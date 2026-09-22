@@ -18,6 +18,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p grove-object-policy --locked
       - run: cargo test -p grove-object-service --locked
+      - run: cargo test -p grove-s3-protocol --locked
 
   hygiene:
     name: Hygiene
@@ -80,6 +81,12 @@ jobs:
         run: |
           cargo build --bin filegate --bin gscli --locked
           python3 scripts/e2e-cli.py
+
+      - name: S3 SDK contract
+        run: |
+          python3 -m venv /tmp/grove-s3-sdk
+          /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-s3-sdk/bin/python scripts/e2e-s3.py
 
   audit:
     name: Audit

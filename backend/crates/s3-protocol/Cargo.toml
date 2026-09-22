@@ -1,0 +1,13 @@
+[package]
+name = "grove-s3-protocol"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hmac = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+roxmltree = "0.21.1"
+
+[lints]
+workspace = true

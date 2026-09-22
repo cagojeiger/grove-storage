@@ -8,6 +8,7 @@ name = "filegate"
 path = "src/main.rs"
 
 [dependencies]
+grove-s3-protocol = { workspace = true }
 grove-object-service = { workspace = true }
 grove-object-policy = { workspace = true }
 filegate-core = { workspace = true }
@@ -20,7 +21,6 @@ serde = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
-hmac = { workspace = true }
 md-5 = { workspace = true }
 sha2 = { workspace = true }
 subtle = { workspace = true }

@@ -2,6 +2,10 @@
 
 ```text
 backend/crates/
+├── s3-protocol/           S3 XML·SigV4 순수 프로토콜 계약
+│   ├── src/multipart.rs  Complete XML 구조·엔티티·namespace 검증
+│   ├── src/signing.rs    서명 계산·raw query 정렬
+│   └── tests/            multipart·signing (서버·DB 독립)
 ├── object-service/        grove-object-service: 업로드 준비·실패 보상 조율
 │   ├── src/cleanup.rs     정리 성공 후 메타데이터 확정
 │   ├── src/multipart_create.rs  vendor 생성·ID 기록·relay 준비·실패 보상
@@ -63,6 +67,8 @@ detach는 같은 트랜잭션을 공유한다.
 
 | 범위 | 테스트 |
 |---|---|
+| S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
+| S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py` (boto3, 격리 DB·filesystem·서버) |
 | 정리 실행 순서·실패·재시도 | `object-service/tests/{cleanup,cleanup_failures}.rs`; `cargo test -p grove-object-service --locked` |
 | 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
 | 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |

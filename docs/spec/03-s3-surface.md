@@ -74,6 +74,7 @@ part별 실측 크기와 완료 목록으로 조립한다.
 | 서로 다른 part | 병렬 가능 |
 | part 진행 중 Complete/Abort | 503, 재시도 |
 | Complete 목록 | 번호 오름차순·유일·원장에 존재·ETag 일치 |
+| Complete XML | 표준 XML 파싱, S3 namespace·엔티티 지원; 잘못된 문서·중복 필드는 400 MalformedXML |
 | 객체 크기 | 완료 목록의 실측 합, part_size × 10000 상한 |
 | ETag | part MD5들의 합성 digest + -N |
 | completing 중 재Complete | 503 ServiceUnavailable |
@@ -128,6 +129,10 @@ DB 테스트는 선점·완료·회수·GC 경합을 검증한다. 실제 바이
 scripts/s3-capture.py의 단일 객체·Range·자동 multipart·key-bound Abort로 검증한다.
 잠금 대기 중 복구 전이는 db/tests/s3_heartbeat_fencing.rs에서 실행 순서를 고정해 검증한다.
 FileGate에서는 S3_EXPECT_WRONG_KEY_404=1로 다른 key의 Abort가 404인지 확인한다.
+
+`scripts/e2e-s3.py`는 격리 PostgreSQL·filesystem·서버를 준비해 위 boto3 검증과
+서명된 잘못된 XML 거부·정상 Complete 재시도·presigned GET을 실행한다.
+XML 파싱·서명 계산은 `grove-s3-protocol`에서 DB 없이 검증한다.
 
 ## 0005 이전 세션 전환
 

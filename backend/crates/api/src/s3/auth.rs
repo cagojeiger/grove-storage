@@ -5,8 +5,7 @@ use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::Response;
 use filegate_core::ExposeSecret as _;
 use filegate_db::s3_registry as s3reg;
-use hmac::{Hmac, Mac};
-use sha2::{Digest, Sha256};
+use grove_s3_protocol::signing::{canonicalize_query, sha256_hex, sign};
 use subtle::ConstantTimeEq as _;
 
 use super::xml::{access_denied, xml_error, xml_internal};
@@ -16,35 +15,6 @@ use crate::routes::AppState;
 /// SigV4 요청 시각의 허용 스큐 (AWS 관례 ±15분). presigned는 여기에 더해
 /// X-Amz-Expires 창 안이어야 한다.
 const MAX_CLOCK_SKEW_SECS: i64 = 15 * 60;
-
-type HmacSha256 = Hmac<Sha256>;
-
-fn hmac_sha256(key: &[u8], msg: &[u8]) -> Vec<u8> {
-    // Hmac::new_from_slice는 임의 길이 키를 받아 InvalidLength가 나지 않는다.
-    // 그래도 unwrap/expect는 워크스페이스 린트가 막으므로 let-else로 받는다 —
-    // 이 분기는 도달 불가다. 설령 도달해도 결과는 실제 서명과 다른 값이라
-    // 상수시간 비교에서 불일치(403)로 닫힌다.
-    let Ok(mut mac) = <HmacSha256 as Mac>::new_from_slice(key) else {
-        return Vec::new();
-    };
-    mac.update(msg);
-    mac.finalize().into_bytes().to_vec()
-}
-
-fn sha256_hex(data: &[u8]) -> String {
-    hex::encode(Sha256::digest(data))
-}
-
-/// SigV4 서명 계산 — secret + scope(date/region) + string_to_sign → hex 서명.
-/// service는 s3, terminator는 aws4_request로 고정이다 (authenticate가 scope를
-/// 이미 검증한 뒤 부른다). 순수 함수라 알려진 답 벡터로 테스트한다.
-fn sign(secret: &str, scope_date: &str, region: &str, string_to_sign: &str) -> String {
-    let k_date = hmac_sha256(format!("AWS4{secret}").as_bytes(), scope_date.as_bytes());
-    let k_region = hmac_sha256(&k_date, region.as_bytes());
-    let k_service = hmac_sha256(&k_region, b"s3");
-    let k_signing = hmac_sha256(&k_service, b"aws4_request");
-    hex::encode(hmac_sha256(&k_signing, string_to_sign.as_bytes()))
-}
 
 /// 검증에 필요한 재료 — 두 서명 모드가 같은 형태로 모은다. 여기까지 오면
 /// 이후 조립·재계산은 모드와 무관하다.
@@ -103,24 +73,6 @@ fn parse_auth(auth: &str) -> Option<ParsedAuth> {
         signed_headers: signed?,
         signature: signature?,
     })
-}
-
-/// canonical query — 키 정렬. X-Amz-Signature는 제외한다: 어느 서명 모드든
-/// 서명 자신은 canonical에 들어가지 않는다(presigned의 핵심 규칙). 받은
-/// percent-encoding을 그대로 보존한다 — 서명한 바이트와 같아야 하므로.
-fn canonicalize_query(query: &str) -> String {
-    let mut pairs: Vec<(&str, &str)> = query
-        .split('&')
-        .filter(|s| !s.is_empty())
-        .map(|p| p.split_once('=').unwrap_or((p, "")))
-        .filter(|(k, _)| *k != "X-Amz-Signature")
-        .collect();
-    pairs.sort_unstable();
-    pairs
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("&")
 }
 
 /// header-signed 재료 — Authorization 헤더 + x-amz-* 헤더에서.
@@ -359,18 +311,6 @@ mod tests {
     }
 
     #[test]
-    fn canonicalize_query_sorts_keys_and_drops_the_signature() {
-        // 서명 자신은 canonical에서 빠지고, 나머지는 키 정렬 + 받은 인코딩 보존.
-        let q = "X-Amz-Signature=zzz&X-Amz-Date=20260715T000000Z&X-Amz-Credential=AK%2F20260715%2Fauto%2Fs3%2Faws4_request";
-        let c = canonicalize_query(q);
-        assert!(!c.contains("X-Amz-Signature"));
-        assert_eq!(
-            c,
-            "X-Amz-Credential=AK%2F20260715%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20260715T000000Z"
-        );
-    }
-
-    #[test]
     fn from_query_parses_credential_scope_and_defaults_unsigned_payload() {
         // 유효 창 안의 최근 시각으로 만든 presigned 쿼리 (서명값은 형태만).
         let now = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
@@ -390,26 +330,6 @@ mod tests {
         assert_eq!(sig.signed_headers, vec!["host".to_owned()]);
         assert_eq!(sig.payload_hash, "UNSIGNED-PAYLOAD");
         assert_eq!(sig.signature, "deadbeef");
-    }
-
-    #[test]
-    fn sign_matches_a_known_answer_vector() {
-        // AWS SigV4(S3) 서명 체인의 자기정합 알려진 답 — secret·scope·
-        // string-to-sign을 고정하면 서명은 이 hex다. 파이썬 hmac 참조와 대조.
-        let string_to_sign = "AWS4-HMAC-SHA256\n\
-             20130524T000000Z\n\
-             20130524/us-east-1/s3/aws4_request\n\
-             7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972";
-        let got = sign(
-            "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            "20130524",
-            "us-east-1",
-            string_to_sign,
-        );
-        assert_eq!(
-            got,
-            "67fe34c8530db585abddc51067328adfedb6e42487d2566dc7d927d6e2722900"
-        );
     }
 
     #[test]

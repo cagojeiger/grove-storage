@@ -408,7 +408,8 @@ pub(super) async fn complete_multipart(
             "the complete request body is not valid utf-8",
         )
     })?;
-    let client_parts = parse_complete_multipart(text).map_err(invalid_part)?;
+    let client_parts = parse_complete_multipart(text)
+        .map_err(|message| xml_error(StatusCode::BAD_REQUEST, "MalformedXML", message))?;
 
     let mut completion_guard =
         match s3reg::begin_multipart_completion(&state.pool, client_id, key, file_id)

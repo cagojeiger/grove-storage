@@ -158,7 +158,7 @@ def check_lifecycle(endpoint, directory):
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
 
-def main():
+def main(check=check_lifecycle):
     if not SERVER.is_file() or not CLI.is_file():
         raise RuntimeError("Run cargo build --bin filegate --bin gscli --locked first")
     container = "filegate-cli-e2e-" + uuid.uuid4().hex[:12]
@@ -188,7 +188,7 @@ def main():
             with tempfile.TemporaryFile() as log:
                 server = subprocess.Popen([str(SERVER)], env=env, cwd=directory, stdout=log, stderr=log)
                 try:
-                    check_lifecycle(endpoint, directory)
+                    check(endpoint, directory)
                 finally:
                     server.terminate()
                     try:

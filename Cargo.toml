@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "backend/crates/s3-protocol",
     "backend/crates/object-service",
     "backend/crates/object-policy",
     "backend/crates/core",
@@ -15,6 +16,7 @@ version = "0.4.1"
 edition = "2024"
 
 [workspace.dependencies]
+grove-s3-protocol = { path = "backend/crates/s3-protocol" }
 grove-object-service = { path = "backend/crates/object-service" }
 grove-object-policy = { path = "backend/crates/object-policy" }
 filegate-core = { path = "backend/crates/core" }

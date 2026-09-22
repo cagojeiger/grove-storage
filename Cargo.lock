@@ -1013,8 +1013,8 @@ dependencies = [
  "futures-util",
  "grove-object-policy",
  "grove-object-service",
+ "grove-s3-protocol",
  "hex",
- "hmac 0.12.1",
  "md-5 0.10.6",
  "percent-encoding",
  "serde",
@@ -1242,6 +1242,16 @@ name = "grove-object-service"
 version = "0.4.1"
 dependencies = [
  "tokio",
+]
+
+[[package]]
+name = "grove-s3-protocol"
+version = "0.4.1"
+dependencies = [
+ "hex",
+ "hmac 0.12.1",
+ "roxmltree",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2261,6 +2271,15 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
