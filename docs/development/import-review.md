@@ -261,3 +261,30 @@ api/reconciler
 
 `grove-object-service`는 런타임 의존성이 없고 테스트만 Tokio를 사용한다.
 서버·DB 없이 `cargo test -p grove-object-service --locked`로 실행한다.
+
+## 4단계: Native multipart 생성 준비
+
+```text
+api/v1/files.rs                  HTTP 입력·예약·응답
+  -> object-service/multipart_create.rs
+       vendor session 생성 -> ID 기록 -> relay 준비
+       실패 -> 알려진 ID 또는 key 기반 보상 -> 원래 오류 반환
+  -> api/v1/multipart_create.rs  기존 S3·DB·crypto 구현 연결
+       cleanup_then_finalize    vendor abort 성공 후 pending 회수
+```
+
+| 실패 위치 | 정리 입력 | 반환 |
+|---|---|---|
+| vendor 생성 | upload ID 미상: object key | 원래 storage 오류 |
+| upload ID 기록 | 생성된 ID (DB 기록 전에도 보존) | 원래 DB 오류 |
+| relay secret 파생·기록 | 생성된 ID 또는 fs의 None | 원래 crypto/DB 오류 |
+| 보상 중 abort·reclaim | 로그, 남은 복구 자료 유지 | 최초 생성 오류 유지 |
+
+성공 순서, fs 분기, 각 초기화 단계 실패, abort·reclaim 실패를 fake 기반
+8개 테스트로 검증한다. Native API 응답·로그·SQL·암호 파생 계약은 유지한다.
+보상 실행의 순서는 3단계 함수를 재사용한다. S3 호환 API의 생성 경로, 단일 PUT,
+예약 이전 오류, backend 구성 실패 및 프로세스 종료 복구는 이번 추출 범위와 구분한다.
+취소 시 새로운 즉시 보상을 추가하지 않고 기존 만료 회수 동작을 유지한다.
+
+검증: 격리 PostgreSQL을 사용한 workspace 테스트 267개 통과, release artifact
+1개 ignored. fmt·clippy 통과. 실제 외부 S3 장애·운영 데이터 이관은 미실시.

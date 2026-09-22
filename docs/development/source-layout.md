@@ -2,9 +2,10 @@
 
 ```text
 backend/crates/
-├── object-service/        grove-object-service: 정리 성공 후 메타데이터 확정
-│   ├── src/cleanup.rs     외부 작업 순서·실패 단계 구분, runtime 의존성 없음
-│   └── tests/            cleanup·cleanup_failures, fake 작업으로 실패 주입
+├── object-service/        grove-object-service: 업로드 준비·실패 보상 조율
+│   ├── src/cleanup.rs     정리 성공 후 메타데이터 확정
+│   ├── src/multipart_create.rs  vendor 생성·ID 기록·relay 준비·실패 보상
+│   └── tests/            cleanup·cleanup_failures·multipart_create
 ├── object-policy/         grove-object-policy: 업로드 선언·파트·ETag·완료 복구 판단
 │   └── tests/             geometry·etag·validation·completion·completion_failures
 ├── cli/                   gscli: 원격 관리자 API 조회·변경
@@ -18,6 +19,7 @@ backend/crates/
 │   │   ├── object_response.rs Range·응답 헤더 정책
 │   │   └── object_response/ Range·응답 헤더 테스트
 │   ├── v1/                 네이티브 파일·multipart·relay
+│   │   └── multipart_create.rs  Native 생성 service의 DB·S3·crypto adapter
 │   ├── blobs.rs            lease URL 바이트 전송
 │   ├── spool.rs            스트림 계측·임시 파일
 │   ├── storage_access.rs   등록부에서 backend 구성·물리 작업
@@ -37,6 +39,7 @@ backend/crates/
 | 모듈 | 입력 → 결과 | 정합성 경계 |
 |---|---|---|
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
+| `object-service/multipart_create` | 예약된 업로드 → vendor·relay 준비 | 실패 시 알려진 upload ID로 보상, 원래 오류 유지 |
 | `api/routes`, `api/admin` | HTTP → 인증된 요청 | 표면별 인증·예약 경로 |
 | `api/s3/auth` | 원본 URI·헤더 → client | SigV4 검증 |
 | `api/s3/object_response` | Range·쿼리 → 응답 정책 | 인코딩·헤더 검증 |
