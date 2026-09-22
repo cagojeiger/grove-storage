@@ -137,6 +137,30 @@ S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 
 검증: workspace 274개 통과, release artifact 1개 ignored. fmt·clippy 통과.
 격리 실서버의 기존 CLI lifecycle 및 사용 중 주소 변경 409·CLI 거부 E2E 통과.
 
+### 일반 만료 회수: 수정 전 재현
+
+`db/tests/reclaim_cleanup_gap.rs`는 현재 한계를 기록하는 characterization test다.
+정상적인 복구 계약을 선언하는 테스트가 아니며, durable retry 구현 때 기대값을
+복구 정보 보존·재시도 성공으로 교체한다.
+
+| 단계 | 격리 PostgreSQL에서 확인한 결과 |
+|---|---|
+| Native pending 생성·lease 만료 | 회수 후보 1개 |
+| 실제 `finalize_reclaim` 실행 | reclaimed, location 0개 |
+| 물리 삭제 실패 주입 | fake 객체는 남음 |
+| 다음 회수·purge 후보 조회 | 모두 0개 |
+| 장부 사용량 조회 | reserved/active/purge_pending 모두 0 |
+| 같은 storage의 bucket 변경 | 남은 location이 없어 허용 |
+
+실제 SQL·스캔 함수와 fake 물리 삭제 실패를 사용한 구성요소 재현이다. 전체 worker나
+외부 S3 네트워크 장애·운영 사고의 재현은 아니다. 기존 reconciler 주석이 명시한
+orphan 허용 정책을 확인한 것으로, 이번 리팩토링의 신규 회귀로 분류하지 않는다.
+재현 테스트 1개와 해당 target clippy·fmt를 검증했다. 실행 코드 변경은 없다.
+
+후속 수정은 pending 소유권을 먼저 종료하면서 정리 위치를 내구적으로 보존하고,
+물리 정리 성공 뒤에만 복구 자료를 해제하는 방향이다. 단순히 삭제 순서를 뒤집으면
+늦은 commit과 경합할 수 있으므로 claim·재시도·GC·사용량·주소 보호를 함께 검증한다.
+
 ## 테스트 정리
 
 | 범위 | 현재 | 보완 |
