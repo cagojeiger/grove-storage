@@ -1,0 +1,605 @@
+//! S3 호환 클라이언트 구성, 접근 검증, presign, 실물 조회.
+//!
+//! 입력은 등록부의 storage 행 + 복호된 시크릿이다 (spec 01).
+//! 등록 시점과 부팅 재검증이 connect를, 도메인 오퍼레이션이
+//! presign_put(발급)과 head_object(commit의 사후 검증)를 호출한다.
+
+use std::collections::HashMap;
+use std::sync::RwLock;
+use std::time::Duration;
+
+use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+use aws_sdk_s3::presigning::PresigningConfig;
+use secrecy::{ExposeSecret, SecretString};
+
+/// S3 호환 storage 접근 명세: 등록부 행 + 복호된 자격증명.
+#[derive(Debug, Clone)]
+pub struct S3StorageSpec {
+    /// filegate 프로세스가 검증·실물 조회에 쓰는 내부 접근 주소.
+    pub endpoint: String,
+    /// 전송 주체가 presigned URL로 접근할 공개 주소. 같을 수 있지만 같은 개념은 아니다.
+    pub public_endpoint: String,
+    pub region: String,
+    pub bucket: String,
+    pub force_path_style: bool,
+    pub access_key: String,
+    pub secret_key: SecretString,
+}
+
+#[derive(Debug, Clone)]
+pub struct S3Storage {
+    pub client: aws_sdk_s3::Client,
+    pub bucket: String,
+}
+
+/// 어느 주소로 클라이언트를 만들 것인가. SigV4는 호스트를 서명에 묶으므로,
+/// presign은 전송 주체가 실제 접속할 공개 주소로 서명해야 한다 (spec 01).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Address {
+    /// filegate 프로세스가 직접 부르는 경로 (검증, head_object).
+    Internal,
+    /// 전송 주체에게 건네질 URL의 서명 (presign).
+    Public,
+}
+
+/// 캐시 유효성 대조용 — 시크릿까지 값으로 비교한다 (양쪽 다 프로세스
+/// 메모리의 우리 값이고 결과는 재구성 여부뿐이라 타이밍 채널이 없다).
+impl PartialEq for S3StorageSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.endpoint == other.endpoint
+            && self.public_endpoint == other.public_endpoint
+            && self.region == other.region
+            && self.bucket == other.bucket
+            && self.force_path_style == other.force_path_style
+            && self.access_key == other.access_key
+            && self.secret_key.expose_secret() == other.secret_key.expose_secret()
+    }
+}
+
+/// storage당 클라이언트 캐시 — 클라이언트가 자기 HTTP 커넥션 풀을 소유하므로,
+/// 요청마다 새로 만들면 모든 S3 네트워크 op가 콜드 TCP+TLS 핸드셰이크로
+/// 시작한다. 재사용이 풀을 웜 상태로 유지한다.
+///
+/// 무효화는 내용 대조다: storage 행은 요청마다 DB에서 새로 읽히므로, 캐시된
+/// spec과 이번 spec이 다르면(등록 갱신) 그 자리에서 재구성한다 — 멀티 pod에도
+/// 별도 무효화 훅이 필요 없다. 락 poison이면 캐시만 건너뛴다 (기능 동일).
+#[derive(Debug, Default)]
+pub struct S3ClientCache {
+    inner: RwLock<HashMap<(String, Address), (S3StorageSpec, S3Storage)>>,
+}
+
+impl S3ClientCache {
+    /// id는 등록부 storage id — 갱신 시 옛 항목이 제자리 교체되게 하는 키.
+    pub fn get(&self, id: &str, spec: &S3StorageSpec, address: Address) -> S3Storage {
+        if let Ok(cache) = self.inner.read()
+            && let Some((cached_spec, storage)) = cache.get(&(id.to_owned(), address))
+            && cached_spec == spec
+        {
+            return storage.clone();
+        }
+        let storage = client(spec, address);
+        if let Ok(mut cache) = self.inner.write() {
+            cache.insert((id.to_owned(), address), (spec.clone(), storage.clone()));
+        }
+        storage
+    }
+}
+
+/// 접근 확인 없이 클라이언트만 구성한다. 요청 경로(presign·head_object)용 —
+/// 접근성은 등록·부팅 재검증이 이미 보증했다. crate 내부 헬퍼다: 외부는
+/// 캐시 래퍼(S3ClientCache::get)와 connect를 지난다.
+fn client(spec: &S3StorageSpec, address: Address) -> S3Storage {
+    let credentials = Credentials::new(
+        spec.access_key.clone(),
+        spec.secret_key.expose_secret().to_owned(),
+        None,
+        None,
+        "filegate-registry",
+    );
+    let endpoint = match address {
+        Address::Internal => &spec.endpoint,
+        Address::Public => &spec.public_endpoint,
+    };
+    // TLS 커넥터를 명시적으로 준다 — rustls 0.23 + ring. aws-sdk의 레거시
+    // "rustls"(0.21) 피처를 끄고 sqlx와 같은 스택으로 통일한다. 커넥터는 자기
+    // 커넥션 풀을 소유하므로 storage당 하나가 자연스럽다(이 함수는 캐시 미스에만 돈다).
+    let http_client = aws_smithy_http_client::Builder::new()
+        .tls_provider(aws_smithy_http_client::tls::Provider::Rustls(
+            aws_smithy_http_client::tls::rustls_provider::CryptoMode::Ring,
+        ))
+        .build_https();
+    let s3_config = aws_sdk_s3::Config::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .http_client(http_client)
+        .region(Region::new(spec.region.clone()))
+        .endpoint_url(endpoint)
+        .credentials_provider(credentials)
+        .force_path_style(spec.force_path_style)
+        .build();
+    S3Storage {
+        client: aws_sdk_s3::Client::from_conf(s3_config),
+        bucket: spec.bucket.clone(),
+    }
+}
+
+/// 클라이언트를 만들고 버킷에 접근 가능한지 확인한다.
+///
+/// filegate는 자기 버킷만 다룬다 — 버킷 프로비저닝은 운영자 몫이다. 버킷이
+/// 없거나 접근 권한이 없으면 실패한다 (등록 거부 또는 부팅 중단, ADR 001).
+/// head_bucket이 존재와 기본 접근을, list_multipart_uploads가 응답 유실 복구에
+/// 필요한 조회 권한을 확인한다. (fs adapter는 경로 존재·쓰기 가능으로 같은
+/// 검증을 한다 — storage 모델마다 방식이 다르다.)
+pub async fn connect(spec: &S3StorageSpec) -> anyhow::Result<S3Storage> {
+    let storage = client(spec, Address::Internal);
+    storage
+        .client
+        .head_bucket()
+        .bucket(&storage.bucket)
+        .send()
+        .await
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "bucket '{}' not accessible at {} — provision it and grant access: {err}",
+                spec.bucket,
+                spec.endpoint
+            )
+        })?;
+    storage
+        .client
+        .list_multipart_uploads()
+        .bucket(&storage.bucket)
+        .max_uploads(1)
+        .send()
+        .await
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "bucket '{}' cannot list multipart uploads at {} — grant recovery access: {err}",
+                spec.bucket,
+                spec.endpoint
+            )
+        })?;
+    Ok(storage)
+}
+
+/// 쓰기 lease의 실체 — 만료가 있는 presigned PUT URL (spec 00 create).
+/// content_type을 선언하면 서명에 포함되어 강제된다 (실측). 크기는 앞단에서
+/// 막지 못한다 — commit의 사후 검증이 게이트다.
+pub async fn presign_put(
+    storage: &S3Storage,
+    object_key: &str,
+    content_type: Option<&str>,
+    expires_in: Duration,
+) -> anyhow::Result<String> {
+    let mut request = storage
+        .client
+        .put_object()
+        .bucket(&storage.bucket)
+        .key(object_key);
+    if let Some(content_type) = content_type {
+        request = request.content_type(content_type);
+    }
+    let presigned = request
+        .presigned(PresigningConfig::expires_in(expires_in)?)
+        .await?;
+    Ok(presigned.uri().to_owned())
+}
+
+/// 읽기 lease의 실체 — 만료가 있는 presigned GET URL (spec 00 read).
+/// filename을 주면 RFC 5987로 Content-Disposition에 실어 서명한다 (ADR 003,
+/// 실측: 서명에 포함해야 강제된다).
+pub async fn presign_get(
+    storage: &S3Storage,
+    object_key: &str,
+    filename: Option<&str>,
+    expires_in: Duration,
+) -> anyhow::Result<String> {
+    let mut request = storage
+        .client
+        .get_object()
+        .bucket(&storage.bucket)
+        .key(object_key);
+    if let Some(filename) = filename {
+        request = request.response_content_disposition(format!(
+            "attachment; filename*=UTF-8''{}",
+            rfc5987_encode(filename)
+        ));
+    }
+    let presigned = request
+        .presigned(PresigningConfig::expires_in(expires_in)?)
+        .await?;
+    Ok(presigned.uri().to_owned())
+}
+
+/// 응답 ETag를 따옴표 제거해 꺼낸다 — 없으면 벤더 규약 위반 에러.
+/// (단일 PUT ETag는 MD5, multipart는 digest-of-digests `-N`, 실측.)
+fn strip_etag(etag: Option<&str>, op: &str) -> anyhow::Result<String> {
+    Ok(etag
+        .ok_or_else(|| anyhow::anyhow!("{op} returned no etag"))?
+        .trim_matches('"')
+        .to_owned())
+}
+
+/// RFC 5987 value-chars 이외를 UTF-8 바이트 단위로 퍼센트 인코딩한다.
+pub fn rfc5987_encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        let attr_char = byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'!' | b'#' | b'$' | b'&' | b'+' | b'-' | b'.' | b'^' | b'_' | b'`' | b'|' | b'~'
+            );
+        if attr_char {
+            out.push(byte as char);
+        } else {
+            use std::fmt::Write;
+            let _ = write!(out, "%{byte:02X}");
+        }
+    }
+    out
+}
+
+/// 중계 쓰기의 뒷단 업로드 — 스풀 파일에서 스트리밍한다 (크기 기지).
+/// filegate가 스트림 중 크기·MD5를 이미 검증했으므로 여기서는 전달만.
+pub async fn put_object_from_path(
+    storage: &S3Storage,
+    object_key: &str,
+    path: &std::path::Path,
+    content_type: Option<&str>,
+) -> anyhow::Result<()> {
+    let body = aws_sdk_s3::primitives::ByteStream::from_path(path).await?;
+    let mut request = storage
+        .client
+        .put_object()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .body(body);
+    if let Some(content_type) = content_type {
+        request = request.content_type(content_type);
+    }
+    request.send().await?;
+    Ok(())
+}
+
+/// 중계 읽기의 뒷단 스트림 — (AsyncRead, 크기). 없으면 None.
+pub async fn open_read(
+    storage: &S3Storage,
+    object_key: &str,
+) -> anyhow::Result<Option<(impl tokio::io::AsyncRead + Send + Unpin + use<>, i64)>> {
+    let result = storage
+        .client
+        .get_object()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .send()
+        .await;
+    match result {
+        Ok(output) => {
+            // 크기 누락은 하드 에러다 (head_object와 같은 규칙) — 0으로 폴백하면
+            // Content-Length: 0으로 비어 보이는 잘린 다운로드가 조용히 나간다.
+            let len = output
+                .content_length()
+                .ok_or_else(|| anyhow::anyhow!("get_object returned no content length"))?;
+            Ok(Some((output.body.into_async_read(), len)))
+        }
+        Err(error) => {
+            let not_found = error
+                .as_service_error()
+                .map(|service| {
+                    matches!(
+                        service,
+                        aws_sdk_s3::operation::get_object::GetObjectError::NoSuchKey(_)
+                    )
+                })
+                .unwrap_or(false);
+            if not_found {
+                Ok(None)
+            } else {
+                Err(error.into())
+            }
+        }
+    }
+}
+
+/// 부분 읽기 스트림 (spec 03 Range) — 벤더 Range GET. 구간은 호출자가
+/// 장부 크기로 검증한 폐구간 [start, end]다. 없으면 None.
+pub async fn open_read_range(
+    storage: &S3Storage,
+    object_key: &str,
+    start: i64,
+    end: i64,
+) -> anyhow::Result<Option<(impl tokio::io::AsyncRead + Send + Unpin + use<>, i64)>> {
+    let result = storage
+        .client
+        .get_object()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .range(format!("bytes={start}-{end}"))
+        .send()
+        .await;
+    match result {
+        Ok(output) => {
+            let len = output.content_length().unwrap_or(end - start + 1);
+            Ok(Some((output.body.into_async_read(), len)))
+        }
+        Err(error) => {
+            let not_found = error
+                .as_service_error()
+                .map(|service| {
+                    matches!(
+                        service,
+                        aws_sdk_s3::operation::get_object::GetObjectError::NoSuchKey(_)
+                    )
+                })
+                .unwrap_or(false);
+            if not_found {
+                Ok(None)
+            } else {
+                Err(error.into())
+            }
+        }
+    }
+}
+
+/// 물리 삭제 (reconciler의 purge·회수). S3 DeleteObject는 없는 키에도
+/// 성공한다 — purge는 멱등하다 (spec 00, 실측).
+pub async fn delete_object(storage: &S3Storage, object_key: &str) -> anyhow::Result<()> {
+    storage
+        .client
+        .delete_object()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .send()
+        .await?;
+    Ok(())
+}
+
+/// 실물 메타 조회 (commit의 사후 검증). 없으면 None.
+/// 반환: (크기, ETag — 따옴표 제거. 단일 PUT이면 MD5와 같다, 실측).
+pub async fn head_object(
+    storage: &S3Storage,
+    object_key: &str,
+) -> anyhow::Result<Option<(i64, String)>> {
+    let result = storage
+        .client
+        .head_object()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .send()
+        .await;
+    match result {
+        Ok(head) => {
+            let size = head
+                .content_length()
+                .ok_or_else(|| anyhow::anyhow!("head_object returned no content length"))?;
+            let etag = strip_etag(head.e_tag(), "head_object")?;
+            Ok(Some((size, etag)))
+        }
+        Err(error) => {
+            let not_found = error
+                .as_service_error()
+                .map(|service| service.is_not_found())
+                .unwrap_or(false);
+            if not_found {
+                Ok(None)
+            } else {
+                Err(error.into())
+            }
+        }
+    }
+}
+
+// ---- multipart (spec 02) ----
+
+/// multipart 세션 시작 — 벤더 upload_id를 돌려준다. lease에 저장되어
+/// 완성(Complete)·중단(Abort)의 핸들이 된다 (파생 불가능한 외부 값).
+pub async fn create_multipart(
+    storage: &S3Storage,
+    object_key: &str,
+    content_type: Option<&str>,
+) -> anyhow::Result<String> {
+    let mut request = storage
+        .client
+        .create_multipart_upload()
+        .bucket(&storage.bucket)
+        .key(object_key);
+    if let Some(content_type) = content_type {
+        request = request.content_type(content_type);
+    }
+    let output = request.send().await?;
+    output
+        .upload_id()
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow::anyhow!("create_multipart returned no upload id"))
+}
+
+/// part 쓰기 presigned URL (직결 multipart). presign이므로 공개 주소
+/// 클라이언트로 서명해야 한다 (spec 01 — SigV4는 호스트를 묶는다).
+pub async fn presign_upload_part(
+    storage: &S3Storage,
+    object_key: &str,
+    upload_id: &str,
+    part_number: i32,
+    expires_in: Duration,
+) -> anyhow::Result<String> {
+    let presigned = storage
+        .client
+        .upload_part()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .upload_id(upload_id)
+        .part_number(part_number)
+        .presigned(PresigningConfig::expires_in(expires_in)?)
+        .await?;
+    Ok(presigned.uri().to_owned())
+}
+
+/// 중계 s3의 part 전달 — 스풀 파일에서 벤더 part로 (spec 02: 도착 즉시
+/// 올리고 스풀을 지워 디스크 점유를 유계로). 반환: 벤더 part ETag.
+pub async fn upload_part_from_path(
+    storage: &S3Storage,
+    object_key: &str,
+    upload_id: &str,
+    part_number: i32,
+    path: &std::path::Path,
+) -> anyhow::Result<String> {
+    let body = aws_sdk_s3::primitives::ByteStream::from_path(path).await?;
+    let output = storage
+        .client
+        .upload_part()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .upload_id(upload_id)
+        .part_number(part_number)
+        .body(body)
+        .send()
+        .await?;
+    strip_etag(output.e_tag(), "upload_part")
+}
+
+/// 벤더에 실재하는 part 목록 (직결 commit의 대조 재료): (번호, 크기, ETag).
+/// 페이지네이션을 따른다 — part는 최대 10,000개다.
+pub async fn list_parts(
+    storage: &S3Storage,
+    object_key: &str,
+    upload_id: &str,
+) -> anyhow::Result<Vec<(i32, i64, String)>> {
+    let mut parts = Vec::new();
+    let mut marker: Option<String> = None;
+    loop {
+        let mut request = storage
+            .client
+            .list_parts()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .upload_id(upload_id);
+        if let Some(marker) = &marker {
+            request = request.part_number_marker(marker);
+        }
+        let output = request.send().await?;
+        for part in output.parts() {
+            let number = part
+                .part_number()
+                .ok_or_else(|| anyhow::anyhow!("list_parts returned a part without number"))?;
+            let size = part
+                .size()
+                .ok_or_else(|| anyhow::anyhow!("list_parts returned a part without size"))?;
+            let etag = part
+                .e_tag()
+                .ok_or_else(|| anyhow::anyhow!("list_parts returned a part without etag"))?
+                .trim_matches('"')
+                .to_owned();
+            parts.push((number, size, etag));
+        }
+        if output.is_truncated() == Some(true) {
+            let next = output.next_part_number_marker().map(str::to_owned);
+            // 방어: 비표준 S3 호환 백엔드가 truncated인데 마커를 안 주거나
+            // 전진시키지 않으면 첫 페이지를 영원히 재요청한다 — 전진 못 하면
+            // 있는 만큼만 반환하고 멈춘다 (commit이 개수 불일치로 거부).
+            if next.is_none() || next == marker {
+                break;
+            }
+            marker = next;
+        } else {
+            break;
+        }
+    }
+    Ok(parts)
+}
+
+/// 완성 — 검증된 part 목록으로 조립을 선언한다 (조립은 벤더 몫).
+/// 반환: multipart ETag (digest-of-digests, `-N` 접미 — 전체 MD5가 아니다).
+pub async fn complete_multipart(
+    storage: &S3Storage,
+    object_key: &str,
+    upload_id: &str,
+    parts: &[(i32, String)],
+) -> anyhow::Result<String> {
+    use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
+    let completed = CompletedMultipartUpload::builder()
+        .set_parts(Some(
+            parts
+                .iter()
+                .map(|(number, etag)| {
+                    CompletedPart::builder()
+                        .part_number(*number)
+                        .e_tag(etag)
+                        .build()
+                })
+                .collect(),
+        ))
+        .build();
+    let output = storage
+        .client
+        .complete_multipart_upload()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .upload_id(upload_id)
+        .multipart_upload(completed)
+        .send()
+        .await?;
+    strip_etag(output.e_tag(), "complete_multipart")
+}
+
+/// 중단 — 미완성 part의 점유·과금을 제거한다 (회수 경로, spec 02).
+/// 이미 없는 세션(NoSuchUpload)도 성공 — 회수는 멱등하다.
+pub async fn abort_multipart(
+    storage: &S3Storage,
+    object_key: &str,
+    upload_id: &str,
+) -> anyhow::Result<()> {
+    let result = storage
+        .client
+        .abort_multipart_upload()
+        .bucket(&storage.bucket)
+        .key(object_key)
+        .upload_id(upload_id)
+        .send()
+        .await;
+    match result {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            let gone = error
+                .raw_response()
+                .map(|response| response.status().as_u16() == 404)
+                .unwrap_or(false);
+            if gone { Ok(()) } else { Err(error.into()) }
+        }
+    }
+}
+
+/// DB에 vendor upload_id를 붙이기 전에 실패한 create의 복구 경로. filegate의
+/// 물리 object_key는 파일별로 유일하므로, 그 정확한 key에 열린 multipart를
+/// 모두 찾아 중단한다. Create 응답 유실로 같은 key에 세션이 둘 생겨도 전부
+/// 정리한다. 이미 없으면 성공이다.
+pub async fn abort_multipart_by_key(storage: &S3Storage, object_key: &str) -> anyhow::Result<()> {
+    let mut key_marker = None;
+    let mut upload_id_marker = None;
+    loop {
+        let output = storage
+            .client
+            .list_multipart_uploads()
+            .bucket(&storage.bucket)
+            .prefix(object_key)
+            .set_key_marker(key_marker)
+            .set_upload_id_marker(upload_id_marker)
+            .send()
+            .await?;
+        let upload_ids: Vec<String> = output
+            .uploads()
+            .iter()
+            .filter(|upload| upload.key() == Some(object_key))
+            .filter_map(|upload| upload.upload_id().map(str::to_owned))
+            .collect();
+        for upload_id in upload_ids {
+            abort_multipart(storage, object_key, &upload_id).await?;
+        }
+        if !output.is_truncated().unwrap_or(false) {
+            return Ok(());
+        }
+        key_marker = output.next_key_marker().map(str::to_owned);
+        upload_id_marker = output.next_upload_id_marker().map(str::to_owned);
+        if key_marker.is_none() {
+            anyhow::bail!("list_multipart_uploads truncated without a next key marker");
+        }
+    }
+}

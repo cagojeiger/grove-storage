@@ -1,0 +1,515 @@
+//! 업로드 루프: create(발급) → 전송 주체의 직접 PUT → commit(사후 검증).
+//!
+//! spec 00의 계약 그대로다: 바이트는 filegate를 지나지 않고(공리 2),
+//! capacity는 집행하지 않는 관찰의 비교선이라 create가 용량으로 거부하지
+//! 않으며, 직결 PUT은 크기를 앞단에서 막지 못하므로 commit이 사후 검증
+//! 게이트다. 용량은 운영자의 세계다 — 클라이언트에 노출하지 않는다 (공리 1).
+
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::{Extension, Json};
+use filegate_core::multipart::part_count;
+use filegate_db::files::{self, CreateOutcome, CreateSpec, CreatedFile, DeleteOutcome};
+use filegate_infra::{Address, s3_head_object, s3_presign_get, s3_presign_put};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use super::ClientId;
+use super::relay::{RelaySecret, relay_base, relay_url};
+use crate::error::{ApiError, bad_request, conflict, internal, not_found};
+use crate::lease::{READ_LEASE_TTL, WRITE_LEASE_TTL};
+use crate::routes::AppState;
+use crate::storage_access::{StorageBackend, backend_from_row};
+use crate::validation::{classify_upload, content_type_ok, declared_md5_format_ok};
+
+#[derive(Deserialize)]
+pub(super) struct CreateBody {
+    declared_size: i64,
+    content_type: Option<String>,
+    /// 선언 MD5 (lowercase hex). commit이 ETag와 대조한다 — 단일 PUT의
+    /// ETag는 MD5다 (실측).
+    declared_md5: Option<String>,
+}
+
+#[derive(Serialize)]
+struct CreateOut {
+    file_id: Uuid,
+    /// 만료가 있는 PUT URL. URL 구조는 계약이 아니다 (spec 00).
+    /// multipart면 없다 — 접근은 parts 발급으로 받는다 (spec 02).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    put_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    multipart: Option<MultipartOut>,
+}
+
+/// multipart 서술자 (spec 02) — 서비스는 이대로 자르고, 구조에 의존하지
+/// 않는다. part 접근은 POST /v1/files/{id}/parts로 받는다.
+#[derive(Serialize)]
+struct MultipartOut {
+    part_size: i64,
+    part_count: i32,
+}
+
+#[derive(Serialize)]
+struct CommitOut {
+    file_id: Uuid,
+    state: &'static str,
+    etag: String,
+}
+
+pub(super) async fn create(
+    State(state): State<AppState>,
+    Extension(client): Extension<ClientId>,
+    Json(body): Json<CreateBody>,
+) -> Result<Response, ApiError> {
+    // 크기·모드·md5-무효 규칙은 순수 계약이다 (validation) — is_multipart 반환.
+    let multipart = classify_upload(
+        body.declared_size,
+        state.multipart_threshold,
+        state.part_size,
+        body.declared_md5.is_some(),
+    )
+    .map_err(bad_request)?;
+    if let Some(md5) = &body.declared_md5
+        && !declared_md5_format_ok(md5)
+    {
+        return Err(bad_request("declared_md5 must be 32 hex chars"));
+    }
+    if let Some(content_type) = &body.content_type
+        && !content_type_ok(content_type)
+    {
+        return Err(bad_request("invalid content_type"));
+    }
+
+    let spec = CreateSpec {
+        client_id: &client.0,
+        declared_size: body.declared_size,
+        content_type: body.content_type.as_deref(),
+        declared_md5: body.declared_md5.as_deref(),
+        lease_ttl_secs: WRITE_LEASE_TTL.as_secs() as i64,
+        part_size: multipart.then_some(state.part_size),
+    };
+    let created = match files::create(&state.pool, spec).await? {
+        CreateOutcome::Created(created) => created,
+        // 인증된 클라이언트는 등록부에 있다 (client_keys FK) — 도달하지 않는다.
+        CreateOutcome::NoClient => return Err(internal("authenticated client has no storage")),
+    };
+
+    // 접근 모드는 storage 선언이 정한다 (ADR 001). 직결이면 공개 주소로
+    // presign(SigV4는 호스트를 묶는다, spec 01), 중계면 filegate 바이트
+    // 엔드포인트 URL + lease secret.
+    let backend = backend_from_row(&state.crypto, &created.storage)?;
+
+    if multipart {
+        // multipart는 PUT URL 대신 서술자를 준다 — part 접근은 parts 발급으로
+        // (spec 02). s3 계열은 지금 벤더 세션을 열어 핸들을 lease에 기록하고,
+        // 중계(fs 또는 force_relay)는 lease id에서 파생한 secret의 해시를
+        // 남긴다 — 이후 parts() 발급이 매번 같은 secret을 재파생해 회전이 없다.
+        let mut vendor_upload_id = None;
+        if let StorageBackend::S3 { spec, .. } = &backend {
+            let storage = state
+                .s3_clients
+                .get(&created.storage.id, spec, Address::Internal);
+            let upload_id = match filegate_infra::s3_create_multipart(
+                &storage,
+                &created.object_key,
+                body.content_type.as_deref(),
+            )
+            .await
+            {
+                Ok(upload_id) => upload_id,
+                Err(error) => {
+                    cleanup_failed_multipart_create(&state, &created, &backend, None).await;
+                    return Err(ApiError::Storage(error));
+                }
+            };
+            // 벤더 세션을 열었으니 upload_id를 반드시 DB에 남겨야 한다 —
+            // 기록 전에 실패하면 회수가 핸들을 몰라 세션이 영구 과금 고아가
+            // 된다. 기록 실패 시 방금 연 세션을 즉시 best-effort로 중단한다.
+            if let Err(error) =
+                files::attach_upload_id(&state.pool, created.lease_id, &upload_id).await
+            {
+                cleanup_failed_multipart_create(&state, &created, &backend, Some(&upload_id)).await;
+                return Err(error.into());
+            }
+            vendor_upload_id = Some(upload_id);
+        }
+        if backend.is_relay() {
+            let secret = match state.crypto.relay_secret(&created.lease_id.to_string()) {
+                Ok(secret) => secret,
+                Err(error) => {
+                    cleanup_failed_multipart_create(
+                        &state,
+                        &created,
+                        &backend,
+                        vendor_upload_id.as_deref(),
+                    )
+                    .await;
+                    return Err(internal(error));
+                }
+            };
+            if let Err(error) = files::attach_write_secret(
+                &state.pool,
+                created.lease_id,
+                &filegate_core::client_key_hash(&secret),
+            )
+            .await
+            {
+                cleanup_failed_multipart_create(
+                    &state,
+                    &created,
+                    &backend,
+                    vendor_upload_id.as_deref(),
+                )
+                .await;
+                return Err(error.into());
+            }
+        }
+        tracing::info!(
+            event = "file.created",
+            file = %created.file_id,
+            client = %client.0,
+            storage = %created.storage.id,
+            multipart = true,
+        );
+        return Ok((
+            StatusCode::CREATED,
+            Json(CreateOut {
+                file_id: created.file_id,
+                put_url: None,
+                multipart: Some(MultipartOut {
+                    part_size: state.part_size,
+                    part_count: part_count(body.declared_size, state.part_size),
+                }),
+            }),
+        )
+            .into_response());
+    }
+
+    let put_url = match &backend {
+        StorageBackend::S3 {
+            spec,
+            force_relay: false,
+        } => {
+            let storage = state
+                .s3_clients
+                .get(&created.storage.id, spec, Address::Public);
+            s3_presign_put(
+                &storage,
+                &created.object_key,
+                body.content_type.as_deref(),
+                WRITE_LEASE_TTL,
+            )
+            .await
+            .map_err(ApiError::Storage)?
+        }
+        _ => {
+            let base = relay_base(&state)?;
+            let relay = RelaySecret::generate();
+            files::attach_write_secret(&state.pool, created.lease_id, &relay.hash).await?;
+            relay_url(base, created.lease_id, &relay.secret, None)
+        }
+    };
+
+    tracing::info!(
+        event = "file.created",
+        file = %created.file_id,
+        client = %client.0,
+        storage = %created.storage.id,
+    );
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateOut {
+            file_id: created.file_id,
+            put_url: Some(put_url),
+            multipart: None,
+        }),
+    )
+        .into_response())
+}
+
+/// create 응답 전에 실패한 multipart 예약은 클라이언트가 재개할 수 없다.
+/// 외부 세션 정리가 확인된 뒤에만 DB pending을 닫는다. 벤더 Abort가 실패하면
+/// location/lease를 남겨 만료 회수가 저장된 upload_id로 재시도할 수 있게 한다.
+async fn cleanup_failed_multipart_create(
+    state: &AppState,
+    created: &CreatedFile,
+    backend: &StorageBackend,
+    vendor_upload_id: Option<&str>,
+) {
+    if let StorageBackend::S3 { spec, .. } = backend {
+        let storage = state
+            .s3_clients
+            .get(&created.storage.id, spec, Address::Internal);
+        let cleaned = match vendor_upload_id {
+            Some(upload_id) => {
+                filegate_infra::s3_abort_multipart(&storage, &created.object_key, upload_id).await
+            }
+            None => filegate_infra::s3_abort_multipart_by_key(&storage, &created.object_key).await,
+        };
+        if let Err(error) = cleaned {
+            tracing::warn!(
+                event = "file.multipart_create_cleanup_failed",
+                file = %created.file_id,
+                step = "abort_vendor",
+                error = %error,
+            );
+            return;
+        }
+    }
+    if let Err(error) = files::reclaim_pending(&state.pool, created.file_id).await {
+        tracing::warn!(
+            event = "file.multipart_create_cleanup_failed",
+            file = %created.file_id,
+            step = "reclaim_pending",
+            error = %error,
+        );
+    }
+}
+
+pub(super) async fn commit(
+    State(state): State<AppState>,
+    Extension(client): Extension<ClientId>,
+    Path(file_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    let file = files::access(&state.pool, &client.0, file_id)
+        .await?
+        .ok_or_else(|| not_found("file not found"))?;
+
+    match file.state.as_str() {
+        // 멱등: 이미 확정된 파일의 commit은 같은 답을 돌려준다.
+        "active" => return Ok(committed_response(file_id, file.etag.unwrap_or_default())),
+        "deleted" => return Err(conflict("file is deleted")),
+        _ => {}
+    }
+
+    // 실물 검증. 중계는 스트림 중 filegate가 직접 기록한 실측을, 직결은
+    // 내부 주소의 head_object를 대조한다 — 계약은 같다 (spec 00).
+    let backend = backend_from_row(&state.crypto, &file.storage)?;
+    // multipart는 검증 단위가 part다 (ADR 002, spec 02) — 별도 게이트로.
+    if let Some(part_size) = file.part_size {
+        return super::multipart::commit(&state, &client, file_id, &file, part_size, &backend)
+            .await;
+    }
+    let (actual_size, etag) = if backend.is_relay() {
+        match files::recorded_upload(&state.pool, file_id).await? {
+            Some(recorded) => recorded,
+            // 아직 업로드 전 — pending에 남아 재시도할 수 있다 (spec 00).
+            None => return Err(bad_request("no uploaded object to commit")),
+        }
+    } else {
+        let StorageBackend::S3 { spec, .. } = &backend else {
+            return Err(internal("direct access requires an s3 storage"));
+        };
+        let storage = state
+            .s3_clients
+            .get(&file.storage.id, spec, Address::Internal);
+        match s3_head_object(&storage, &file.object_key)
+            .await
+            .map_err(ApiError::Storage)?
+        {
+            Some(head) => head,
+            None => return Err(bad_request("no uploaded object to commit")),
+        }
+    };
+    // 직결·중계 공용 사후 게이트. 중계는 바이트 엔드포인트가 이미 크기를
+    // 강제해 이 검사에 걸릴 수 없지만, 직결은 head_object 실측이라 걸린다.
+    if actual_size != file.declared_size {
+        return Err(bad_request("uploaded size does not match declaration"));
+    }
+    if let Some(declared_md5) = &file.declared_md5
+        && !declared_md5.eq_ignore_ascii_case(&etag)
+    {
+        return Err(bad_request("uploaded content does not match declared md5"));
+    }
+
+    if files::finalize_commit(&state.pool, file_id, &etag).await? {
+        tracing::info!(event = "file.committed", file = %file_id, client = %client.0);
+        return Ok(committed_response(file_id, etag));
+    }
+
+    // 전이 경합의 패자 — 현재 상태로 멱등 응답한다.
+    committed_or_conflict(&state, &client, file_id).await
+}
+
+/// commit 전이 경합의 패자 처리 (단일 PUT·multipart 공용): 현재 상태를 다시
+/// 읽어 active면 멱등 응답, 아니면 409. 승자가 확정을 끝낸 뒤라 대개 active다.
+pub(super) async fn committed_or_conflict(
+    state: &AppState,
+    client: &ClientId,
+    file_id: Uuid,
+) -> Result<Response, ApiError> {
+    let now = files::access(&state.pool, &client.0, file_id)
+        .await?
+        .ok_or_else(|| not_found("file not found"))?;
+    match now.state.as_str() {
+        "active" => Ok(committed_response(file_id, now.etag.unwrap_or_default())),
+        _ => Err(conflict("file is not committable")),
+    }
+}
+
+#[derive(Deserialize, Default)]
+pub(super) struct ReadBody {
+    /// 다운로드 표현 — 파일명 (RFC 5987로 인코딩되어 서명에 실린다, ADR 003).
+    filename: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ReadOut {
+    file_id: Uuid,
+    /// 만료가 있는 GET URL. 서비스가 302 redirect한다 (spec 00).
+    get_url: String,
+}
+
+pub(super) async fn read(
+    State(state): State<AppState>,
+    Extension(client): Extension<ClientId>,
+    Path(file_id): Path<Uuid>,
+    body: Option<Json<ReadBody>>,
+) -> Result<Response, ApiError> {
+    let body = body.map(|Json(inner)| inner).unwrap_or_default();
+    let file = files::access(&state.pool, &client.0, file_id)
+        .await?
+        .ok_or_else(|| not_found("file not found"))?;
+    match file.state.as_str() {
+        "active" => {}
+        "deleted" => return Err(conflict("file is deleted")),
+        // pending — commit 전까지 파일이 아니다 (spec 00).
+        _ => return Err(conflict("file is not committed")),
+    }
+
+    // 현재 location 재해석 — 이동해도 같은 file_id로 접근한다 (spec 00).
+    let backend = backend_from_row(&state.crypto, &file.storage)?;
+    let get_url = match &backend {
+        StorageBackend::S3 {
+            spec,
+            force_relay: false,
+        } => {
+            let storage = state
+                .s3_clients
+                .get(&file.storage.id, spec, Address::Public);
+            let url = s3_presign_get(
+                &storage,
+                &file.object_key,
+                body.filename.as_deref(),
+                READ_LEASE_TTL,
+            )
+            .await
+            .map_err(ApiError::Storage)?;
+            crate::lease::audit_read(
+                &state.pool,
+                file_id,
+                &file.storage.id,
+                &client.0,
+                file.declared_size,
+            )
+            .await;
+            url
+        }
+        _ => {
+            let base = relay_base(&state)?;
+            let relay = RelaySecret::generate();
+            let lease_id = files::issue_read_lease(
+                &state.pool,
+                file_id,
+                READ_LEASE_TTL.as_secs() as i64,
+                Some(&relay.hash),
+                &file.storage.id,
+                &client.0,
+                file.declared_size,
+            )
+            .await?;
+            relay_url(base, lease_id, &relay.secret, body.filename.as_deref())
+        }
+    };
+
+    tracing::info!(event = "file.read", file = %file_id, client = %client.0);
+    Ok(Json(ReadOut { file_id, get_url }).into_response())
+}
+
+#[derive(Serialize)]
+struct StatOut {
+    file_id: Uuid,
+    state: String,
+    declared_size: i64,
+}
+
+/// stat — 상태·크기만 (spec 00: location·URL은 제외).
+pub(super) async fn stat(
+    State(state): State<AppState>,
+    Extension(client): Extension<ClientId>,
+    Path(file_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    let stat = files::stat(&state.pool, &client.0, file_id)
+        .await?
+        .ok_or_else(|| not_found("file not found"))?;
+    // reclaimed는 내부 상태다 — 클라이언트 계약은 pending|active|deleted
+    // 셋뿐이고(spec 00), 회수된 파일은 파일이 된 적이 없다.
+    if stat.state == "reclaimed" {
+        return Err(not_found("file not found"));
+    }
+    Ok(Json(StatOut {
+        file_id,
+        state: stat.state,
+        declared_size: stat.declared_size,
+    })
+    .into_response())
+}
+
+/// delete = detach 결정 기록 (spec 00). 물리 purge는 reconciler 몫이다.
+pub(super) async fn delete(
+    State(state): State<AppState>,
+    Extension(client): Extension<ClientId>,
+    Path(file_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    match files::mark_deleted(&state.pool, &client.0, file_id).await? {
+        DeleteOutcome::Deleted => {
+            tracing::info!(event = "file.deleted", file = %file_id, client = %client.0);
+            Ok(deleted_response(file_id))
+        }
+        // 멱등 — 재삭제는 같은 답.
+        DeleteOutcome::AlreadyDeleted => Ok(deleted_response(file_id)),
+        DeleteOutcome::NotCommitted => Err(conflict("file is not committed")),
+        DeleteOutcome::NotFound => Err(not_found("file not found")),
+    }
+}
+
+#[derive(Serialize)]
+struct DeleteOut {
+    file_id: Uuid,
+    state: &'static str,
+}
+
+/// 클라이언트 delete는 200 + 상태 본문이다 — 운영자·S3 표면의 204와
+/// 다르다 (의도적). 이건 자원 제거가 아니라 detach 상태 전이라, 파일이
+/// `deleted`로 남아 stat이 계속 답한다 (spec 00). 전이 결과를 본문으로
+/// 돌려주는 게 계약이고, 멱등(AlreadyDeleted)도 같은 200을 받는다.
+fn deleted_response(file_id: Uuid) -> Response {
+    Json(DeleteOut {
+        file_id,
+        state: "deleted",
+    })
+    .into_response()
+}
+
+pub(super) fn committed_response(file_id: Uuid, etag: String) -> Response {
+    Json(CommitOut {
+        file_id,
+        state: "active",
+        etag,
+    })
+    .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CreateBody;
+
+    #[test]
+    fn create_body_needs_only_declared_size() {
+        // storage는 클라이언트 소유라 요청 본문에 위치 선언이 없다 (0.3.0).
+        let parsed: Result<CreateBody, _> = serde_json::from_str(r#"{"declared_size":1}"#);
+        assert!(matches!(parsed, Ok(ref b) if b.declared_size == 1));
+    }
+}

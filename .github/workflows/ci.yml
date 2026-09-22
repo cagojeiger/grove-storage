@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  hygiene:
+    name: Hygiene
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Release version and installer contracts
+        run: |
+          python3 deploy/ci/check-version.py
+          python3 -B -m unittest discover -s deploy/tests -v
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: filegate
+          POSTGRES_PASSWORD: filegate
+          POSTGRES_DB: filegate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U filegate -d filegate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      FILEGATE_DATABASE_URL: postgres://filegate:filegate@localhost:5432/filegate
+      # sqlx 표준 변수 — 마이그레이션 실행 테스트(db/tests/migrations.rs)가 읽는다
+      DATABASE_URL: postgres://filegate:filegate@localhost:5432/filegate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo check --workspace --all-targets
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: CLI API contract
+        run: |
+          cargo build --bin filegate --bin gscli --locked
+          python3 scripts/e2e-cli.py
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # RUSTSEC-2023-0071 (rsa/Marvin): rsa는 sqlx-mysql 전용 전이 의존성이라
+      # postgres-only인 이 워크스페이스 빌드엔 컴파일되지 않는다(cargo tree -i로 확인,
+      # Cargo.lock에만 잔존). 상위 픽스 릴리스도 아직 없다 — 근거 있는 무시.
+      - name: Audit
+        run: cargo audit --ignore RUSTSEC-2023-0071

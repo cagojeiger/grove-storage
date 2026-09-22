@@ -1,20 +1,72 @@
 [workspace]
 resolver = "2"
-members = ["crates/domain", "crates/registry"]
+members = [
+    "backend/crates/core",
+    "backend/crates/db",
+    "backend/crates/infra",
+    "backend/crates/api",
+    "backend/crates/cli",
+]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.4.1"
 edition = "2024"
-publish = false
 
 [workspace.dependencies]
-grove-domain = { path = "crates/domain" }
-secrecy = "0.10"
+filegate-core = { path = "backend/crates/core" }
+filegate-db = { path = "backend/crates/db" }
+filegate-infra = { path = "backend/crates/infra" }
+
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+axum = { version = "0.8" }
+tower-http = { version = "0.6", features = ["trace", "request-id", "limit", "timeout", "cors"] }
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "macros",
+    "migrate",
+    "uuid",
+    "chrono",
+] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio"] }
+# TLS 커넥터는 명시적으로 주입한다(infra::s3) — rustls 0.23 + ring로 sqlx와
+# 스택을 통일하고, aws-sdk의 레거시 "rustls"(0.21) 피처를 끊는다. aws-lc가
+# 아니라 ring이라 빌드에 cmake가 필요 없다.
+aws-smithy-http-client = { version = "1", default-features = false, features = ["rustls-ring"] }
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+serde_json = "1"
+anyhow = "1"
 thiserror = "2"
-url = "2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+secrecy = { version = "0.10", features = ["serde"] }
+aes-gcm = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+md-5 = "0.10"
+futures-util = { version = "0.3", default-features = false }
+subtle = "2"
+hex = "0.4"
+dotenvy = "0.15"
+percent-encoding = "2"
 
 [workspace.lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
+await_holding_lock = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unreachable = "warn"
+indexing_slicing = "warn"
+unwrap_in_result = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+debug = 1
