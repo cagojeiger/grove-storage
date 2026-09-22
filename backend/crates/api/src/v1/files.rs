@@ -9,9 +9,9 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use filegate_core::multipart::part_count;
 use filegate_db::files::{self, CreateOutcome, CreateSpec, CreatedFile, DeleteOutcome};
 use filegate_infra::{Address, s3_head_object, s3_presign_get, s3_presign_put};
+use grove_object_policy::multipart::part_count;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -21,7 +21,7 @@ use crate::error::{ApiError, bad_request, conflict, internal, not_found};
 use crate::lease::{READ_LEASE_TTL, WRITE_LEASE_TTL};
 use crate::routes::AppState;
 use crate::storage_access::{StorageBackend, backend_from_row};
-use crate::validation::{classify_upload, content_type_ok, declared_md5_format_ok};
+use grove_object_policy::validation::{classify_upload, content_type_ok, declared_md5_format_ok};
 
 #[derive(Deserialize)]
 pub(super) struct CreateBody {

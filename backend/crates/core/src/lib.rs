@@ -4,7 +4,8 @@ mod config;
 mod crypto;
 mod error;
 mod hash;
-pub mod multipart;
+// Preserve the existing Rust import path while policy has a single owner.
+pub use grove_object_policy::multipart;
 
 pub use config::{Config, DatabaseConfig, LogFormat, SecurityConfig, ServerConfig};
 pub use crypto::{Crypto, EncryptedSecret};

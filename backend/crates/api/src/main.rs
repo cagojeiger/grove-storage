@@ -14,7 +14,6 @@ mod spool;
 mod status;
 mod storage_access;
 mod v1;
-mod validation;
 
 use std::io;
 use std::sync::Arc;

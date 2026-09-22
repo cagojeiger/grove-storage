@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "backend/crates/object-service",
+    "backend/crates/object-policy",
     "backend/crates/core",
     "backend/crates/db",
     "backend/crates/infra",
@@ -13,6 +15,8 @@ version = "0.4.1"
 edition = "2024"
 
 [workspace.dependencies]
+grove-object-service = { path = "backend/crates/object-service" }
+grove-object-policy = { path = "backend/crates/object-policy" }
 filegate-core = { path = "backend/crates/core" }
 filegate-db = { path = "backend/crates/db" }
 filegate-infra = { path = "backend/crates/infra" }

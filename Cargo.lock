@@ -1011,6 +1011,8 @@ dependencies = [
  "filegate-db",
  "filegate-infra",
  "futures-util",
+ "grove-object-policy",
+ "grove-object-service",
  "hex",
  "hmac 0.12.1",
  "md-5 0.10.6",
@@ -1035,9 +1037,9 @@ version = "0.4.1"
 dependencies = [
  "aes-gcm",
  "dotenvy",
+ "grove-object-policy",
  "hex",
  "hkdf",
- "md-5 0.10.6",
  "secrecy",
  "sha2 0.10.9",
  "subtle",
@@ -1225,6 +1227,21 @@ checksum = "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
 dependencies = [
  "opaque-debug",
  "polyval",
+]
+
+[[package]]
+name = "grove-object-policy"
+version = "0.4.1"
+dependencies = [
+ "hex",
+ "md-5 0.10.6",
+]
+
+[[package]]
+name = "grove-object-service"
+version = "0.4.1"
+dependencies = [
+ "tokio",
 ]
 
 [[package]]

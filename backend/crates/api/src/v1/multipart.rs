@@ -7,9 +7,11 @@
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use filegate_core::multipart::{composite_etag, part_count, part_expected_size, part_number_ok};
 use filegate_db::files;
 use filegate_infra::Address;
+use grove_object_policy::multipart::{
+    composite_etag, part_count, part_expected_size, part_number_ok,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

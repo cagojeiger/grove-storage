@@ -3,6 +3,8 @@
 use filegate_core::Crypto;
 use filegate_db::{PgPool, files, registry};
 use filegate_infra::S3ClientCache;
+use grove_object_policy::completion::{CompletionAction, completion_action};
+use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 
 use super::{BATCH_LIMIT, sweep_object};
 use crate::lease::WRITE_LEASE_TTL;
@@ -38,28 +40,27 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                 continue;
             }
         };
-        let observation = match crate::storage_access::observe_backend_object(
+        let observation = crate::storage_access::observe_backend_object(
             s3_clients,
             &backend,
             &candidate.storage_id,
             &candidate.object_key,
         )
-        .await
-        {
-            Ok(observation) => observation,
+        .await;
+        let action = match completion_action(
+            candidate.expected_size,
+            &candidate.expected_etag,
+            true,
+            observation,
+        ) {
+            Ok(action) => action,
             Err(error) => {
                 tracing::warn!(event = "reconciler.observe_failed", file = %candidate.file_id, %error);
                 continue;
             }
         };
-        match observation {
-            Some(observed)
-                if observed.size == candidate.expected_size
-                    && observed
-                        .etag
-                        .as_deref()
-                        .is_none_or(|etag| etag.eq_ignore_ascii_case(&candidate.expected_etag)) =>
-            {
+        match action {
+            CompletionAction::Finalize => {
                 match files::finalize_completion(pool, candidate.file_id, &candidate.expected_etag)
                     .await
                 {
@@ -75,7 +76,7 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                     ),
                 }
             }
-            None => match files::reopen_completion(
+            CompletionAction::Reopen => match files::reopen_completion(
                 pool,
                 candidate.file_id,
                 WRITE_LEASE_TTL.as_secs() as i64,
@@ -93,18 +94,20 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                     %error,
                 ),
             },
-            Some(_) => match files::claim_cleanup(pool, candidate.file_id).await {
-                Ok(true) => tracing::warn!(
-                    event = "file.multipart_completion_invalid",
-                    file = %candidate.file_id,
-                ),
-                Ok(false) => {}
-                Err(error) => tracing::error!(
-                    event = "reconciler.reclaim_failed",
-                    file = %candidate.file_id,
-                    %error,
-                ),
-            },
+            CompletionAction::Cleanup => {
+                match files::claim_cleanup(pool, candidate.file_id).await {
+                    Ok(true) => tracing::warn!(
+                        event = "file.multipart_completion_invalid",
+                        file = %candidate.file_id,
+                    ),
+                    Ok(false) => {}
+                    Err(error) => tracing::error!(
+                        event = "reconciler.reclaim_failed",
+                        file = %candidate.file_id,
+                        %error,
+                    ),
+                }
+            }
         }
     }
 
@@ -116,20 +119,23 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
         }
     };
     for candidate in cleanup {
-        match sweep_object(pool, crypto, s3_clients, &candidate).await {
-            Ok(()) => match files::finalize_completion_cleanup(pool, candidate.file_id).await {
-                Ok(true) => tracing::info!(
-                    event = "file.multipart_completion_cleaned",
-                    file = %candidate.file_id,
-                ),
-                Ok(false) => {}
-                Err(error) => tracing::error!(
-                    event = "reconciler.reclaim_failed",
-                    file = %candidate.file_id,
-                    %error,
-                ),
-            },
-            Err(error) => tracing::warn!(
+        match cleanup_then_finalize(
+            || sweep_object(pool, crypto, s3_clients, &candidate),
+            || files::finalize_completion_cleanup(pool, candidate.file_id),
+        )
+        .await
+        {
+            Ok(true) => tracing::info!(
+                event = "file.multipart_completion_cleaned",
+                file = %candidate.file_id,
+            ),
+            Ok(false) => {}
+            Err(CleanupError::Metadata(error)) => tracing::error!(
+                event = "reconciler.reclaim_failed",
+                file = %candidate.file_id,
+                %error,
+            ),
+            Err(CleanupError::Physical(error)) => tracing::warn!(
                 event = "reconciler.sweep_failed",
                 file = %candidate.file_id,
                 %error,

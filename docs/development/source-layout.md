@@ -2,6 +2,11 @@
 
 ```text
 backend/crates/
+├── object-service/        grove-object-service: 정리 성공 후 메타데이터 확정
+│   ├── src/cleanup.rs     외부 작업 순서·실패 단계 구분, runtime 의존성 없음
+│   └── tests/            cleanup·cleanup_failures, fake 작업으로 실패 주입
+├── object-policy/         grove-object-policy: 업로드 선언·파트·ETag·완료 복구 판단
+│   └── tests/             geometry·etag·validation·completion·completion_failures
 ├── cli/                   gscli: 원격 관리자 API 조회·변경
 │   ├── src/               인자·설정·HTTP·입력·확인·비밀 출력·응답 출력
 │   │   ├── commands/      조회·변경 실행
@@ -24,13 +29,14 @@ backend/crates/
 │   ├── migrations/         PostgreSQL 스키마
 │   └── tests/              DB 통합 테스트
 ├── infra/src/              fs·외부 S3 I/O
-└── core/src/               설정·암호·해시·multipart 계산
+└── core/src/               설정·암호·해시, multipart는 policy 재노출
 ```
 
 ## 책임
 
 | 모듈 | 입력 → 결과 | 정합성 경계 |
 |---|---|---|
+| `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
 | `api/routes`, `api/admin` | HTTP → 인증된 요청 | 표면별 인증·예약 경로 |
 | `api/s3/auth` | 원본 URI·헤더 → client | SigV4 검증 |
 | `api/s3/object_response` | Range·쿼리 → 응답 정책 | 인코딩·헤더 검증 |
@@ -42,7 +48,8 @@ backend/crates/
 | `api/status` | 로컬 Config → DB·저장소 접근·요약 | HTTP 독립, 부팅과 같은 storage 검사 |
 | `cli` | 운영자 인자 → 관리자 HTTP API → table·JSON | DB 의존성 없음, 기존 서버·로컬 status와 분리 |
 | `cli/update` | 공식 Release → 검증된 실행 파일 | 서버 인증 독립, 설치·업데이트의 동일 잠금·교체 |
-| `core` | 값 → 검증·계산 | 프로토콜·DB에서 독립된 계산 |
+| `object-policy` | 값 → 업로드 검증·파트 계산·ETag·복구 결정 | HTTP·DB·런타임·환경 설정 독립 |
+| `core` | 환경 설정·암호·키 해시 | 기존 multipart import 경로는 policy 재노출 |
 
 `uploads`의 크기보다 상태 전이의 원자성을 우선한다. 논리키 교체와 옛 파일
 detach는 같은 트랜잭션을 공유한다.
@@ -51,6 +58,9 @@ detach는 같은 트랜잭션을 공유한다.
 
 | 범위 | 테스트 |
 |---|---|
+| 정리 실행 순서·실패·재시도 | `object-service/tests/{cleanup,cleanup_failures}.rs`; `cargo test -p grove-object-service --locked` |
+| 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
+| 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |
 | 조합 라우팅·인증·CORS | `api/src/routes/tests.rs` |
 | S3 서명·쿼리 | `api/src/s3/auth.rs`, `s3/mod.rs` |
 | Range·응답 헤더 | `api/src/s3/object_response/tests.rs` |

@@ -8,6 +8,8 @@ name = "filegate"
 path = "src/main.rs"
 
 [dependencies]
+grove-object-service = { workspace = true }
+grove-object-policy = { workspace = true }
 filegate-core = { workspace = true }
 filegate-db = { workspace = true }
 filegate-infra = { workspace = true }

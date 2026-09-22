@@ -1,0 +1,11 @@
+[package]
+name = "grove-object-policy"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hex = { workspace = true }
+md-5 = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,6 +3,7 @@
 use filegate_core::Crypto;
 use filegate_db::{PgPool, registry, s3_registry as s3reg};
 use filegate_infra::S3ClientCache;
+use grove_object_policy::completion::{CompletionAction, completion_action};
 
 use super::BATCH_LIMIT;
 use crate::lease::WRITE_LEASE_TTL;
@@ -16,8 +17,14 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
         }
     };
     for candidate in candidates {
-        let observation = match observe_s3_completion(pool, crypto, s3_clients, &candidate).await {
-            Ok(observation) => observation,
+        let observation = observe_s3_completion(pool, crypto, s3_clients, &candidate).await;
+        let action = match completion_action(
+            candidate.expected_size,
+            &candidate.expected_etag,
+            candidate.multipart,
+            observation,
+        ) {
+            Ok(action) => action,
             Err(error) => {
                 tracing::warn!(
                     event = "reconciler.observe_failed",
@@ -27,14 +34,8 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                 continue;
             }
         };
-        match observation {
-            Some(observed)
-                if observed.size == candidate.expected_size
-                    && observed
-                        .etag
-                        .as_deref()
-                        .is_none_or(|etag| etag.eq_ignore_ascii_case(&candidate.expected_etag)) =>
-            {
+        match action {
+            CompletionAction::Finalize => {
                 let finalized = if candidate.multipart {
                     s3reg::finalize_multipart_upload(
                         pool,
@@ -65,7 +66,7 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                     ),
                 }
             }
-            None if candidate.multipart => {
+            CompletionAction::Reopen => {
                 match s3reg::reopen_completion(
                     pool,
                     candidate.file_id,
@@ -85,18 +86,20 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                     ),
                 }
             }
-            _ => match s3reg::mark_completion_aborting(pool, candidate.file_id).await {
-                Ok(true) => tracing::warn!(
-                    event = "s3.completion_invalid",
-                    file = %candidate.file_id,
-                ),
-                Ok(false) => {}
-                Err(error) => tracing::error!(
-                    event = "reconciler.reclaim_failed",
-                    file = %candidate.file_id,
-                    %error,
-                ),
-            },
+            CompletionAction::Cleanup => {
+                match s3reg::mark_completion_aborting(pool, candidate.file_id).await {
+                    Ok(true) => tracing::warn!(
+                        event = "s3.completion_invalid",
+                        file = %candidate.file_id,
+                    ),
+                    Ok(false) => {}
+                    Err(error) => tracing::error!(
+                        event = "reconciler.reclaim_failed",
+                        file = %candidate.file_id,
+                        %error,
+                    ),
+                }
+            }
         }
     }
 }

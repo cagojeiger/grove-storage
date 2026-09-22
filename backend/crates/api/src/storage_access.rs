@@ -41,11 +41,7 @@ pub enum CommitErr {
     Storage(anyhow::Error),
 }
 
-pub struct ObjectObservation {
-    pub size: i64,
-    /// fs는 ETag 메타데이터가 없어 None. S3는 벤더 ETag를 반환한다.
-    pub etag: Option<String>,
-}
+pub use grove_object_policy::completion::ObjectObservation;
 
 /// completing 세션의 외부 작업 결과를 관찰한다. object_key는 파일별로
 /// 유일하므로 fs는 크기, S3는 크기+ETag를 완료 예상값과 대조할 수 있다.

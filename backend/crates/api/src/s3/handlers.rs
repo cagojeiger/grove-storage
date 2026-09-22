@@ -20,7 +20,7 @@ use crate::lease::{WRITE_LEASE_TTL, run_with_completion_heartbeat};
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
 use crate::storage_access::{CommitErr, StorageBackend, backend_from_row, commit_temp_to_backend};
-use crate::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
+use grove_object_policy::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
 
 // ── PutObject ────────────────────────────────────────────────
 

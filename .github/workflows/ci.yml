@@ -10,6 +10,15 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  object-policy:
+    name: Object contracts (no services)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p grove-object-policy --locked
+      - run: cargo test -p grove-object-service --locked
+
   hygiene:
     name: Hygiene
     runs-on: ubuntu-latest

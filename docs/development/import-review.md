@@ -19,7 +19,7 @@
 기존 미커밋 작업에서 가져온 스키마다. 이번 책임 분석에서 새 스키마를 설계한 것은 아니다.
 콘솔은 메모리 기반 미리보기이며 실제 관리자 API 연결은 후속 작업이다.
 
-## 현재 구조
+## 이관 기준선 구조
 
 ```text
 backend/crates/
@@ -69,7 +69,7 @@ S3 클라이언트에 직접 묶여 있다는 점이다. 크레이트 수보다 
 
 ## 우선순위
 
-| 순서 | 후보 책임 / 제안 crate | 현재 코드 | 완료 기준 |
+| 순서 | 후보 책임 / 제안 crate | 이관 시 코드 | 완료 기준 |
 |---|---|---|---|
 | 1 | 순수 객체 규칙 / `grove-object-policy` | `core/multipart.rs`, `api/validation.rs`, 완료 관찰 판단 | DB·Tokio·AWS·환경 변수 없이 값 기반 테스트 |
 | 2 | 업로드·완료·복구 유스케이스 / `grove-object-service` | `v1/files.rs`, `v1/multipart.rs`, `s3/multipart.rs`, `reconciler/*` | 저장소 실패·응답 유실·재시작을 fake port로 재현 |
@@ -77,7 +77,8 @@ S3 클라이언트에 직접 묶여 있다는 점이다. 크레이트 수보다 
 | 4 | 등록부 유스케이스 / `grove-registry` | `admin/storages.rs`, `admin/clients.rs`, `db/registry.rs` | 등록 검증·키 회전·참조 보호를 HTTP 밖에서 테스트 |
 | 5 | 관리자 인증 유스케이스 / `grove-admin-auth` | `api/admin_auth`, `db/admin_auth.rs` | 발급·폐기·복구·세션 만료 정책, HTTP의 cookie/CSRF는 adapter |
 
-이 표는 제안이며 현재 Cargo workspace에 추가된 crate 목록이 아니다. 각 단계에서
+1단계의 `grove-object-policy`는 업로드 선언·파트 계산·ETag에 한해 추출했다.
+완료 관찰 판단도 같은 crate로 추출했다. 나머지 표는 제안이다. 각 단계에서
 실제 재사용·테스트 경계가 확인되는 책임만 독립 crate로 만든다.
 
 ```text
@@ -128,7 +129,7 @@ S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 
 | 범위 | 현재 | 보완 |
 |---|---|---|
 | PG 수명주기·경합 | native/S3 완료·abort·GC·lock wait 테스트 | 그대로 유지하고 adapter 계약으로 연결 |
-| 순수 규칙 | core multipart·API validation 테스트 | 하나의 policy 테스트 집합 |
+| 순수 규칙 | `object-policy/tests`로 추출 완료 | geometry·ETag·validation 독립 테스트 |
 | 요청↔vendor↔DB 실패 조합 | 핸들러·워커에 결합 | 단계별 실패 주입과 재시작 테스트 |
 | S3 프로토콜 | SigV4·Range·라우팅 단위 테스트, capture 스크립트 | 실제 SDK+backend 왕복 검증 |
 | 관리자 인증 | DB·HTTP 정책 테스트 | 실서버 로그인·복구·폐기 시나리오 자동화 |
@@ -141,8 +142,8 @@ S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 
 
 ## 후속 순서
 
-1. 이관 기준선 검증: workspace·PG·CLI·콘솔 테스트.
-2. 순수 객체 규칙 추출: 공개 API·schema·동작 유지.
+1. 완료: 이관 기준선 검증 (workspace·PG·CLI·콘솔 테스트).
+2. 구현: 순수 업로드 규칙 추출 (API 응답·schema·동작 유지, core multipart 경로 재노출).
 3. 업로드/완료/복구 유스케이스 추출: 실패 주입 테스트부터 보강.
 4. 등록부 변경 안전성 보완: 정책 확정·회귀 테스트·별도 동작 변경.
 5. 관리자 API에 콘솔 연결: CLI 기능 대응표와 실제 E2E.
@@ -177,3 +178,86 @@ Git 이력에 기록된 release 이름은 새 저장소에서 바이너리를 �
 
 실제 외부 S3 vendor 왕복, 운영 데이터 이관, release 바이너리 설치 검증은 이번
 실행 범위에 포함하지 않았다. 로컬 테스트 통과와 운영 전환 완료를 구분한다.
+
+## 1단계: 순수 업로드 규칙 추출
+
+| 항목 | 결과 |
+|---|---|
+| 소유 crate | `grove-object-policy` (`backend/crates/object-policy`) |
+| 책임 | 업로드 선언 검증, part 수·크기·offset, composite ETag |
+| 의존성 | `hex`, `md-5`; DB·HTTP·런타임·환경 설정 독립 |
+| 호출자 | Native/S3 API와 blob 전송이 직접 사용 |
+| 기존 Rust 경로 | `filegate_core::multipart`는 새 구현을 재노출 |
+| 동작 | 오류 문구·검증 순서·계산 유지; schema·SQL·복구 흐름 유지 |
+| 테스트 | 기존 8개 이동 + 경계값·검증 순서 5개 추가, 세 파일로 분리 |
+| CI | DB service 없는 독립 policy 테스트 job 추가 |
+| 로컬 검증 | workspace 244 통과, release artifact 1개 ignored; fmt·clippy 통과 |
+
+```sh
+cargo test -p grove-object-policy --locked
+```
+
+호출자는 기존과 같이 검증된 part 설정과 기록된 part MD5를 공급한다.
+이번 단계는 입력 계약의 확장이 아닌 추출이다. 실패 보상 실행은 후속 유스케이스
+단계에서 다룬다.
+
+## 2단계: 완료 복구 판단
+
+```text
+이전                                   이후
+api/reconciler/                         object-policy/src/completion.rs
+  native_completion.rs                   실물 관찰 결과 -> 복구 결정
+    관찰 + 판단 + DB 전이              api/reconciler/
+  s3_completion.rs                       native_completion.rs
+    관찰 + 같은 판단 + DB 전이           s3_completion.rs
+                                           관찰 -> 공통 판단 -> 기존 DB 전이
+```
+
+| 관찰 결과 | multipart | single upload |
+|---|---|---|
+| 크기·ETag 일치 | Finalize | Finalize |
+| ETag 없는 fs, 크기 일치 | Finalize | Finalize |
+| 객체 없음 | Reopen | Cleanup |
+| 크기 또는 ETag 불일치 | Cleanup | Cleanup |
+| 관찰 오류 | 오류 유지, 다음 tick에서 재관찰 | 오류 유지, 다음 tick에서 재관찰 |
+
+`completion.rs`는 결정을 반환한다. Reconciler는 기존 DB 함수를 호출하며,
+DB가 여전히 최신 소유권·락·조건부 전이를 집행한다. 판단 결과는 전이 권한이 아니다.
+스캔 순서·로그·lease TTL·물리 정리 순서·SQL은 유지한다.
+
+테스트는 정상·부재·불일치·빈 객체 4개와 관찰 실패·재관찰 3개로 분리한다.
+실패 주입은 policy 입력의 timeout/permission/unavailable 결과를 사용한다.
+이는 실제 vendor 장애나 DB commit 실패의 end-to-end 검증을 뜻하지 않는다.
+물리 정리 후 DB 확정 순서는 아래 3단계에서 추출한다. 업로드 생성과 완료의
+실패 보상 흐름 전체는 후속 범위다.
+
+## 3단계: 물리 정리 후 확정
+
+```text
+api/reconciler
+  Native completion cleanup / S3 abort cleanup / purge
+    -> object-service/cleanup_then_finalize
+         1. 물리 정리 (기존 sweep_object)
+         2. 성공한 경우에만 기존 DB finalize 호출
+    <- 적용 여부 또는 Physical / Metadata 오류
+```
+
+| 경계 | 소유자 |
+|---|---|
+| 작업 순서·실패 단계 구분 | `grove-object-service` |
+| 후보 선정·재시도 tick·로그 | 기존 Reconciler |
+| 물리 삭제·S3 abort·멱등성 | 기존 storage adapter |
+| 최신 소유권 확인·조건부 전이·복구 정보 해제 | 기존 DB 트랜잭션 |
+
+정상 순서, 정리 실패, 삭제 응답 유실, DB 실패, commit 응답 유실, 중간 취소,
+중복 실행, 조건부 전이 거절을 8개 fake 기반 테스트로 검증한다. DB 오류가
+항상 rollback을 뜻하지 않으므로 commit 응답 유실 후 이미 확정된 경우도 구분한다.
+함수 내부 재시도와 물리 작업 rollback은 추가하지 않는다.
+
+일반 pending reclaim은 기존처럼 DB 전이가 먼저이므로 이 함수의 적용 대상과
+구분한다. SQL·migration·스캔 순서·lease TTL은 유지한다.
+실제 PG 동시성은 기존 DB 테스트가 검증하며, fake 테스트를 실제 vendor 장애
+또는 DB 네트워크 장애의 end-to-end 검증으로 취급하지 않는다.
+
+`grove-object-service`는 런타임 의존성이 없고 테스트만 Tokio를 사용한다.
+서버·DB 없이 `cargo test -p grove-object-service --locked`로 실행한다.

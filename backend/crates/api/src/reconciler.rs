@@ -23,6 +23,7 @@ use filegate_core::Crypto;
 use filegate_db::files::{self, SweepCandidate};
 use filegate_db::{PgPool, registry, s3_registry as s3reg, usage};
 use filegate_infra::{Address, S3ClientCache, fs as fs_backend, s3_head_object};
+use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
@@ -153,20 +154,23 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
     match s3reg::cleanup_candidates(pool, BATCH_LIMIT).await {
         Ok(candidates) => {
             for candidate in candidates {
-                match sweep_object(pool, crypto, s3_clients, &candidate).await {
-                    Ok(()) => match s3reg::finalize_abort(pool, candidate.file_id).await {
-                        Ok(true) => tracing::info!(
-                            event = "s3.upload_aborted",
-                            file = %candidate.file_id,
-                        ),
-                        Ok(false) => {}
-                        Err(error) => tracing::error!(
-                            event = "reconciler.reclaim_failed",
-                            file = %candidate.file_id,
-                            %error,
-                        ),
-                    },
-                    Err(error) => tracing::warn!(
+                match cleanup_then_finalize(
+                    || sweep_object(pool, crypto, s3_clients, &candidate),
+                    || s3reg::finalize_abort(pool, candidate.file_id),
+                )
+                .await
+                {
+                    Ok(true) => tracing::info!(
+                        event = "s3.upload_aborted",
+                        file = %candidate.file_id,
+                    ),
+                    Ok(false) => {}
+                    Err(CleanupError::Metadata(error)) => tracing::error!(
+                        event = "reconciler.reclaim_failed",
+                        file = %candidate.file_id,
+                        %error,
+                    ),
+                    Err(CleanupError::Physical(error)) => tracing::warn!(
                         event = "reconciler.sweep_failed",
                         file = %candidate.file_id,
                         %error,
@@ -216,18 +220,23 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
     match files::purgeable(pool, BATCH_LIMIT).await {
         Ok(candidates) => {
             for candidate in candidates {
-                match sweep_object(pool, crypto, s3_clients, &candidate).await {
-                    Ok(()) => match files::finalize_purge(pool, &candidate).await {
-                        Ok(true) => tracing::info!(
-                            event = "file.purged",
-                            file = %candidate.file_id,
-                        ),
-                        Ok(false) => {} // 이미 purge됨 — 멱등.
-                        Err(error) => {
-                            tracing::error!(event = "reconciler.purge_failed", file = %candidate.file_id, %error)
-                        }
-                    },
-                    Err(error) => tracing::warn!(
+                match cleanup_then_finalize(
+                    || sweep_object(pool, crypto, s3_clients, &candidate),
+                    || files::finalize_purge(pool, &candidate),
+                )
+                .await
+                {
+                    Ok(true) => tracing::info!(
+                        event = "file.purged",
+                        file = %candidate.file_id,
+                    ),
+                    Ok(false) => {}
+                    Err(CleanupError::Metadata(error)) => tracing::error!(
+                        event = "reconciler.purge_failed",
+                        file = %candidate.file_id,
+                        %error,
+                    ),
+                    Err(CleanupError::Physical(error)) => tracing::warn!(
                         event = "reconciler.sweep_failed",
                         file = %candidate.file_id,
                         %error,

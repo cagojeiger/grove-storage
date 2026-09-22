@@ -15,10 +15,10 @@
 use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use filegate_core::multipart::{MAX_PARTS, composite_etag, part_number_ok};
 use filegate_db::files::{self, CreateOutcome, CreateSpec};
 use filegate_db::s3_registry as s3reg;
 use filegate_infra::{Address, fs as fs_backend};
+use grove_object_policy::multipart::{MAX_PARTS, composite_etag, part_number_ok};
 use uuid::Uuid;
 
 use super::S3Result;
@@ -34,7 +34,7 @@ use crate::lease::{
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
 use crate::storage_access::{StorageBackend, backend_from_row, cleanup_backend_upload};
-use crate::validation::content_type_ok;
+use grove_object_policy::validation::content_type_ok;
 
 /// Complete 요청 XML 본문 상한 — part 목록만 담긴다 (10,000개 × ~120B ≈ 1.2MB).
 /// 바이트는 이 표면을 지나지 않으므로 넉넉히 4MiB로 둔다.
