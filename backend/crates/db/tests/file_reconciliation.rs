@@ -32,7 +32,12 @@ async fn expired_pending_reclaims_and_frees_observation(pool: PgPool) {
     let candidate = candidates.first().unwrap();
     assert_eq!(candidate.file_id, file.file_id);
     assert!(files::finalize_reclaim(&pool, candidate).await.unwrap());
-    // location이 사라졌으니 관찰량에서도 사라진다 — 남은 행 = 현재 점유.
+    assert_eq!(observed(&pool).await, (0, 0, 100));
+    assert!(
+        files::finalize_reclaim_cleanup(&pool, candidate)
+            .await
+            .unwrap()
+    );
     assert_eq!(observed(&pool).await, (0, 0, 0));
 }
 
@@ -168,7 +173,12 @@ async fn prune_terminal_files_keeps_occupied_and_leased_rows(pool: PgPool) {
             .unwrap(),
         0
     );
-    // lease GC 뒤에는 B만 정리된다 — A는 여전히 점유가 막는다.
+    // 물리 정리 확정과 lease GC 뒤에는 B만 정리된다.
+    assert!(
+        files::finalize_reclaim_cleanup(&pool, &candidates[0])
+            .await
+            .unwrap()
+    );
     files::prune_terminal_leases(&pool, 0, 10).await.unwrap();
     assert_eq!(
         files::prune_terminal_files(&pool, RETENTION_90D, 10)

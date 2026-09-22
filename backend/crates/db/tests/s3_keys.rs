@@ -99,7 +99,7 @@ async fn key_mapping_dies_with_the_file_row(pool: PgPool) {
     s3::upsert_key(&pool, "c", "dir/b.bin", file.file_id)
         .await
         .unwrap();
-    // reclaim → lease GC → 보존 경과 → prune (lifecycle.rs와 같은 절차).
+    // reclaim → 물리 정리 확정 → lease GC → 보존 경과 → prune.
     sqlx::query("UPDATE leases SET expires_at = now() - interval '1 hour' WHERE file_id = $1")
         .bind(file.file_id)
         .execute(&pool)
@@ -111,6 +111,9 @@ async fn key_mapping_dies_with_the_file_row(pool: PgPool) {
             .await
             .unwrap()
     );
+    files::finalize_reclaim_cleanup(&pool, &candidates[0])
+        .await
+        .unwrap();
     files::prune_terminal_leases(&pool, 0, 10).await.unwrap();
     sqlx::query("UPDATE files SET created_at = now() - interval '91 days' WHERE id = $1")
         .bind(file.file_id)

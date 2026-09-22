@@ -25,8 +25,10 @@ backend/crates/
 │   ├── storage_access.rs   등록부에서 backend 구성·물리 작업
 │   ├── status.rs           현재 로컬 DB·저장소 진단 CLI
 │   └── reconciler/         완료 복구
+│       └── reclaim.rs      만료 회수의 물리 정리·재시도
 ├── db/
 │   ├── src/files/          파일·lease 상태 전이
+│   │   └── reclaim_cleanup.rs  reclaimed 정리 후보·확정
 │   ├── src/s3_registry/    자격증명·논리키·업로드 세션
 │   ├── migrations/         PostgreSQL 스키마
 │   └── tests/              DB 통합 테스트

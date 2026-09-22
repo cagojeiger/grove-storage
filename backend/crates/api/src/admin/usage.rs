@@ -20,7 +20,7 @@ struct UsageOut {
     purge_pending_bytes: i64,
     /// 한도 − (예약 + 확정 + purge 대기).
     remaining_bytes: i64,
-    /// 버킷과 짝을 이루는 파일 수 (pending↔reserved, active, deleted↔purge_pending).
+    /// 파일 수 (pending↔reserved, active, deleted/reclaimed↔purge_pending).
     reserved_files: i64,
     active_files: i64,
     purge_pending_files: i64,

@@ -3,12 +3,12 @@
 //! 진실은 files다: purge가 location을 실제로 지우므로 남은 행이 곧 현재
 //! 점유고, 파생 카운터를 저장하지 않으니 어긋날 것도 없다 (spec 00 —
 //! capacity는 집행이 아니라 관찰). 버킷 이름은 상태의 별칭이다:
-//! reserved=pending, active=active, purge_pending=deleted(미purge).
+//! reserved=pending, active=active, purge_pending=deleted/reclaimed(물리 정리 대기).
 
 use sqlx::PgPool;
 
 /// storage 하나의 용량·3버킷·상태별 파일 수. 파일 수는 버킷과 짝을 이룬다:
-/// reserved↔pending, active↔active, purge_pending↔deleted(아직 purge 전).
+/// reserved↔pending, active↔active, purge_pending↔deleted/reclaimed(정리 전).
 /// purge 완료 파일은 locations가 사라지므로 세지 않는다 — 점유가 없다.
 #[derive(sqlx::FromRow)]
 pub struct StorageUsage {
@@ -32,11 +32,11 @@ pub async fn by_storage(pool: &PgPool) -> Result<Vec<StorageUsage>, sqlx::Error>
              AS reserved_bytes, \
          coalesce(sum(f.declared_size) FILTER (WHERE f.state = 'active'), 0)::bigint \
              AS active_bytes, \
-         coalesce(sum(f.declared_size) FILTER (WHERE f.state = 'deleted'), 0)::bigint \
+         coalesce(sum(f.declared_size) FILTER (WHERE f.state IN ('deleted', 'reclaimed')), 0)::bigint \
              AS purge_pending_bytes, \
          count(f.id) FILTER (WHERE f.state = 'pending') AS reserved_files, \
          count(f.id) FILTER (WHERE f.state = 'active') AS active_files, \
-         count(f.id) FILTER (WHERE f.state = 'deleted') AS purge_pending_files \
+         count(f.id) FILTER (WHERE f.state IN ('deleted', 'reclaimed')) AS purge_pending_files \
          FROM storages s \
          LEFT JOIN locations l ON l.storage_id = s.id \
          LEFT JOIN files f ON f.id = l.file_id \

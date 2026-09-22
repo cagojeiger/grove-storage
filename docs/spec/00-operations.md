@@ -73,11 +73,12 @@ stateDiagram-v2
 
 | 작업 | 보존·제거 조건 |
 |---|---|
-| generic 회수 | native/S3 완료 소유 행을 제외하고 pending을 선점 |
+| generic 회수 | native/S3 완료 소유 행을 제외하고 pending→reclaimed 선점, location·lease 보존 |
+| 회수 실물 정리 | reclaimed+location을 재조회, 물리 삭제 성공 뒤 location 해제; 실패는 다음 tick에서 재시도 |
 | purge | 물리 삭제 성공 뒤 location 제거 |
 | 완료 복구 | [native multipart](02-multipart.md#완료와-복구)·[S3](03-s3-surface.md#완료와-복구) |
 | read lease 정리 | 만료를 expired로 기록 |
-| terminal lease GC | 24시간 보존, S3 세션·native completion 소유 파일 보호 |
+| terminal lease GC | 24시간 보존, S3 세션·native completion·location이 남은 reclaimed 파일 보호 |
 | terminal file GC | 90일 보존, location·lease 정리가 끝난 reclaimed/deleted 행 |
 | lease_history | 90일 보존 |
 
@@ -89,10 +90,18 @@ stateDiagram-v2
 |---|---|
 | reserved | pending 선언 크기 합 |
 | active | 활성 점유 |
-| purge_pending | deleted 중 location이 남은 점유 |
+| purge_pending | deleted 또는 reclaimed 중 location이 남은 선언 크기·파일 수 |
 | remaining | 등록 capacity − reserved − active − purge_pending |
 | client × storage | 활성 파일 수·바이트 |
 | history | 일별 활성 점유 스냅샷 |
+
+회수 선점은 늦은 commit을 차단하고 reserved를 해제한다. 물리 정리가 끝날 때까지
+같은 선언 크기를 purge_pending에 포함하므로 실패 시 remaining이 조기에 증가하지 않는다.
+물리 바이트의 실측값이 아니라 보수적인 선언 크기 기준이다.
+
+이 동작은 기존 스키마를 사용한다. 배포 시 이전 reconciler들을 중지하고 새 버전으로
+전환한다. 이전 버전은 reclaimed 정리 재시도·lease 보호를 지원하지 않는다.
+이미 구버전이 location을 제거한 고아 객체는 이 변경만으로 복원되지 않는다.
 
 capacity는 등록 기준선이고 실제 filesystem 여유 공간과 구분한다.
 점유는 files·locations에서 조회 시 집계한다. 일별 스냅샷은 UTC 자정 이후 첫 tick의

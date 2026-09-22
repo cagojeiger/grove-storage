@@ -111,7 +111,7 @@ Fake는 흐름 테스트에 사용하고, 동시성 보장은 실제 PG 테스�
 
 native와 S3 완료 흐름은 닮았지만 S3에는 논리키 publish와 single upload 복구가
 추가된다. 공통 관찰 판단을 먼저 추출하고 각각의 확정 작업은 구분한다.
-현재 generic reclaim은 전이 후 물리 삭제 실패를 orphan 로그로 남기는 정책이며,
+이관 당시 generic reclaim은 전이 후 물리 삭제 실패를 orphan 로그로 남기는 정책이며,
 S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 이 차이를 보존한다.
 
 ## 별도 동작 개선 후보
@@ -119,7 +119,7 @@ S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 
 | 코드에서 확인한 위험 | 영향 | 다음 검증 |
 |---|---|---|
 | 사용 중 storage의 물리 주소 전체 치환 | 기존 location이 다른 실물을 가리킬 수 있음 | 후속 수정: location 존재 시 주소 변경 409, 파일 예약과 storage 락 공유 |
-| generic reclaim은 DB 전이 후 물리 삭제 실패를 로그로 남김 | orphan 정리가 지속 재시도되지 않을 수 있음 | 장애 주입으로 현재 계약 재현 후 durable cleanup 필요성 결정 |
+| generic reclaim의 물리 삭제 실패 | orphan 정리 재시도 소실 | 후속 수정: reclaimed location·lease 보존, 물리 성공 뒤 해제 |
 
 두 항목은 이번 기계적 이관에서 변경하지 않았다. 책임 추출과 동작 변경은 별도
 커밋·검증으로 진행한다. 크레이트 분리만으로 해결된 것으로 취급하지 않는다.
@@ -139,9 +139,9 @@ S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 
 
 ### 일반 만료 회수: 수정 전 재현
 
-`db/tests/reclaim_cleanup_gap.rs`는 현재 한계를 기록하는 characterization test다.
-정상적인 복구 계약을 선언하는 테스트가 아니며, durable retry 구현 때 기대값을
-복구 정보 보존·재시도 성공으로 교체한다.
+`9b619d1`의 `db/tests/reclaim_cleanup_gap.rs`는 기존 한계의 characterization test다.
+후속 수정에서 `reclaim_cleanup.rs`로 이름을 바꾸고 복구 정보 보존·재시도 성공을
+검증하는 회귀 테스트로 전환했다. 아래 표는 수정 전 재현 결과다.
 
 | 단계 | 격리 PostgreSQL에서 확인한 결과 |
 |---|---|
@@ -158,8 +158,10 @@ orphan 허용 정책을 확인한 것으로, 이번 리팩토링의 신규 회�
 재현 테스트 1개와 해당 target clippy·fmt를 검증했다. 실행 코드 변경은 없다.
 
 후속 수정은 pending 소유권을 먼저 종료하면서 정리 위치를 내구적으로 보존하고,
-물리 정리 성공 뒤에만 복구 자료를 해제하는 방향이다. 단순히 삭제 순서를 뒤집으면
-늦은 commit과 경합할 수 있으므로 claim·재시도·GC·사용량·주소 보호를 함께 검증한다.
+물리 정리 성공 뒤에만 복구 자료를 해제한다. claim·재시도·GC·사용량·주소 보호를
+함께 검증한다. `reclaimed + location`이 정리 대기 기록이므로 새 테이블은 없다.
+실제 filesystem의 삭제 오류를 발생시킨 뒤 같은 Reconciler를 재실행하는 통합
+테스트는 `api/src/reconciler/reclaim/tests.rs`에 있다. 외부 S3 장애 검증과는 구분한다.
 
 ## 테스트 정리
 

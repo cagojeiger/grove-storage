@@ -7,6 +7,7 @@ mod commit;
 mod completion;
 mod create;
 mod multipart;
+mod reclaim_cleanup;
 mod sweep;
 
 pub use access::{
@@ -29,6 +30,7 @@ pub use multipart::{
     claim_relay_part, done_parts, extend_write_lease, finish_relay_part, has_done_parts,
     record_part_done, renew_relay_part_lease, write_lease,
 };
+pub use reclaim_cleanup::{finalize_reclaim_cleanup, reclaim_cleanup_candidates};
 pub use sweep::{
     DeleteOutcome, SweepCandidate, active_multipart_lease_ids, expire_read_leases, expired_pending,
     finalize_purge, finalize_reclaim, mark_deleted, prune_history, prune_terminal_files,

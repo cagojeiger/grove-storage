@@ -8,12 +8,13 @@
 //!   3. read lease GC / 5. 종료 lease GC / 6. 이력 보존 정리 / 8. 종착 파일 정리
 //!   7. 일별 사용량 스냅샷 (전량 집계) / 4. fs 임시 파일 sweep
 //!
-//! 순서가 잡마다 다르다. generic 회수는 전이(pending→reclaimed)가 먼저고,
+//! generic 회수는 pending→reclaimed 선점 후 위치를 보존해 물리 정리를 재시도한다.
 //! S3 호환 회수는 aborting 선점 뒤 session/location을 보존한 채 물리를 먼저
 //! 지워 실패를 재시도한다. purge도 물리 삭제 뒤 점유를 해제한다. 재시도 가능한
 //! 경로의 물리 작업은 멱등이다.
 
 mod native_completion;
+mod reclaim;
 mod s3_completion;
 
 use std::sync::Arc;
@@ -36,7 +37,7 @@ const BATCH_LIMIT: i64 = 20;
 const TEMP_MAX_AGE: Duration = Duration::from_secs(48 * 3600);
 
 /// 종료 lease의 보존 기간 — 이보다 오래된 issued 아닌 lease는 GC한다.
-/// CASCADE로 lease_parts가 함께 사라진다. 어떤 진행 중 업로드보다 넉넉하다.
+/// CASCADE로 lease_parts가 함께 사라진다. 완료·회수 정리 소유 행은 보호한다.
 const LEASE_RETENTION: Duration = Duration::from_secs(24 * 3600);
 
 /// 대여 이력(lease_history)의 보존 기간 — 관찰·통계용 durable 로그는
@@ -183,25 +184,12 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
         }
     }
 
-    // 잡 1: 만료 회수 (spec 00 — pending의 capacity 해제 지점).
-    // 전이가 먼저다: reclaimed로 잠근 뒤에만 실물을 지운다. 늦은 commit이
-    // 전이를 이겼으면(false) 실물을 건드리지 않는다. 전이 후 물리 삭제가
-    // 실패하면 고아 객체가 남지만 — 회계는 이미 정확하고, 실물 없는
-    // active보다 훨씬 싼 실패다.
+    // 회수는 쓰기 권한을 종료한다. 위치와 lease는 물리 정리 성공까지 보존한다.
     match files::expired_pending(pool, BATCH_LIMIT).await {
         Ok(candidates) => {
             for candidate in candidates {
                 match files::finalize_reclaim(pool, &candidate).await {
                     Ok(true) => {
-                        if let Err(error) = sweep_object(pool, crypto, s3_clients, &candidate).await
-                        {
-                            tracing::warn!(
-                                event = "reconciler.orphan_object",
-                                file = %candidate.file_id,
-                                storage = %candidate.storage_id,
-                                %error,
-                            );
-                        }
                         tracing::info!(event = "file.reclaimed", file = %candidate.file_id);
                     }
                     // 회수 취소: 늦은 commit이 이겼거나(파일 active) 스냅샷 이후
@@ -215,6 +203,8 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
         }
         Err(error) => tracing::error!(event = "reconciler.scan_failed", job = "reclaim", %error),
     }
+
+    reclaim::recover(pool, crypto, s3_clients).await;
 
     // 잡 2: purge (spec 00 — deleted의 capacity 해제 지점).
     match files::purgeable(pool, BATCH_LIMIT).await {

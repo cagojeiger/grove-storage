@@ -54,7 +54,7 @@ pub async fn mark_deleted(
 // ---- reconciler 잡의 스캔·정리 (유계 배치, docs/stack) ----
 
 /// 회수·purge 대상 한 건 — 물리 삭제에 필요한 위치 정보까지.
-#[derive(Debug)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct SweepCandidate {
     pub file_id: Uuid,
     pub storage_id: String,
@@ -100,8 +100,8 @@ pub async fn expired_pending(
         .collect())
 }
 
-/// 만료 회수 확정: pending → reclaimed 전이가 이기면 lease 만료 +
-/// location 제거. 늦은 commit과의 경합은 이 조건부 전이 하나로 끊긴다.
+/// 만료 회수 선점: pending → reclaimed 전이가 이기면 lease를 만료시킨다.
+/// location은 물리 정리 성공까지 보존한다. 늦은 commit은 이 전이로 차단한다.
 pub async fn finalize_reclaim(
     pool: &PgPool,
     candidate: &SweepCandidate,
@@ -138,10 +138,6 @@ pub async fn finalize_reclaim(
     if expired.rows_affected() == 0 {
         return Ok(false);
     }
-    sqlx::query("DELETE FROM locations WHERE file_id = $1")
-        .bind(candidate.file_id)
-        .execute(&mut *tx)
-        .await?;
     tx.commit().await?;
     Ok(true)
 }
@@ -264,6 +260,8 @@ pub async fn prune_terminal_leases(
          AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = le.file_id) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
                          WHERE c.file_id = le.file_id) \
+         AND NOT EXISTS (SELECT 1 FROM files f JOIN locations l ON l.file_id = f.id \
+                         WHERE f.id = le.file_id AND f.state = 'reclaimed') \
          LIMIT $2)",
     )
     .bind(retention_secs)
