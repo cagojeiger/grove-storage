@@ -28,11 +28,11 @@ def docker(*args):
 def check_lifecycle(endpoint, directory):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def request(method, path, body=None):
+    def request(method, path, body=None, token=TOKEN):
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(
             endpoint + path, data=data, method=method,
-            headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
         with opener.open(req, timeout=5) as response:
             payload = response.read()
@@ -131,6 +131,31 @@ def check_lifecycle(endpoint, directory):
     assert request("GET", admin + "/clients") == []
     assert request("GET", admin + "/storages") == []
     print("PASS registry lifecycle completed without Terraform")
+
+    # A separate fixture remains in the disposable database until container teardown.
+    run_cli("storage", "create", "cli-test-fs", "--from", str(storage_spec))
+    run_cli("client", "create", "cli-test", "--storage", "cli-test-fs")
+    run_cli("client-key", "register", "--client", "cli-test", "--key-file", str(key_file))
+    request("POST", "/api/v1/files", {"declared_size": 0}, token=raw_key)
+    run_cli("storage", "replace", "cli-test-fs", "--from", str(storage_spec), "--yes")
+    other_root = Path(directory) / "other-objects"
+    other_root.mkdir()
+    replacement = {"kind": "fs", "root_path": str(other_root), "capacity_bytes": 2147483648}
+    try:
+        request("PUT", admin + "/storages/cli-test-fs", replacement)
+    except urllib.error.HTTPError as error:
+        assert error.code == 409, error.code
+    else:
+        raise AssertionError("storage address replacement should be rejected")
+    storage_spec.write_text(json.dumps(replacement))
+    rejected = subprocess.run(
+        [str(CLI), "--output", "json", "storage", "replace", "cli-test-fs",
+         "--from", str(storage_spec), "--yes"],
+        cwd=directory, env=env, capture_output=True, text=True, timeout=10,
+    )
+    assert rejected.returncode != 0, rejected.stdout
+    assert request("GET", admin + "/storages/cli-test-fs")["root_path"] == str(root)
+    print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
 
 def main():

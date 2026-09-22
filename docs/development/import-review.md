@@ -118,11 +118,24 @@ S3 abort/native completion cleanup의 재시도 정책과 다르다. 추출 시 
 
 | 코드에서 확인한 위험 | 영향 | 다음 검증 |
 |---|---|---|
-| `db/registry.rs::update_storage`가 사용 중 storage의 bucket/root/kind를 전체 치환 | 기존 location이 다른 실물을 가리킬 수 있음 | 파일 존재 상태에서 물리 identity 변경 회귀 테스트, credential rotation과 변경 정책 구분 |
+| 사용 중 storage의 물리 주소 전체 치환 | 기존 location이 다른 실물을 가리킬 수 있음 | 후속 수정: location 존재 시 주소 변경 409, 파일 예약과 storage 락 공유 |
 | generic reclaim은 DB 전이 후 물리 삭제 실패를 로그로 남김 | orphan 정리가 지속 재시도되지 않을 수 있음 | 장애 주입으로 현재 계약 재현 후 durable cleanup 필요성 결정 |
 
 두 항목은 이번 기계적 이관에서 변경하지 않았다. 책임 추출과 동작 변경은 별도
 커밋·검증으로 진행한다. 크레이트 분리만으로 해결된 것으로 취급하지 않는다.
+
+### 후속 동작 변경: 저장소 주소 보호
+
+사용 중 저장소의 주소 교체를 거부하도록 DB·API 계약을 변경한다. 키 회전·용량 변경은
+유지하고 새 migration은 추가하지 않는다. Native와 S3의 공통 `create_in_tx`가 storage
+공유 락을 잡아 갱신과 직렬화한다. 갱신은 배타 락 뒤 새 snapshot으로 location을 조회한다.
+
+검증은 `db/tests/storage_update.rs`, `storage_update_races.rs`로 분리한다.
+`scripts/e2e-cli.py`는 실제 서버에서 0바이트 pending 파일의 주소 변경 409와 CLI 실패를
+확인한다. 기존 일반 만료 회수의 orphan 문제는 이 수정과 별도다.
+
+검증: workspace 274개 통과, release artifact 1개 ignored. fmt·clippy 통과.
+격리 실서버의 기존 CLI lifecycle 및 사용 중 주소 변경 409·CLI 거부 E2E 통과.
 
 ## 테스트 정리
 

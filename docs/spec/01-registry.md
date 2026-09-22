@@ -37,10 +37,19 @@ PostgreSQL이 정본이고 운영자 API가 변경 경계다. `gscli`과 API 클
 | 등록·부팅 | 저장소 접근 검증 |
 | client 배치 | 생성 시 storage_id 하나 지정 |
 | storage 삭제 | client·location 참조가 정리된 뒤 수행 |
+| storage 주소 갱신 | location이 남으면 주소 변경은 409; 없으면 갱신 |
+| 주소 필드 | kind·root_path·endpoint·public_endpoint·region·bucket·force_path_style |
+| 사용 중 허용 갱신 | 자격증명·암호 키 회전, capacity_bytes·force_relay |
 | client 삭제 | 파일 정리 후 수행, 키·S3 자격증명·논리키는 cascade |
 
 현재 fs 검증은 디렉터리 존재·쓰기 가능 확인이다. mount 식별·상실 정책은
 [Grove 경계](../adr/007-grove-storage-foundation.md)에서 추가로 정한다.
+
+주소 보호는 파일 크기나 active 상태가 아닌 location 존재로 판단한다. pending·0바이트·
+purge 대기 파일도 포함한다. 주소는 저장된 문자열을 비교하며, 같은 저장소를 가리키는
+별칭 변경도 주소 변경으로 취급한다. 자격증명 회전은 같은 저장소에 접근하는 키를 사용한다.
+파일 예약은 storage 공유 락, storage 갱신은 배타 락을 사용하고 락 획득 후 참조를
+재확인한다. 갱신 요청의 형식·접근 검증은 기존처럼 DB 갱신에 앞서 수행한다.
 
 외부 S3 자격증명은 객체 I/O와 multipart 생성·part 조회/쓰기·완료·중단·열린 multipart
 목록 조회 권한을 가진다. 열린 목록 조회는 불명확한 Create 결과에서 object_key로

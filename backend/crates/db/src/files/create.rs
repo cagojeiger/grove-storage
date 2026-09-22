@@ -36,8 +36,8 @@ pub enum CreateOutcome {
     NoClient,
 }
 
-/// 선언 해석 → pending 파일 기록. 전부 한 트랜잭션 — 새 행 INSERT만이라
-/// 공유 락 지점이 없고, 동시 create는 서로를 기다리지 않는다.
+/// 선언 해석 → pending 파일 기록. 저장소 공유 락은 동시 create끼리 호환되고
+/// 저장소 주소 변경과는 직렬화된다. 예약 전체는 한 트랜잭션이다.
 pub async fn create(pool: &PgPool, spec: CreateSpec<'_>) -> Result<CreateOutcome, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let outcome = create_in_tx(&mut tx, spec).await?;
@@ -62,7 +62,7 @@ pub(crate) async fn create_in_tx(
     let storage: Option<StorageRow> = sqlx::query_as(&format!(
         "SELECT {storage_cols} FROM storages s \
          JOIN clients c ON c.storage_id = s.id \
-         WHERE c.id = $1"
+         WHERE c.id = $1 FOR SHARE OF s"
     ))
     .bind(spec.client_id)
     .fetch_optional(&mut **tx)

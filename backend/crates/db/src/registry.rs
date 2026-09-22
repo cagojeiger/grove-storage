@@ -69,10 +69,48 @@ pub async fn insert_storage(pool: &PgPool, row: &StorageRow) -> Result<(), sqlx:
     .map(|_| ())
 }
 
-/// 전체 치환 갱신 (id 제외). 갱신은 쓰기라 새 암호문이 온다 — 회전 런북 2단계의
-/// 재암호화가 바로 이 경로다. 행이 없으면 false.
-pub async fn update_storage(pool: &PgPool, row: &StorageRow) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query(
+#[derive(Debug, PartialEq, Eq)]
+pub enum UpdateStorageOutcome {
+    Updated,
+    NotFound,
+    LocationInUse,
+}
+
+/// Serialize address replacement with file reservation. Credential rotation is
+/// allowed while locations exist; physical addressing remains stable.
+pub async fn update_storage(
+    pool: &PgPool,
+    row: &StorageRow,
+) -> Result<UpdateStorageOutcome, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let current: Option<StorageRow> = sqlx::query_as(&format!(
+        "SELECT {STORAGE_COLUMNS} FROM storages WHERE id = $1 FOR UPDATE"
+    ))
+    .bind(&row.id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(current) = current else {
+        return Ok(UpdateStorageOutcome::NotFound);
+    };
+    let address_changed = current.kind != row.kind
+        || current.root_path != row.root_path
+        || current.endpoint != row.endpoint
+        || current.public_endpoint != row.public_endpoint
+        || current.region != row.region
+        || current.bucket != row.bucket
+        || current.force_path_style != row.force_path_style;
+    if address_changed {
+        // Read after the lock wait so a just-committed reservation is visible.
+        let in_use: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM locations WHERE storage_id = $1)")
+                .bind(&row.id)
+                .fetch_one(&mut *tx)
+                .await?;
+        if in_use {
+            return Ok(UpdateStorageOutcome::LocationInUse);
+        }
+    }
+    sqlx::query(
         "UPDATE storages SET kind = $2, force_relay = $3, root_path = $4, endpoint = $5, \
          public_endpoint = $6, region = $7, bucket = $8, force_path_style = $9, access_key = $10, \
          secret_key_ciphertext = $11, secret_key_nonce = $12, enc_key_id = $13, \
@@ -92,9 +130,10 @@ pub async fn update_storage(pool: &PgPool, row: &StorageRow) -> Result<bool, sql
     .bind(&row.secret_key_nonce)
     .bind(&row.enc_key_id)
     .bind(row.capacity_bytes)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
-    Ok(result.rows_affected() > 0)
+    tx.commit().await?;
+    Ok(UpdateStorageOutcome::Updated)
 }
 
 pub async fn get_storage(pool: &PgPool, id: &str) -> Result<Option<StorageRow>, sqlx::Error> {

@@ -16,7 +16,7 @@ use filegate_db::registry::{self, StorageRow};
 use filegate_infra::{S3StorageSpec, s3_connect};
 use serde::{Deserialize, Serialize};
 
-use crate::error::{ApiError, bad_request, not_found};
+use crate::error::{ApiError, bad_request, conflict, not_found};
 use crate::routes::AppState;
 use crate::storage_access::{StorageBackend, backend_from_row};
 
@@ -334,8 +334,14 @@ pub(super) async fn update(
     }
     let relay_base_ready = state.public_url.is_some();
     let row = verified_row(&state.crypto, relay_base_ready, &id, body).await?;
-    if !registry::update_storage(&state.pool, &row).await? {
-        return Err(not_found("storage not found"));
+    match registry::update_storage(&state.pool, &row).await? {
+        registry::UpdateStorageOutcome::Updated => {}
+        registry::UpdateStorageOutcome::NotFound => return Err(not_found("storage not found")),
+        registry::UpdateStorageOutcome::LocationInUse => {
+            return Err(conflict(
+                "storage address cannot change while file locations remain",
+            ));
+        }
     }
     tracing::info!(event = "storage.updated", storage = %row.id);
     Ok(Json(StorageOut::from(row)).into_response())
