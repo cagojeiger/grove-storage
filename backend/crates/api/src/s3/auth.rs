@@ -5,6 +5,9 @@ use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::Response;
 use filegate_core::ExposeSecret as _;
 use filegate_db::s3_registry as s3reg;
+use grove_s3_protocol::auth::{
+    canonical_header_value, credential_scope, presigned_expiry, signed_headers, valid_payload_hash,
+};
 use grove_s3_protocol::signing::{canonicalize_query, sha256_hex, sign};
 use subtle::ConstantTimeEq as _;
 
@@ -35,6 +38,11 @@ struct SigV4 {
     canonical_query: String,
 }
 
+pub(super) struct Authenticated {
+    pub client_id: String,
+    pub payload_hash: String,
+}
+
 /// `AWS4-HMAC-SHA256 Credential=AK/date/region/s3/aws4_request,
 ///  SignedHeaders=h1;h2, Signature=hex`
 struct ParsedAuth {
@@ -55,21 +63,24 @@ fn parse_auth(auth: &str) -> Option<ParsedAuth> {
     for part in rest.split(',') {
         let (name, value) = part.trim().split_once('=')?;
         match name {
-            "Credential" => credential = Some(value),
+            "Credential" if credential.is_none() => credential = Some(value),
             "SignedHeaders" => {
-                signed = Some(value.split(';').map(str::to_owned).collect::<Vec<_>>())
+                if signed.is_some() {
+                    return None;
+                }
+                signed = Some(signed_headers(value).ok()?)
             }
-            "Signature" => signature = Some(value.to_owned()),
-            _ => {}
+            "Signature" if signature.is_none() => signature = Some(value.to_owned()),
+            _ => return None,
         }
     }
-    let mut scope = credential?.split('/');
+    let scope = credential_scope(credential?).ok()?;
     Some(ParsedAuth {
-        access_key: scope.next()?.to_owned(),
-        scope_date: scope.next()?.to_owned(),
-        region: scope.next()?.to_owned(),
-        service: scope.next()?.to_owned(),
-        terminator: scope.next()?.to_owned(),
+        access_key: scope.access_key.to_owned(),
+        scope_date: scope.date.to_owned(),
+        region: scope.region.to_owned(),
+        service: "s3".to_owned(),
+        terminator: "aws4_request".to_owned(),
         signed_headers: signed?,
         signature: signature?,
     })
@@ -85,7 +96,7 @@ fn from_header(uri: &Uri, headers: &HeaderMap) -> Result<SigV4, Response> {
 
     let amz_date =
         header_str(headers, "x-amz-date").ok_or_else(|| access_denied("missing x-amz-date"))?;
-    if !amz_date.starts_with(parsed.scope_date.as_str()) {
+    if amz_date.get(..8) != Some(parsed.scope_date.as_str()) {
         return Err(access_denied(
             "x-amz-date does not match the credential scope",
         ));
@@ -113,6 +124,10 @@ fn from_header(uri: &Uri, headers: &HeaderMap) -> Result<SigV4, Response> {
         ));
     }
 
+    if !valid_payload_hash(payload_hash) {
+        return Err(access_denied("invalid x-amz-content-sha256"));
+    }
+
     Ok(SigV4 {
         access_key: parsed.access_key,
         scope_date: parsed.scope_date,
@@ -133,6 +148,25 @@ fn from_header(uri: &Uri, headers: &HeaderMap) -> Result<SigV4, Response> {
 #[allow(clippy::result_large_err)]
 fn from_query(uri: &Uri) -> Result<SigV4, Response> {
     let query = uri.query().unwrap_or_default();
+    for key in [
+        "X-Amz-Algorithm",
+        "X-Amz-Credential",
+        "X-Amz-Date",
+        "X-Amz-Expires",
+        "X-Amz-SignedHeaders",
+        "X-Amz-Signature",
+    ] {
+        let count = query
+            .split('&')
+            .filter(|pair| {
+                let name = pair.split('=').next().unwrap_or_default();
+                percent_encoding::percent_decode_str(name).decode_utf8_lossy() == key
+            })
+            .count();
+        if count != 1 {
+            return Err(access_denied("missing or duplicate signature parameter"));
+        }
+    }
     let algorithm = query_value(query, "X-Amz-Algorithm")
         .ok_or_else(|| access_denied("missing X-Amz-Algorithm"))?;
     if algorithm != "AWS4-HMAC-SHA256" {
@@ -144,16 +178,16 @@ fn from_query(uri: &Uri) -> Result<SigV4, Response> {
         .ok_or_else(|| access_denied("missing X-Amz-Credential"))?
         .replace("%2F", "/")
         .replace("%2f", "/");
-    let mut scope = credential.split('/');
-    let access_key = scope.next().unwrap_or_default().to_owned();
-    let scope_date = scope.next().unwrap_or_default().to_owned();
-    let region = scope.next().unwrap_or_default().to_owned();
-    let service = scope.next().unwrap_or_default().to_owned();
-    let terminator = scope.next().unwrap_or_default().to_owned();
+    let scope = credential_scope(&credential).map_err(access_denied)?;
+    let access_key = scope.access_key.to_owned();
+    let scope_date = scope.date.to_owned();
+    let region = scope.region.to_owned();
+    let service = "s3".to_owned();
+    let terminator = "aws4_request".to_owned();
 
     let amz_date =
         query_value(query, "X-Amz-Date").ok_or_else(|| access_denied("missing X-Amz-Date"))?;
-    if !amz_date.starts_with(scope_date.as_str()) {
+    if amz_date.get(..8) != Some(scope_date.as_str()) {
         return Err(access_denied(
             "X-Amz-Date does not match the credential scope",
         ));
@@ -161,9 +195,8 @@ fn from_query(uri: &Uri) -> Result<SigV4, Response> {
     let request_time = chrono::NaiveDateTime::parse_from_str(amz_date, "%Y%m%dT%H%M%SZ")
         .map_err(|_| access_denied("malformed X-Amz-Date"))?
         .and_utc();
-    let expires: i64 = query_value(query, "X-Amz-Expires")
-        .and_then(|v| v.parse().ok())
-        .ok_or_else(|| access_denied("missing or invalid X-Amz-Expires"))?;
+    let expires = presigned_expiry(query_value(query, "X-Amz-Expires").unwrap_or_default())
+        .map_err(access_denied)?;
     let elapsed = (chrono::Utc::now() - request_time).num_seconds();
     if elapsed < -MAX_CLOCK_SKEW_SECS {
         return Err(access_denied("the presigned url is not yet valid"));
@@ -176,13 +209,11 @@ fn from_query(uri: &Uri) -> Result<SigV4, Response> {
         ));
     }
 
-    let signed_headers = query_value(query, "X-Amz-SignedHeaders")
+    let signed_header_value = query_value(query, "X-Amz-SignedHeaders")
         .ok_or_else(|| access_denied("missing X-Amz-SignedHeaders"))?
         .replace("%3B", ";")
-        .replace("%3b", ";")
-        .split(';')
-        .map(str::to_owned)
-        .collect();
+        .replace("%3b", ";");
+    let signed_headers = signed_headers(&signed_header_value).map_err(access_denied)?;
     let signature = query_value(query, "X-Amz-Signature")
         .ok_or_else(|| access_denied("missing X-Amz-Signature"))?
         .to_owned();
@@ -211,7 +242,17 @@ pub(super) async fn authenticate(
     method: &Method,
     uri: &Uri,
     headers: &HeaderMap,
-) -> Result<String, Response> {
+) -> Result<Authenticated, Response> {
+    for name in [
+        "host",
+        "authorization",
+        "x-amz-date",
+        "x-amz-content-sha256",
+    ] {
+        if headers.get_all(name).iter().count() > 1 {
+            return Err(access_denied("duplicate authentication header"));
+        }
+    }
     // 서명 위치로 모드를 가른다: Authorization 헤더면 header-signed,
     // 쿼리에 X-Amz-Signature가 있으면 presigned.
     let sig = if header_str(headers, "authorization").is_some() {
@@ -221,6 +262,31 @@ pub(super) async fn authenticate(
     } else {
         return Err(access_denied("missing authorization"));
     };
+
+    if sig.signature.len() != 64 || !sig.signature.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(access_denied("invalid signature encoding"));
+    }
+    if let Some(hash) = header_str(headers, "x-amz-content-sha256")
+        && !valid_payload_hash(hash)
+    {
+        return Err(access_denied("invalid x-amz-content-sha256"));
+    }
+    for name in headers
+        .keys()
+        .filter(|name| name.as_str().starts_with("x-amz-"))
+    {
+        // Header-signed payload hash is already part of the canonical request.
+        if name == "x-amz-content-sha256" && headers.contains_key("authorization") {
+            continue;
+        }
+        if !sig
+            .signed_headers
+            .iter()
+            .any(|signed| signed == name.as_str())
+        {
+            return Err(access_denied("x-amz header must be signed"));
+        }
+    }
 
     if sig.service != "s3" || sig.terminator != "aws4_request" {
         return Err(access_denied(
@@ -256,11 +322,18 @@ pub(super) async fn authenticate(
     // canonical request — SignedHeaders 목록 순서대로 (소문자:trim값).
     let mut canonical_headers = String::new();
     for name in &sig.signed_headers {
-        let value =
-            header_str(headers, name).ok_or_else(|| access_denied("signed header absent"))?;
+        let values = headers
+            .get_all(name)
+            .iter()
+            .map(|value| value.to_str().map(canonical_header_value))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| access_denied("invalid signed header"))?;
+        if values.is_empty() {
+            return Err(access_denied("signed header absent"));
+        }
         canonical_headers.push_str(name);
         canonical_headers.push(':');
-        canonical_headers.push_str(value.trim());
+        canonical_headers.push_str(&values.join(","));
         canonical_headers.push('\n');
     }
     let canonical_request = format!(
@@ -288,7 +361,12 @@ pub(super) async fn authenticate(
 
     // 서명 비교는 상수 시간 (config.rs 연산자 토큰 대조와 같은 프리미티브).
     if bool::from(expected.as_bytes().ct_eq(sig.signature.as_bytes())) {
-        return Ok(credential.client_id);
+        return Ok(Authenticated {
+            client_id: credential.client_id,
+            payload_hash: header_str(headers, "x-amz-content-sha256")
+                .unwrap_or(&sig.payload_hash)
+                .to_owned(),
+        });
     }
     Err(xml_error(
         StatusCode::FORBIDDEN,
@@ -298,48 +376,4 @@ pub(super) async fn authenticate(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn query_param_reads_the_value_or_none() {
-        let q = "X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc&X-Amz-Expires=900";
-        assert_eq!(query_value(q, "X-Amz-Signature"), Some("abc"));
-        assert_eq!(query_value(q, "X-Amz-Expires"), Some("900"));
-        assert_eq!(query_value(q, "X-Amz-Missing"), None);
-    }
-
-    #[test]
-    fn from_query_parses_credential_scope_and_defaults_unsigned_payload() {
-        // 유효 창 안의 최근 시각으로 만든 presigned 쿼리 (서명값은 형태만).
-        let now = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-        let date = &now[..8];
-        let uri: Uri = format!(
-            "/b/k?X-Amz-Algorithm=AWS4-HMAC-SHA256\
-             &X-Amz-Credential=fgak0123456789abcdef%2F{date}%2Fauto%2Fs3%2Faws4_request\
-             &X-Amz-Date={now}&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=deadbeef"
-        )
-        .parse()
-        .unwrap();
-        let sig = from_query(&uri).expect("valid presigned query parses");
-        assert_eq!(sig.access_key, "fgak0123456789abcdef");
-        assert_eq!(sig.region, "auto");
-        assert_eq!(sig.service, "s3");
-        assert_eq!(sig.terminator, "aws4_request");
-        assert_eq!(sig.signed_headers, vec!["host".to_owned()]);
-        assert_eq!(sig.payload_hash, "UNSIGNED-PAYLOAD");
-        assert_eq!(sig.signature, "deadbeef");
-    }
-
-    #[test]
-    fn from_query_rejects_expired_url() {
-        // X-Amz-Date가 만료창 훨씬 전이면 거부된다.
-        let uri: Uri = "/b/k?X-Amz-Algorithm=AWS4-HMAC-SHA256\
-             &X-Amz-Credential=ak%2F20200101%2Fauto%2Fs3%2Faws4_request\
-             &X-Amz-Date=20200101T000000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=x"
-            .parse()
-            .unwrap();
-        assert!(from_query(&uri).is_err());
-    }
-}
+mod tests;

@@ -389,6 +389,7 @@ pub(super) async fn complete_multipart(
     key: &str,
     upload_id: &str,
     body: Body,
+    payload_hash: &str,
 ) -> S3Result {
     let (file_id, file, lease) = resolve_session(state, client_id, key, upload_id, true).await?;
 
@@ -401,6 +402,13 @@ pub(super) async fn complete_multipart(
                 "the complete request body is unreadable",
             )
         })?;
+    if !grove_s3_protocol::auth::payload_matches(payload_hash, &bytes) {
+        return Err(xml_error(
+            StatusCode::BAD_REQUEST,
+            "XAmzContentSHA256Mismatch",
+            "the request body does not match the signed payload hash",
+        ));
+    }
     let text = std::str::from_utf8(&bytes).map_err(|_| {
         xml_error(
             StatusCode::BAD_REQUEST,

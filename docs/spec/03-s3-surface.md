@@ -39,7 +39,10 @@ multipart의 누락·중복·상충 파라미터는 400 InvalidArgument로 거�
 | 인증 | header-signed·query-signed SigV4 |
 | 자격증명 | 운영자 API가 발급한 client 소유 access key·secret |
 | canonical query | raw 인코딩 보존·정렬, X-Amz-Signature 제외 |
-| query-signed | X-Amz-Date·Expires·SignedHeaders 검증 |
+| query-signed | X-Amz-Date·Expires(1~604800초)·SignedHeaders 검증, 필수 인증 파라미터는 하나씩 |
+| SignedHeaders | host 포함, 소문자·정렬·유일; 전송한 x-amz-* 헤더 서명, header-signed의 payload hash 헤더는 별도 canonical hash로 포함 |
+| credential scope | key/date/region/s3/aws4_request의 정확한 5개 구성 요소, 요청 날짜 일치 |
+| canonical headers | 값의 공백 정규화, 다중 값은 쉼표 결합; host·Authorization·날짜·payload hash의 중복 헤더 거부 |
 | secret 저장 | AES-GCM, AAD=access key id, enc_key_id로 복호 |
 | 회전 | [등록부](01-registry.md#키와-비밀)의 재발급 절차 |
 
@@ -80,6 +83,7 @@ part별 실측 크기와 완료 목록으로 조립한다.
 | part 진행 중 Complete/Abort | 503, 재시도 |
 | Complete 목록 | 번호 오름차순·유일·원장에 존재·ETag 일치 |
 | Complete XML | 표준 XML 파싱, S3 namespace·엔티티 지원; 잘못된 문서·중복 필드는 400 MalformedXML |
+| Complete 본문 무결성 | 인증된 SHA-256과 실측 본문 대조 후 completing 선점; 불일치는 400 XAmzContentSHA256Mismatch, 기존 세션 재시도 가능 |
 | 객체 크기 | 완료 목록의 실측 합, part_size × 10000 상한 |
 | ETag | part MD5들의 합성 digest + -N |
 | completing 중 재Complete | 503 ServiceUnavailable |
@@ -115,6 +119,9 @@ stateDiagram-v2
 
 파일이 확정되거나 정리가 성공한 뒤 세션을 제거한다. 내부 vendor multipart 조회는
 복구용 권한이며 클라이언트 API 지원과 별개다.
+
+`UNSIGNED-PAYLOAD`는 본문 해시 대조를 생략하는 명시적 모드다. 기본 presigned
+Complete도 이 모드를 사용한다. 서명 검증과 본문 바이트 무결성 검증을 구분한다.
 
 ## 에러와 검증
 

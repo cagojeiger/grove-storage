@@ -118,6 +118,8 @@ def check(endpoint, directory):
         raise AssertionError("unsupported CopyObject was accepted as PutObject")
     assert client.get_object(Bucket="s3-test", Key="xml-contract")["Body"].read() == b"xml-body"
     client.delete_object(Bucket="s3-test", Key="xml-contract")
+    from s3_auth_cases import check_auth
+    check_auth(client, credential, endpoint, opener)
     print("PASS signed XML rejection/retry, presigned GET, and unsupported-operation guards")
 
 

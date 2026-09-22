@@ -5,8 +5,9 @@ backend/crates/
 ├── s3-protocol/           S3 XML·SigV4 순수 프로토콜 계약
 │   ├── src/multipart.rs  Complete XML 구조·엔티티·namespace 검증
 │   ├── src/signing.rs    서명 계산·raw query 정렬
+│   ├── src/auth.rs       scope·서명 헤더·만료 범위·본문 해시 검증
 │   ├── src/operation.rs  지원 동작 분류·미지원 요청 차단
-│   └── tests/            multipart·signing·operation (서버·DB 독립)
+│   └── tests/            multipart·signing·operation·auth (서버·DB 독립)
 ├── object-service/        grove-object-service: 업로드 준비·실패 보상 조율
 │   ├── src/cleanup.rs     정리 성공 후 메타데이터 확정
 │   ├── src/multipart_create.rs  vendor 생성·ID 기록·relay 준비·실패 보상
@@ -74,7 +75,7 @@ detach는 같은 트랜잭션을 공유한다.
 | 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
 | 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |
 | 조합 라우팅·인증·CORS | `api/src/routes/tests.rs` |
-| S3 서명·쿼리 | `api/src/s3/auth.rs`, `s3/mod.rs` |
+| S3 서명·쿼리 | `s3-protocol/tests/auth.rs`, `api/src/s3/auth/tests.rs`, `s3/mod.rs`; 실제 요청은 `scripts/s3_auth_cases.py` |
 | Range·응답 헤더 | `api/src/s3/object_response/tests.rs` |
 | 파일 상태·동시성·GC | `db/tests/file_*`, `native_multipart_completion.rs` |
 | S3 원자적 교체·완료·회수 | `db/tests/s3_*` |

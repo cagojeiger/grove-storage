@@ -57,11 +57,12 @@ async fn dispatch(
     req: Request,
 ) -> Response {
     let (parts, body) = req.into_parts();
-    let client_id =
+    let authenticated =
         match auth::authenticate(&state, &parts.method, &parts.uri, &parts.headers).await {
-            Ok(client_id) => client_id,
+            Ok(authenticated) => authenticated,
             Err(response) => return response,
         };
+    let client_id = authenticated.client_id;
     // client == bucket: 인증된 클라이언트의 버킷은 자기 id뿐이다. GET/HEAD/
     // DELETE/PUT 모두 이 검사를 지나야 한다 (다른 버킷은 존재하지 않는다).
     if bucket != client_id {
@@ -122,7 +123,16 @@ async fn dispatch(
             .await
         }
         Operation::CompleteMultipart { upload_id } => {
-            multipart::complete_multipart(&state, &client_id, &bucket, &key, upload_id, body).await
+            multipart::complete_multipart(
+                &state,
+                &client_id,
+                &bucket,
+                &key,
+                upload_id,
+                body,
+                &authenticated.payload_hash,
+            )
+            .await
         }
         Operation::AbortMultipart { upload_id } => {
             multipart::abort_multipart(&state, &client_id, &key, upload_id).await
