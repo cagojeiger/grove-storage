@@ -1,0 +1,16 @@
+[package]
+name = "grove-registry"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+grove-domain.workspace = true
+secrecy.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

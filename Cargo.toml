@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["crates/domain", "crates/registry"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+grove-domain = { path = "crates/domain" }
+secrecy = "0.10"
+thiserror = "2"
+url = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
