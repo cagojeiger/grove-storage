@@ -2,6 +2,7 @@
 
 | 읽을 내용 | 정본 |
 |---|---|
+| Grove 코드 이관·수정 이력·책임 분리 계획 | [이관 분석](development/import-review.md) |
 | 단계별 제품 방향과 구현 경계 | [ADR 007](adr/007-grove-storage-foundation.md) |
 | 결정과 근거 | [ADR 목차](adr/README.md) |
 | 현재 네이티브 파일 API | [파일](spec/00-operations.md) · [multipart](spec/02-multipart.md) |

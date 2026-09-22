@@ -1,4 +1,8 @@
-# filegate
+# Grove Storage
+
+FileGate 구현을 보존한 개발 기준선이다. 서버·패키지·API 이름은 현재 FileGate 계약을
+유지한다. [이관 기록과 책임 분리 분석](docs/development/import-review.md)에 원본 커밋,
+후속 작업, 검증 범위를 기록한다. 관리자 인증 추가분과 콘솔 미리보기는 미배포 작업이다.
 
 PostgreSQL에 파일 메타데이터를 기록하고, fs·외부 S3 저장소의 바이트를
 네이티브 API와 S3 호환 API로 제공한다.
@@ -41,8 +45,8 @@ Compose는 PostgreSQL(`55432`), MinIO(`9000/9001`), 개발 버킷을 준비한�
 | `GET /healthz` | 프로세스 생존 |
 | `GET /readyz` | DB 준비 상태 |
 
-버전 갱신을 main에 머지하고 CI가 성공하면 태그·GHCR 이미지·`gscli` 실행 파일을 발행한다.
-실행 환경의 배포는 별도 운영 절차로 수행한다.
+자동 릴리스는 기존 FileGate 저장소에 한정한다. Grove의 패키지·업데이트 채널은
+후속 릴리스에서 전환한다. 실행 환경의 배포는 별도 운영 절차로 수행한다.
 
 ## 관리 CLI
 

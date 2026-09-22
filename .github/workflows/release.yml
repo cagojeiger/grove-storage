@@ -22,6 +22,7 @@ jobs:
   version:
     name: Resolve version
     if: >-
+      github.repository == 'cagojeiger/filegate' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
