@@ -22,7 +22,7 @@
 |---|---|
 | bind·로그·DB URL·pool 크기·multipart·CORS | env, 로컬 예시는 [.env.example](../../.env.example) |
 | 마스터 키·key id·이전 키 쌍 | env, [키 회전](../spec/01-registry.md#키와-비밀) |
-| 운영자 토큰 | env의 쉼표 목록 |
+| 관리자 인증 | DB 토큰·콘솔 세션, 초기화 전 env 토큰 호환; [spec 05](../spec/05-admin-auth.md) |
 | storage·client·키·S3 자격증명 | PostgreSQL, 운영자 API |
 
 프로세스는 환경 변수를 읽는다. 배포 도구가 env 또는 Secret을 공급한다.

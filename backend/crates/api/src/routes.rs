@@ -6,7 +6,7 @@
 //!   /healthz           liveness (무의존)
 //!   /readyz            readiness (DB 체크)
 //!   /api/v1/*          클라이언트 API (클라이언트 키 — v1 모듈)
-//!   /api/admin/v1/*    운영자 API (정적 운영자 토큰 — admin 모듈)
+//!   /api/admin/v1/*    운영자 API (관리자 토큰 또는 콘솔 세션)
 //!   /blobs/*           중계 바이트 엔드포인트 (lease secret — blobs 모듈)
 
 use std::sync::Arc;
@@ -41,6 +41,7 @@ pub struct AppState {
     /// 중계 바이트 URL의 공개 베이스 (FILEGATE_PUBLIC_URL). 중계 storage
     /// 등록·발급이 요구한다 — 없으면 등록이 400으로 거부된다.
     pub public_url: Option<String>,
+    pub console_origin: Option<String>,
     /// 이 선언 크기를 넘으면 create가 multipart를 발급한다 (spec 02).
     pub multipart_threshold: i64,
     /// multipart part 크기 — create 시점 값이 업로드별로 동결된다 (spec 02).
@@ -129,13 +130,15 @@ fn v1_guarded(state: AppState) -> Router<AppState> {
     ))
 }
 
-/// 운영자 표면 — 전 경로가 토큰 미들웨어 뒤에 있다. route_layer라
-/// 매치 안 된 경로는 인증 없이 404로 떨어진다 (TF-친화의 명확한 404).
+/// 리소스 경로는 관리자 인증을 적용하고, 세션 경로는 자체 인증을 사용한다.
+/// route_layer로 매치되지 않은 경로는 인증 없이 404를 반환한다.
 fn admin_guarded(state: AppState) -> Router<AppState> {
-    crate::admin::admin_routes().route_layer(middleware::from_fn_with_state(
-        state,
-        crate::admin::require_operator,
-    ))
+    crate::admin::admin_routes()
+        .route_layer(middleware::from_fn_with_state(
+            state,
+            crate::admin_auth::require_operator,
+        ))
+        .merge(crate::admin_auth::routes())
 }
 
 async fn root() -> impl IntoResponse {
@@ -199,4 +202,4 @@ fn log_request_end(response: &axum::response::Response, latency: Duration, span:
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

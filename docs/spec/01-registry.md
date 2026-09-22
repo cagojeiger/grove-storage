@@ -50,7 +50,8 @@ vendor 세션을 재발견하는 내부 복구에 사용한다.
 
 | 비밀 | 공급·저장 | 회전 |
 |---|---|---|
-| 운영자 토큰 | env FILEGATE_OPERATOR_TOKENS, 쉼표 목록·상수시간 비교 | 새 토큰 추가 → 소비자 전환 → 옛 토큰 제거 |
+| 관리자 토큰 | DB 해시, [초기화·세션·호환 계약](05-admin-auth.md) | 새 토큰 발급 → 소비자 전환 → 옛 토큰 폐기 |
+| 초기화 전 운영자 토큰 | env FILEGATE_OPERATOR_TOKENS, 쉼표 목록·상수시간 비교 | 관리자 초기화 시 DB 인증으로 전환 |
 | client 키 | 생성자가 raw 전달, API에는 sha256:64hex 등록 | 해시 추가 → 소비자 전환 → 옛 해시 삭제 |
 | S3 secret | 서버 생성·발급 시 1회 반환, AES-GCM 저장 | 재발급 → 소비자 전환 → 옛 자격증명 삭제 |
 | storage secret | 운영자가 제출, 접근 검증 후 AES-GCM 저장 | 새 vendor 키로 storage 갱신 |

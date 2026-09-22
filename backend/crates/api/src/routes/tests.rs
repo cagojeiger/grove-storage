@@ -12,7 +12,7 @@ use super::*;
 
 const LAZY_DATABASE_URL: &str = "postgres://unused:unused@localhost/unused";
 
-fn test_state() -> AppState {
+pub(crate) fn test_state() -> AppState {
     let security = SecurityConfig {
         enc_root_secret: "test-root-secret-that-is-at-least-32-bytes"
             .to_owned()
@@ -31,6 +31,7 @@ fn test_state() -> AppState {
         security,
         crypto,
         public_url: Some("http://filegate.test".to_owned()),
+        console_origin: None,
         multipart_threshold: 8 * 1024 * 1024,
         part_size: 5 * 1024 * 1024,
         s3_clients: Arc::new(filegate_infra::S3ClientCache::default()),

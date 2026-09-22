@@ -2,6 +2,7 @@
 //! → HTTP + reconciler → graceful shutdown.
 
 mod admin;
+mod admin_auth;
 mod blobs;
 mod cors;
 mod error;
@@ -30,6 +31,7 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
             Ok(std::process::ExitCode::SUCCESS)
         }
         Some("status") => status::run().await,
+        Some("admin") => admin_auth::cli::run().await,
         Some("--help") | Some("-h") | Some("help") => {
             print_usage();
             Ok(std::process::ExitCode::SUCCESS)
@@ -47,7 +49,8 @@ fn print_usage() {
         "filegate — file gateway\n\n\
          USAGE:\n    \
          filegate [serve]   서버를 기동한다 (기본)\n    \
-         filegate status    배포 상태를 점검하고 요약을 출력한다"
+         filegate status    배포 상태를 점검하고 요약을 출력한다\n    \
+         filegate admin     관리자 초기화 및 토큰 관리"
     );
 }
 
@@ -55,6 +58,7 @@ fn print_usage() {
 /// → HTTP + reconciler → graceful shutdown.
 async fn serve() -> anyhow::Result<()> {
     let config = filegate_core::Config::load()?;
+    let console_origin = admin_auth::console_origin(std::env::var("FILEGATE_CONSOLE_ORIGIN").ok())?;
     init_tracing(config.server.log_format);
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.
@@ -70,6 +74,11 @@ async fn serve() -> anyhow::Result<()> {
     )
     .await?;
     filegate_db::migrate(&pool).await?;
+    anyhow::ensure!(
+        !config.security.operator_tokens.is_empty()
+            || filegate_db::admin_auth::initialized(&pool).await?,
+        "administrator not initialized; run filegate admin init or configure FILEGATE_OPERATOR_TOKENS"
+    );
     info!(
         event = "db.connected",
         max_connections = config.database.max_connections
@@ -97,6 +106,7 @@ async fn serve() -> anyhow::Result<()> {
         security: config.security.clone(),
         crypto,
         public_url: config.server.public_url.clone(),
+        console_origin,
         multipart_threshold: config.server.multipart_threshold_bytes,
         part_size: config.server.part_size_bytes,
         s3_clients,

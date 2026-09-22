@@ -17,8 +17,7 @@ pub struct Config {
     pub security: SecurityConfig,
 }
 
-/// 비밀 env 셋 (spec 01 "키와 비밀"). 마스터 키·운영자 토큰은 필수다 —
-/// 부팅 필수 설정이며 배포 환경에서 공급한다.
+/// 마스터 키와 초기화 전 호환용 운영자 토큰. 관리자 토큰의 정본은 DB다.
 #[derive(Debug, Clone)]
 pub struct SecurityConfig {
     /// storage 시크릿 암호화의 마스터 키 (최소 32바이트 검증은 Crypto::new가).
@@ -28,7 +27,7 @@ pub struct SecurityConfig {
     /// 회전 전환기의 이전 마스터 키 (복호 전용, spec 01 런북). 쌍으로만 유효.
     pub enc_root_secret_prev: Option<SecretString>,
     pub enc_key_id_prev: Option<String>,
-    /// 운영자 토큰 목록 — 메인/서브 두 개로 무중단 로테이션한다.
+    /// 관리자 초기화 전까지 사용하는 호환용 운영자 토큰 목록.
     pub operator_tokens: Vec<SecretString>,
 }
 
@@ -188,15 +187,13 @@ impl Config {
         }
         let required =
             |key: &str| env(key).ok_or_else(|| Error::config(format!("{key} is not set")));
-        let operator_tokens: Vec<SecretString> = required("FILEGATE_OPERATOR_TOKENS")?
+        let operator_tokens: Vec<SecretString> = env("FILEGATE_OPERATOR_TOKENS")
+            .unwrap_or_default()
             .split(',')
             .map(str::trim)
             .filter(|t| !t.is_empty())
             .map(|t| SecretString::from(t.to_owned()))
             .collect();
-        if operator_tokens.is_empty() {
-            return Err(Error::config("FILEGATE_OPERATOR_TOKENS is empty"));
-        }
         let enc_root_secret_prev = env("FILEGATE_ENC_ROOT_SECRET_PREV").map(SecretString::from);
         let enc_key_id_prev = env("FILEGATE_ENC_KEY_ID_PREV");
         if enc_root_secret_prev.is_some() != enc_key_id_prev.is_some() {
@@ -270,7 +267,13 @@ mod tests {
                 .then(|| base_env(key))
                 .flatten()
         };
-        assert!(Config::load_from(&without_tokens).is_err());
+        assert!(
+            Config::load_from(&without_tokens)
+                .unwrap()
+                .security
+                .operator_tokens
+                .is_empty()
+        );
     }
 
     #[test]

@@ -7,6 +7,7 @@
 | 현재 네이티브 파일 API | [파일](spec/00-operations.md) · [multipart](spec/02-multipart.md) |
 | 현재 S3 API | [S3 계약](spec/03-s3-surface.md) |
 | 등록·인증·키 회전 | [등록부](spec/01-registry.md) |
+| 독립형 관리자 토큰·콘솔 세션 | [관리자 인증](spec/05-admin-auth.md) |
 | 로컬 진단 / 원격 관리 CLI | [status](stack/README.md#현재-cli) · [CLI 구현·후속 계약](spec/04-cli.md) |
 | 버전 / CLI 설치·배포 | [릴리스 계약](development/releases.md) |
 | 서비스 연결 | [네이티브](guide/service-integration.md) · [S3](guide/s3-onboarding.md) |
