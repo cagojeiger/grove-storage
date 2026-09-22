@@ -22,6 +22,7 @@ def check(endpoint, directory):
     from botocore.credentials import Credentials
     import boto3
     from botocore.config import Config
+    from botocore.exceptions import ClientError
 
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -65,6 +66,13 @@ def check(endpoint, directory):
                           config=Config(signature_version="s3v4", s3={"addressing_style": "path"}))
     upload = client.create_multipart_upload(Bucket="s3-test", Key="xml-contract")
     upload_id = upload["UploadId"]
+    try:
+        client.list_parts(Bucket="s3-test", Key="xml-contract", UploadId=upload_id)
+    except ClientError as error:
+        assert error.response["ResponseMetadata"]["HTTPStatusCode"] == 501
+        assert error.response["Error"]["Code"] == "NotImplemented"
+    else:
+        raise AssertionError("unsupported ListParts was accepted")
     part = client.upload_part(Bucket="s3-test", Key="xml-contract", UploadId=upload_id,
                               PartNumber=1, Body=b"xml-body")
 
@@ -89,11 +97,28 @@ def check(endpoint, directory):
                   + fragment + "</Part></CompleteMultipartUpload>") as response:
         assert response.status == 200
     assert client.get_object(Bucket="s3-test", Key="xml-contract")["Body"].read() == b"xml-body"
+    try:
+        client.delete_object_tagging(Bucket="s3-test", Key="xml-contract")
+    except ClientError as error:
+        assert error.response["ResponseMetadata"]["HTTPStatusCode"] == 501
+        assert error.response["Error"]["Code"] == "NotImplemented"
+    else:
+        raise AssertionError("unsupported DeleteObjectTagging was accepted")
+    assert client.get_object(Bucket="s3-test", Key="xml-contract")["Body"].read() == b"xml-body"
     url = client.generate_presigned_url("get_object", Params={"Bucket": "s3-test", "Key": "xml-contract"})
     with opener.open(url, timeout=10) as response:
         assert response.read() == b"xml-body"
+    try:
+        client.copy_object(Bucket="s3-test", Key="xml-contract",
+                           CopySource="s3-test/xml-contract")
+    except ClientError as error:
+        assert error.response["ResponseMetadata"]["HTTPStatusCode"] == 501
+        assert error.response["Error"]["Code"] == "NotImplemented"
+    else:
+        raise AssertionError("unsupported CopyObject was accepted as PutObject")
+    assert client.get_object(Bucket="s3-test", Key="xml-contract")["Body"].read() == b"xml-body"
     client.delete_object(Bucket="s3-test", Key="xml-contract")
-    print("PASS signed malformed XML rejection, valid retry, and presigned GET")
+    print("PASS signed XML rejection/retry, presigned GET, and unsupported-operation guards")
 
 
 if __name__ == "__main__":

@@ -8,11 +8,14 @@ mod object_response;
 mod xml;
 
 use axum::extract::{Path, Request, State};
-use axum::http::{HeaderMap, Method, StatusCode};
+use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
 use axum::{Router, middleware};
+#[cfg(test)]
+use grove_s3_protocol::operation::query_flag;
+use grove_s3_protocol::operation::{Operation, RouteError, classify, query_value};
 
 use crate::routes::AppState;
 
@@ -72,77 +75,70 @@ async fn dispatch(
     // ?uploads·?uploadId·?partNumber 분기는 단일 객체 메서드 라우팅에 없는
     // 새 표면이다. 인증·bucket 검사는 이미 공용으로 지났다.
     let query = parts.uri.query().unwrap_or("");
-    let has_uploads = query_flag(query, "uploads");
-    let upload_id = query_value(query, "uploadId");
-    let part_number = query_value(query, "partNumber");
-    let result = match (&parts.method, has_uploads, upload_id, part_number) {
-        // CreateMultipartUpload: POST …?uploads
-        (&Method::POST, true, _, _) => {
+    let operation = match classify(
+        parts.method.as_str(),
+        query,
+        parts.headers.contains_key("x-amz-copy-source"),
+    ) {
+        Ok(operation) => operation,
+        Err(error) => {
+            let (status, code, message) = match error {
+                RouteError::InvalidArgument => (
+                    StatusCode::BAD_REQUEST,
+                    "InvalidArgument",
+                    "invalid multipart operation parameters",
+                ),
+                RouteError::NotImplemented => (
+                    StatusCode::NOT_IMPLEMENTED,
+                    "NotImplemented",
+                    "the operation is not supported on this surface",
+                ),
+                RouteError::MethodNotAllowed => (
+                    StatusCode::METHOD_NOT_ALLOWED,
+                    "MethodNotAllowed",
+                    "the method is not supported on this surface",
+                ),
+            };
+            return xml::xml_error(status, code, message);
+        }
+    };
+    let result = match operation {
+        Operation::CreateMultipart => {
             multipart::create_multipart(&state, &client_id, &bucket, &key, &parts.headers).await
         }
-        // UploadPart: PUT …?partNumber=N&uploadId=U
-        (&Method::PUT, _, Some(upload_id), Some(part_number)) => match part_number.parse::<i32>() {
-            Ok(part_number) => {
-                multipart::upload_part(
-                    &state,
-                    &client_id,
-                    &key,
-                    part_number,
-                    upload_id,
-                    &parts.headers,
-                    body,
-                )
-                .await
-            }
-            Err(_) => Err(xml::xml_error(
-                StatusCode::BAD_REQUEST,
-                "InvalidArgument",
-                "partNumber must be an integer",
-            )),
-        },
-        // CompleteMultipartUpload: POST …?uploadId=U (no uploads)
-        (&Method::POST, false, Some(upload_id), _) => {
+        Operation::UploadPart {
+            upload_id,
+            part_number,
+        } => {
+            multipart::upload_part(
+                &state,
+                &client_id,
+                &key,
+                part_number,
+                upload_id,
+                &parts.headers,
+                body,
+            )
+            .await
+        }
+        Operation::CompleteMultipart { upload_id } => {
             multipart::complete_multipart(&state, &client_id, &bucket, &key, upload_id, body).await
         }
-        // AbortMultipartUpload: DELETE …?uploadId=U
-        (&Method::DELETE, _, Some(upload_id), _) => {
+        Operation::AbortMultipart { upload_id } => {
             multipart::abort_multipart(&state, &client_id, &key, upload_id).await
         }
-        // 단일 객체 오퍼레이션 — 메서드로 라우팅한다 (기존 표면).
-        (&Method::PUT, ..) => {
+        Operation::Put => {
             handlers::put_object(&state, &client_id, &bucket, &key, &parts.headers, body).await
         }
-        (&Method::GET, ..) => {
+        Operation::Get => {
             handlers::get_object(&state, &client_id, &bucket, &key, &parts.headers, query).await
         }
-        (&Method::HEAD, ..) => handlers::head_object(&state, &client_id, &key, query).await,
-        (&Method::DELETE, ..) => handlers::delete_object(&state, &client_id, &bucket, &key).await,
-        _ => Err(xml::xml_error(
-            StatusCode::METHOD_NOT_ALLOWED,
-            "MethodNotAllowed",
-            "the method is not supported on this surface",
-        )),
+        Operation::Head => handlers::head_object(&state, &client_id, &key, query).await,
+        Operation::Delete => handlers::delete_object(&state, &client_id, &bucket, &key).await,
     };
     match result {
         Ok(response) | Err(response) => response,
     }
-}
-
-/// 쿼리에 이 키가 (값 유무와 무관하게) 있는가 — `?uploads`처럼 값 없는
-/// 플래그 판정용. S3의 subresource 플래그는 값이 없다.
-fn query_flag(query: &str, key: &str) -> bool {
-    query
-        .split('&')
-        .any(|pair| pair == key || pair.split_once('=').is_some_and(|(k, _)| k == key))
-}
-
-/// 첫 번째 정확히 일치하는 키의 raw 값. 서명 검증까지 원본 인코딩을 유지한다.
-fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
-    query
-        .split('&')
-        .filter_map(|pair| pair.split_once('='))
-        .find(|(k, _)| *k == key)
-        .map(|(_, value)| value)
 }
 
 /// 헤더 값을 문자열로 — 표면 전역이 쓰는 작은 헬퍼 (auth·handlers 공유).

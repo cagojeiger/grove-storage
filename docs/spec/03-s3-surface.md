@@ -21,6 +21,11 @@
 ListObjectsV2·ListBuckets·HeadBucket·CopyObject·ListParts·클라이언트용
 ListMultipartUploads는 현재 지원 범위 밖이다.
 
+CopyObject·UploadPartCopy 및 객체 경로의 미지원 subresource
+(acl·tagging·versionId·torrent·restore·retention·legal-hold·attributes·select)는
+501 NotImplemented로 거부한다. GET ?uploadId (ListParts)도 같은 응답이다.
+multipart의 누락·중복·상충 파라미터는 400 InvalidArgument로 거부한다.
+
 ## 주소·인증
 
 | 항목 | 계약 |
