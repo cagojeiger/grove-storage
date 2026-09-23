@@ -161,7 +161,10 @@ FileGate에서는 S3_EXPECT_WRONG_KEY_404=1로 다른 key의 Abort가 404인지 
 XML 파싱·서명 계산은 `grove-s3-protocol`에서 DB 없이 검증한다.
 MinIO 모드는 vendor bucket의 실제 바이트·열린 multipart 세션 0개를 확인하고,
 저장소 중지 시 503 및 같은 endpoint로 재시작 후 읽기 복구를 검증한다.
-Complete 응답 유실·프로세스 중단 중 쓰기 복구는 별도 검증 범위다.
+`scripts/e2e-s3-recovery.py`는 MinIO Complete 성공 응답 유실 후 기존 객체 보존,
+재시도 차단, lease 만료 후 Reconciler 확정·이전 객체 purge·점유 정산을 검증한다.
+완료된 UploadId 재요청은 `NoSuchUpload`다. 프로세스 강제 종료·DB 확정 실패는
+별도 검증 범위다.
 
 ## 0005 이전 세션 전환
 

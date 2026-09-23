@@ -5,7 +5,8 @@
 이번 검증: workspace 305개 통과·1개 제외, S3·CLI E2E·Clippy·fmt 통과.
 후속 계약 검증에서는 동일 SDK 시나리오를 MinIO backend로도 통과했다.
 MinIO 실물 바이트·열린 multipart 0개·중지 중 503·재시작 후 읽기를 확인했다.
-클라우드 S3/R2, 결과가 불명확한 쓰기 장애, 운영 데이터 이관은 미검증이다.
+MinIO Complete 응답 유실 후 기존 객체 보존·실물 관찰 확정·purge·점유 정산도 통과했다.
+클라우드 S3/R2, 프로세스 강제 종료·DB 확정 실패, 운영 데이터 이관은 미검증이다.
 
 ## 파일 트리
 
@@ -31,6 +32,8 @@ backend/crates/
 scripts/
 ├── e2e-cli.py        격리 DB·서버의 CLI 계약
 ├── e2e-s3.py         같은 격리 환경에서 S3 검증 조립
+├── e2e-s3-recovery.py 완료 응답 유실·실제 Reconciler 복구
+├── s3_fault_proxy.py 테스트 전용 Complete 응답 유실 주입
 ├── s3-capture.py     SDK 기본 객체·multipart·다운로드
 └── s3_*_cases.py     인증·multipart·무결성 실패 시나리오
 output/              콘솔 HTML 프로토타입·별도 UI 테스트
@@ -60,12 +63,12 @@ docs/                현재 계약·구조·검증 범위
 | SRP | 순수 규칙과 HTTP/DB 경계가 명확해짐 | S3 생성·part·완료 조율은 API에 남아 있어 실패 경계별 검증 후 추출 |
 | 서비스 계층 | 정리·native 생성 일부를 독립 실행 | 모든 API 흐름이 서비스로 옮겨진 상태와 구분 |
 | DB | 원자적 변경과 락의 소유권 유지 | 파일 크기만 보고 transaction을 나누지 않음 |
-| 테스트 | 단위·실제 PG·filesystem/MinIO SDK HTTP의 층이 생김 | 쓰기 응답 유실·프로세스 중단 검증 |
+| 테스트 | 단위·실제 PG·filesystem/MinIO SDK HTTP·Complete 응답 유실 복구 | 프로세스 중단·DB 확정 실패 검증 |
 | 큰 테스트 | DB 테스트는 현재 최대 298줄 | 독립 fixture/실패 경계가 늘어날 때 분리, 줄 수만으로 crate 추가하지 않음 |
 | checksum | PUT/part 요청 무결성 검증 | 저장·조회·전체 multipart checksum·추가 알고리즘은 아직 미완성 |
 | 조건부 쓰기 | 미지원 요청은 501, 무시해서 덮어쓰는 동작 제거 | 필요 시 논리키 transaction 안에서 원자적 조건 구현 |
 | UI/2차 스토리지 | 콘솔 프로토타입·기존 fs adapter 유지 | 완성 대시보드·스토리지 agent join은 별도 단계 |
 
 현재 결론: 안정화와 책임 분리는 진전됐지만 AWS 전체 호환·운영 검증 완료는 아니다.
-MinIO 경유 정상·오류 계약을 확인했으므로 다음 우선순위는 쓰기 완료 응답 유실과
-프로세스 중단 뒤 재조정 검증이다. crate 수 증가는 해당 실패 경계에 맞춰 결정한다.
+MinIO 경유 정상·오류·Complete 응답 유실 계약을 확인했다. 다음 우선순위는
+프로세스 중단·DB 확정 실패 뒤 재조정 검증이다. crate 수 증가는 해당 실패 경계에 맞춰 결정한다.

@@ -158,7 +158,7 @@ def check_lifecycle(endpoint, directory):
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
 
-def main(check=check_lifecycle):
+def main(check=check_lifecycle, *, with_database=False):
     if not SERVER.is_file() or not CLI.is_file():
         raise RuntimeError("Run cargo build --bin filegate --bin gscli --locked first")
     container = "filegate-cli-e2e-" + uuid.uuid4().hex[:12]
@@ -179,6 +179,8 @@ def main(check=check_lifecycle):
                 FILEGATE_OPERATOR_TOKENS=TOKEN, FILEGATE_BIND=f"127.0.0.1:{port}",
                 FILEGATE_PUBLIC_URL=endpoint, FILEGATE_LOG_FORMAT="json",
             )
+            if with_database:
+                env["FILEGATE_RECONCILER_INTERVAL_SECS"] = "1"
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
@@ -188,7 +190,10 @@ def main(check=check_lifecycle):
             with tempfile.TemporaryFile() as log:
                 server = subprocess.Popen([str(SERVER)], env=env, cwd=directory, stdout=log, stderr=log)
                 try:
-                    check(endpoint, directory)
+                    if with_database:
+                        check(endpoint, directory, container)
+                    else:
+                        check(endpoint, directory)
                 finally:
                     server.terminate()
                     try:
