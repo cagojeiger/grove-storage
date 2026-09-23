@@ -92,6 +92,21 @@ jobs:
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+
+      - name: Console build and browser contracts
+        working-directory: frontend/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm test
+          python3 -B -u ../../scripts/e2e-console.py
+
   audit:
     name: Audit
     runs-on: ubuntu-latest

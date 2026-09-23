@@ -78,6 +78,8 @@ detach는 같은 트랜잭션을 공유한다.
 | S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |
 | 응답 유실 후 프로세스 재시작 | 같은 스크립트의 `--restart`; SIGKILL·새 PID·동일 DB로 복구 확인 |
 | DB 커밋 거부 후 복구 | 같은 스크립트의 `--db-failure`; `s3_db_fault.py`가 격리 DB의 deferred trigger로 커밋 실패 주입 |
+| 실제 콘솔 | `frontend/web/src`: app·auth·api·design·features/overview |
+| 콘솔 테스트 | `frontend/web/tests`: 전송 단위·mock UI·실제 HTTPS 세션; `scripts/e2e-console.py`가 격리 환경 구성 |
 | 정리 실행 순서·실패·재시도 | `object-service/tests/{cleanup,cleanup_failures}.rs`; `cargo test -p grove-object-service --locked` |
 | 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
 | 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |

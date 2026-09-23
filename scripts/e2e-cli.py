@@ -159,7 +159,7 @@ def check_lifecycle(endpoint, directory):
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
 
-def main(check=check_lifecycle, *, with_database=False, with_restart=False):
+def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -184,6 +184,8 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False):
             )
             if with_database:
                 env["FILEGATE_RECONCILER_INTERVAL_SECS"] = "1"
+            if console_origin:
+                env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:

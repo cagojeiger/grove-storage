@@ -1,6 +1,6 @@
 # spec 06: 관리 콘솔
 
-- 상태: 구현 계획. `output/` 화면은 샘플 데이터 미리보기다.
+- 상태: A단계 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 
@@ -67,7 +67,7 @@ Grove Storage
 
 | 단계 | 산출물 | 완료 기준 |
 |---|---|---|
-| A | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
+| A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
 | B | 저장소 조회·등록·교체·삭제 | 모든 필드, S3/fs 입력, 실제 409·동시 변경, secret 미보관 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
 | D | 반응형·접근성·배포 | 320/390/768/1024/1440px, light/dark/system, 키보드·초점, 같은 origin 배포 |
@@ -76,12 +76,14 @@ Grove Storage
 미리보기 테스트는 레이아웃 회귀 근거이며 실제 인증·API 연결의 증거와 구분한다.
 
 ```text
-frontend/web/src/     계획 경로; 아직 생성되지 않음
+frontend/web/src/     현재 구현
 ├── app/              라우팅·초기화
 ├── api/              HTTP·오류·응답 타입
 ├── auth/             세션·로그인
 ├── design/           테마 토큰
-├── shared/ui/        입력·버튼·대화상자
-├── layout/           내비게이션·반응형 셸
-└── features/         overview · storages · clients
+└── features/overview/ 개요·저장소 점유
 ```
+
+현재 셸은 `app/App.tsx`가 소유한다. 공유 UI·별도 layout·storages/clients는 후속
+화면에서 재사용이 생길 때 추가한다. 실행·검증은 [콘솔 README](../../frontend/web/README.md)를 따른다.
+개요는 저장소·클라이언트 수와 저장소별 점유를 제공하며, 이력과 클라이언트 상세는 후속이다.
