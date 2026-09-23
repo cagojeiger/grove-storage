@@ -7,6 +7,7 @@ backend/crates/
 │   ├── src/completion.rs 완료 목록·원장 ETag·비최종 part 최소 크기 검증
 │   ├── src/signing.rs    서명 계산·raw query 정렬
 │   ├── src/auth.rs       scope·서명 헤더·만료 범위·본문 해시 검증
+│   ├── src/integrity.rs  checksum 비교·읽기 If-Match·조건 헤더 식별
 │   ├── src/operation.rs  지원 동작 분류·미지원 요청 차단
 │   └── tests/            multipart·completion·signing·operation·auth (서버·DB 독립)
 ├── object-service/        grove-object-service: 업로드 준비·실패 보상 조율
@@ -24,11 +25,13 @@ backend/crates/
 │   ├── admin/              등록부·운영자 인증·usage
 │   ├── s3/                 SigV4·라우팅·객체·multipart
 │   │   ├── object_response.rs Range·응답 헤더 정책
+│   │   ├── integrity.rs    실측값·HTTP 헤더 연결, checksum 오류 응답
 │   │   └── object_response/ Range·응답 헤더 테스트
 │   ├── v1/                 네이티브 파일·multipart·relay
 │   │   └── multipart_create.rs  Native 생성 service의 DB·S3·crypto adapter
 │   ├── blobs.rs            lease URL 바이트 전송
 │   ├── spool.rs            스트림 계측·임시 파일
+│   ├── spool/tests.rs      청크별 누적 해시·네이티브 계측 유지
 │   ├── storage_access.rs   등록부에서 backend 구성·물리 작업
 │   ├── status.rs           현재 로컬 DB·저장소 진단 CLI
 │   └── reconciler/         완료 복구

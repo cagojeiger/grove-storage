@@ -53,12 +53,12 @@ pub fn spool_root(backend: &StorageBackend) -> std::path::PathBuf {
     }
 }
 
-/// 스풀 실측 결과. sha256은 요청했을 때만 (S3 표면의 x-amz-content-sha256
-/// 대조용) — 네이티브 중계는 md5만 쓴다.
+/// 스풀 실측 결과. S3 요청은 SHA256·CRC32도 실측하며 네이티브 중계는 MD5를 쓴다.
 pub struct Measured {
     pub written: i64,
     pub md5_hex: String,
     pub sha256_hex: Option<String>,
+    pub crc32: Option<u32>,
 }
 
 /// 스풀 실패의 종류 — 호출자가 각자의 표면 에러(ApiError·S3 XML)로 번역한다.
@@ -76,17 +76,18 @@ pub enum SpoolError {
     Io(std::io::Error),
 }
 
-/// body를 writer에 쓰며 크기·MD5(+선택 SHA256)를 실측하고, 선언 크기를 넘는
+/// body를 writer에 쓰며 크기·MD5(+선택 SHA256·CRC32)를 실측하고, 선언 크기를 넘는
 /// 순간 끊는다. 유휴·단절·초과·IO 실패는 임시 파일을 지우고 에러로 돌아간다.
 pub async fn spool_to_temp(
     body: Body,
     writer: &mut (impl tokio::io::AsyncWrite + Unpin),
     temp_path: &Path,
     declared_size: i64,
-    want_sha256: bool,
+    want_s3_checksums: bool,
 ) -> Result<Measured, SpoolError> {
     let mut md5 = Md5::new();
-    let mut sha256 = want_sha256.then(Sha256::new);
+    let mut sha256 = want_s3_checksums.then(Sha256::new);
+    let mut crc32 = want_s3_checksums.then(crc32fast::Hasher::new);
     let mut written: i64 = 0;
     let mut stream = body.into_data_stream();
     loop {
@@ -108,6 +109,9 @@ pub async fn spool_to_temp(
             return Err(SpoolError::TooLarge);
         }
         md5.update(&chunk);
+        if let Some(crc) = crc32.as_mut() {
+            crc.update(&chunk);
+        }
         if let Some(sha) = sha256.as_mut() {
             use sha2::Digest as _;
             sha.update(&chunk);
@@ -120,6 +124,7 @@ pub async fn spool_to_temp(
     Ok(Measured {
         written,
         md5_hex: hex::encode(md5.finalize()),
+        crc32: crc32.map(crc32fast::Hasher::finalize),
         sha256_hex: sha256.map(|sha| {
             use sha2::Digest as _;
             hex::encode(sha.finalize())
@@ -132,32 +137,4 @@ async fn fs_backend_abort(temp_path: &Path) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn dummy_s3_spec() -> filegate_infra::S3StorageSpec {
-        filegate_infra::S3StorageSpec {
-            endpoint: "http://m:9000".to_owned(),
-            public_endpoint: "http://m:9000".to_owned(),
-            region: "us-east-1".to_owned(),
-            bucket: "b".to_owned(),
-            force_path_style: true,
-            access_key: "ak".to_owned(),
-            secret_key: filegate_core::SecretString::from("sk".to_owned()),
-        }
-    }
-
-    #[test]
-    fn spool_root_targets_root_for_fs_and_temp_dir_for_s3() {
-        let fs = StorageBackend::Fs {
-            root: std::path::PathBuf::from("/data/x"),
-        };
-        assert_eq!(spool_root(&fs), std::path::PathBuf::from("/data/x"));
-        // s3 중계는 OS 로컬 스풀(임시 디렉토리)을 거친다.
-        let s3 = StorageBackend::S3 {
-            spec: dummy_s3_spec(),
-            force_relay: true,
-        };
-        assert_eq!(spool_root(&s3), std::env::temp_dir());
-    }
-}
+mod tests;

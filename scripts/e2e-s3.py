@@ -122,6 +122,8 @@ def check(endpoint, directory):
     check_auth(client, credential, endpoint, opener)
     from s3_multipart_cases import check_multipart
     check_multipart(client)
+    from s3_integrity_cases import check_integrity
+    check_integrity(client, credential, endpoint, opener)
     print("PASS signed XML rejection/retry, presigned GET, and unsupported-operation guards")
 
 

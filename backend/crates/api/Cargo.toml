@@ -8,6 +8,7 @@ name = "filegate"
 path = "src/main.rs"
 
 [dependencies]
+crc32fast = "1.5"
 grove-s3-protocol = { workspace = true }
 grove-object-service = { workspace = true }
 grove-object-policy = { workspace = true }

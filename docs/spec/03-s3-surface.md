@@ -59,7 +59,11 @@ multipart의 누락·중복·상충 파라미터는 400 InvalidArgument로 거�
 | 기타 Range 형식 | 전체 응답 |
 | 응답 override | 서명된 response-content-disposition/type/cache-control |
 | override 검증 | percent decode 후 HeaderValue 검증; 제어문자는 400 InvalidArgument |
-| checksum 헤더 | 서명 범위로 검증; CRC32 값의 본문 대조는 현재 제공하지 않음 |
+| PUT·UploadPart checksum | Content-MD5·CRC32·SHA256을 본문 실측값과 대조, 불일치 400 BadDigest·형식 오류 400 InvalidDigest |
+| PUT·UploadPart 추가 알고리즘 | 지원하지 않는 checksum 알고리즘·옵션은 501 NotImplemented |
+| checksum 범위 | 요청 무결성 검증; checksum 저장·GET/HEAD 반환·multipart 전체 checksum 계약은 후속 |
+| GET·HEAD If-Match | 현재 읽는 객체의 strong ETag 비교, 불일치 412 PreconditionFailed; wildcard·목록 지원 |
+| 기타 조건부 요청 | 조건부 쓰기·삭제 및 미지원 읽기 조건은 501 NotImplemented로 명시적 거부 |
 | 접근 기록 | 내부 lease 원장 사용 |
 
 ## Multipart
@@ -128,6 +132,10 @@ Complete도 이 모드를 사용한다. 서명 검증과 본문 바이트 무결
 완료 목록 검증은 completing 선점·물리 조립·논리키 교체 전에 수행한다. 거부된
 업로드는 open 상태를 유지하며 part 재업로드 또는 목록 수정 뒤 같은 UploadId로
 재시도한다. S3 크기 제한은 네이티브 multipart의 geometry 계약과 구분한다.
+
+UploadPart는 signed payload SHA256 및 요청 checksum 대조 후 part를 선점한다.
+실패 시 임시 파일을 정리하고 기존 part 원장·실물을 유지한다. 네이티브 중계의
+MD5 계측은 그대로 유지한다.
 
 ## 에러와 검증
 

@@ -223,7 +223,7 @@ pub(super) async fn upload_part(
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file_handle);
 
     let measured =
-        match spool::spool_to_temp(body, &mut writer, &temp_path, content_length, false).await {
+        match spool::spool_to_temp(body, &mut writer, &temp_path, content_length, true).await {
             Ok(measured) => measured,
             Err(error) => return Err(spool_error_to_xml(error)),
         };
@@ -234,6 +234,10 @@ pub(super) async fn upload_part(
             "IncompleteBody",
             "the body does not match the content-length",
         ));
+    }
+    if let Err(error) = super::integrity::verify(headers, &measured) {
+        fs_backend::abort_write(&temp_path).await;
+        return Err(error);
     }
     let md5_hex = measured.md5_hex;
 

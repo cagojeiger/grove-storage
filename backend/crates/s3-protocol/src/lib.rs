@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod completion;
+pub mod integrity;
 pub mod multipart;
 pub mod operation;
 pub mod signing;

@@ -53,10 +53,6 @@ pub(super) async fn put_object(
             "the object exceeds the single-upload limit (5 GiB)",
         ));
     }
-    // 서명된 본문 해시 — 64 hex면 스트림 실측과 대조한다 (UNSIGNED-PAYLOAD 제외).
-    let expected_sha256 = header_str(headers, "x-amz-content-sha256")
-        .filter(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()))
-        .map(str::to_owned);
     // content_type은 네이티브 create와 같은 가드 — 있는데 형태가 아니면 400
     // (조용히 버려 메타데이터를 잃지 않는다, 공유 validation).
     let content_type = header_str(headers, "content-type");
@@ -111,7 +107,6 @@ pub(super) async fn put_object(
             Err(error) => return Err(spool_error_to_xml(error)),
         };
     let written = measured.written;
-    let sha256_hex = measured.sha256_hex.unwrap_or_default();
     if written != content_length {
         fs_backend::abort_write(&temp_path).await;
         return Err(xml_error(
@@ -120,17 +115,11 @@ pub(super) async fn put_object(
             "the body does not match the content-length",
         ));
     }
-    let md5_hex = measured.md5_hex;
-    if let Some(expected) = &expected_sha256
-        && !expected.eq_ignore_ascii_case(&sha256_hex)
-    {
+    if let Err(error) = super::integrity::verify(headers, &measured) {
         fs_backend::abort_write(&temp_path).await;
-        return Err(xml_error(
-            StatusCode::BAD_REQUEST,
-            "XAmzContentSHA256Mismatch",
-            "the provided x-amz-content-sha256 does not match what was computed",
-        ));
+        return Err(error);
     }
+    let md5_hex = measured.md5_hex;
 
     use tokio::io::AsyncWriteExt as _;
     if let Err(error) = writer.flush().await {
@@ -295,6 +284,7 @@ pub(super) async fn get_object(
     let response_overrides =
         ResponseOverrides::from_query(query).map_err(|_| invalid_response_override())?;
     let (file_id, file) = resolve(state, client_id, key).await?;
+    super::integrity::verify_read_condition(headers, file.etag.as_deref())?;
     let backend =
         backend_from_row(&state.crypto, &file.storage).map_err(|e| xml_internal("backend", e))?;
     let total = file.declared_size;
@@ -369,10 +359,12 @@ pub(super) async fn head_object(
     client_id: &str,
     key: &str,
     query: &str,
+    headers: &HeaderMap,
 ) -> S3Result {
     let response_overrides =
         ResponseOverrides::from_query(query).map_err(|_| invalid_response_override())?;
     let (_, file) = resolve(state, client_id, key).await?;
+    super::integrity::verify_read_condition(headers, file.etag.as_deref())?;
     let mut response = StatusCode::OK.into_response();
     object_headers(response.headers_mut(), &file, file.declared_size);
     response_overrides.apply(response.headers_mut());

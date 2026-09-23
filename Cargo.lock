@@ -1007,6 +1007,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "crc32fast",
  "filegate-core",
  "filegate-db",
  "filegate-infra",
@@ -1248,6 +1249,7 @@ dependencies = [
 name = "grove-s3-protocol"
 version = "0.4.1"
 dependencies = [
+ "base64",
  "hex",
  "hmac 0.12.1",
  "roxmltree",

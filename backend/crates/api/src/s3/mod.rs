@@ -3,6 +3,7 @@
 
 mod auth;
 mod handlers;
+mod integrity;
 mod multipart;
 mod object_response;
 mod xml;
@@ -70,6 +71,16 @@ async fn dispatch(
             StatusCode::NOT_FOUND,
             "NoSuchBucket",
             "the specified bucket does not exist",
+        );
+    }
+    if parts.headers.keys().any(|name| {
+        grove_s3_protocol::integrity::is_conditional_header(name.as_str())
+            && !(name == "if-match" && matches!(parts.method.as_str(), "GET" | "HEAD"))
+    }) {
+        return xml::xml_error(
+            StatusCode::NOT_IMPLEMENTED,
+            "NotImplemented",
+            "conditional requests are not supported",
         );
     }
     // multipart는 쿼리스트링이 오퍼레이션을 가른다 (spec 03) — POST와
@@ -143,7 +154,9 @@ async fn dispatch(
         Operation::Get => {
             handlers::get_object(&state, &client_id, &bucket, &key, &parts.headers, query).await
         }
-        Operation::Head => handlers::head_object(&state, &client_id, &key, query).await,
+        Operation::Head => {
+            handlers::head_object(&state, &client_id, &key, query, &parts.headers).await
+        }
         Operation::Delete => handlers::delete_object(&state, &client_id, &bucket, &key).await,
     };
     match result {
