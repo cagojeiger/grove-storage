@@ -1,4 +1,4 @@
-"""Loopback-only test proxy that loses vendor Complete responses."""
+"""Loopback-only Complete observer with optional response loss."""
 
 from contextlib import contextmanager
 import http.client
@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 
 @contextmanager
-def lose_complete_responses(endpoint):
+def complete_proxy(endpoint, *, drop_response=True):
     upstream = urlsplit(endpoint)
     assert upstream.scheme == "http" and upstream.hostname == "127.0.0.1"
     attempts = []
@@ -34,6 +34,7 @@ def lose_complete_responses(endpoint):
                             "uploadId" in parse_qs(urlsplit(self.path).query))
                 if complete:
                     attempts.append((response.status, payload))
+                if complete and drop_response:
                     self.close_connection = True
                     self.connection.shutdown(socket.SHUT_RDWR)
                     self.connection.close()

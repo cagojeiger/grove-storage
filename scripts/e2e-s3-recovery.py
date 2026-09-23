@@ -13,13 +13,14 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from s3_backend_fixture import docker, minio_backend
-from s3_fault_proxy import lose_complete_responses
+from s3_fault_proxy import complete_proxy
+import s3_db_fault
 
 
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
-def check(endpoint, directory, database, backend, proxy, attempts, restart=None):
+def check(endpoint, directory, database, backend, proxy, attempts, restart=None, db_failure=False):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def admin(method, path, body=None):
@@ -65,15 +66,21 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None)
     complete = {**args, "UploadId": upload,
                 "MultipartUpload": {"Parts": [{"PartNumber": 1, "ETag": part["ETag"]}]}}
 
-    def unavailable():
+    if db_failure:
+        s3_db_fault.install(sql, file_id)
+
+    def unavailable(status=503):
         try:
             client.complete_multipart_upload(**complete)
         except ClientError as error:
-            assert error.response["ResponseMetadata"]["HTTPStatusCode"] == 503, error
+            assert error.response["ResponseMetadata"]["HTTPStatusCode"] == status, error
+            assert error.response["Error"]["Code"] == ("InternalError" if status == 500 else "ServiceUnavailable"), error
         else:
-            raise AssertionError("lost completion response must not report success")
+            raise AssertionError("injected completion failure must not report success")
 
-    unavailable()
+    unavailable(500 if db_failure else 503)
+    if db_failure:
+        assert s3_db_fault.failures(sql) == 1, "request must reach the deferred commit failure"
     assert attempts and attempts[0][0] == 200, attempts
     assert b"CompleteMultipartUploadResult" in attempts[0][1]
     assert sum(status == 200 for status, _ in attempts) == 1
@@ -84,7 +91,7 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None)
     count = len(attempts)
     unavailable()
     assert len(attempts) == count, "client retry must not repeat vendor completion"
-    print("PASS vendor committed; response lost; old object preserved; retry fenced")
+    print("PASS vendor committed; Grove completion failed; old object preserved; retry fenced")
 
     if restart is not None:
         restart()
@@ -99,6 +106,19 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None)
     # Advance only this fixture's abandoned lease, not the product clock or state.
     sql(f"UPDATE leases SET expires_at = now() - interval '1 second' "
         f"WHERE file_id = '{file_id}' AND kind = 'write'")
+    if db_failure:
+        wait_for(lambda: s3_db_fault.failures(sql) >= 2)
+        assert sql(f"SELECT state FROM files WHERE id = '{file_id}'") == "pending"
+        assert sql(f"SELECT state FROM leases WHERE file_id = '{file_id}' AND kind = 'write'") == "issued"
+        assert sql(f"SELECT state FROM s3_uploads WHERE file_id = '{file_id}'") == "completing"
+        assert client.get_object(**args)["Body"].read() == old
+        assert backend.vendor.get_object(Bucket=backend.spec["bucket"], Key=physical)["Body"].read() == new
+        assert len(attempts) == count == 1
+        usage = admin("GET", "/api/admin/v1/usage")[0]
+        assert usage["active_bytes"] == len(old) and usage["active_files"] == 1, usage
+        assert usage["reserved_files"] == 1 and usage["purge_pending_files"] == 0, usage
+        print("PASS request and reconciler commit failures roll back file, lease, and key changes")
+        s3_db_fault.remove(sql)
     wait_for(lambda: sql(f"SELECT state FROM files WHERE id = '{file_id}'") == "active")
     assert client.get_object(**args)["Body"].read() == new
     assert sql(f"SELECT count(*) FROM s3_uploads WHERE file_id = '{file_id}'") == "0"
@@ -128,11 +148,14 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None)
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--restart", action="store_true",
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--restart", action="store_true",
                         help="SIGKILL after response loss, then recover in a new server process")
+    mode.add_argument("--db-failure", action="store_true",
+                      help="reject DB commits after successful vendor completion")
     options = parser.parse_args()
     with minio_backend() as backend:
-        with lose_complete_responses(backend.endpoint) as (proxy, attempts):
+        with complete_proxy(backend.endpoint, drop_response=not options.db_failure) as (proxy, attempts):
             HARNESS["main"](lambda endpoint, directory, database, restart=None:
-                check(endpoint, directory, database, backend, proxy, attempts, restart),
+                check(endpoint, directory, database, backend, proxy, attempts, restart, options.db_failure),
                 with_database=True, with_restart=options.restart)

@@ -31,6 +31,7 @@
 | vendor 가용성 | 같은 fixture의 stop/start | 중지 중 GET 503 ServiceUnavailable, 같은 주소 재시작 후 동일 객체 읽기 |
 | Complete 응답 유실 | `e2e-s3-recovery.py`·`s3_fault_proxy.py` | MinIO 성공 후 응답 차단, 기존 객체 보존, 재시도 fencing, 실물 관찰 확정·purge·점유 정산 |
 | 응답 유실 후 프로세스 재시작 | `e2e-s3-recovery.py --restart` | SIGKILL 종료·새 PID 확인, 동일 DB·endpoint, 소유권 보존과 새 Reconciler 복구 |
+| DB 커밋 거부 | `e2e-s3-recovery.py --db-failure`·`s3_db_fault.py` | vendor 성공, 요청·Reconciler 커밋 롤백, 장애 제거 후 실물 관찰 확정·정산 |
 
 ## 재현 후 수정
 
@@ -76,7 +77,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
 | 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
 | 3 | 읽기·쓰기 추가 옵션 | 원자적 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
-| 4 | 쓰기 장애 복구 | DB 확정 실패·쓰기 진행 도중 종료, AWS S3/R2 별도 호환성 |
+| 4 | 쓰기 장애 복구 | DB COMMIT 응답 유실·쓰기 진행 도중 종료, AWS S3/R2 별도 호환성 |
 
 현재 raw query 정렬 방식은 유지한다. 필수 query 인증 파라미터의 중복은 거부하며,
 percent encoding의 모든 동등 표현까지 AWS와 같다고 판단하는 근거로 사용하지 않는다.
@@ -93,6 +94,7 @@ python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
 ```
 
 두 모드는 같은 SDK 성공·거부·재시도 시나리오를 사용한다. MinIO 모드는 테스트가
@@ -113,7 +115,7 @@ Docker 자동 포트 재할당 대신 명시적 임시 포트를 사용한다.
 | 확정된 UploadId 재요청 | NoSuchUpload, 추가 vendor Complete 없음 |
 
 격리 DB의 대상 write lease만 과거 시각으로 바꾸고 Reconciler 주기를 1초로 설정한다.
-실제 15분 대기·쓰기 진행 도중 종료·DB 확정 실패를 검증한 결과와 구분한다.
+실제 15분 대기·쓰기 진행 도중 종료·DB COMMIT 응답 유실을 검증한 결과와 구분한다.
 프록시는 loopback MinIO만 대상으로 하며 Host·경로·HEAD Content-Length를 보존한다.
 
 ### 응답 유실 후 재시작
@@ -129,6 +131,22 @@ Docker 자동 포트 재할당 대신 명시적 임시 포트를 사용한다.
 
 실행 중인 Complete 요청을 강제 종료하는 경우와 구분한다. 기본 모드와 재시작 모드를
 CI에서 각각 실행하며, CLI fixture의 기존 실행 경로도 로컬 E2E로 확인했다.
+
+### DB 커밋 거부
+
+`--db-failure`는 Complete 응답을 정상 전달한다. 격리 PostgreSQL의 대상 file_id에만
+deferred constraint trigger를 적용해 세션 삭제 후 COMMIT에서 예외를 발생시킨다.
+rollback에 영향받지 않는 sequence로 요청과 Reconciler 양쪽의 주입 실행을 확인한다.
+
+| 시점 | 확인 |
+|---|---|
+| 요청 COMMIT 거부 | 500 InternalError; MinIO Complete 200·물리 바이트 일치 |
+| 클라이언트 재시도 | 503, 추가 vendor Complete 없음 |
+| lease 만료 후 Reconciler COMMIT 거부 | pending/completing·issued 유지, 이전 논리키 보존, 이전 active·새 reserved 점유 유지 |
+| 트리거 제거 후 | 자동 확정, 이전 실물 purge, 활성 객체 1개·예약 및 purge 대기 0 |
+
+실패 시에도 fixture DB 전체를 폐기한다. 이 검증은 확실한 rollback이며,
+DB가 COMMIT한 뒤 응답만 유실되는 결과 불명확성이나 DB 전체 장애와 구분한다.
 
 기준: [AWS CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html),
 [roxmltree 파싱 옵션](https://docs.rs/roxmltree/0.21.1/roxmltree/struct.ParsingOptions.html).

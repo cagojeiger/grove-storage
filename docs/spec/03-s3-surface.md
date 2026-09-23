@@ -165,7 +165,9 @@ MinIO 모드는 vendor bucket의 실제 바이트·열린 multipart 세션 0개�
 재시도 차단, lease 만료 후 Reconciler 확정·이전 객체 purge·점유 정산을 검증한다.
 완료된 UploadId 재요청은 `NoSuchUpload`다. `--restart`는 응답 유실 후 SIGKILL과
 동일 DB·endpoint 재시작을 추가한다. 재시작 직후 이전 객체·완료 소유권을 유지하고,
-lease 만료 후 새 프로세스가 복구한다. 쓰기 진행 도중 종료·DB 확정 실패는 별도 검증 범위다.
+lease 만료 후 새 프로세스가 복구한다. `--db-failure`는 vendor 성공 응답을 전달하고
+DB 커밋을 거부해 요청·Reconciler의 롤백과 장애 제거 후 복구·정산을 검증한다.
+쓰기 진행 도중 종료·DB COMMIT 응답 유실은 별도 검증 범위다.
 
 ## 0005 이전 세션 전환
 
