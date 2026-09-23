@@ -74,7 +74,7 @@ detach는 같은 트랜잭션을 공유한다.
 | 범위 | 테스트 |
 |---|---|
 | S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
-| S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py` (boto3, 격리 DB·filesystem·서버) |
+| S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
 | 정리 실행 순서·실패·재시도 | `object-service/tests/{cleanup,cleanup_failures}.rs`; `cargo test -p grove-object-service --locked` |
 | 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
 | 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |

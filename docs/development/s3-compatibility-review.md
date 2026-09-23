@@ -4,9 +4,9 @@
 
 | 대상 | 이번 검증 |
 |---|---|
-| 서버 | Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·filesystem |
+| 서버 | Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·filesystem 또는 별도 MinIO 컨테이너 |
 | SDK | boto3/botocore 1.43.99, path-style, HTTP |
-| 외부 S3 backend | 이번 E2E 대상과 구분, 실제 vendor 장애 검증은 후속 |
+| 외부 S3 backend | MinIO RELEASE.2025-09-07T16-13-09Z 경유 검증; AWS S3·R2·운영 endpoint는 별도 |
 | 운영 | 배포·데이터 이관 없음 |
 | 호환성 의미 | spec 03의 지원 subset, AWS 전체 API 동등성을 뜻하지 않음 |
 
@@ -27,6 +27,8 @@
 | Complete part 계약 | `completion` 단위 테스트·`s3_multipart_cases.py` | 5 MiB 경계·순서·중복·누락·ETag; 실패 시 기존 객체 보존·같은 UploadId 복구 |
 | 요청 무결성 | `s3_integrity_cases.py`·spool 테스트 | PUT checksum·UploadPart signed hash 실패 시 기존 객체/part 유지, 정상 MD5·CRC32·SHA256 |
 | 조건부 요청 | 같은 SDK 시나리오 | GET/HEAD If-Match 정상·stale 412, 미지원 조건부 쓰기 501 |
+| vendor 데이터 | `s3_backend_fixture.py` | 실제 MinIO bucket의 바이트 일치, 시나리오 종료 시 열린 multipart 0개 |
+| vendor 가용성 | 같은 fixture의 stop/start | 중지 중 GET 503 ServiceUnavailable, 같은 주소 재시작 후 동일 객체 읽기 |
 
 ## 재현 후 수정
 
@@ -72,7 +74,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
 | 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
 | 3 | 읽기·쓰기 추가 옵션 | 원자적 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
-| 4 | 실제 S3 backend | 동일 SDK 시나리오를 vendor 경유로 실행, timeout·응답 유실 복구 검증 |
+| 4 | 쓰기 장애 복구 | vendor Complete 응답 유실·프로세스 중단·DB 확정 실패, AWS S3/R2 별도 호환성 |
 
 현재 raw query 정렬 방식은 유지한다. 필수 query 인증 파라미터의 중복은 거부하며,
 percent encoding의 모든 동등 표현까지 AWS와 같다고 판단하는 근거로 사용하지 않는다.
@@ -85,8 +87,18 @@ cargo test -p grove-s3-protocol --locked
 cargo build --bin filegate --bin gscli --locked
 python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
-/tmp/grove-s3-sdk/bin/python scripts/e2e-s3.py
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
 ```
+
+두 모드는 같은 SDK 성공·거부·재시도 시나리오를 사용한다. MinIO 모드는 테스트가
+직접 만든 컨테이너만 중지·재시작하며 기존 운영 endpoint를 받지 않는다. 컨테이너·
+볼륨·PG·임시 파일은 finally에서 정리한다. 재시작 시 endpoint 유지가 계약이므로
+Docker 자동 포트 재할당 대신 명시적 임시 포트를 사용한다.
+
+이번 단계는 테스트/CI/문서 변경이다. 제품 Rust 코드는 변경하지 않았다.
+단순 읽기 중단·재개 통과를 쓰기 결과 불명확성이나 클라우드 전체 호환성의 증거로
+확대하지 않는다.
 
 기준: [AWS CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html),
 [roxmltree 파싱 옵션](https://docs.rs/roxmltree/0.21.1/roxmltree/struct.ParsingOptions.html).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run S3 SDK compatibility checks against disposable PostgreSQL and filesystem."""
+"""Run SDK contracts against a disposable filesystem or MinIO backend."""
 
 import json
 import os
@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent
 HARNESS = runpy.run_path(str(ROOT / "e2e-cli.py"))
 
 
-def check(endpoint, directory):
+def check(endpoint, directory, backend=None):
     from botocore.auth import S3SigV4Auth
     from botocore.awsrequest import AWSRequest
     from botocore.credentials import Credentials
@@ -47,13 +47,14 @@ def check(endpoint, directory):
             raise RuntimeError("server readiness timeout")
         time.sleep(0.1)
 
-    root = Path(directory) / "s3-objects"
-    root.mkdir()
-    admin("POST", "/api/admin/v1/storages", {
-        "id": "s3-test-fs", "kind": "fs", "root_path": str(root),
-        "capacity_bytes": 1073741824,
-    })
-    admin("POST", "/api/admin/v1/clients", {"id": "s3-test", "storage_id": "s3-test-fs"})
+    if backend is None:
+        root = Path(directory) / "s3-objects"
+        root.mkdir()
+        spec = {"kind": "fs", "root_path": str(root), "capacity_bytes": 1073741824}
+    else:
+        spec = backend.spec
+    admin("POST", "/api/admin/v1/storages", {"id": "s3-test-backend", **spec})
+    admin("POST", "/api/admin/v1/clients", {"id": "s3-test", "storage_id": "s3-test-backend"})
     credential = admin("POST", "/api/admin/v1/clients/s3-test/s3-credentials", {})
     env = dict(os.environ, S3_ENDPOINT=endpoint, S3_BUCKET="s3-test",
                S3_ACCESS_KEY=credential["access_key_id"], S3_SECRET_KEY=credential["secret_key"],
@@ -124,8 +125,19 @@ def check(endpoint, directory):
     check_multipart(client)
     from s3_integrity_cases import check_integrity
     check_integrity(client, credential, endpoint, opener)
+    if backend is not None:
+        backend.verify(client, credential)
     print("PASS signed XML rejection/retry, presigned GET, and unsupported-operation guards")
 
 
 if __name__ == "__main__":
-    HARNESS["main"](check)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--backend", choices=["fs", "minio"], default="fs")
+    args = parser.parse_args()
+    if args.backend == "minio":
+        from s3_backend_fixture import minio_backend
+        with minio_backend() as backend:
+            HARNESS["main"](lambda endpoint, directory: check(endpoint, directory, backend))
+    else:
+        HARNESS["main"](check)
