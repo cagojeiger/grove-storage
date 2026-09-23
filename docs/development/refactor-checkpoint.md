@@ -77,3 +77,19 @@ MinIO 경유 정상·오류·Complete 응답 유실 및 이후 프로세스 재�
 DB 커밋 거부 뒤 재조정도 확인했다. 이번 세 장애 경계의 검증을 마감하고,
 남은 작업 조율 책임의 추출 필요성을 검토한 뒤 대시보드 구현으로 진행한다.
 crate 수 증가는 검증된 실패 경계에 맞춰 결정한다.
+
+## 대시보드 전환 점검
+
+| 실제 책임 | 점검 결과 | 결정 |
+|---|---|---|
+| `object-policy/completion` | 실물 관찰에 따른 finalize/reopen/cleanup 순수 판단 공유 | 현재 경계 유지 |
+| `object-service/cleanup`, `multipart_create` | 물리 정리·실패 보상 순서 독립 테스트 | 현재 경계 유지 |
+| `api/reconciler/{native,s3}_completion` | 공통 판단을 서로 다른 DB 전이에 연결; native는 cleaning, S3는 aborting | 통합 wrapper·추가 crate 보류 |
+| `db/s3_registry/uploads` | 파일·lease·논리키·세션을 한 transaction에서 확정 | 원자성 경계 유지 |
+| `api/s3/multipart` | 여전히 큰 I/O 조율 모듈 | 줄 수만으로 분할하지 않고 추가 변경 시 실패 경계별 추출 검토 |
+| `output/` | 샘플 데이터 HTML·미리보기 테스트 | 실연결 앱과 구분 |
+| 관리 API·세션 | 등록부 API와 쿠키 인증 구현 | 기존 API에 실제 UI 연결 |
+
+이번 점검에서 추가 제품 코드 분리를 필수로 만드는 결함은 확인하지 못했다.
+이는 전체 코드 무결성 증명이 아닌, 위 책임 경계와 세 장애 시나리오에 대한 판단이다.
+다음 구현은 [콘솔 spec](../spec/06-console.md)의 A단계: 실제 로그인·개요 조회다.
