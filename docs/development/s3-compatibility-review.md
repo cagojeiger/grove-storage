@@ -30,6 +30,7 @@
 | vendor 데이터 | `s3_backend_fixture.py` | 실제 MinIO bucket의 바이트 일치, 시나리오 종료 시 열린 multipart 0개 |
 | vendor 가용성 | 같은 fixture의 stop/start | 중지 중 GET 503 ServiceUnavailable, 같은 주소 재시작 후 동일 객체 읽기 |
 | Complete 응답 유실 | `e2e-s3-recovery.py`·`s3_fault_proxy.py` | MinIO 성공 후 응답 차단, 기존 객체 보존, 재시도 fencing, 실물 관찰 확정·purge·점유 정산 |
+| 응답 유실 후 프로세스 재시작 | `e2e-s3-recovery.py --restart` | SIGKILL 종료·새 PID 확인, 동일 DB·endpoint, 소유권 보존과 새 Reconciler 복구 |
 
 ## 재현 후 수정
 
@@ -75,7 +76,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
 | 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
 | 3 | 읽기·쓰기 추가 옵션 | 원자적 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
-| 4 | 쓰기 장애 복구 | 프로세스 중단·DB 확정 실패, AWS S3/R2 별도 호환성 |
+| 4 | 쓰기 장애 복구 | DB 확정 실패·쓰기 진행 도중 종료, AWS S3/R2 별도 호환성 |
 
 현재 raw query 정렬 방식은 유지한다. 필수 query 인증 파라미터의 중복은 거부하며,
 percent encoding의 모든 동등 표현까지 AWS와 같다고 판단하는 근거로 사용하지 않는다.
@@ -91,6 +92,7 @@ python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
 ```
 
 두 모드는 같은 SDK 성공·거부·재시도 시나리오를 사용한다. MinIO 모드는 테스트가
@@ -111,8 +113,22 @@ Docker 자동 포트 재할당 대신 명시적 임시 포트를 사용한다.
 | 확정된 UploadId 재요청 | NoSuchUpload, 추가 vendor Complete 없음 |
 
 격리 DB의 대상 write lease만 과거 시각으로 바꾸고 Reconciler 주기를 1초로 설정한다.
-실제 15분 대기·프로세스 강제 종료·DB 확정 실패를 검증한 결과와 구분한다.
+실제 15분 대기·쓰기 진행 도중 종료·DB 확정 실패를 검증한 결과와 구분한다.
 프록시는 loopback MinIO만 대상으로 하며 Host·경로·HEAD Content-Length를 보존한다.
+
+### 응답 유실 후 재시작
+
+`--restart`는 Grove가 503을 반환하고 DB가 completing으로 남은 시점에 SIGKILL한다.
+종료 코드와 새 PID를 확인하고, 동일 DB·암호화 키·endpoint로 서버를 재실행한다.
+
+| 시점 | 확인 |
+|---|---|
+| 재시작 직후, lease 유효 | pending/completing 유지, 이전 객체 읽기, Complete 재시도 503, vendor 중복 호출 0 |
+| 대상 lease 만료 후 | 새 Reconciler가 새 객체 확정, write lease committed, 이전 실물 purge |
+| 정산 | 활성 객체 1개·실제 크기, 예약·purge 대기 0, 열린 multipart 0 |
+
+실행 중인 Complete 요청을 강제 종료하는 경우와 구분한다. 기본 모드와 재시작 모드를
+CI에서 각각 실행하며, CLI fixture의 기존 실행 경로도 로컬 E2E로 확인했다.
 
 기준: [AWS CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html),
 [roxmltree 파싱 옵션](https://docs.rs/roxmltree/0.21.1/roxmltree/struct.ParsingOptions.html).

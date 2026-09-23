@@ -19,7 +19,7 @@ from s3_fault_proxy import lose_complete_responses
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
-def check(endpoint, directory, database, backend, proxy, attempts):
+def check(endpoint, directory, database, backend, proxy, attempts, restart=None):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def admin(method, path, body=None):
@@ -86,6 +86,16 @@ def check(endpoint, directory, database, backend, proxy, attempts):
     assert len(attempts) == count, "client retry must not repeat vendor completion"
     print("PASS vendor committed; response lost; old object preserved; retry fenced")
 
+    if restart is not None:
+        restart()
+        wait_for(ready)
+        assert sql(f"SELECT state FROM s3_uploads WHERE file_id = '{file_id}'") == "completing"
+        assert sql(f"SELECT state FROM files WHERE id = '{file_id}'") == "pending"
+        assert client.get_object(**args)["Body"].read() == old
+        unavailable()
+        assert len(attempts) == count, "restart must preserve completion fencing"
+        print("PASS restart preserves pending ownership, old object, and retry fencing")
+
     # Advance only this fixture's abandoned lease, not the product clock or state.
     sql(f"UPDATE leases SET expires_at = now() - interval '1 second' "
         f"WHERE file_id = '{file_id}' AND kind = 'write'")
@@ -116,7 +126,13 @@ def check(endpoint, directory, database, backend, proxy, attempts):
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--restart", action="store_true",
+                        help="SIGKILL after response loss, then recover in a new server process")
+    options = parser.parse_args()
     with minio_backend() as backend:
         with lose_complete_responses(backend.endpoint) as (proxy, attempts):
-            HARNESS["main"](lambda endpoint, directory, database:
-                check(endpoint, directory, database, backend, proxy, attempts), with_database=True)
+            HARNESS["main"](lambda endpoint, directory, database, restart=None:
+                check(endpoint, directory, database, backend, proxy, attempts, restart),
+                with_database=True, with_restart=options.restart)

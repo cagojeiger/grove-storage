@@ -89,6 +89,7 @@ jobs:
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
 
   audit:
     name: Audit

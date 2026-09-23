@@ -163,8 +163,9 @@ MinIO 모드는 vendor bucket의 실제 바이트·열린 multipart 세션 0개�
 저장소 중지 시 503 및 같은 endpoint로 재시작 후 읽기 복구를 검증한다.
 `scripts/e2e-s3-recovery.py`는 MinIO Complete 성공 응답 유실 후 기존 객체 보존,
 재시도 차단, lease 만료 후 Reconciler 확정·이전 객체 purge·점유 정산을 검증한다.
-완료된 UploadId 재요청은 `NoSuchUpload`다. 프로세스 강제 종료·DB 확정 실패는
-별도 검증 범위다.
+완료된 UploadId 재요청은 `NoSuchUpload`다. `--restart`는 응답 유실 후 SIGKILL과
+동일 DB·endpoint 재시작을 추가한다. 재시작 직후 이전 객체·완료 소유권을 유지하고,
+lease 만료 후 새 프로세스가 복구한다. 쓰기 진행 도중 종료·DB 확정 실패는 별도 검증 범위다.
 
 ## 0005 이전 세션 전환
 

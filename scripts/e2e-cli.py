@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import signal
 import subprocess
 import tempfile
 import time
@@ -158,7 +159,9 @@ def check_lifecycle(endpoint, directory):
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
 
-def main(check=check_lifecycle, *, with_database=False):
+def main(check=check_lifecycle, *, with_database=False, with_restart=False):
+    if with_restart and not with_database:
+        raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
         raise RuntimeError("Run cargo build --bin filegate --bin gscli --locked first")
     container = "filegate-cli-e2e-" + uuid.uuid4().hex[:12]
@@ -189,8 +192,21 @@ def main(check=check_lifecycle, *, with_database=False):
                 time.sleep(0.2)
             with tempfile.TemporaryFile() as log:
                 server = subprocess.Popen([str(SERVER)], env=env, cwd=directory, stdout=log, stderr=log)
+
+                def crash_and_restart():
+                    nonlocal server
+                    assert server.poll() is None, "fixture server already exited"
+                    previous_pid = server.pid
+                    server.kill()
+                    assert server.wait(timeout=5) == -signal.SIGKILL
+                    server = subprocess.Popen([str(SERVER)], env=env, cwd=directory, stdout=log, stderr=log)
+                    assert server.pid != previous_pid
+                    print("PASS SIGKILL confirmed; new process started with the same DB and endpoint")
+
                 try:
-                    if with_database:
+                    if with_restart:
+                        check(endpoint, directory, container, crash_and_restart)
+                    elif with_database:
                         check(endpoint, directory, container)
                     else:
                         check(endpoint, directory)
