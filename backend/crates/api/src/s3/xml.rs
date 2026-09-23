@@ -33,11 +33,6 @@ pub(super) fn no_such_upload() -> Response {
     )
 }
 
-/// Complete의 part 목록 불일치 (spec 03) — 원장에 없거나 ETag가 어긋난다.
-pub(super) fn invalid_part(message: &str) -> Response {
-    xml_error(StatusCode::BAD_REQUEST, "InvalidPart", message)
-}
-
 /// XML 텍스트 노드 이스케이프 — 논리키·ETag가 성공 응답 XML에 실릴 때
 /// `&`·`<`·`>`가 마크업을 깨지 않게 한다. 에러 메시지는 정적이라 필요 없다.
 fn xml_escape(value: &str) -> String {

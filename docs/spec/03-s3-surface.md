@@ -82,6 +82,8 @@ part별 실측 크기와 완료 목록으로 조립한다.
 | 서로 다른 part | 병렬 가능 |
 | part 진행 중 Complete/Abort | 503, 재시도 |
 | Complete 목록 | 번호 오름차순·유일·원장에 존재·ETag 일치 |
+| Complete part 크기 | 완료 목록의 마지막 part를 제외하고 각 part는 5 MiB 이상; 마지막은 0바이트 포함 허용 |
+| Complete 검증 오류 | 역순·중복 번호는 400 InvalidPartOrder, 없는 part·ETag 불일치는 400 InvalidPart, 작은 비최종 part는 400 EntityTooSmall |
 | Complete XML | 표준 XML 파싱, S3 namespace·엔티티 지원; 잘못된 문서·중복 필드는 400 MalformedXML |
 | Complete 본문 무결성 | 인증된 SHA-256과 실측 본문 대조 후 completing 선점; 불일치는 400 XAmzContentSHA256Mismatch, 기존 세션 재시도 가능 |
 | 객체 크기 | 완료 목록의 실측 합, part_size × 10000 상한 |
@@ -122,6 +124,10 @@ stateDiagram-v2
 
 `UNSIGNED-PAYLOAD`는 본문 해시 대조를 생략하는 명시적 모드다. 기본 presigned
 Complete도 이 모드를 사용한다. 서명 검증과 본문 바이트 무결성 검증을 구분한다.
+
+완료 목록 검증은 completing 선점·물리 조립·논리키 교체 전에 수행한다. 거부된
+업로드는 open 상태를 유지하며 part 재업로드 또는 목록 수정 뒤 같은 UploadId로
+재시도한다. S3 크기 제한은 네이티브 multipart의 geometry 계약과 구분한다.
 
 ## 에러와 검증
 

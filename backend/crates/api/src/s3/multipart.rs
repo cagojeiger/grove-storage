@@ -25,8 +25,8 @@ use super::S3Result;
 use super::handlers::spool_error_to_xml;
 use super::header_str;
 use super::xml::{
-    complete_result, initiate_result, invalid_part, no_such_upload, parse_complete_multipart,
-    xml_error, xml_internal, xml_storage_error,
+    complete_result, initiate_result, no_such_upload, parse_complete_multipart, xml_error,
+    xml_internal, xml_storage_error,
 };
 use crate::lease::{
     WRITE_LEASE_TTL, run_with_completion_heartbeat, run_with_upload_part_heartbeat,
@@ -438,7 +438,8 @@ pub(super) async fn complete_multipart(
         .done_parts()
         .await
         .map_err(|e| xml_internal("done parts", e))?;
-    let completion = reconcile(&client_parts, &ledger)?;
+    let completion = grove_s3_protocol::completion::reconcile(&client_parts, &ledger)
+        .map_err(|error| xml_error(StatusCode::BAD_REQUEST, error.code(), error.message()))?;
 
     // 크기의 진실은 원장 실측 합이다. 상한은 part_size×10000 (spec 02) — create에
     // 크기가 없으므로 Complete가 실측 합으로 강제한다. checked 합산은 회계 overflow
@@ -671,89 +672,4 @@ async fn resolve_session(
         .map_err(|e| xml_internal("session lease", e))?
         .ok_or_else(no_such_upload)?;
     Ok((file_id, file, lease))
-}
-
-/// 클라이언트 part 목록을 원장과 대조한다 (spec 03: 목록은 검증 입력). 모든
-/// 나열 part가 원장에 존재하고 ETag가 일치해야 한다 — 아니면 InvalidPart.
-/// 완성 집합은 번호 오름차순의 (번호, 실측 크기, 원장 ETag)다 (크기의 진실은
-/// 원장). 조립 offset이 번호순 누계이므로 정렬한다.
-// Err=Response는 s3 표면의 관용구(auth와 같음) — sync fn이라만 lint 대상.
-#[allow(clippy::result_large_err)]
-fn reconcile(
-    client_parts: &[(i32, String)],
-    ledger: &[(i32, i64, String)],
-) -> Result<Vec<(i32, i64, String)>, Response> {
-    let mut completion = Vec::with_capacity(client_parts.len());
-    let mut prev = 0_i32;
-    let ledger_by_number: std::collections::HashMap<i32, (i64, &str)> = ledger
-        .iter()
-        .map(|(number, size, etag)| (*number, (*size, etag.as_str())))
-        .collect();
-    for (n, client_etag) in client_parts {
-        // S3처럼 번호는 오름차순·유일해야 한다 — 중복을 허용하면 조립이 같은
-        // part를 두 번 써서 바이트가 불어난다(fs). 이 검사가 그 손상을 막는다.
-        if *n <= prev {
-            return Err(invalid_part(
-                "parts must be listed in ascending order without duplicates",
-            ));
-        }
-        prev = *n;
-        let (size, ledger_etag) = ledger_by_number
-            .get(n)
-            .ok_or_else(|| invalid_part("a listed part was never uploaded"))?;
-        if !ledger_etag.eq_ignore_ascii_case(client_etag.trim_matches('"')) {
-            return Err(invalid_part(
-                "a listed part etag does not match the recorded upload",
-            ));
-        }
-        completion.push((*n, *size, (*ledger_etag).to_owned()));
-    }
-    Ok(completion)
-}
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reconcile_matches_client_list_against_ledger_and_sorts() {
-        // 원장은 비순차로 와도 완성 집합은 번호 오름차순이다.
-        let ledger = vec![
-            (2, 30_i64, "bbbb".to_owned()),
-            (1, 50_i64, "aaaa".to_owned()),
-        ];
-        let client = vec![(1, "\"aaaa\"".to_owned()), (2, "bbbb".to_owned())];
-        let completion = reconcile(&client, &ledger).unwrap();
-        assert_eq!(
-            completion,
-            vec![(1, 50, "aaaa".to_owned()), (2, 30, "bbbb".to_owned())]
-        );
-        // 크기 합 = 실측 합.
-        let total: i64 = completion.iter().map(|(_, s, _)| *s).sum();
-        assert_eq!(total, 80);
-    }
-
-    #[test]
-    fn reconcile_rejects_missing_part_and_etag_mismatch() {
-        let ledger = vec![(1, 50_i64, "aaaa".to_owned())];
-        // 원장에 없는 part 번호 → InvalidPart.
-        assert!(reconcile(&[(2, "aaaa".to_owned())], &ledger).is_err());
-        // ETag 불일치 → InvalidPart.
-        assert!(reconcile(&[(1, "zzzz".to_owned())], &ledger).is_err());
-    }
-
-    #[test]
-    fn reconcile_rejects_duplicate_and_out_of_order_parts() {
-        let ledger = vec![
-            (1, 50_i64, "aaaa".to_owned()),
-            (2, 30_i64, "bbbb".to_owned()),
-        ];
-        // 같은 번호 두 번 → 거부 (조립이 바이트를 불리는 손상 방지).
-        assert!(reconcile(&[(1, "aaaa".to_owned()), (1, "aaaa".to_owned())], &ledger).is_err());
-        // 내림차순 → 거부.
-        assert!(reconcile(&[(2, "bbbb".to_owned()), (1, "aaaa".to_owned())], &ledger).is_err());
-        // 오름차순·유일은 통과.
-        assert!(reconcile(&[(1, "aaaa".to_owned()), (2, "bbbb".to_owned())], &ledger).is_ok());
-    }
 }

@@ -4,10 +4,11 @@
 backend/crates/
 ├── s3-protocol/           S3 XML·SigV4 순수 프로토콜 계약
 │   ├── src/multipart.rs  Complete XML 구조·엔티티·namespace 검증
+│   ├── src/completion.rs 완료 목록·원장 ETag·비최종 part 최소 크기 검증
 │   ├── src/signing.rs    서명 계산·raw query 정렬
 │   ├── src/auth.rs       scope·서명 헤더·만료 범위·본문 해시 검증
 │   ├── src/operation.rs  지원 동작 분류·미지원 요청 차단
-│   └── tests/            multipart·signing·operation·auth (서버·DB 독립)
+│   └── tests/            multipart·completion·signing·operation·auth (서버·DB 독립)
 ├── object-service/        grove-object-service: 업로드 준비·실패 보상 조율
 │   ├── src/cleanup.rs     정리 성공 후 메타데이터 확정
 │   ├── src/multipart_create.rs  vendor 생성·ID 기록·relay 준비·실패 보상

@@ -24,6 +24,7 @@
 | Complete XML | protocol 단위 테스트·실제 서명 요청 | 잘못된 문서 거부·namespace·엔티티·정상 재시도 |
 | 미지원 요청 | protocol 분류·실제 SDK | CopyObject·ListParts·DeleteObjectTagging 501, 기존 객체 유지 |
 | 완료·회수·GC | 기존 DB 통합 테스트 | 전체 workspace 회귀 실행 |
+| Complete part 계약 | `completion` 단위 테스트·`s3_multipart_cases.py` | 5 MiB 경계·순서·중복·누락·ETag; 실패 시 기존 객체 보존·같은 UploadId 복구 |
 
 ## 재현 후 수정
 
@@ -34,10 +35,12 @@
 | multipart·하위 리소스의 일반 객체 fallback | 지원 동작 명시 분류, 잘못된 조합 400·미지원 501 |
 | 604801초 presigned URL·host 없는 서명 수용 | 인증 단계에서 403 AccessDenied |
 | Complete 본문 바이트 변경 후 성공 | 상태 전이 전 400 XAmzContentSHA256Mismatch |
+| 작은 비최종 part 완료·역순 목록 InvalidPart | EntityTooSmall·InvalidPartOrder로 구분, 완료 선점 전 거부 |
 
 XML 실패는 이전 파서 단위 테스트에서, CopyObject 성공은 수정 전 실제 boto3
 요청에서 재현했다. 운영 사고를 관찰했다는 의미와 구분한다.
 만료 초과·host 누락·Complete 변조도 수정 전 실제 HTTP 200으로 재현했다.
+작은 비최종 part의 완료 성공과 역순의 잘못된 오류 코드도 실제 SDK로 재현했다.
 
 ## 책임 구조
 
@@ -47,6 +50,7 @@ api/s3                          HTTP·자격증명 조회·복호화·오류 응
   -> s3-protocol/signing         서명 계산·raw query 정렬 (시계·DB 없음)
   -> s3-protocol/auth            scope·헤더·만료 범위·본문 해시 검증
   -> s3-protocol/multipart       Complete XML 파싱 (DB 없음)
+  -> s3-protocol/completion      S3 완료 목록과 실측 원장 대조 (DB 없음)
   -> object-policy              공통 업로드 규칙·완료 관찰 판단
   -> object-service             정리·실패 보상 순서
   -> db                         파일 락·세션·원장·논리키 원자 전이
@@ -61,7 +65,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 | 우선순위 | 경계 | 완료 기준 |
 |---|---|---|
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
-| 2 | multipart AWS 차이 | 비최종 part 최소 크기·InvalidPartOrder 등 실패 코드 계약 확정 |
+| 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
 | 3 | 읽기·쓰기 옵션 | 조건부 요청·checksum·suffix Range의 지원/거부 계약 명시 |
 | 4 | 실제 S3 backend | 동일 SDK 시나리오를 vendor 경유로 실행, timeout·응답 유실 복구 검증 |
 

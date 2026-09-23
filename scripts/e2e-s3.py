@@ -120,6 +120,8 @@ def check(endpoint, directory):
     client.delete_object(Bucket="s3-test", Key="xml-contract")
     from s3_auth_cases import check_auth
     check_auth(client, credential, endpoint, opener)
+    from s3_multipart_cases import check_multipart
+    check_multipart(client)
     print("PASS signed XML rejection/retry, presigned GET, and unsupported-operation guards")
 
 
