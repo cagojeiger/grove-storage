@@ -32,6 +32,7 @@ pub(crate) fn test_state() -> AppState {
         crypto,
         public_url: Some("http://filegate.test".to_owned()),
         console_origin: None,
+        master: None,
         multipart_threshold: 8 * 1024 * 1024,
         part_size: 5 * 1024 * 1024,
         s3_clients: Arc::new(filegate_infra::S3ClientCache::default()),

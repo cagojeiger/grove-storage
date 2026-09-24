@@ -50,7 +50,11 @@ fn agents_cannot_bootstrap_or_recover_an_admin() {
     for role in AGENT_ROLES {
         for owner_role in ROLES {
             for surface in MACHINE_SURFACES {
-                for action in [Action::BootstrapAdmin, Action::RecoverAdmin] {
+                for action in [
+                    Action::BootstrapAdmin,
+                    Action::RecoverAdmin,
+                    Action::ManageSetupSession,
+                ] {
                     assert_eq!(
                         authorize(agent(role, owner_role), surface, action),
                         Err(Denial::MasterSessionRequired)

@@ -105,7 +105,15 @@ pub async fn recover_admin(
     account: Uuid,
     key: &NewCredential<'_>,
 ) -> Result<Credential, Error> {
-    let mut tx = lock(pool).await?;
+    recover_in(lock(pool).await?, context, account, key).await
+}
+
+pub(super) async fn recover_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    account: Uuid,
+    key: &NewCredential<'_>,
+) -> Result<Credential, Error> {
     let admin: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts WHERE id=$1 AND kind='user' AND role='admin' AND is_active AND deleted_at IS NULL)")
         .bind(account).fetch_one(&mut *tx).await?;
     if !admin {
@@ -125,6 +133,6 @@ pub async fn recover_admin(
         credential.id,
     )
     .await?;
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(credential)
 }

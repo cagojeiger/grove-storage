@@ -29,7 +29,15 @@ pub async fn bootstrap(
     name: &str,
     key: &NewCredential<'_>,
 ) -> Result<(Uuid, Credential), Error> {
-    let mut tx = lock(pool).await?;
+    bootstrap_in(lock(pool).await?, context, name, key).await
+}
+
+pub(super) async fn bootstrap_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    name: &str,
+    key: &NewCredential<'_>,
+) -> Result<(Uuid, Credential), Error> {
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts)")
         .fetch_one(&mut *tx)
         .await?;
@@ -58,7 +66,7 @@ pub async fn bootstrap(
         credential.id,
     )
     .await?;
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok((id, credential))
 }
 

@@ -2,6 +2,8 @@
 mod browser;
 mod failures;
 mod lifecycle;
+mod master;
+mod master_recovery;
 
 use super::{browser::COOKIE, secrets};
 use axum::{
@@ -105,7 +107,7 @@ async fn request(
         .oneshot(builder.body(Body::from(body)).unwrap())
         .await
         .unwrap();
-    if path == PATH {
+    if path.starts_with("/api/admin/identity/v1/") {
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
     }
     response

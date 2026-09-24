@@ -9,6 +9,7 @@ mod audit;
 mod credentials;
 pub mod history;
 mod identity;
+pub mod master;
 pub mod queries;
 mod sessions;
 pub mod telemetry;
@@ -34,6 +35,7 @@ pub enum Error {
     LastAdmin,
     InvalidInput,
     CommitUnknown,
+    MasterConfigurationMismatch,
 }
 
 impl From<sqlx::Error> for Error {

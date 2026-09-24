@@ -5,6 +5,7 @@
 mod command;
 mod dispatch;
 mod logging;
+pub mod master;
 pub mod sessions;
 pub use command::Command;
 pub use filegate_db::management::{Proof, queries::Page};
@@ -64,6 +65,7 @@ impl From<db::Error> for Error {
             }
             db::Error::InvalidInput => Self::InvalidInput,
             db::Error::CommitUnknown => Self::OutcomeUnknown,
+            db::Error::MasterConfigurationMismatch => Self::Unavailable,
             db::Error::Database(error) => match error.as_database_error() {
                 Some(error) if error.is_unique_violation() || error.is_foreign_key_violation() => {
                     Self::Conflict

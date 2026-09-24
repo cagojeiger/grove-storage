@@ -16,7 +16,7 @@ pub const SURFACES: [Surface; 4] = [
     Surface::ResourceApi,
 ];
 pub const MACHINE_SURFACES: [Surface; 3] = [Surface::Cli, Surface::Mcp, Surface::ResourceApi];
-pub const ACTIONS: [Action; 12] = [
+pub const ACTIONS: [Action; 13] = [
     Action::ReadResources,
     Action::WriteResources,
     Action::ManageServiceCredentials,
@@ -29,6 +29,7 @@ pub const ACTIONS: [Action; 12] = [
     Action::ReadSecurityEvents,
     Action::BootstrapAdmin,
     Action::RecoverAdmin,
+    Action::ManageSetupSession,
 ];
 pub const CONSOLE_ACTIONS: [Action; 7] = [
     Action::ReadOwnSessions,

@@ -59,6 +59,11 @@ fn print_usage() {
 async fn serve() -> anyhow::Result<()> {
     let config = filegate_core::Config::load()?;
     let console_origin = admin_auth::console_origin(std::env::var("FILEGATE_CONSOLE_ORIGIN").ok())?;
+    let master = console_identity::master_config::load(&|key| std::env::var(key).ok())?;
+    anyhow::ensure!(
+        master.is_none() || console_origin.is_some(),
+        "master authentication requires FILEGATE_CONSOLE_ORIGIN"
+    );
     init_tracing(config.server.log_format);
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.
@@ -74,10 +79,26 @@ async fn serve() -> anyhow::Result<()> {
     )
     .await?;
     filegate_db::migrate(&pool).await?;
+    if let Some(master) = &master {
+        let current = master
+            .install(&pool)
+            .await
+            .map_err(|_| anyhow::anyhow!("master configuration activation failed"))?;
+        if !current {
+            tracing::warn!(
+                event = "master.configuration_mismatch",
+                "Master routes fail closed until this replica uses the active configuration"
+            );
+        }
+    }
     anyhow::ensure!(
         !config.security.operator_tokens.is_empty()
-            || filegate_db::admin_auth::initialized(&pool).await?,
-        "administrator not initialized; run filegate admin init or configure FILEGATE_OPERATOR_TOKENS"
+            || filegate_db::admin_auth::initialized(&pool).await?
+            || master.is_some()
+            || filegate_db::management::master::initialized(&pool)
+                .await
+                .map_err(|_| anyhow::anyhow!("management initialization check failed"))?,
+        "administrator not initialized; configure master setup or run filegate admin init for legacy authentication"
     );
     info!(
         event = "db.connected",
@@ -107,6 +128,7 @@ async fn serve() -> anyhow::Result<()> {
         crypto,
         public_url: config.server.public_url.clone(),
         console_origin,
+        master,
         multipart_threshold: config.server.multipart_threshold_bytes,
         part_size: config.server.part_size_bytes,
         s3_clients,

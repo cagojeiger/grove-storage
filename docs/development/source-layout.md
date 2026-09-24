@@ -2,13 +2,14 @@
 
 ```text
 backend/crates/
-├── management-service/   신원·이력 정책 실행 (User 세션 HTTP 연결)
+├── management-service/   신원·이력 정책 실행 (User/master 인증 HTTP 연결)
 │   ├── src/command.rs    콘솔 내부 명령 → Action·이름공간
 │   ├── src/lib.rs        잠금·현재 신원·권한·server request ID
 │   ├── src/dispatch.rs   허용 scope → 저장소 연산
 │   ├── src/logging.rs    bounded best-effort 호출·보안 기록
 │   ├── src/sessions.rs   로그인 예산·User 토큰 교환·인증 이력
-│   └── tests/           authorization·history·logging (실제 PostgreSQL)
+│   ├── src/master.rs     설정 세대·master 세션·일회성 설정/복구 실행
+│   └── tests/           authorization·history·logging·master_fencing·master_recovery
 ├── management-command/   자원 명령 19개·schema·권한 매핑 (서버 실행기 미연결)
 │   ├── src/catalog.rs    명령명·입출력·권한·변경 여부의 정본
 │   ├── src/input.rs      공통 입력·순수 값 검증
@@ -39,11 +40,13 @@ backend/crates/
 │   │   └── update/        업데이트 흐름·다운로드·설치 기록·파일 교체, 분리된 tests/
 │   └── tests/             설정·조회·변경·비밀·실패·status·update 테스트
 ├── api/src/
-│   ├── console_identity/  새 User 세션 HTTP (기존 UI·CLI 전환 전)
+│   ├── console_identity/  새 User/master 인증 HTTP (기존 UI·CLI 전환 전)
 │   │   ├── browser.rs    Origin·CSRF·cookie·Bearer 분리
 │   │   ├── secrets.rs    token/session 형식·해시 domain
 │   │   ├── session.rs    로그인·현재 세션·로그아웃 adapter
-│   │   └── tests/        browser·lifecycle·failures (실제 PostgreSQL)
+│   │   ├── master.rs     master 로그인·첫 Admin 발급·대상 복구 adapter
+│   │   ├── master_config.rs  설정 쌍·형식 검증 (비밀 원문 오류 제외)
+│   │   └── tests/        browser·lifecycle·failures·master/·master_recovery
 │   ├── admin/              등록부·운영자 인증·usage
 │   ├── s3/                 SigV4·라우팅·객체·multipart
 │   │   ├── object_response.rs Range·응답 헤더 정책
@@ -63,6 +66,7 @@ backend/crates/
 │   │   ├── accounts.rs    최초 Admin·User/Agent 생성·마지막 Admin 보호
 │   │   ├── credentials.rs 발급·폐기·대상 Admin 복구
 │   │   ├── sessions.rs    User 세션·원본 만료 상한·폐기·개수 상한
+│   │   ├── master.rs      master 세대 fence·짧은 세션·설정/복구 transaction
 │   │   ├── identity.rs    현재 DB 상태 → 정책용 Caller
 │   │   ├── audit.rs       변경 transaction 내부 감사 기록
 │   │   ├── transaction.rs 권한 검사와 변경이 공유하는 transaction
@@ -84,7 +88,7 @@ backend/crates/
 |---|---|---|
 | `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 adapter/service 책임 |
 | `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; User 로그인 예산·인증 이력 |
-| `api/console_identity` | HTTP token/cookie → User 세션 service | Origin/CSRF·별도 쿠키·해시 domain; 기존 UI·자원 API 전환과 분리 |
+| `api/console_identity` | HTTP token/cookie → User/master service | Origin/CSRF·별도 쿠키·해시 domain; 기존 UI·자원 API 전환과 분리 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
 | `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |

@@ -1,6 +1,8 @@
 //! New console identity surface. Legacy operator authentication stays separate
 //! until the explicit migration; neither cookie grants the other's authority.
 mod browser;
+mod master;
+pub(crate) mod master_config;
 mod secrets;
 mod session;
 
@@ -24,6 +26,14 @@ pub fn routes(state: AppState) -> Router<AppState> {
                 .get(session::current)
                 .delete(session::logout),
         )
+        .route(
+            "/master/session",
+            post(master::login)
+                .get(master::current)
+                .delete(master::logout),
+        )
+        .route("/master/bootstrap", post(master::bootstrap))
+        .route("/master/recover", post(master::recover))
         .layer(middleware::from_fn_with_state(state, browser::guard))
 }
 

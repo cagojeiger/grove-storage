@@ -15,6 +15,7 @@ pub enum Action {
     ReadSecurityEvents,
     BootstrapAdmin,
     RecoverAdmin,
+    ManageSetupSession,
 }
 
 /// The service must apply this scope using authenticated IDs, not owner IDs
@@ -64,7 +65,9 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
 
     let Some(role) = role else {
         return match action {
-            Action::BootstrapAdmin | Action::RecoverAdmin => Ok(Scope::SetupRecovery),
+            Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
+                Ok(Scope::SetupRecovery)
+            }
             _ => Err(Denial::MasterScopeOnly),
         };
     };
@@ -93,7 +96,9 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
                 Role::Viewer | Role::Operator => Scope::SelfAndOwnedAgents,
             })
         }
-        Action::BootstrapAdmin | Action::RecoverAdmin => Err(Denial::MasterSessionRequired),
+        Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
+            Err(Denial::MasterSessionRequired)
+        }
     }
 }
 

@@ -84,7 +84,11 @@ fn users_cannot_use_master_setup_or_recovery_even_as_admin() {
             } else {
                 AuthMethod::ManagementToken
             };
-            for action in [Action::BootstrapAdmin, Action::RecoverAdmin] {
+            for action in [
+                Action::BootstrapAdmin,
+                Action::RecoverAdmin,
+                Action::ManageSetupSession,
+            ] {
                 assert_eq!(
                     authorize(user(role, method), surface, action),
                     Err(Denial::MasterSessionRequired)

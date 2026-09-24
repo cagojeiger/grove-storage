@@ -9,6 +9,7 @@ grove-management-policy.workspace = true
 uuid.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+subtle.workspace = true
 
 [dev-dependencies]
 grove-management-command.workspace = true

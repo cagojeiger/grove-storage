@@ -1,9 +1,9 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 순수 권한·명령 계약, 신원 DB·관리 서비스·관리 로그·User 세션 HTTP 구현·테스트. master·신원 CRUD HTTP·MCP·새 UI는 후속.
+- 상태: 순수 권한·명령 계약, 신원 DB·관리 서비스·관리 로그·User/master 세션·설정/복구 HTTP 구현·테스트. 신원 CRUD HTTP·MCP·새 UI는 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
-- `0008–0010`은 `management` 신원·이력 스키마를 추가한다. 기존 `/api/admin/v1`과 UI·CLI는 `admin_*`를 계속 사용한다.
+- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`과 UI·CLI는 `admin_*`를 계속 사용한다.
 
 ## 책임과 접근
 
@@ -67,14 +67,14 @@ User/Agent 토큰                → CLI/MCP 자원 명령
 
 | 대상 | 계약 |
 |---|---|
-| master | Secret 파일·환경변수로 공급; DB에 원문 저장 없이 검증 |
+| master | 배포 Secret을 환경변수로 공급; DB에는 세대·검증용 해시 저장 |
 | 설정 세션 | 짧은 TTL, 최초 설정·복구에만 사용; 일반 자원·감사 조회 API와 분리 |
 | 첫 User | Admin으로 생성; User·개인 토큰·감사 이벤트를 함께 commit |
 | 이후 User | Admin이 콘솔에서 생성·역할 부여·개인 토큰 전달 |
 | 일반 세션 | User·원본 credential에 연결; 원본 토큰 만료 이내의 고정 TTL |
 | 폐기 | 토큰 폐기 시 연결 세션 거부; 계정 비활성화 시 관련 접근 거부 |
 | master 교체 | 설정 세대 변경으로 기존 master 세션 무효화; replica 불일치 시 master 경로 fail-closed |
-| 복구 | 대상 Admin의 개인 토큰 재발급·기존 토큰/세션 폐기; 전체 관리 credential 폐기는 별도 명시적 선택 |
+| 복구 | 지정한 활성 Admin의 개인 토큰 재발급·기존 토큰/세션 폐기; 전체 관리 credential 폐기는 후속 별도 기능 |
 | 복구 영향 | Client 키·Provider secret·파일 데이터는 보존; 수행 내역은 master 주체로 감사 |
 | 원문 유실 | 발급 원문 재조회 대신 공개 credential ID로 대조 후 폐기·재발급 |
 
@@ -111,8 +111,50 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 
 기존 `fgop_`·`__Host-filegate_session`과 새 토큰·쿠키는 양방향으로 분리한다.
 새 세션은 기존 전체권한 자원 API의 증거가 되지 않는다. 현재 UI·CLI 동작은 유지한다.
-최초 User·개인 토큰 발급은 아직 공개 HTTP에 연결하지 않았다. 이 단계의 로그인 검증은
-격리 DB fixture로 수행하며 운영 DB 수동 삽입을 설치 절차로 제공하지 않는다.
+최초 User·개인 토큰 발급은 아래 master HTTP 흐름으로 제공한다. 기존 UI의 로그인 화면은
+아직 이 경로로 전환하지 않았으며 운영 DB 수동 삽입을 설치 절차로 제공하지 않는다.
+
+### Master 설정·복구 HTTP (3b)
+
+```text
+설정(master token + generation) → 서버 시작 → DB 세대 활성화
+POST /master/session {token}    → 10분 설정/복구 쿠키
+     ├─ POST /master/bootstrap {display_name}    → 첫 Admin + 개인 토큰
+     └─ POST /master/recover {user_id,confirm}   → 대상 Admin의 새 개인 토큰
+                                              + 사용한 master 세션 폐기
+```
+
+경로 기준은 `/api/admin/identity/v1`이다. master 세션 GET은 초기화 여부·세션 ID·만료만,
+DELETE는 해당 세션 종료만 제공한다. 일반 User·자원·이력 조회 권한으로 확장하지 않는다.
+
+| 항목 | 구현 계약 |
+|---|---|
+| 설정 | `FILEGATE_MASTER_TOKEN` + `FILEGATE_MASTER_GENERATION` 쌍, HTTPS `FILEGATE_CONSOLE_ORIGIN` 필수 |
+| 토큰 | `gsmt_` + 난수 소문자 hex 64자; 암호화 root·기존 운영자 토큰과 별도 비밀 |
+| 해시 | SHA-256(`grove-master-token-v1` + NUL + 원문); 요청 검증은 고정 길이 해시의 상수시간 비교 |
+| 세대 | 양의 bigint, 최초 권장값 1; 서버 시작 시 DB보다 큰 세대만 활성화, 같은 세대는 해시 일치 확인 |
+| 교체 | 새 토큰과 더 큰 세대를 배포; 활성화·기존 master 세션 폐기·system 감사가 같은 commit |
+| replica 불일치 | DB와 세대/해시가 다른 replica의 master 경로는 503; 이전 설정으로 재시작해도 DB 세대를 낮추지 않음 |
+| 장애 범위 | 불일치 replica의 기존 데이터·운영자 API는 유지; 정상 설정 replica는 master 요청을 처리 |
+| 쿠키 | `__Host-grove_setup=gsms_…`; Secure·HttpOnly·SameSite=Strict·Path=/; User 쿠키와 별도 |
+| 세션 | 해시 domain `grove-master-session-v1`; 10분 고정 TTL, 설치 전체 활성 8개, 초과 시 오래된 세션 폐기 |
+| 브라우저 | User와 같은 Origin/CSRF·중복 쿠키·Authorization 차단; master 미설정은 404 |
+| 로그인 예산 | User/master가 설치 전체 60회/분 공유; 올바른 envelope의 실패 토큰도 소비 |
+| 첫 설정 | DB 신원 잠금에서 첫 계정 여부 확인; 첫 Admin·90일 개인 토큰·감사·master 세션 폐기 atomic |
+| 복구 | `user_id` UUID + `confirm:true`; 활성 Admin만 대상, 새 90일 토큰 발급과 대상의 이전 키/세션 폐기 atomic |
+| 보존 | 다른 User·소유 Agent·기존 admin_*·Client 키·Provider secret·파일/위치 레코드 유지 |
+| 원문 전달 | 성공 응답 201에서 `user_id`, `credential_id`, `expires_at`, `token` 한 번 전달; no-store, 원문 재조회 없음 |
+| 재전송 | 성공한 master 세션은 폐기되므로 반복 변경은 401; 재복구는 새 master 로그인으로 명시적으로 시작 |
+| 실패 | 감사 실패 시 설정/복구/세션 소비 모두 rollback; commit 응답 불명은 outcome_unknown, 자동 재시도 없음 |
+| 복구 정보 | 첫 발급 시 공개 `user_id`와 개인 토큰을 보관; 계정 검색 UI와 신원 목록 API는 후속 |
+| 실행 검증 | 임시 PG + 실제 서버 프로세스에서 운영자 토큰 없이 부팅·설정·User 로그인·복구·이전 접근 차단 확인; TLS/브라우저/proxy E2E는 후속 |
+
+master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는다. 새 설치는 master 설정으로
+부팅할 수 있으나, 자원 관리와 UI를 새 신원으로 전환하는 작업은 후속이다. master를 잠시
+비활성화하려면 모든 replica에서 설정 쌍을 제거한다. 같은 설정을 다시 켜면 남은 유효 세션도
+재사용할 수 있으므로, 세션까지 영구 무효화하려면 세대를 올려 교체한다. 교체 시에는 두 값을 함께
+배포하고 `/master/session` 응답으로 경로를 검증한다. 낮은 세대로의 rollback 대신 더 큰
+세대를 사용하며, DB backup 복원은 별도의 운영 복구 절차로 취급한다.
 
 ## DB 구현과 후속 설계
 
@@ -120,6 +162,7 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 감사의 resource_id는 신원 UUID와 기존 Storage/Client slug를 담는 text다.
 accounts/users/agents/credentials/sessions/audit_events는 `0008`에 구현했다.
 command_invocations/security_events와 공통 로그인 예산은 `0009`에 구현했다.
+로그인 성공/제한 이벤트는 `0010`, master 구성 세대는 `0011`에 구현했다.
 
 | 테이블 (`management.*`) | 주요 컬럼 |
 |---|---|
@@ -132,6 +175,7 @@ command_invocations/security_events와 공통 로그인 예산은 `0009`에 구�
 | `command_invocations` | id, created_at, actor context, request_id, surface, operation, outcome, error_code, duration_ms |
 | `security_events` | id, created_at, nullable actor context, request_id, surface, event_type, reason_code |
 | `login_budget` | 단일 행 id=1, window_start, attempts; 설치 전체 분당 60회 |
+| `master_configuration` | 단일 행 id=1, generation 양의 bigint, token_hash; process 설정의 DB fence |
 
 ```text
 accounts
@@ -166,7 +210,7 @@ audit / invocation / security ── actor snapshot + request_id
 | 최초 설정 | 계정·첫 credential·감사 함께 commit; 기존 management 계정이 있으면 초기화 거부 |
 | 변경 직렬화 | bootstrap·계정 변경·발급·복구·폐기·로그인이 같은 transaction advisory lock 사용 |
 | 마지막 Admin | 활성 Admin의 강등·비활성화·삭제를 현재 DB 상태로 검사; 데이터 경로는 잠금 공유 없이 유지 |
-| credential | 해시 v1은 소문자 hex 64자·UNIQUE; User 로그인 해시 계산은 HTTP에 연결, 발급·TTL 결정은 후속 |
+| credential | 해시 v1은 소문자 hex 64자·UNIQUE; master 설정/복구는 90일 토큰 발급, 일반 User/Agent 발급 HTTP는 후속 |
 | 현재 신원 | 매 인증 조회에서 만료/폐기·계정·Agent 소유자 상태를 읽어 정책용 Caller 생성 |
 | User 세션 | User와 credential 소유자 일치 FK; Agent 로그인 거부; TTL=min(원본 만료, 8시간), 활성 세션은 credential당 64개 |
 | 비활성화·삭제 | 비활성화 시 세션 폐기; 삭제 시 자기/소유 Agent 키도 폐기; 삭제 계정 재활성화는 제공하지 않음 |
@@ -179,8 +223,8 @@ audit / invocation / security ── actor snapshot + request_id
 `db::management`는 내부 저장소 연산이다. `AuditContext`는 권한 증명이 아니며
 HTTP에서 역직렬화하지 않는다. `grove-management-service`가 현재 신원을 읽고 정책을
 적용하며 actor/request ID를 구성한다. HTTP adapter는 Origin·CSRF 검증과 Surface 선택을
-책임진다. 새 User 세션 HTTP만 연결했고 master 세션은 DDL 형태만 정의했다.
-master 발급·세대 검증, 관리 token 원문 발급, 로그인 외 last_used_at, 자원 변경의 새 audit 결합은 후속이다.
+책임진다. User/master 세션과 master 설정/복구 HTTP를 연결했다.
+일반 신원/이력 HTTP, 로그인 외 last_used_at, 자원 변경의 새 audit 결합은 후속이다.
 
 ### 관리 서비스
 
@@ -203,10 +247,10 @@ master 발급·세대 검증, 관리 token 원문 발급, 로그인 외 last_use
 | 추적 | service 생성 request_id로 audit·호출·보안 연결; 계정 삭제/키 폐기 후에도 actor snapshot 보존 |
 | 실패 | 감사 실패는 변경 rollback; 호출/보안 저장 실패·timeout은 경고만 기록하고 결과 유지 |
 | commit 응답 불명 | 변경은 outcome_unknown, 자동 재시도 없이 대조; 읽기 commit 실패는 unavailable |
-| 로그인 예산 | DB의 원자적 60회/분 budget을 새 User 로그인에 적용; master 연결은 다음 단계 |
+| 로그인 예산 | DB의 원자적 60회/분 budget을 User/master 로그인에 공동 적용 |
 
 현재 security event는 로그인 성공·실패·예산 초과·권한 거부·인증 저장소 장애를 기록한다.
-master 사용 이벤트는 해당 adapter 구현 시 추가한다. 기존 Storage/Client·파일 로그는 유지한다.
+master 로그인은 master 주체로 보안/호출을 기록하고 설정/복구는 변경 감사에도 연결한다. 기존 Storage/Client·파일 로그는 유지한다.
 신원 관리 서비스 호출을 transport에서 다시 invocation으로 기록하지 않는다.
 
 ## CLI·MCP의 공통 계약
@@ -279,7 +323,8 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 2a (로컬 구현·검증) | `0008` + `db::management`: 신원·credential·세션·변경 감사의 저장소 기반 | 첫/마지막 Admin 경합, 발급/폐기 경합, 감사 실패 rollback, subtype/세션 FK, 기존 DB upgrade; 19개 PG 테스트 |
 | 2b (로컬 구현·검증) | `management-service` + `0009`: 권한 연결·신원/이력 scope 조회·호출/보안 로그·로그인 예산 | 15개 PG 테스트 + 명령 이름공간 테스트; 역할·진입 경계·잠금 대기·scope·비밀 제외·로그 장애 |
 | 3a (로컬 구현·검증) | User 로그인·현재 세션 조회·로그아웃 HTTP; `0010` 보안 이벤트 | 9개 PG HTTP 테스트 + 형식 테스트; CSRF·Agent·legacy 격리·폐기·예산·감사 rollback·commit 불명 |
-| 3b (다음) | master 설정/복구·identity/history API | 최초 token 발급, master 세대 불일치, 신원 CRUD의 세션/role/CSRF |
+| 3b (로컬 구현·검증) | master 설정/복구 HTTP·`0011` 세대 fence | 7개 PG 서비스 + 4개 PG HTTP + 설정 단위 테스트; 최초 발급·동시 초기화·세대 변경·단일 사용·복구 원자성·기존 데이터 보존 |
+| 3c (다음) | identity/history API | 신원 CRUD·토큰 발급/폐기·scope 조회의 세션/role/CSRF |
 | 4 | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |
 | 5 | 콘솔 User/Agent/role/token/history | 역할별 표시·API 거부, 원문 한 번 표시, 응답 불명, light/dark·phone/tablet/desktop |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
@@ -289,5 +334,5 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 이전 audit는 이전 방식의 기록으로 보존하며, 새 확정 변경 이벤트와 구분한다.
 각 단계는 코드·테스트·대응 spec을 함께 커밋하고 공개·운영 전환은 별도로 수행한다.
 
-후속 구현 전에 고정할 값: 새 master 설정명·설정 세대 동기화 방식, 관리 token TTL·개수 상한,
+후속 구현 전에 고정할 값: 일반 관리 token의 TTL 선택·개수 상한,
 로그 보존 기간·최대 payload·접근 예산, endpoint/tool명·전송 envelope, 이전 인증의 전환/복구 절차.

@@ -112,7 +112,9 @@ fn authentication_method_and_surface_must_match_the_actor() {
 fn master_session_only_authorizes_setup_and_recovery() {
     for action in ACTIONS {
         let expected = match action {
-            Action::BootstrapAdmin | Action::RecoverAdmin => Ok(Scope::SetupRecovery),
+            Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
+                Ok(Scope::SetupRecovery)
+            }
             _ => Err(Denial::MasterScopeOnly),
         };
         assert_eq!(
