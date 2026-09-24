@@ -37,9 +37,16 @@ Only Overview and Storage are currently linked in `App.tsx`.
 Grove Storage
 ├── Overview
 ├── Storage       list / detail / register / replace / delete / test connection
-├── Clients       list / detail / create / delete / Native keys / S3 credentials
+├── Clients       list / create / delete
+│   └── Client detail
+│       ├── Overview   assigned storage / usage
+│       ├── Keys       Native keys / S3 credentials
+│       └── Logs       runtime file requests / observed results
 ├── Access        Users / Agents / management tokens (Admin only)
-├── Activity      management audit / invocations / security (scoped)
+├── Activity      scoped management history
+│   ├── Audit     committed management changes
+│   ├── Calls     Console / CLI / MCP management invocations
+│   └── Security  authentication / authorization events
 └── Settings      personal theme / own login sessions / allowlisted system information
 
 Entry screens    User sign-in / Master setup / recovery
@@ -51,15 +58,16 @@ its Native/S3 keys and file access logs remain separate from management tokens/a
 
 | Section | Boundary |
 |---|---|
-| Clients | App identity, assigned storage, file ownership, usage and service keys |
+| Clients | App identity, assigned storage, file ownership, usage and service keys; Logs is runtime file history |
 | Access | Admin-managed Users, owned automation Agents, roles, management token issuance/revocation; separate from future Storage Node agents |
-| Activity | Management audit, invocations and security events under existing actor/owner scopes |
+| Activity | Audit / Calls / Security under existing actor/owner scopes; classify by operation, not transport |
 | Settings | Personal appearance and own browser sessions; system information is allowlisted and read-only initially |
 
 Client detail can link to Activity filtered by Client ID, reusing the same management
 audit records. Server-side Client filtering is pending; filtering one fetched page
-in the browser is not a complete history. Runtime file access history is a separate
-future view, with the limits described in [management logs](08-management-plane.md#client-history-coverage).
+in the browser is not a complete history. Client Logs is a separate future view;
+its query API, observation coverage and retention contract remain pending, with the
+limits described in [management logs](08-management-plane.md#client-history-coverage).
 Settings does not duplicate Access or write deployment environment variables.
 
 ## Connection Test Proposal
@@ -89,6 +97,7 @@ This section specifies the next contract; no test command/button is implemented 
 | 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
 | 3 | Shared connection test | Saved/draft S3 probes via API, Console, CLI and MCP; real MinIO failures plus permission/timeout/concurrency tests |
 | 4 | Activity and Settings | Scoped queries, server-side Client filter, cursor paging, own-session revocation and separation from Client file logs |
+| 5 | Client Logs | Defined observation/retention contract, scoped server queries and paging; URL issuance distinguished from transfer completion |
 
 Frontend command typing is supporting work within these slices. Existing backend
 identity/resource contracts are reused; new crates or a second authentication model

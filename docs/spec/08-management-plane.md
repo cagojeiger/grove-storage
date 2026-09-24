@@ -339,10 +339,18 @@ CLI HTTP path·전송 envelope는 spec 09, 같은 명령명을 사용하는 MCP�
 | Runtime events | Native/S3 handlers emit file and request-operation events through tracing | Not a complete durable Client request audit API; retention depends on log collection |
 | Presigned direct transfer | Grove observes URL issuance and its own metadata/commit operations | Direct download completion/repeated URL use require provider-side observations |
 
-Client detail's management Activity reuses the existing audit store with a
-server-side Client filter and the same actor/owner scope. Runtime file history
-remains separate from management Activity; scope, retention and ingestion require
-their own contract before a complete access-log feature is promised.
+Client detail links to Activity with a server-side Client filter and the same
+actor/owner scope, reusing the existing audit store. The **Logs** tab is reserved
+for runtime file requests and observed results; its query API, scope, retention
+and ingestion contract remain pending. Management history is labeled
+**Activity → Audit / Calls / Security**.
+
+| Operation | UI destination |
+|---|---|
+| Admin issues a Client service key | Activity / Audit |
+| Agent changes storage through CLI or MCP | Activity / Calls and, on committed change, Audit |
+| Client requests a file upload/download | Clients / client / Logs |
+| Management authentication or permission failure | Activity / Security |
 
 ### Management Streams
 
