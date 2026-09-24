@@ -1,19 +1,78 @@
 # spec 06: 관리 콘솔
 
-- 상태: A·B + 인증 전환 5a 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
+- 상태: A·B + 인증 전환 5a 로컬 구현·검증, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 - 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
 
-## 구성
+## Current Coverage
+
+| Capability | Console UI | API / CLI / MCP |
+|---|---|---|
+| Personal token login, Overview, Storage CRUD | Implemented | Implemented; browser sessions and Bearer remain separate |
+| Master setup/recovery | Pending | Console-only identity API implemented |
+| User, Agent, management tokens | Pending | Console-only identity API implemented |
+| Client, Native keys, S3 credentials | Pending | Shared resource commands implemented in API, CLI and MCP |
+| Sessions, management audit/call/security history | Pending | Console-only scoped APIs implemented |
+| On-demand storage connection test | Pending | New shared command required; `gscli status` reads metadata |
+
+The sample preview returns in-memory data. Its successful storage forms are not
+evidence of real provider connectivity. Real registration/replacement runs provider
+checks before persistence. `readyz` and usage summaries are separate from those checks.
+The server-local `filegate status` probes all registered backends, but is not a
+remote per-storage command for Console/CLI/MCP.
+
+## Target Navigation
+
+Only Overview and Storage are currently linked in `App.tsx`.
 
 ```text
 Grove Storage
-├── 개요       준비 상태 · 등록 수 · 저장소/클라이언트 점유 · 이력
-├── 저장소     목록 · 상세 · S3/fs 등록 · 교체 · 삭제
-└── 클라이언트 목록 · 상세 · 등록 · 삭제 · Native/S3 키
-    공통       로그인 · 로그아웃 · 시스템/라이트/다크
+├── Overview
+├── Storage       list / detail / register / replace / delete / test connection
+├── Clients       list / detail / create / delete / Native keys / S3 credentials
+├── Access        Users / Agents / management tokens (Admin only)
+├── Activity      management audit / invocations / security (scoped)
+└── My sessions  current User sessions
+
+Entry screens    User sign-in / Master setup / recovery
+Header           theme / sign out
 ```
+
+User and Agent identify management callers. Client identifies a runtime consumer;
+its Native/S3 keys and file access logs remain separate from management tokens/audit.
+
+## Connection Test Proposal
+
+This section specifies the next contract; no test command/button is implemented yet.
+
+| Item | Proposed behavior |
+|---|---|
+| Entry points | **Test connection** in Storage detail and registration/replacement form |
+| Shared command | `storage.test` through the same Console, CLI and MCP executor; input selects registered ID or draft fields |
+| Permissions | Operator/Admin resource permission, rechecked on each call; User/Agent ownership limits remain effective |
+| Saved storage | Resolve provider credentials on the server; return checks without secret values |
+| Draft fields | Probe without saving registry metadata; clear submitted secrets; allow registering only through the existing mutation |
+| S3 baseline | Internal endpoint `HeadBucket` and `ListMultipartUploads`, matching current registration checks |
+| FS baseline | Directory and temporary write probe; unique probe paths and cleanup tested before exposing concurrent manual checks |
+| Result | Per-check success/failure, server timestamp, duration, sanitized error; label the completed checks rather than general storage health |
+| Scope | S3 baseline does not prove object PUT/GET/DELETE permission, public endpoint reachability or browser CORS |
+| Execution | Bounded timeout/concurrency; an explicit click per run; clear stale results when target fields change |
+| Records | Management invocation result; registry metadata remains unchanged, so no storage-change audit event |
+| Preview | Mark results as simulated or leave the test unavailable; never report sample success as a live probe |
+
+## Next UI Priorities
+
+| Order | Deliverable | Acceptance |
+|---|---|---|
+| 1 | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User/Agent tokens; last-Admin and one-time-secret safeguards |
+| 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
+| 3 | Shared connection test | Saved/draft probes via API, Console, CLI and MCP; real MinIO and FS failures plus permission/timeout/concurrency tests |
+| 4 | Activity and My sessions | Scoped queries, cursor paging, revocation and separation from Client file logs |
+
+Frontend command typing is supporting work within these slices. Existing backend
+identity/resource contracts are reused; new crates or a second authentication model
+are not required for these screens.
 
 | 항목 | 구현 계약 |
 |---|---|
@@ -99,8 +158,9 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 | B (구현) | 저장소 조회·등록·교체·삭제 | 실제 fs/MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
 | 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·Agent 로그인 거부·console 감사 |
 | 5b (다음) | master 설정·복구·User/Agent·관리 토큰 UI | 일회성 발급·마지막 Admin·응답 불명·콘솔 전용 API |
-| 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
+| 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 probe, 권한·timeout·비밀 보호·임시 파일 충돌 검사 |
+| 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
 | D | 반응형·접근성·배포 | 320/390/768/1024/1440px, light/dark/system, 키보드·초점, 같은 origin 배포 |
 
 각 단계는 단위 테스트·HTTP 통합·실제 브라우저 검증을 갖추고 커밋한다.
