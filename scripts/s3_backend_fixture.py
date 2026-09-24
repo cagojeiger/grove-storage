@@ -43,7 +43,11 @@ class MinioBackend:
             try:
                 with opener.open(self.endpoint + "/minio/health/ready", timeout=2) as response:
                     if response.status == 200:
+                        self.vendor.list_buckets()
                         return
+            except ClientError as error:
+                if error.response["Error"]["Code"] != "XMinioServerNotInitialized":
+                    raise
             except OSError:
                 pass
             time.sleep(0.2)

@@ -106,6 +106,7 @@ jobs:
         run: |
           python3 -m venv /tmp/grove-s3-sdk
           /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-s3-sdk/bin/python -B -m unittest discover -s scripts/tests -v
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
