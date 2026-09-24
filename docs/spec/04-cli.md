@@ -4,7 +4,7 @@
 - 원격 관리 CLI: `gscli`; 서버·기존 로컬 진단: `filegate`
 - 관련 계약: [등록부](01-registry.md), [제품 경계](../adr/007-grove-storage-foundation.md)
 - 첫 목표: 기존 등록·키·데이터를 보존하면서 FileGate 등록부의 Terraform 관리를 대체한다.
-- 인증 전환 (미구현): [ADR 008](../adr/008-local-owner-and-agent-credentials.md). CLI는 User/Agent 토큰을 사용하는 도구이며, 계정·토큰 lifecycle은 관리 API가 소유한다.
+- 인증 전환 (미구현): [ADR 009](../adr/009-management-identity-and-command-boundary.md). CLI/MCP는 User/Agent 토큰으로 자원 작업만 제공하며 신원 관리는 콘솔 세션 전용이다.
 
 ## 현재 구현과 다음 단계
 
@@ -13,7 +13,7 @@
 | 서버 진입점 | `filegate`·`filegate serve` 유지 | 서버 이름 전환은 별도 릴리스 |
 | 원격 진단 | `gscli status`: HTTP 상태·등록부 요약 | 지원 서버 계약 확장 |
 | 로컬 진단 | `filegate status`: DB·복호 키·저장소 접근 | doctor 명칭·probe 개선은 서버 측 별도 변경 |
-| 관리 명령 | list·show·usage·create·replace·delete·register | User/자동화 Agent 토큰 관리는 인증 전환, Storage Node·Agent 조인은 2차 |
+| 관리 명령 | list·show·usage·create·replace·delete·register | 같은 명령 계약의 MCP adapter; 관리 토큰 발급은 콘솔 전용, Node 조인은 2차 |
 | 인자·출력 | 변경 확인, table·버전 있는 JSON, 일회성 비밀 파일 | 연결 profile은 후속 |
 | 테스트 | 설정·입력·HTTP·비밀·변경 결과·status 분리 | 실제 전송·운영 이관 |
 
@@ -49,6 +49,22 @@ HTTP 응답 모델을 소유하며, 등록부 정본과 변경 규칙은 API·Po
 현재 fs backend·S3 중계 API는 현행 계약을 유지한다. 소비자 전환과 API 축소는 별도 결정한다.
 2차의 Node·Agent 조인 명령은 별도 스펙으로 확장한다. 새 CLI만 `gscli` 이름을 사용하고,
 기존 서버 바이너리·환경 변수·이미지·URL·자격증명은 유지한다.
+
+## CLI·MCP 동등성 계획
+
+상태: 미구현. 정본은 [spec 08](08-management-plane.md#climcp의-공통-계약)이다.
+현재 CLI는 아래 REST API를 직접 호출하며 MCP 진입점은 아직 없다.
+
+| 공유하는 것 | 유지하는 차이 |
+|---|---|
+| Storage·Client·서비스 키·usage/status 명령 | CLI JSON HTTP / MCP tool envelope |
+| 입력 schema·결과·오류·역할·삭제 제약 | CLI 표·JSON 출력 / MCP 구조화 결과 |
+| 공통 관리 서비스·변경 audit | 호출 기록의 surface=cli/mcp |
+
+User·Agent·role·관리 토큰 발급·관리 이력 조회는 콘솔 전용이다. `credential`과
+`client-key`는 기존 서비스 자격증명 명령이며 관리 User/Agent 토큰과 구분한다.
+CLI의 update·로컬 설정·secret-out은 전송 adapter의 책임으로 유지한다.
+명령 protocol과 기존 CLI의 전환 호환성을 검증한 뒤 새 진입점으로 전환한다.
 
 ## 명령 구조
 

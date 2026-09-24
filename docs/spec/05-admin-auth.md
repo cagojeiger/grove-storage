@@ -3,8 +3,8 @@
 - 상태: 작업 브랜치 구현, 미릴리스·미배포
 - 범위: 단일 관리자, 복수 토큰, 콘솔 세션, 로컬 복구
 - 기존 토큰을 사용하는 콘솔 로그인·로그아웃·개요 조회는 실제 API 연결 및 로컬 HTTPS 검증 완료다. 운영 배포는 후속이다.
-- 후속 결정: [ADR 008](../adr/008-local-owner-and-agent-credentials.md)의 로컬 ID·비밀번호 및 User/Agent 토큰. 아래 현행 계약과 문서 끝의 전환 계획을 구분한다.
-- 브라우저 보안·비밀번호 변경/복구·세션 관리 완료 조건: [spec 07](07-browser-security.md).
+- 후속 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 마스터 초기 설정·개인 토큰 로그인·콘솔 전용 신원 관리. 아래는 현재 구현 계약이다.
+- 새 권한·DB·CLI/MCP·감사 설계: [spec 08](08-management-plane.md). 브라우저 보안: [spec 07](07-browser-security.md).
 
 ## 자격증명 경계
 
@@ -113,73 +113,21 @@ DB 토큰을 사용한다. 초기화 이후 구버전으로 롤백하면 환경�
 유지하고 오류 로그를 남긴다. 인증 실패·로그아웃의 별도 감사, 감사 조회 UI·보존 정책은
 후속 작업이다. 원격 계정·토큰 관리는 아래 전환 계획을 따른다.
 
-## 로컬 계정·토큰 전환 계획
+## 관리 신원 전환 계획
 
-상태: 제품 방향 채택, DB migration·API·UI 미구현. 아래 테이블명과 권한은 구현을
-위한 설계안이며, 앞의 `fgop_` 토큰 로그인 계약이 현재 동작이다.
+상태: 설계, 미구현. 이전 비밀번호·단일 Owner 안은 ADR 009로 대체했다.
+권한표·DB·토큰 수명·로그·검증 순서의 정본은 [spec 08](08-management-plane.md)이다.
 
 | 항목 | 현재 | 전환 목표 |
 |---|---|---|
-| 최초 설정 | 로컬 명령으로 관리자 토큰 발급 | 로컬 설치 절차로 Owner ID·비밀번호 설정 |
-| 사람 로그인 | 관리자 토큰 → 세션 | ID·비밀번호 → User에 귀속된 세션 |
-| 개인 API 사용 | 관리자 토큰 | 로그인한 Owner가 발급한 User 토큰 |
-| 자동화 | 같은 관리자 토큰에 이름 지정 | Owner가 만든 Agent와 Agent 토큰 |
-| 관리 위치 | 서버 로컬 토큰 명령 | 대시보드·관리 API·gscli |
-| 감사 주체 | 관리자 credential ID | User/Agent account ID + credential ID |
+| 최초 설정 | 로컬 명령으로 관리자 토큰 발급 | 설정 master → 제한된 콘솔 설정 세션 → 첫 Admin |
+| 사람 로그인 | 공통 관리자 토큰 → 세션 | 개인 토큰 → 명명된 User 세션 |
+| 역할 | 공통 관리자 | viewer / operator / admin |
+| 자동화 | 관리자 토큰에 이름 지정 | User 소유 Agent와 토큰 |
+| 신원 관리 | 서버 로컬 명령 | 콘솔 세션 전용; CLI/MCP는 자원 관리만 제공 |
+| 복구 | 로컬 명령으로 전체 토큰 재발급 | 설정 master로 대상 Admin 접근 복구 |
+| 감사 | HTTP intent + status | 확정 변경 audit + 관리 호출 + 보안 이벤트 |
 
-### DB 소유 관계
-
-```text
-admin_accounts (user / agent, 활성 상태)
-├── admin_users (단일 Owner, login_id, password_hash)
-│   └── admin_sessions (user_id, session_hash, expires_at)
-├── admin_agents (owner_user_id, 이름, 위임 권한)
-└── admin_api_keys (account_id, created_by, 이름, token_hash,
-                   created_at, expires_at, revoked_at, last_used_at)
-
-admin_audit_events (actor_account_id, credential_id, action, target, status)
-```
-
-| 대상 | 저장·수명 계약 |
-|---|---|
-| 비밀번호 | 검증된 password hashing 구현으로 단방향 저장; 토큰 해시와 별도 처리 |
-| 최초 Owner | 동시 초기화에서도 계정 하나만 생성; 설치 권한으로 초기화 |
-| 세션 | User에 직접 연결; 현재 HttpOnly·Secure·same-origin/CSRF 조건 계승 |
-| User/Agent 토큰 | 서버 생성, 원문 한 번 반환, DB에는 검증용 해시·소유자·만료·폐기 상태 |
-| 폐기·Agent 비활성화 | 이후 요청에서 DB 상태를 확인해 차단; 이미 인증된 요청은 완료 가능 |
-| 발급 응답 유실 | 목록의 credential ID·이름으로 대조하고 필요 시 폐기·재발급 |
-| 감사 | 계정·키 변경과 감사 기록을 함께 저장; 토큰·비밀번호 원문 제외 |
-
-### 권한 설계안
-
-| 작업 | Owner 세션 / User 토큰 | Agent 조회 권한 | Agent 변경 권한 |
-|---|---|---|---|
-| 등록부·점유 조회 | 허용 | 허용 | 허용 |
-| 저장소·client·서비스 키 변경 | 허용 | 거부 | 허용 |
-| User 토큰·Agent·Agent 토큰 관리 | 허용 | 거부 | 거부 |
-| 비밀번호 변경 | 현재 비밀번호 재확인 | 거부 | 거부 |
-| 브라우저 세션 발급 | ID·비밀번호 로그인 | 거부 | 거부 |
-
-Agent 변경 권한은 서비스 키 발급까지 포함하는 강한 운영 권한이다. Agent 생성 시
-조회 권한을 기본값으로 하고 변경 권한은 Owner가 명시적으로 위임하는 안이다.
-기존 Native/S3 요청은 client 자격증명 계약을 따른다. 자동화 Agent 토큰과
-2차 Storage Node 조인 자격증명은 별도 계약으로 둔다.
-
-### 구현 순서
-
-| 단계 | 산출물·검증 |
-|---|---|
-| 1 | 권한·수명·입력 정책: User/Agent 판정과 토큰 lifecycle의 독립 단위 테스트 |
-| 2 | 추가 DB migration: Owner 초기화 경합, 계정·키 폐기와 발급 경합, 감사 원자성 |
-| 3 | 로그인·토큰 관리 API: 잘못된 비밀번호, CSRF, 만료·폐기, Agent 권한 경계 |
-| 4 | UI·gscli: 로그인, 목록·발급·폐기, 원문 한 번 표시, 응답 유실, 반응형 |
-| 5 | 전환 검증: 기존 관리 인증 종료, 새 로그인·복구, 기존 파일 소비자 회귀 |
-
-구현 시작 전에 토큰 유효기간 상한·활성 키 수, 비밀번호 정책, API 경로와 오류 계약을
-확정한다. 기존 migration은 유지하고 추가 migration으로 전환한다. 설치 관리자가
-Owner 설정을 완료하는 시점에 기존 관리 토큰·세션을 폐기하고 환경변수 운영자 인증을
-종료한다. 전환 시점은 트랜잭션으로 직렬화하고 구버전 replica 종료를 선행한다.
-
-로컬 복구는 Owner 로그인 수단을 재설정하고 관리 세션·User/Agent 토큰을 폐기한다.
-파일 데이터·client 자격증명·Provider secret은 각 기존 계약을 유지한다. 비밀번호
-입력·비밀 파일 전달 방식과 복구 명령의 최종 인자는 구현 단계에서 검증한다.
+현재 환경변수 운영자 토큰은 초기화 후 비활성화되며 브라우저 로그인에 사용되지 않는다.
+새 master는 별도의 설정·복구 계약이다. 기존 환경변수에 복구 권한을 자동 부여하지 않는다.
+기존 runtime Client 키·S3 credential·Provider secret·파일 데이터는 전환과 분리한다.

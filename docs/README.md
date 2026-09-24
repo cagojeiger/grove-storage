@@ -8,9 +8,10 @@
 | 현재 네이티브 파일 API | [파일](spec/00-operations.md) · [multipart](spec/02-multipart.md) |
 | 현재 S3 API | [S3 계약](spec/03-s3-surface.md) |
 | 등록·인증·키 회전 | [등록부](spec/01-registry.md) |
-| 현행 관리자 인증·로컬 Owner/User/Agent 전환 계획 | [관리자 인증](spec/05-admin-auth.md) · [ADR 008](adr/008-local-owner-and-agent-credentials.md) |
+| 현행 관리자 인증 | [관리자 인증](spec/05-admin-auth.md) |
+| master·User/Agent·권한·DB·CLI/MCP·관리 감사 설계 | [ADR 009](adr/009-management-identity-and-command-boundary.md) · [spec 08](spec/08-management-plane.md) |
 | 관리 콘솔의 화면·API 대응·완료 기준 | [콘솔 구현 계획](spec/06-console.md) |
-| 브라우저 origin·CSP·비밀번호/세션 보안 | [브라우저 보안](spec/07-browser-security.md) |
+| 브라우저 origin·CSP·proxy·토큰/세션 보안 | [브라우저 보안](spec/07-browser-security.md) |
 | 로컬 진단 / 원격 관리 CLI | [status](stack/README.md#현재-cli) · [CLI 구현·후속 계약](spec/04-cli.md) |
 | 버전 / CLI 설치·배포 | [릴리스 계약](development/releases.md) |
 | 서비스 연결 | [네이티브](guide/service-integration.md) · [S3](guide/s3-onboarding.md) |
@@ -31,7 +32,8 @@
 | 배치 | client에 storage 하나 고정 | 현행 배치 유지 | 조인·배치·이동 모델 설계 |
 | 복구 | 업로드 완료·삭제·만료 복구 | 현행 복구 유지 | Node 장애·작업 복구 설계 |
 | 관리 | 운영자 API, gscli 조회·변경, Terraform 비교 예제 | 등록부 Terraform 운영 이관 | Storage Server·Agent 조인 |
-| 관리 인증 | 관리자 토큰·토큰에 귀속된 콘솔 세션 | 로컬 Owner 로그인·DB 기반 User/자동화 Agent 토큰 관리 | 노드 조인 자격증명은 별도 계약 |
+| 관리 인증 | 관리자 토큰·토큰에 귀속된 콘솔 세션 | master 설정·복구, 개인 토큰 로그인, 콘솔 전용 User/Agent/권한 관리 | 노드 조인 자격증명은 별도 계약 |
+| 관리 명령·감사 | REST CLI·HTTP intent/status 기록 | CLI/MCP 공통 자원 명령, 확정 변경 audit·호출·보안 로그, 콘솔 조회 | 데이터 경로의 로그와 별도 |
 | 실행 이름 | 서버 `filegate`·`FILEGATE_*`, CLI `gscli`·`GROVE_*` | 기존 서버 계약 유지 | 서버 이름 변경은 별도 릴리스 |
 
 Grove Storage는 후속 제품명이다. 현재 fs adapter는 서버 로컬 구현이며, 2차의 독립

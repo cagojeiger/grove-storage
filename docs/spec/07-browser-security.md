@@ -1,7 +1,8 @@
 # spec 07: 관리 브라우저의 보안 경계
 
-- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더 구현. 운영 호스팅·ID/비밀번호 로그인 검증은 후속.
+- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더 구현. 운영 호스팅·새 master/User 인증 검증은 후속.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [콘솔](06-console.md).
+- 후속 신원·진입 경계: [spec 08](08-management-plane.md), 미구현.
 
 ## Origin 분리
 
@@ -16,6 +17,22 @@ console.example.com               data.example.com
 콘솔과 관리 API는 같은 HTTPS origin을 사용한다. 사용자 파일·S3·relay는 별도 호스트로
 제공한다. 같은 서버 프로세스를 사용해도 reverse proxy가 호스트별 경로를 제한한다.
 관리 호스트의 정적 root에는 콘솔 빌드 산출물만 둔다.
+
+### OAuth2 Proxy와 기계용 API (설계)
+
+| 진입 호스트 예시 | 앞단·서버 인증 | 경로 제한 |
+|---|---|---|
+| console.example.com | OAuth2 Proxy + Grove User 세션 | 콘솔·세션·신원·관리 자원·감사 API; master는 설정/복구 경로만 |
+| api.example.com | User/Agent Bearer; 대화형 OAuth 로그인 없음 | 자원 CLI/MCP/API만; 신원·감사·세션 발급 경로 제외 |
+| data.example.com | 기존 Client key / SigV4 / 발급 URL | 기존 데이터 경로만 |
+
+호스트 허용 목록뿐 아니라 backend가 자격증명 종류와 작업 권한을 검사한다.
+기계용 자원 경로는 콘솔 쿠키를 받지 않아 proxy 보호의 우회 통로가 되지 않는다.
+프록시 OIDC 토큰을 Grove의 Authorization으로 주입하지 않고, 전달된 사용자 헤더도
+Grove 관리 권한으로 해석하지 않는다. 콘솔에서 호출하는 API는 콘솔 origin을 사용한다.
+기계용 401/403은 JSON/MCP 오류로 반환하고 OAuth 로그인 페이지로 redirect하지 않는다.
+SigV4의 Authorization·Host·path·query와 presigned URL은 서명 계약에 맞게 보존한다.
+TLS 종료 뒤의 직접 접근 경로·신뢰 proxy 헤더·callback 쿠키·로그아웃을 배포 E2E로 검증한다.
 
 S3는 객체 content type과 서명된 응답 헤더 override를 제공한다. 관리 origin에서
 업로드된 HTML을 열면 같은 origin의 스크립트가 관리 쿠키를 동반한 요청을 실행할 수 있다.
@@ -32,7 +49,7 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 | 비밀 | 입력·발급 결과에만 보관; URL·웹 저장소·query/mutation 캐시·로그에서 제외 | 현행 로그인·storage 폼; 신규 토큰 화면에 동일 적용 |
 | 렌더링 | 외부 문자열은 React text로 표시 | 현행 화면; 향후 파일 미리보기는 데이터 origin 사용 |
 | 세션 종료 | 서버 세션 폐기, 진행 중 조회 취소, 비공개 캐시 제거 | 현행 로그아웃·401 테스트 |
-| 여러 탭·뒤로 가기 | logout/비밀번호 변경 통지, 복원 시 세션 재검증 후 비공개 화면 표시 | 인증 전환 시 구현·검증 |
+| 여러 탭·뒤로 가기 | logout/토큰 폐기/역할 변경 후 재검증, 복원 시 세션 확인 후 비공개 화면 표시 | 인증 전환 시 구현·검증 |
 | 일회성 토큰 | 발급 직후 한 번 표시, 닫기·세션 종료 시 제거 | User/Agent 토큰 UI 구현 시 검증 |
 
 ## 문서 응답 헤더
@@ -53,19 +70,21 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 
 헤더는 정적 HTML 응답에 실려야 한다. API 응답에만 CSP를 붙이거나 HTML meta만 사용하는
 것으로 frame-ancestors를 대신할 수 없다. 운영 ingress의 실제 응답 헤더를 배포 후 확인한다.
-로컬 HTTP 샘플 서버는 인증을 모사하므로 실제 쿠키·비밀번호 인증의 검증 근거는 HTTPS fixture다.
+로컬 HTTP 샘플 서버는 인증을 모사한다. 실제 세션의 근거는 HTTPS fixture이며 새 master/User
+인증은 별도 구현·검증이 필요하다.
 
-## 비밀번호 로그인 완료 조건
+## master·개인 토큰 로그인 완료 조건 (설계)
 
 | 기능 | 구현·검증 조건 |
 |---|---|
-| 최초 설정 | 설치 권한으로 단일 Owner 생성; 동시 초기화 테스트 |
+| 최초 설정 | master 설정 세션으로 첫 Admin 생성; 동시 초기화 테스트 |
 | 로그인 | 공통 실패 응답·공유 rate limit; 인증 성공 시 새 세션 발급 |
-| 폼 | username/current-password/new-password autocomplete 구분; 자동 비밀번호 생성·붙여넣기 지원 |
-| 변경 | 현재 비밀번호 재확인, 변경 트랜잭션 이후 기존 브라우저 세션 폐기·재로그인 |
-| 분실 복구 | 로그인 화면에 로컬 복구 방법 안내; 복구 후 관리 세션·User/Agent 토큰 폐기 |
+| 폼 | master/개인 토큰 입력·붙여넣기, 로그인 완료 시 원문 제거; Agent 토큰 로그인 거부 |
+| 폐기 | 원본 개인 토큰 폐기 후 연결 세션 거부; 계정 비활성화·역할 변경 즉시 후속 요청에 반영 |
+| 분실 복구 | 별도 master 복구 흐름·명시적 대상/영향 확인; 설정 세대 변경 시 master 세션 무효화 |
 | 세션 관리 | 목록·현재 세션 표시·개별/전체 종료; 세션 원문 조회 대신 공개 ID 사용 |
-| 권한 | User/Agent 판정은 서버에서 집행; UI 숨김과 독립적으로 API 거부 검증 |
+| 권한 | User/Agent·role·진입 경계를 서버에서 집행; Admin Bearer의 신원 API 호출도 거부 |
+| master 제한 | 설정/복구 세션으로 일반 자원·이력 API 호출 거부 |
 
 ## 검증과 남은 범위
 
@@ -76,7 +95,8 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 | 로그인·401·secret 제거·CRUD·반응형 | 기존 Playwright suite에 함께 실행 |
 | 파일 HTML을 관리 origin에서 열 수 있는 배포 조건 | 코드·계약에서 확인한 조건부 위험; 운영 ingress는 이번 점검 범위 밖 |
 | 운영 호스트 경로 제한·TLS·응답 헤더 | 배포 완료 조건; 미검증 |
-| 새 비밀번호 로그인·세션 관리·다중 탭 | 인증 전환 구현 단계의 필수 회귀 테스트 |
+| 새 master/User 로그인·세션 관리·다중 탭 | 인증 전환 구현 단계의 필수 회귀 테스트 |
+| OAuth2 Proxy·기계용 API 분리 | 배포 전 401/403, Bearer 보존, 신원 API 우회 거부 검증 |
 
 근거: [OWASP CSP](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html),
 [OWASP 파일 호스트 분리](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html),

@@ -1,9 +1,12 @@
 # ADR 008: 로컬 관리자 계정이 User·Agent 토큰을 관리한다
 
-- 상태: Accepted (제품 방향), 구현 예정
+- 상태: Superseded by [ADR 009](009-management-identity-and-command-boundary.md), 구현 전 대체
 - 날짜: 2026-09-24
 - 선행 전제: [ADR 007](007-grove-storage-foundation.md)
 - 현행 구현·전환 계획: [관리자 인증](../spec/05-admin-auth.md)
+
+아래는 이전 결정의 기록이다. 현행 제품 방향은 마스터 초기 설정·개인 토큰 로그인·
+대시보드 전용 신원 관리이며, 비밀번호 로그인과 CLI 신원 관리 계획을 대체한다.
 
 ## 전제
 
