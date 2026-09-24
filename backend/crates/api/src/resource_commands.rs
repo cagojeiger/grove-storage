@@ -43,6 +43,7 @@ pub(crate) async fn execute(
         };
     let execution = resources::execute(
         &state.pool,
+        &state.crypto,
         Proof::Token(&hash),
         Surface::ResourceApi,
         command,

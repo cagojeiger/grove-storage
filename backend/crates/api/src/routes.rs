@@ -7,7 +7,7 @@
 //!   /readyz            readiness (DB 체크)
 //!   /api/v1/*          클라이언트 API (클라이언트 키 — v1 모듈)
 //!   /api/admin/v1/*    운영자 API (관리자 토큰 또는 콘솔 세션)
-//!   /api/admin/commands/v1  공통 자원 조회 (User/Agent Bearer)
+//!   /api/admin/commands/v1  공통 자원 명령 (User/Agent Bearer)
 //!   /blobs/*           중계 바이트 엔드포인트 (lease secret — blobs 모듈)
 
 use std::sync::Arc;
@@ -32,7 +32,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// 단일 리스너의 최상위 제어 경로 세그먼트다. client id(= S3 버킷, 루트
 /// path-style)가 이 중 하나와 같으면 제어 라우트를 가리므로 예약된다
 /// (admin::clients가 client id로 거부한다).
-pub(crate) const RESERVED_TOP_LEVEL: &[&str] = &["api", "blobs", "healthz", "readyz"];
+pub(crate) const RESERVED_TOP_LEVEL: &[&str] = filegate_db::registry::RESERVED_CLIENT_IDS;
 
 #[derive(Clone)]
 pub struct AppState {

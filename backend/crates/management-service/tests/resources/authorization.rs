@@ -10,28 +10,46 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
     {
         let login = operator(&pool, role, n as u64 + 2).await;
         for surface in [Surface::Cli, Surface::Mcp, Surface::ResourceApi] {
-            let result = resources::execute(&pool, Proof::Token(&login.token), surface, clients())
-                .await
-                .result
-                .unwrap();
+            let result = resources::execute(
+                &pool,
+                &crypto(),
+                Proof::Token(&login.token),
+                surface,
+                clients(),
+            )
+            .await
+            .result
+            .unwrap();
             assert!(matches!(result, Output::ClientList(ids) if ids == ["app"]));
-            let result = resources::execute(&pool, Proof::Token(&login.token), surface, keys())
-                .await
-                .result;
+            let result = resources::execute(
+                &pool,
+                &crypto(),
+                Proof::Token(&login.token),
+                surface,
+                keys(),
+            )
+            .await
+            .result;
             if role == Role::Viewer {
                 assert_eq!(result.unwrap_err().code, ErrorCode::Forbidden);
             } else {
                 assert!(result.is_ok());
             }
-            let result =
-                resources::execute(&pool, Proof::Session(&login.session), surface, clients())
-                    .await
-                    .result;
+            let result = resources::execute(
+                &pool,
+                &crypto(),
+                Proof::Session(&login.session),
+                surface,
+                clients(),
+            )
+            .await
+            .result;
             assert_eq!(result.unwrap_err().code, ErrorCode::Forbidden);
         }
         assert!(
             resources::execute(
                 &pool,
+                &crypto(),
                 Proof::Session(&login.session),
                 Surface::Console,
                 clients()
@@ -43,6 +61,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
         assert_eq!(
             resources::execute(
                 &pool,
+                &crypto(),
                 Proof::Token(&login.token),
                 Surface::Console,
                 clients()
@@ -66,7 +85,7 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
         .await
         .unwrap();
     assert!(
-        resources::execute(&pool, Proof::Token(&token), Surface::Mcp, keys())
+        resources::execute(&pool, &crypto(), Proof::Token(&token), Surface::Mcp, keys())
             .await
             .result
             .is_ok()
@@ -80,7 +99,8 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
     )
     .await
     .unwrap();
-    let denied = resources::execute(&pool, Proof::Token(&token), Surface::Mcp, keys()).await;
+    let denied =
+        resources::execute(&pool, &crypto(), Proof::Token(&token), Surface::Mcp, keys()).await;
     assert_eq!(denied.result.unwrap_err().code, ErrorCode::Forbidden);
     let recorded_owner: uuid::Uuid = sqlx::query_scalar(
         "SELECT owner_user_id FROM management.command_invocations WHERE request_id=$1",
@@ -91,20 +111,32 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
     .unwrap();
     assert_eq!(recorded_owner, owner.account);
     assert!(
-        resources::execute(&pool, Proof::Token(&token), Surface::Cli, clients())
-            .await
-            .result
-            .is_ok()
+        resources::execute(
+            &pool,
+            &crypto(),
+            Proof::Token(&token),
+            Surface::Cli,
+            clients()
+        )
+        .await
+        .result
+        .is_ok()
     );
     db::revoke_credential(&pool, &context(), credential.id)
         .await
         .unwrap();
     assert_eq!(
-        resources::execute(&pool, Proof::Token(&token), Surface::Cli, clients())
-            .await
-            .result
-            .unwrap_err()
-            .code,
+        resources::execute(
+            &pool,
+            &crypto(),
+            Proof::Token(&token),
+            Surface::Cli,
+            clients()
+        )
+        .await
+        .result
+        .unwrap_err()
+        .code,
         ErrorCode::Unauthorized
     );
 }
@@ -121,7 +153,14 @@ async fn queued_resource_read_rechecks_role_after_identity_lock(pool: PgPool) {
         .unwrap();
     let task_pool = pool.clone();
     let task = tokio::spawn(async move {
-        resources::execute(&task_pool, Proof::Token(&login.token), Surface::Mcp, keys()).await
+        resources::execute(
+            &task_pool,
+            &crypto(),
+            Proof::Token(&login.token),
+            Surface::Mcp,
+            keys(),
+        )
+        .await
     });
     wait_for_identity_lock(&pool).await;
     sqlx::query("UPDATE management.accounts SET role='viewer' WHERE id=$1")

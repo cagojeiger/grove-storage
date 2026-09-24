@@ -1260,6 +1260,7 @@ name = "grove-management-service"
 version = "0.4.1"
 dependencies = [
  "chrono",
+ "filegate-core",
  "filegate-db",
  "grove-management-command",
  "grove-management-policy",

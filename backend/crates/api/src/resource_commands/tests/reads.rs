@@ -87,7 +87,7 @@ async fn all_resource_reads_match_legacy_payloads_without_provider_secrets(pool:
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn missing_resource_and_known_mutation_have_stable_errors(pool: PgPool) {
+async fn missing_resource_and_storage_mutation_have_stable_errors(pool: PgPool) {
     let token = owner(&pool).await;
     seed(&pool).await;
     for (name, input) in [
@@ -103,7 +103,7 @@ async fn missing_resource_and_known_mutation_have_stable_errors(pool: PgPool) {
             json!({"code":"not_found","outcome":"not_applied"})
         );
     }
-    let response = call(&pool, &token, "client.delete", json!({"id":"app"})).await;
+    let response = call(&pool, &token, "storage.delete", json!({"id":"local"})).await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         json_body(response).await["error"],

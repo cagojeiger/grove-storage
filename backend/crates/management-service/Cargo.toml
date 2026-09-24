@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 filegate-db.workspace = true
+filegate-core.workspace = true
 grove-management-policy.workspace = true
 grove-management-command.workspace = true
 uuid.workspace = true

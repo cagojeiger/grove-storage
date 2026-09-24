@@ -1,7 +1,7 @@
 # spec 09: 공통 자원 명령 계약
 
-- 상태: `grove-management-command` + 공통 조회 실행기 + Bearer HTTP 구현. CLI는 명령명·입력/응답 DTO를 재사용한다.
-- 변경 실행기·CLI 전송 전환·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
+- 상태: `grove-management-command` + 조회 10개·Client/서비스 키 변경 6개 실행기 + Bearer HTTP 구현.
+- Storage 변경 3개·CLI 전송 전환·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
 - 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
 
 ## 구성
@@ -13,8 +13,8 @@ management-command      명령명 + 입력/출력 + schema + 권한 + 변경 여
         ↑
 gscli                   인자·파일·확인 → 기존 REST → 표 / JSON
 
-commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → 기존 DB 조회
-후속: 변경 + 감사 transaction, CLI HTTP adapter / MCP tool adapter
+commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → DB 조회 / 변경 + 감사
+후속: Storage probe·변경, CLI HTTP adapter / MCP tool adapter
 ```
 
 | 항목 | 현재 계약 |
@@ -30,7 +30,7 @@ commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → 기�
 현재 CLI는 새 `decode`·권한 정책·오류 타입을 실행하지 않는다. 공통 실행기 연결 시
 검증과 권한 적용을 함께 전환한다. 공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 adapter 단계에서 확정한다.
 
-## 공통 조회 HTTP (4a)
+## 공통 자원 HTTP (4a·4b-1)
 
 ```http
 POST /api/admin/commands/v1
@@ -42,20 +42,21 @@ Content-Type: application/json
 
 | 항목 | 현재 계약 |
 |---|---|
-| 지원 범위 | 아래 조회 10개; 변경 9개는 권한 검사 후 `request_rejected/not_applied` |
+| 지원 범위 | 조회 10개·Client/서비스 키 변경 6개; Storage 변경 3개는 권한 검사 후 `request_rejected/not_applied` |
 | 성공 | 200 `{protocol:1, request_id, command, result}`; result는 공통 typed Output |
-| 실패 | `{protocol:1, request_id, error:{code,outcome}}`; 모든 현재 실행 실패는 `not_applied` |
+| 실패 | `{protocol:1, request_id, error:{code,outcome}}`; commit 전 거부는 `not_applied`, 변경 commit 실패는 `unavailable/unknown` |
 | HTTP 코드 | unauthorized 401, forbidden 403, not_found 404, conflict 409, unavailable 503; 입력/protocol/명령/미연결 변경은 400 |
 | 인증 | 활성 User/Agent 관리 토큰; Cookie가 있거나 Authorization이 중복이면 401; master·기존 운영자 토큰은 별도 namespace |
 | 표면 | 서버가 `resource_api`로 기록; 요청 body·User-Agent·proxy 사용자 헤더로 actor/surface 지정 생략 |
 | 응답 보안 | no-store·nosniff·서버 request_id; 관리 쿠키 발급·OAuth redirect·CORS 허용 생략 |
 | 조회 경계 | identity lock → 현재 신원·role·owner 확인 → 조회 → commit; 저장소 I/O probe 생략 |
 | DB 재사용 | 기존 registry/usage/S3 키 SQL이 pool 또는 현재 transaction에서 실행; SQL 조건·정렬 유지 |
+| 변경 경계 | 현재 권한 → Client/서비스 키 변경 + audit → commit; 감사 실패는 rollback, commit 불명은 자동 재시도 없이 대조 |
 | 상태 | status는 서버의 신원/DB/등록부 관찰, 물리 storage는 `not_checked`; 실패 시 명령 오류, CLI의 네트워크 진단과 구분 |
 | 일관성 | READ COMMITTED; 여러 SELECT의 등록부 상태를 고정 snapshot으로 보장하지 않음 |
 | 호출 기록 | service 실행 시 검증된 actor + 명령명 + 결과를 한 번 기록; 조회는 변경 감사 생성 없이 완료 |
 | 거부 기록 | 인증 실패는 보안 이벤트, 신원 확인 후 권한 거부는 호출·보안 이벤트; envelope/decode 거부는 HTTP 진단 범위 |
-| 비밀 | 응답은 명시적 DTO; storage 암호문/nonce/enc_key_id 제외; 로그는 요청/결과 payload 대신 ID·안정 코드 사용 |
+| 비밀 | 응답은 명시적 DTO; S3 secret은 발급 commit 성공 시 한 번 전달; 로그는 요청/결과 payload 대신 ID·안정 코드 사용 |
 
 기존 CLI는 `/api/admin/v1`을 계속 호출한다. CLI/MCP Surface 동등성은 같은 실행기에
 검증된 토큰을 전달한 PG 테스트이며 실제 CLI/MCP 전송 연결은 후속이다.
@@ -85,6 +86,21 @@ Content-Type: application/json
 
 19개 명령은 조회 10개·변경 9개다. User·Agent·role·관리 토큰·관리 이력은
 콘솔 세션 API의 별도 계약이다. `credential`은 Client의 S3 서비스 키를 뜻한다.
+
+### Client·서비스 키 변경 (4b-1)
+
+| 경계 | 현재 계약 |
+|---|---|
+| 생성 | 기존 slug·예약 Client명·storage/client FK·키 중복 제약 적용 |
+| 삭제 | 파일 참조가 남은 Client는 409; 키는 client_id와 대상 키를 함께 대조 |
+| 멱등 | 실제 삭제 행이 있을 때만 감사 생성; Client 삭제의 소유 키 cascade는 `client.delete` 한 건으로 기록 |
+| Native 키 감사 | `resource_type=client_key`, target·metadata는 Client ID; 원문·전체 hash 제외, 개별 키 식별은 현 감사 범위 밖 |
+| S3 키 감사 | `resource_type=s3_credential`, target은 공개 access key ID, metadata는 Client ID |
+| Client 감사 | target은 Client ID; 생성 metadata는 Client/Storage ID, 삭제는 Client ID |
+| S3 암호화 | 주입된 기존 Crypto·활성 key ID·access key ID AAD 사용; 기존 SigV4 인증 저장 형식 유지 |
+| 불명확한 발급 | `unknown`이면 원문 반환 없이 종료; 목록 대조·필요 시 폐기 후 명시적 재발급 |
+
+이 보장은 새 공통 실행기 범위다. 기존 `/api/admin/v1`은 기존 인증·기록을 유지한다.
 
 ## 검증과 비밀
 
@@ -134,8 +150,11 @@ JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하�
 | `cli/tests/command_contract.rs` | 실제 clap 원격 명령과 catalog의 일대일 대응 |
 | 기존 CLI 테스트 | REST path·JSON·비밀 파일·변경 결과·status 동작 유지 |
 | `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·Agent owner 상한·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
+| `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
 | `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
+| 같은 경로의 `writes.rs`, `write_failures.rs` | 4개 PG HTTP 테스트: 변경 왕복·기존 키 조회/인증·409/400·감사 rollback·원문 없는 unknown |
 | 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 10개·Agent owner 상한·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
+| 변경 서버 smoke | 변경 6개·기존 S3 키 목록·Native PUT/commit/GET 바이트 일치·파일 참조 삭제 409·키 폐기 후 401·비밀 없는 감사 확인; S3 실제 전송은 이번 검증에서 제외 |
 
-현재 검증은 순수 계약·PG 서비스·HTTP 라우터를 포함한다. 실제 MCP 전송과 변경/audit
-transaction 검증은 후속 단계다.
+현재 검증은 순수 계약·PG 서비스·HTTP 라우터와 Client/서비스 키 변경/audit transaction을
+포함한다. 실제 CLI/MCP 전송 전환과 Storage 변경은 후속 단계다.

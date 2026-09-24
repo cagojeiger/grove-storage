@@ -1,12 +1,14 @@
-//! Shared resource reads; writes await transactional resource auditing.
+//! Shared resource execution; storage writes await backend probe integration.
 mod reads;
+mod writes;
 
 use crate::{Error, Proof, audit_context, logging};
+use filegate_core::Crypto;
 use filegate_db::{
     PgPool,
     management::{AuditContext, IdentityTransaction},
 };
-use grove_management_command::{Command, CommandError, Effect, ErrorCode, Output};
+use grove_management_command::{Command, CommandError, Effect, ErrorCode, Outcome, Output};
 use grove_management_policy::{Scope, Surface, authorize};
 use uuid::Uuid;
 
@@ -17,6 +19,7 @@ pub struct Execution {
 
 pub async fn execute(
     pool: &PgPool,
+    crypto: &Crypto,
     proof: Proof<'_>,
     surface: Surface,
     command: Command,
@@ -24,7 +27,7 @@ pub async fn execute(
     let request_id = Uuid::new_v4();
     let started = std::time::Instant::now();
     let name = command.name();
-    let (context, result) = run(pool, proof, surface, command, request_id).await;
+    let (context, result) = run(pool, crypto, proof, surface, command, request_id).await;
     logging::record(
         pool,
         context.as_ref(),
@@ -43,6 +46,7 @@ pub async fn execute(
 
 async fn run(
     pool: &PgPool,
+    crypto: &Crypto,
     proof: Proof<'_>,
     surface: Surface,
     command: Command,
@@ -69,22 +73,32 @@ async fn run(
     if command.validate().is_err() {
         return (Some(context), Err(Error::InvalidInput));
     }
-    if command.name().effect() != Effect::Read {
-        return (Some(context), Err(Error::RequestRejected));
-    }
-    let result = match reads::run(&mut tx, command).await {
-        Ok(output) => tx
-            .finish()
-            .await
-            .map(|()| output)
-            .map_err(|_| Error::Unavailable),
+    let mutation = command.name().effect() == Effect::Mutation;
+    let result = if mutation {
+        writes::run(&mut tx, crypto, &context, command).await
+    } else {
+        reads::run(&mut tx, command).await
+    };
+    let result = match result {
+        Ok(output) => tx.finish().await.map(|()| output).map_err(|_| {
+            if mutation {
+                Error::OutcomeUnknown
+            } else {
+                Error::Unavailable
+            }
+        }),
         Err(error) => Err(error),
     };
     (Some(context), result)
 }
 
-// No resource writes execute yet, so every failure is known not to apply one.
 fn wire_error(error: Error) -> CommandError {
+    if error == Error::OutcomeUnknown {
+        return CommandError {
+            code: ErrorCode::Unavailable,
+            outcome: Outcome::Unknown,
+        };
+    }
     CommandError::rejected(match error {
         Error::Unauthenticated => ErrorCode::Unauthorized,
         Error::Forbidden => ErrorCode::Forbidden,

@@ -14,6 +14,9 @@ use support::*;
 fn clients() -> Command {
     Command::ClientList(input::EmptyInput {})
 }
+fn crypto() -> filegate_core::Crypto {
+    filegate_core::Crypto::new("test", &"resource-test-root-at-least-32-bytes".into()).unwrap()
+}
 fn keys() -> Command {
     Command::ClientKeyList(input::ClientInput {
         client_id: "app".into(),
@@ -33,6 +36,7 @@ async fn resources_read_status_is_server_observation_and_logs_once(pool: PgPool)
     let before = audit_count(&pool).await;
     let execution = resources::execute(
         &pool,
+        &crypto(),
         Proof::Token(&admin.token),
         Surface::Cli,
         Command::Status(input::EmptyInput {}),

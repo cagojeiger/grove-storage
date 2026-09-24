@@ -5,6 +5,9 @@
 
 use sqlx::PgPool;
 
+/// Control-plane routes reserve these names from the S3 bucket namespace.
+pub const RESERVED_CLIENT_IDS: &[&str] = &["api", "blobs", "healthz", "readyz"];
+
 /// storages 행. 종류(kind)가 s3/fs를 가르고, 종류별 필수는 DB CHECK가
 /// 집행한다 (0002). s3 시크릿은 암호문 컬럼 셋으로만 존재 — 복호는
 /// core::Crypto가 행의 enc_key_id 라벨로 한다 (spec 01). fs는 시크릿이
@@ -172,7 +175,11 @@ pub async fn delete_storage(pool: &PgPool, id: &str) -> Result<(), sqlx::Error> 
 
 // ---- clients ----
 
-pub async fn insert_client(pool: &PgPool, id: &str, storage_id: &str) -> Result<(), sqlx::Error> {
+pub async fn insert_client<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+    storage_id: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT INTO clients (id, storage_id) VALUES ($1, $2)")
         .bind(id)
         .bind(storage_id)
@@ -208,17 +215,24 @@ pub async fn list_clients<'e>(pool: impl sqlx::PgExecutor<'e>) -> Result<Vec<Str
 /// 멱등 삭제. file(location)이 남아 있으면 FK가 거부한다. 키·자격증명·논리
 /// 키 매핑은 소유물이라 함께 진다 (CASCADE).
 pub async fn delete_client(pool: &PgPool, id: &str) -> Result<(), sqlx::Error> {
+    delete_client_rows(pool, id).await.map(|_| ())
+}
+
+pub async fn delete_client_rows<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+) -> Result<u64, sqlx::Error> {
     sqlx::query("DELETE FROM clients WHERE id = $1")
         .bind(id)
         .execute(pool)
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected())
 }
 
 // ---- client_keys ----
 
-pub async fn insert_client_key(
-    pool: &PgPool,
+pub async fn insert_client_key<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
     client_id: &str,
     key_hash: &str,
 ) -> Result<(), sqlx::Error> {
@@ -272,12 +286,22 @@ pub async fn delete_client_key(
     client_id: &str,
     key_hash: &str,
 ) -> Result<(), sqlx::Error> {
+    delete_client_key_rows(pool, client_id, key_hash)
+        .await
+        .map(|_| ())
+}
+
+pub async fn delete_client_key_rows<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    client_id: &str,
+    key_hash: &str,
+) -> Result<u64, sqlx::Error> {
     sqlx::query("DELETE FROM client_keys WHERE key_hash = $1 AND client_id = $2")
         .bind(key_hash)
         .bind(client_id)
         .execute(pool)
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected())
 }
 
 // ---- 쓰기 거부 분류 ----

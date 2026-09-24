@@ -94,12 +94,22 @@ pub(super) async fn record(
     resource_type: &str,
     resource_id: Uuid,
 ) -> Result<i64, Error> {
+    record_target(tx, context, action, resource_type, &resource_id.to_string()).await
+}
+
+pub(super) async fn record_target(
+    tx: &mut Transaction<'_, Postgres>,
+    context: &AuditContext,
+    action: &str,
+    resource_type: &str,
+    resource_id: &str,
+) -> Result<i64, Error> {
     let fields = columns(Some(context.actor));
     let id = sqlx::query_scalar("INSERT INTO management.audit_events
         (actor_kind, actor_id, owner_user_id, credential_id, session_id, request_id, surface, action, resource_type, resource_id)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id")
         .bind(fields.kind).bind(fields.actor).bind(fields.owner).bind(fields.credential).bind(fields.session)
-        .bind(context.request_id).bind(surface_name(context.surface)).bind(action).bind(resource_type).bind(resource_id.to_string())
+        .bind(context.request_id).bind(surface_name(context.surface)).bind(action).bind(resource_type).bind(resource_id)
         .fetch_one(&mut **tx).await?;
     Ok(id)
 }
