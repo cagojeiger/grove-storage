@@ -190,7 +190,7 @@ fn credential_delivery(
 
 fn deleted(resource: &'static str, id: &str, client_id: Option<String>) -> Data {
     Data::Deleted(model::Deleted {
-        resource,
+        resource: resource.to_owned(),
         id: id.to_owned(),
         client_id,
     })

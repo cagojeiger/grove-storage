@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use grove_management_command::CommandName;
 
 #[derive(Parser)]
 #[command(name = "gscli", version, about = "Grove Storage management CLI")]
@@ -184,25 +185,35 @@ impl Command {
             Self::Update { check: true } => "update.check",
             Self::Update { check: false } => "update",
             Self::Install { .. } => "install",
-            Self::Status => "status",
-            Self::Storage(StorageCommand::List) => "storage.list",
-            Self::Storage(StorageCommand::Show { .. }) => "storage.show",
-            Self::Storage(StorageCommand::Create { .. }) => "storage.create",
-            Self::Storage(StorageCommand::Replace { .. }) => "storage.replace",
-            Self::Storage(StorageCommand::Delete { .. }) => "storage.delete",
-            Self::Client(ClientCommand::List) => "client.list",
-            Self::Client(ClientCommand::Show { .. }) => "client.show",
-            Self::Client(ClientCommand::Create { .. }) => "client.create",
-            Self::Client(ClientCommand::Delete { .. }) => "client.delete",
-            Self::Credential(CredentialCommand::List { .. }) => "credential.list",
-            Self::Credential(CredentialCommand::Create { .. }) => "credential.create",
-            Self::Credential(CredentialCommand::Delete { .. }) => "credential.delete",
-            Self::ClientKey(ClientKeyCommand::List { .. }) => "client-key.list",
-            Self::ClientKey(ClientKeyCommand::Register { .. }) => "client-key.register",
-            Self::ClientKey(ClientKeyCommand::Delete { .. }) => "client-key.delete",
-            Self::Usage(Usage::Storages) => "usage.storages",
-            Self::Usage(Usage::Clients) => "usage.clients",
-            Self::Usage(Usage::History { .. }) => "usage.history",
+            Self::Status => CommandName::Status.as_str(),
+            Self::Storage(StorageCommand::List) => CommandName::StorageList.as_str(),
+            Self::Storage(StorageCommand::Show { .. }) => CommandName::StorageShow.as_str(),
+            Self::Storage(StorageCommand::Create { .. }) => CommandName::StorageCreate.as_str(),
+            Self::Storage(StorageCommand::Replace { .. }) => CommandName::StorageReplace.as_str(),
+            Self::Storage(StorageCommand::Delete { .. }) => CommandName::StorageDelete.as_str(),
+            Self::Client(ClientCommand::List) => CommandName::ClientList.as_str(),
+            Self::Client(ClientCommand::Show { .. }) => CommandName::ClientShow.as_str(),
+            Self::Client(ClientCommand::Create { .. }) => CommandName::ClientCreate.as_str(),
+            Self::Client(ClientCommand::Delete { .. }) => CommandName::ClientDelete.as_str(),
+            Self::Credential(CredentialCommand::List { .. }) => {
+                CommandName::CredentialList.as_str()
+            }
+            Self::Credential(CredentialCommand::Create { .. }) => {
+                CommandName::CredentialCreate.as_str()
+            }
+            Self::Credential(CredentialCommand::Delete { .. }) => {
+                CommandName::CredentialDelete.as_str()
+            }
+            Self::ClientKey(ClientKeyCommand::List { .. }) => CommandName::ClientKeyList.as_str(),
+            Self::ClientKey(ClientKeyCommand::Register { .. }) => {
+                CommandName::ClientKeyRegister.as_str()
+            }
+            Self::ClientKey(ClientKeyCommand::Delete { .. }) => {
+                CommandName::ClientKeyDelete.as_str()
+            }
+            Self::Usage(Usage::Storages) => CommandName::UsageStorages.as_str(),
+            Self::Usage(Usage::Clients) => CommandName::UsageClients.as_str(),
+            Self::Usage(Usage::History { .. }) => CommandName::UsageHistory.as_str(),
         }
     }
 }

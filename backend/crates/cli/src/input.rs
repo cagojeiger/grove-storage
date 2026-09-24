@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -11,35 +10,7 @@ use crate::error::Error;
 const MAX_STORAGE_INPUT_BYTES: u64 = 1024 * 1024;
 const MAX_KEY_BYTES: u64 = 8192;
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum StorageKind {
-    S3,
-    Fs,
-}
-
-fn default_storage_kind() -> StorageKind {
-    StorageKind::S3
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct StorageSpec {
-    #[serde(default = "default_storage_kind")]
-    kind: StorageKind,
-    #[serde(default)]
-    force_relay: bool,
-    root_path: Option<String>,
-    endpoint: Option<String>,
-    public_endpoint: Option<String>,
-    region: Option<String>,
-    bucket: Option<String>,
-    #[serde(default)]
-    force_path_style: bool,
-    access_key: Option<String>,
-    secret_key: Option<String>,
-    capacity_bytes: i64,
-}
+pub use grove_management_command::input::StorageSpec;
 
 pub fn storage_spec(path: &Path) -> Result<StorageSpec, Error> {
     let bytes = read(path, MAX_STORAGE_INPUT_BYTES, true)?;

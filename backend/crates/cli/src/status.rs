@@ -1,37 +1,11 @@
-use serde::Serialize;
+use grove_management_command::model::StorageAccess;
+pub use grove_management_command::model::{Registry, State, Status};
 
 use crate::{
     error::Error,
     http::Api,
     model::{Health, Identity, StorageUsage},
 };
-
-#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum State {
-    Ok,
-    Failed,
-    Unknown,
-}
-
-#[derive(Serialize)]
-pub struct Registry {
-    pub state: State,
-    pub usage: State,
-    pub clients: State,
-    pub storage_count: Option<usize>,
-    pub client_count: Option<usize>,
-}
-
-#[derive(Serialize)]
-pub struct Status {
-    pub server_version: Option<String>,
-    pub identity: State,
-    pub health: State,
-    pub readiness: State,
-    pub registry: Registry,
-    pub storage_access: &'static str,
-}
 
 fn observed<T>(result: &Result<T, Error>) -> State {
     match result {
@@ -111,7 +85,7 @@ pub async fn inspect(api: &Api) -> (Status, Option<Error>) {
                 storage_count: usage.ok().map(|rows| rows.len()),
                 client_count: clients.ok().map(|rows| rows.len()),
             },
-            storage_access: "not_checked",
+            storage_access: StorageAccess::NotChecked,
         },
         error,
     )

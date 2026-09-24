@@ -1,0 +1,13 @@
+[package]
+name = "grove-management-command"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+grove-management-policy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+
+[lints]
+workspace = true

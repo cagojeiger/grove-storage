@@ -1,6 +1,6 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 순수 권한 정책 구현·테스트, 서버 미연결. DB migration·새 인증 API·MCP·UI 미구현.
+- 상태: 순수 권한 정책·명령 계약 구현·테스트, 서버 미연결. DB migration·새 인증 API·MCP·UI 미구현.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
 - `management`는 제안된 PostgreSQL schema다. 기존 migration과 runtime 테이블은 유지한다.
@@ -53,7 +53,8 @@ Agent는 viewer/operator로 제한하고 소유 User의 활성 상태·권한으
 
 정책 허용은 DB 쿼리의 소유권 필터·첫/마지막 Admin 잠금·삭제 조건을 대신하지 않는다.
 현재 API의 기존 인증 경로는 아직 이 crate를 호출하지 않는다. CLI/MCP 동등성 테스트는
-정책 입력에 대한 결과 비교이며 실제 전송·도구 목록·응답 schema 검증은 후속이다.
+정책 입력에 대한 결과 비교다. [명령 계약](09-management-commands.md)은 실제 CLI 명령
+목록·입출력 DTO·schema를 검증하며 두 adapter의 전송 검증은 후속이다.
 
 ## 초기 설정·로그인·복구
 
@@ -124,6 +125,10 @@ audit / invocation / security ── actor snapshot + request_id
 
 ## CLI·MCP의 공통 계약
 
+명령명 19개·protocol 1·입출력·오류·권한 매핑은 [spec 09](09-management-commands.md)에
+구현했다. CLI는 공통 DTO와 명령명을 재사용하며 기존 REST를 호출한다.
+아래 공통 서버 실행기와 MCP adapter 연결은 후속 단계다.
+
 ```text
 CLI adapter ──┐
               ├─ 공통 command schema → validation → authorization → management service
@@ -147,7 +152,7 @@ Console identity/history API ── User session + role → identity/history ser
 
 User·Agent·role·관리 credential·감사 검색은 콘솔 전용이다.
 Admin Bearer의 직접 호출도 identity/history API에서 거부한다.
-MCP tool명·HTTP path·protocol 번호는 구현 전에 고정하고 두 adapter의 동일 fixture로 검증한다.
+MCP tool명·HTTP path·전송 envelope는 adapter 구현 전에 고정하고 동일 fixture로 검증한다.
 
 ## 관리 로그의 경계
 
@@ -184,7 +189,7 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 단계 | 변경 | 검증 |
 |---|---|---|
 | 1a (로컬 구현·검증) | `management-policy`: 순수 신원·권한 규칙 | 역할/표면/인증 상태, Agent 상한, 감사 조회 scope, master 제한; 14개 테스트 |
-| 1b (다음) | resource command 입력·출력·오류·권한 매핑 | 현행 CLI 기능과 정확히 대응; identity/history 명령 제외 |
+| 1b (로컬 구현·검증) | `management-command`: 입력·출력·오류·schema·권한 매핑; CLI DTO 재사용 | 원격 19개 명령과 대응; identity/history 제외; 기존 CLI 회귀 테스트 |
 | 2 | 추가 DB migration·관리 서비스·audit | 첫/마지막 Admin 경합, 발급/폐기 경합, 감사 실패 rollback, 삭제 후 이력 |
 | 3 | master/User 로그인·identity API | CSRF, Agent 로그인 거부, token/session 폐기, 복구, master 세대 불일치 |
 | 4 | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |
@@ -197,4 +202,4 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 각 단계는 코드·테스트·대응 spec을 함께 커밋하고 공개·운영 전환은 별도로 수행한다.
 
 구현 전에 고정할 값: 새 master 설정명·설정 세대 동기화 방식, token/session TTL·개수 상한,
-로그 보존 기간·최대 payload·접근 예산, endpoint/tool명·protocol, 이전 인증의 전환/복구 절차.
+로그 보존 기간·최대 payload·접근 예산, endpoint/tool명·전송 envelope, 이전 인증의 전환/복구 절차.

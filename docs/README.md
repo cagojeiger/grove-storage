@@ -10,6 +10,7 @@
 | 등록·인증·키 회전 | [등록부](spec/01-registry.md) |
 | 현행 관리자 인증 | [관리자 인증](spec/05-admin-auth.md) |
 | master·User/Agent·권한·DB·CLI/MCP·관리 감사 설계 | [ADR 009](adr/009-management-identity-and-command-boundary.md) · [spec 08](spec/08-management-plane.md) |
+| CLI/MCP 공통 명령·입출력·오류·권한 계약 | [명령 계약](spec/09-management-commands.md) |
 | 관리 콘솔의 화면·API 대응·완료 기준 | [콘솔 구현 계획](spec/06-console.md) |
 | 브라우저 origin·CSP·proxy·토큰/세션 보안 | [브라우저 보안](spec/07-browser-security.md) |
 | 로컬 진단 / 원격 관리 CLI | [status](stack/README.md#현재-cli) · [CLI 구현·후속 계약](spec/04-cli.md) |

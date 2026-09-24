@@ -44,7 +44,8 @@ flowchart LR
 | CLI 로컬 파일 | 명시적으로 저장한 일회성 비밀 산출물; 등록부 정본은 PostgreSQL |
 
 CLI는 기존 `/api/admin/v1`을 사용하는 독립 crate다. 서버·DB·infra crate 의존성 없이
-HTTP 응답 모델을 소유하며, 등록부 정본과 변경 규칙은 API·PostgreSQL이 소유한다.
+공통 `management-command`의 입력/응답 모델을 사용하며, 등록부 정본과 변경 규칙은
+API·PostgreSQL이 소유한다.
 1차는 외부 S3 backend 등록·presigned 전송 지원을 유지하면서 등록부 관리를 CLI로 이관한다.
 현재 fs backend·S3 중계 API는 현행 계약을 유지한다. 소비자 전환과 API 축소는 별도 결정한다.
 2차의 Node·Agent 조인 명령은 별도 스펙으로 확장한다. 새 CLI만 `gscli` 이름을 사용하고,
@@ -52,7 +53,8 @@ HTTP 응답 모델을 소유하며, 등록부 정본과 변경 규칙은 API·Po
 
 ## CLI·MCP 동등성 계획
 
-상태: 미구현. 정본은 [spec 08](08-management-plane.md#climcp의-공통-계약)이다.
+상태: [공통 명령 계약](09-management-commands.md) 구현·CLI 타입 재사용.
+공통 서버 실행기·새 인증·MCP adapter는 미구현이며 방향은 [spec 08](08-management-plane.md#climcp의-공통-계약)을 따른다.
 현재 CLI는 아래 REST API를 직접 호출하며 MCP 진입점은 아직 없다.
 
 | 공유하는 것 | 유지하는 차이 |

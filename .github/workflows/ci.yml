@@ -37,6 +37,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p grove-management-policy --locked
+      - run: cargo test -p grove-management-command --locked
       - run: cargo test -p grove-object-policy --locked
       - run: cargo test -p grove-object-service --locked
       - run: cargo test -p grove-s3-protocol --locked
