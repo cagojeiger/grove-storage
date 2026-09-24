@@ -24,6 +24,7 @@ pub(crate) fn layer(allowed_origins: &[String]) -> Option<CorsLayer> {
             .allow_methods([
                 Method::GET,
                 Method::PUT,
+                Method::POST,
                 Method::HEAD,
                 Method::DELETE,
                 Method::OPTIONS,
@@ -89,6 +90,40 @@ mod tests {
             res.headers().get("access-control-allow-origin").unwrap(),
             "http://127.0.0.1:5173"
         );
+    }
+
+    #[tokio::test]
+    async fn multipart_post_preflight_allows_sigv4_headers() {
+        for uri in ["/bucket/key?uploads", "/bucket/key?uploadId=test"] {
+            let req = Request::builder()
+                .method(Method::OPTIONS)
+                .uri(uri)
+                .header("origin", "http://127.0.0.1:5173")
+                .header("access-control-request-method", "POST")
+                .header(
+                    "access-control-request-headers",
+                    "authorization,x-amz-date,x-amz-content-sha256,content-type",
+                )
+                .body(Body::empty())
+                .unwrap();
+            let res = cors_router(&allowed()).oneshot(req).await.unwrap();
+            assert!(res.status().is_success());
+            let methods = res.headers()["access-control-allow-methods"]
+                .to_str()
+                .unwrap();
+            assert!(methods.split(',').any(|method| method.trim() == "POST"));
+            let headers = res.headers()["access-control-allow-headers"]
+                .to_str()
+                .unwrap();
+            for required in [
+                "authorization",
+                "x-amz-date",
+                "x-amz-content-sha256",
+                "content-type",
+            ] {
+                assert!(headers.split(',').any(|header| header.trim() == required));
+            }
+        }
     }
 
     #[tokio::test]
