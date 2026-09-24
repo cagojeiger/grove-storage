@@ -11,11 +11,16 @@ sample registry data in memory; edits reset when the preview server stops. It do
 not connect to PostgreSQL or validate S3 credentials. Use the isolated HTTPS fixture
 below to test authentication and the real API.
 
+The sample preview starts signed out. Use `qwer1234` in **Personal token**.
+This fixed demo token and process-wide sample session are only for the loopback
+preview; production uses DB-backed User credentials and browser sessions.
+
 | Implemented | Follow-up |
 |---|---|
 | Personal User token login/logout, current role, session restore and 401 handling | Master setup/recovery, User/Agent/token/session/history screens |
 | Storage list/detail, S3/fs create/replace/delete, conflict guards | Client detail and key lifecycle |
 | API readiness, client count, per-storage usage | Usage history and client detail |
+| Backend access checks during real storage registration/replacement | On-demand **Test connection** command and UI; sample preview performs no probes |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 
 ## Isolated Local Console

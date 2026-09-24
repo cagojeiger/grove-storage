@@ -50,6 +50,11 @@ button,
 select {
   cursor: pointer;
 }
+select,
+option {
+  color: var(--text);
+  background-color: var(--surface);
+}
 button {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -131,7 +136,7 @@ header {
   color: var(--muted);
 }
 .theme select {
-  background: transparent;
+  background: var(--surface);
   color: var(--text);
   border: 0;
   padding: 7px 0;
