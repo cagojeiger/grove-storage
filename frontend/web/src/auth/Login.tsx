@@ -44,7 +44,7 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       />
       <h1>Grove Storage</h1>
       <h2>관리자 로그인</h2>
-      <form onSubmit={submit}>
+      <form onSubmit={(event) => { void submit(event); }}>
         <label htmlFor="token">관리자 토큰</label>
         <input
           id="token"

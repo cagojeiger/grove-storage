@@ -37,7 +37,9 @@ export async function request<T>(
     const seconds = Number(response.headers.get("Retry-After"));
     throw new ApiError(response.status, seconds > 0 ? seconds : null);
   }
-  return response.status === 204 ? (undefined as T) : response.json();
+  // The API contract supplies T; this assertion is not runtime schema validation.
+  const payload: unknown = response.status === 204 ? undefined : await response.json();
+  return payload as T;
 }
 
 export const admin = "/api/admin/v1";

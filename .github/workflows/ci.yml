@@ -103,6 +103,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          npm run lint
           npm run build
           npm test
           python3 -B -u ../../scripts/e2e-console.py

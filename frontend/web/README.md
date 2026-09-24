@@ -16,13 +16,14 @@ cd frontend/web
 npm ci
 npx playwright install chromium
 npm run build
+npm run lint
 npm test
 cd ../..
 python3 -B -u scripts/e2e-console.py
 python3 -B -u scripts/e2e-console.py --serve
 ```
 
-The fixture needs Docker, Python 3, Node 22+ and OpenSSL. It creates a disposable
+The fixture needs Docker, Python 3, Node 22.13+ (22.x) or 24+ and OpenSSL. It creates a disposable
 PostgreSQL database, API and HTTPS Vite server. `--serve` prints the URL and a local
 mode-0600 token file. The certificate is self-signed and scoped to this local fixture;
 the browser may show a trust warning. Ctrl-C or SIGTERM cleans up the fixture.
@@ -48,6 +49,13 @@ For release hosting, mount `dist` at `/api/admin/console/` and forward existing 
 routes unchanged. This commit does not alter the backend image or production ingress.
 
 ## Verification
+
+TypeScript is pinned to 6.0.3. ESLint 10 and typescript-eslint 8 use the
+[recommended type-aware rules](https://typescript-eslint.io/getting-started/typed-linting/)
+for application, test and configuration TypeScript. React Hooks order and dependency
+checks are errors. JavaScript test/configuration files use the recommended ESLint
+rules; generated build, browser reports and local TLS files are excluded.
+`npm run lint` fails on warnings as well as errors and runs in CI before the build.
 
 | Test | Boundary |
 |---|---|
