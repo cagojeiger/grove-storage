@@ -13,6 +13,7 @@ On macOS use `DEVELOPER_DIR=/Library/Developer/CommandLineTools` if required by 
 
 ```sh
 cd frontend/web
+nvm use
 npm ci
 npx playwright install chromium
 npm run build
@@ -28,6 +29,11 @@ PostgreSQL database, API and HTTPS Vite server. `--serve` prints the URL and a l
 mode-0600 token file. The certificate is self-signed and scoped to this local fixture;
 the browser may show a trust warning. Ctrl-C or SIGTERM cleans up the fixture.
 No production endpoint or credentials are used. The initial overview is empty.
+
+The project development and CI baseline is Node 24 (`.nvmrc`); any Node version
+manager can select it. `nvm use` applies when using nvm. Frontend lint/build/browser
+checks run independently of Rust CI. The real HTTPS API check runs with the Rust
+binaries in the backend job. TypeScript remains pinned to 6.0.3.
 
 ## Existing Development API
 
