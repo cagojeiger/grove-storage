@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
+import { previewIdentity } from "./preview-identity.mjs";
 import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
@@ -40,7 +41,7 @@ const storages = new Map([
     },
   ],
 ]);
-let signedIn = false;
+const identities = previewIdentity(json);
 
 function json(res, status, body) {
   res.writeHead(status, {
@@ -77,32 +78,13 @@ function usage(storage) {
 }
 
 async function response(req, res) {
-  const path = new URL(req.url, "http://127.0.0.1").pathname;
+  const url = new URL(req.url, "http://127.0.0.1");
+  const path = url.pathname;
+  if (await identities.handle(req, res, url)) return;
   const method = req.method;
   if (path === "/readyz") return json(res, 200, { status: "ready" });
-  if (path === "/api/admin/identity/v1/session") {
-    if (method === "POST") {
-      let raw = "";
-      for await (const chunk of req) {
-        raw += chunk;
-        if (raw.length > 65536) return json(res, 413, {});
-      }
-      if (JSON.parse(raw)?.token !== "qwer1234") return json(res, 401, {});
-      signedIn = true;
-    }
-    if (method === "DELETE") {
-      signedIn = false;
-      res.writeHead(204, { "Cache-Control": "no-store" });
-      return res.end();
-    }
-    return json(
-      res,
-      signedIn ? 200 : 401,
-      signedIn ? { principal: "user", role: "admin", user_id: "preview", session_id: "preview", credential_id: "preview" } : {},
-    );
-  }
   if (path === "/api/admin/console-commands/v1" && method === "POST") {
-    if (!signedIn) return json(res, 401, {});
+    if (!identities.session()) return json(res, 401, {});
     let raw = "";
     for await (const chunk of req) {
       raw += chunk;

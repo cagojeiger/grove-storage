@@ -2,25 +2,25 @@ import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { storageChecks } from "./live-storages.mjs";
+import { bootstrapChecks, accessChecks } from "./live-access.mjs";
 import { permissionChecks } from "./live-permissions.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const fixture = JSON.parse(input);
-const { origin, token, credentialId, database } = fixture;
+const { origin, masterToken, database, endpoint } = fixture;
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(origin + "/api/admin/console/");
-  await page.getByLabel("Personal token").fill(token);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  const { token, credentialId } = await bootstrapChecks(page, origin, masterToken);
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await page.getByText("No storage registered.").waitFor();
   await storageChecks(page, fixture);
   await permissionChecks(browser, page, origin);
+  await accessChecks(browser, page, origin, endpoint, masterToken);
   const cookie = (await context.cookies()).find(
     (cookie) => cookie.name === "__Host-grove_session",
   );

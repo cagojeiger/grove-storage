@@ -6,11 +6,13 @@ export function Dialog({
   busy,
   onClose,
   children,
+  closeDisabled = false,
 }: {
   title: string;
   busy: boolean;
   onClose: () => void;
   children: ReactNode;
+  closeDisabled?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const label = useId();
@@ -30,7 +32,7 @@ export function Dialog({
       aria-labelledby={label}
       onCancel={(event) => {
         event.preventDefault();
-        if (!busy) onClose();
+        if (!busy && !closeDisabled) onClose();
       }}
     >
       <div className="dialog-heading">
@@ -40,7 +42,7 @@ export function Dialog({
           className="icon-button"
           aria-label="Close"
           title="Close"
-          disabled={busy}
+          disabled={busy || closeDisabled}
           onClick={onClose}
         >
           <X size={18} />

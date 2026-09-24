@@ -1,6 +1,6 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 신원·이력·세션 HTTP와 공통 자원 19개/Bearer HTTP·CLI·MCP 연결 구현·테스트. UI 5a(User 로그인·역할·기존 자원 화면 전환) 구현; 신원·이력 화면은 후속.
+- 상태: 신원·이력·세션 HTTP와 공통 자원 19개/Bearer HTTP·CLI·MCP 연결 구현·테스트. UI 5a·5b(User 로그인·자원·master 설정/복구·Access) 구현; 세션 목록·이력 화면은 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
 - `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`은 `admin_*`를 유지한다. 새 UI는 `management` User 세션, CLI/MCP는 User/Agent 토큰을 사용한다.
@@ -399,7 +399,7 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 4c-1 (로컬 구현·검증) | CLI command HTTP adapter | 19개 명령·User/Agent·owner 강등/폐기·wire 검증·비밀 파일·기존 REST 결과 대조 |
 | 4c-2 (로컬 구현·검증) | MCP adapter | 같은 19개 명령·실제 HTTP/CLI 결과 대조·MCP 감사·owner·폐기·secret 로그 제외 |
 | 5a (로컬 구현·검증) | 개인 토큰 로그인·현재 역할·개요/저장소 공통 명령 연결 | User 쿠키·CSRF·현재 권한·폐기·console 감사; 실제 HTTPS·fs/MinIO·반응형 |
-| 5b (다음) | master 설정/복구·User/Agent/role/token UI | 원문 한 번 표시·마지막 Admin·응답 불명·권한별 표시 |
+| 5b (로컬 구현·검증) | master 설정/복구·User/Agent/role/token UI | 실제 HTTPS 최초 설정·대상 복구·Agent 토큰 사용/폐기·마지막 Admin; 원문 한 번 표시·응답 불명·권한별 표시 |
 | 5c | 세션·관리 이력 UI | 조회 scope·cursor·상관 ID·secret 제외 |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
 

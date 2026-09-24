@@ -39,9 +39,10 @@ def check(endpoint, directory, database, origin, serve, minio):
             if cookie:
                 headers['Cookie'] = cookie.split(';', 1)[0]
             return json.loads(response.read())
-    identity('/master/session', {'token': HARNESS['MASTER_TOKEN']})
-    credential = identity('/master/bootstrap', {'display_name': 'Console test owner'})
-    token = credential['token']
+    if serve:
+        identity('/master/session', {'token': HARNESS['MASTER_TOKEN']})
+        credential = identity('/master/bootstrap', {'display_name': 'Console test owner'})
+        token = credential['token']
     key, cert = Path(directory) / 'key.pem', Path(directory) / 'cert.pem'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                     '-keyout', str(key), '-out', str(cert), '-days', '1',
@@ -73,10 +74,10 @@ def check(endpoint, directory, database, origin, serve, minio):
                     time.sleep(1)
             else:
                 subprocess.run(['node', 'tests/live.mjs'], cwd=ROOT / 'frontend/web',
-                               input=json.dumps({'origin': origin, 'token': token, 'credentialId': credential['credential_id'],
+                               input=json.dumps({'origin': origin, 'masterToken': HARNESS['MASTER_TOKEN'],
                                                  'database': database, 'endpoint': endpoint,
                                                  'minio': minio.spec}), text=True,
-                               check=True, timeout=90)
+                               check=True, timeout=150)
         finally:
             vite.terminate()
             try:

@@ -1,6 +1,6 @@
 # spec 06: 관리 콘솔
 
-- 상태: A·B + 인증 전환 5a 로컬 구현·검증, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
+- 상태: A·B + 인증 전환 5a·5b 로컬 구현·검증, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 - 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
@@ -18,8 +18,8 @@ The separate on-demand connection test is still pending.
 | Capability | Console UI | API / CLI / MCP |
 |---|---|---|
 | Personal token login, Overview, Storage CRUD | Implemented | Implemented; browser sessions and Bearer remain separate |
-| Master setup/recovery | Pending | Console-only identity API implemented |
-| User, Agent, management tokens | Pending | Console-only identity API implemented |
+| Master setup/recovery | Implemented | Console-only identity API implemented |
+| User, Agent, management tokens | Implemented; Admin only | Console-only identity API implemented |
 | Client, Native keys, S3 credentials | Pending | Shared resource commands implemented in API, CLI and MCP |
 | Sessions, management audit/call/security history | Pending | Console-only scoped APIs implemented |
 | On-demand storage connection test | Pending | New shared command required; `gscli status` reads metadata |
@@ -32,7 +32,8 @@ remote per-storage command for Console/CLI/MCP.
 
 ## Target Navigation
 
-Only Overview and Storage are currently linked in `App.tsx`.
+Overview, Storage and Admin-only Access are currently linked in `App.tsx`.
+The signed-out entry links to Initial setup / recovery.
 
 ```text
 Grove Storage
@@ -94,7 +95,7 @@ This section specifies the next contract; no test command/button is implemented 
 | Order | Deliverable | Acceptance |
 |---|---|---|
 | 0 (Implemented) | S3-only admission | Console/API/CLI/MCP reject FS create/replace; legacy FS runtime retained. Inventory and migration/rollback remain before runtime removal |
-| 1 | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User/Agent tokens; last-Admin and one-time-secret safeguards |
+| 1 (Implemented) | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User/Agent tokens; last-Admin and one-time-secret safeguards |
 | 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
 | 3 | Shared connection test | Saved/draft S3 probes via API, Console, CLI and MCP; real MinIO failures plus permission/timeout/concurrency tests |
 | 4 | Activity and Settings | Scoped queries, server-side Client filter, cursor paging, own-session revocation and separation from Client file logs |
@@ -137,13 +138,22 @@ are not required for these screens.
 | `update` | CLI 설치 안내 영역 | 사용자 PC의 바이너리 교체는 CLI의 로컬 기능 |
 
 동등성 대상은 위 등록부 원격 작업이다. 현재 `filegate admin init/recover`는 운영자 로컬
-명령이다. 후속 신원·관리 토큰 관리·감사 조회는 콘솔 전용이며 CLI/MCP에는 제공하지 않는다.
+명령이다. 신원·관리 토큰 관리·감사 조회는 콘솔 전용이며 CLI/MCP에는 제공하지 않는다.
 
 ## 로그인·토큰 관리 전환
 
 [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 개인 토큰 로그인·역할 표시·자원 연결을 구현했다.
-최초 설정/복구·User/Agent·토큰·이력 UI는 후속이며 대응 HTTP API는 구현되어 있다.
+최초 설정/복구·User/Agent·관리 토큰 UI를 구현했다. 세션 목록·이력 UI는 후속이다.
 권한·DB·전환 순서는 [관리 영역 설계](08-management-plane.md)를 따른다.
+
+| Access flow | Current UI contract |
+|---|---|
+| Initial setup | Master token opens a limited setup session; first Admin token is shown once; User login is a separate step |
+| Recovery | Known active Admin UUID and explicit confirmation replace that Admin's tokens and revoke its sessions |
+| Accounts | Cursor-paged Users/Agents; create, change role, enable/disable and delete; Agent owner is selected from loaded active Users |
+| Tokens | Label, prefix, expiry and status; issue with 1–90 day expiry, copy once, acknowledge before closing; revoke with confirmation |
+| Safety | Server enforces last-Admin and owner/role rules; disable/delete require the account name; unknown outcomes block resubmission |
+| Paging | Search filters loaded accounts; Load more fetches the next server page |
 
 ```text
 초기 설정 / 복구         master → 제한된 설정·복구 세션
@@ -155,7 +165,7 @@ are not required for these screens.
 활동 이력               관리 변경 / 관리 호출 / 보안 이벤트
 ```
 
-토큰 목록은 이름·소유자·만료·최근 사용·상태를 표시한다. 발급 결과에서 원문을 한 번
+토큰 목록은 이름·접두사·만료·상태를 표시한다. 발급 결과에서 원문을 한 번
 표시하고 닫을 때 제거한다. User 토큰은 사람 로그인·자원 API 사용, Agent 토큰은 자동화에 사용한다.
 `gscli`·MCP는 둘 다 전달할 수 있으며 자원 작업만 제공한다. 신원·관리 토큰·감사 조회 API는
 사람의 콘솔 세션과 역할로 보호한다. Admin Bearer도 이 경계를 대신하지 않는다.
@@ -187,7 +197,7 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 | A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
 | B (구현) | 저장소 조회·등록·교체·삭제 | 실제 MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
 | 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·Agent 로그인 거부·console 감사 |
-| 5b (다음) | master 설정·복구·User/Agent·관리 토큰 UI | 일회성 발급·마지막 Admin·응답 불명·콘솔 전용 API |
+| 5b (구현) | master 설정·복구·User/Agent·관리 토큰 UI | 실제 HTTPS 최초 설정·대상 복구·Agent 토큰 사용/폐기·마지막 Admin; 응답 불명·중복 제출·권한 변경·반응형 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
 | 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 S3 probe, 권한·timeout·비밀 보호 |
 | 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
@@ -200,14 +210,16 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 frontend/web/src/     현재 구현
 ├── app/              라우팅·초기화
 ├── api/              HTTP·오류·응답 타입
-├── auth/             세션·로그인·401 캐시 제거
+├── auth/             세션·로그인·master 설정/복구·401 캐시 제거
 ├── design/           테마·모달·용량 표시
 └── features/
+    ├── access/       User/Agent·역할·관리 토큰·일회성 비밀 표시
     ├── overview/     개요·저장소 점유
     └── storages/     목록·상세·폼·삭제·입력 변환
 ```
 
-현재 셸은 `app/App.tsx`가 소유한다. 해시 경로로 목록·상세 새로고침과 뒤로 가기를 지원한다.
+현재 셸은 `app/App.tsx`가 소유한다. 저장소 목록·상세와 Access Users/Agents 탭은 해시 경로를 사용한다.
+Access 계정 선택은 컴포넌트 상태이며 새로고침하면 해당 탭의 목록으로 돌아간다.
 등록·수정 입력은 폼에 두며 변경 요청의 secret은 query/mutation 캐시에 넣지 않는다.
 응답 유실·계약 불일치·`unknown/applied` 오류는 재제출을 잠근 뒤 조회로 대조한다.
 검증된 `not_applied` 오류는 변경 전 거부로 표시한다. 자동 변경 재전송은 없다.

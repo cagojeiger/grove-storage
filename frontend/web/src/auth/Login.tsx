@@ -65,6 +65,7 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           <ArrowRight size={16} aria-hidden="true" />
         </button>
       </form>
+      <a className="back-link" href="#setup">Initial setup / recovery</a>
     </main>
   );
 }
