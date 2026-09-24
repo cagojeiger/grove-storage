@@ -20,16 +20,16 @@ export async function permissionChecks(browser, admin, origin) {
   try {
     const page = await context.newPage();
     await page.goto(`${origin}/api/admin/console/#storages/console-live`);
-    await page.getByLabel("개인 토큰").fill(credential.token);
-    await page.getByRole("button", { name: "로그인", exact: true }).click();
-    await page.getByRole("button", { name: "저장소 수정" }).click();
+    await page.getByLabel("Personal token").fill(credential.token);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Edit storage" }).click();
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "viewer" });
-    await page.getByRole("button", { name: "저장", exact: true }).click();
-    await expect(page.getByText("Viewer · 읽기")).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Viewer · Read-only")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "저장소 수정" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole("region", { name: "저장소 설정" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
     const blocked = await page.evaluate(async () => {
       const response = await fetch("/api/admin/console-commands/v1", {
         method: "POST", headers: { "Content-Type": "application/json", "X-Grove-CSRF": "1" },
@@ -38,9 +38,9 @@ export async function permissionChecks(browser, admin, origin) {
       return response.status;
     });
     assert.equal(blocked, 403);
-    await page.getByRole("button", { name: "로그아웃" }).click();
-    await page.getByLabel("개인 토큰").fill(agentKey.token);
-    await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByLabel("Personal token").fill(agentKey.token);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 0);
     const audit = await identity("GET", "/history/audit?limit=100");

@@ -31,13 +31,13 @@ export function ThemePicker() {
     <label className="theme">
       <Icon size={16} aria-hidden="true" />
       <select
-        aria-label="화면 테마"
+        aria-label="Theme"
         value={theme}
         onChange={(event) => setTheme(event.target.value as Theme)}
       >
-        <option value="system">시스템</option>
-        <option value="light">라이트</option>
-        <option value="dark">다크</option>
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
       </select>
     </label>
   );

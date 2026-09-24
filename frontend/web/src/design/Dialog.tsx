@@ -38,8 +38,8 @@ export function Dialog({
         <button
           type="button"
           className="icon-button"
-          aria-label="닫기"
-          title="닫기"
+          aria-label="Close"
+          title="Close"
           disabled={busy}
           onClick={onClose}
         >

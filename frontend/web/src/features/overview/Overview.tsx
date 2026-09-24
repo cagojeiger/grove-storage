@@ -29,12 +29,12 @@ export function Overview() {
       <div className="page-heading">
         <div>
           <p className="eyebrow">WORKSPACE</p>
-          <h1>개요</h1>
+          <h1>Overview</h1>
         </div>
         <button
           className="icon-button"
-          title="새로고침"
-          aria-label="새로고침"
+          title="Refresh"
+          aria-label="Refresh"
           onClick={() => void query.refetch()}
           disabled={query.isFetching}
         >
@@ -42,7 +42,7 @@ export function Overview() {
         </button>
       </div>
       {query.isPending ? (
-        <p role="status">불러오는 중...</p>
+        <p role="status">Loading...</p>
       ) : query.isError ? (
         <p role="alert">{message(query.error)}</p>
       ) : (
@@ -51,25 +51,25 @@ export function Overview() {
             <div className="status-line">
               <span className={`dot ${data.ready ? "online" : ""}`} />
               <strong>
-                API {data.ready ? "준비됨" : "준비 상태 확인 실패"}
+                API {data.ready ? "ready" : "readiness check failed"}
               </strong>
-              <span className="muted">저장소 연결 상태는 별도</span>
+              <span className="muted">Storage connectivity not checked</span>
             </div>
             <dl className="metrics">
               <div>
-                <dt>저장소</dt>
+                <dt>Storage</dt>
                 <dd>{data.usage.length}</dd>
               </div>
               <div>
-                <dt>클라이언트</dt>
+                <dt>Clients</dt>
                 <dd>{data.clients.length}</dd>
               </div>
               <div>
-                <dt>활성 데이터</dt>
+                <dt>Active data</dt>
                 <dd>{bytes(sum("active_bytes"))}</dd>
               </div>
               <div>
-                <dt>예약 / 삭제 대기</dt>
+                <dt>Reserved / Pending deletion</dt>
                 <dd className="compact-value">
                   {bytes(sum("reserved_bytes"))} /{" "}
                   {bytes(sum("purge_pending_bytes"))}
@@ -78,13 +78,13 @@ export function Overview() {
             </dl>
             <section>
               <div className="section-heading">
-                <h2>저장소 점유</h2>
-                <span className="muted">{data.usage.length}개</span>
+                <h2>Storage usage</h2>
+                <span className="muted">{data.usage.length.toLocaleString("en-US")}</span>
               </div>
               {data.usage.length === 0 ? (
                 <div className="empty">
                   <HardDrive size={28} aria-hidden="true" />
-                  <p>등록된 저장소가 없습니다.</p>
+                  <p>No storage registered.</p>
                 </div>
               ) : (
                 <div className="storage-list">
@@ -95,26 +95,26 @@ export function Overview() {
                         <div>
                           <h3>{row.storage_id}</h3>
                           <span className="muted">
-                            {row.kind.toUpperCase()} · 활성 파일{" "}
-                            {row.active_files.toLocaleString()}개
+                            {row.kind.toUpperCase()} · Active files:{" "}
+                            {row.active_files.toLocaleString("en-US")}
                           </span>
                         </div>
                       </div>
                       <dl className="storage-values">
                         <div>
-                          <dt>활성</dt>
+                          <dt>Active</dt>
                           <dd>{bytes(row.active_bytes)}</dd>
                         </div>
                         <div>
-                          <dt>예약</dt>
+                          <dt>Reserved</dt>
                           <dd>{bytes(row.reserved_bytes)}</dd>
                         </div>
                         <div>
-                          <dt>삭제 대기</dt>
+                          <dt>Pending deletion</dt>
                           <dd>{bytes(row.purge_pending_bytes)}</dd>
                         </div>
                         <div>
-                          <dt>남은 용량</dt>
+                          <dt>Remaining</dt>
                           <dd
                             className={row.remaining_bytes < 0 ? "danger" : ""}
                           >
@@ -124,7 +124,7 @@ export function Overview() {
                       </dl>
                       <div className="capacity">
                         <progress
-                          aria-label={`${row.storage_id} 점유율`}
+                          aria-label={`${row.storage_id} usage`}
                           max={Math.max(1, row.capacity_bytes)}
                           value={Math.max(
                             0,
@@ -134,7 +134,7 @@ export function Overview() {
                           )}
                         />
                         <span className="muted">
-                          등록 용량 {bytes(row.capacity_bytes)}
+                          Registered capacity {bytes(row.capacity_bytes)}
                         </span>
                       </div>
                     </article>

@@ -50,14 +50,14 @@ export function DeleteStorage({
     }
   }
   return (
-    <Dialog title="저장소 삭제" busy={busy} onClose={onClose}>
+    <Dialog title="Delete storage" busy={busy} onClose={onClose}>
       <form onSubmit={(event) => void remove(event)}>
         <p className="delete-summary">
-          <strong>{id}</strong> 등록을 삭제합니다. 실제 버킷·파일시스템은
-          유지됩니다.
+          Remove <strong>{id}</strong> from the registry. The bucket or filesystem
+          is retained.
         </p>
         <label className="confirmation">
-          삭제할 저장소 ID
+          Storage ID to delete
           <input
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
@@ -76,7 +76,7 @@ export function DeleteStorage({
             onClick={unknown ? onReturnToList : onClose}
             disabled={busy}
           >
-            {unknown ? "목록에서 확인" : "취소"}
+            {unknown ? "Review list" : "Cancel"}
           </button>
           <button
             type="submit"
@@ -84,7 +84,7 @@ export function DeleteStorage({
             disabled={busy || unknown || confirmation !== id}
           >
             <Trash2 size={16} />
-            {busy ? "삭제 중..." : "삭제 확인"}
+            {busy ? "Deleting..." : "Confirm delete"}
           </button>
         </div>
       </form>

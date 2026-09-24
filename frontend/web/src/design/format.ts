@@ -10,5 +10,5 @@ export function bytes(value: number) {
           : absolute >= 1024
             ? 1
             : 0;
-  return `${(value / 1024 ** unit).toLocaleString("ko-KR", { maximumFractionDigits: 1 })} ${["B", "KiB", "MiB", "GiB", "TiB"][unit]}`;
+  return `${(value / 1024 ** unit).toLocaleString("en-US", { maximumFractionDigits: 1 })} ${["B", "KiB", "MiB", "GiB", "TiB"][unit]}`;
 }

@@ -11,31 +11,31 @@ export function StorageDetail({
 }) {
   const fields =
     storage.kind === "fs"
-      ? [["루트 경로", storage.root_path]]
+      ? [["Root path", storage.root_path]]
       : [
           ["Endpoint", storage.endpoint],
           ["Public endpoint", storage.public_endpoint],
-          ["리전", storage.region],
-          ["버킷", storage.bucket],
+          ["Region", storage.region],
+          ["Bucket", storage.bucket],
           ["Access key", storage.access_key],
-          ["Path-style", storage.force_path_style ? "사용" : "해제"],
-          ["릴레이", storage.force_relay ? "사용" : "해제"],
+          ["Path-style", storage.force_path_style ? "Enabled" : "Disabled"],
+          ["Relay", storage.force_relay ? "Enabled" : "Disabled"],
         ];
   return (
     <>
-      <section className="storage-section" aria-label="저장소 설정">
-        <h2>설정</h2>
+      <section className="storage-section" aria-label="Storage settings">
+        <h2>Settings</h2>
         <dl className="detail-fields">
           <div>
-            <dt>종류</dt>
-            <dd>{storage.kind === "fs" ? "파일시스템" : "S3"}</dd>
+            <dt>Type</dt>
+            <dd>{storage.kind === "fs" ? "Filesystem" : "S3"}</dd>
           </div>
           <div>
-            <dt>등록 용량</dt>
+            <dt>Registered capacity</dt>
             <dd>
               {bytes(storage.capacity_bytes)}{" "}
               <span className="muted">
-                ({storage.capacity_bytes.toLocaleString("ko-KR")} bytes)
+                ({storage.capacity_bytes.toLocaleString("en-US")} bytes)
               </span>
             </dd>
           </div>
@@ -47,38 +47,38 @@ export function StorageDetail({
           ))}
         </dl>
       </section>
-      <section className="storage-section" aria-label="저장소 점유">
-        <h2>점유</h2>
+      <section className="storage-section" aria-label="Storage usage">
+        <h2>Usage</h2>
         {usage ? (
           <dl className="usage-fields">
             <div>
-              <dt>사용 중</dt>
+              <dt>Active</dt>
               <dd>{bytes(usage.active_bytes)}</dd>
               <dd className="muted">
-                {usage.active_files.toLocaleString("ko-KR")} 파일
+                Files: {usage.active_files.toLocaleString("en-US")}
               </dd>
             </div>
             <div>
-              <dt>예약</dt>
+              <dt>Reserved</dt>
               <dd>{bytes(usage.reserved_bytes)}</dd>
               <dd className="muted">
-                {usage.reserved_files.toLocaleString("ko-KR")} 파일
+                Files: {usage.reserved_files.toLocaleString("en-US")}
               </dd>
             </div>
             <div>
-              <dt>정리 대기</dt>
+              <dt>Pending deletion</dt>
               <dd>{bytes(usage.purge_pending_bytes)}</dd>
               <dd className="muted">
-                {usage.purge_pending_files.toLocaleString("ko-KR")} 파일
+                Files: {usage.purge_pending_files.toLocaleString("en-US")}
               </dd>
             </div>
             <div>
-              <dt>잔여</dt>
+              <dt>Remaining</dt>
               <dd>{bytes(usage.remaining_bytes)}</dd>
             </div>
           </dl>
         ) : (
-          <p className="muted">점유 정보가 없습니다.</p>
+          <p className="muted">Usage is unavailable.</p>
         )}
       </section>
     </>

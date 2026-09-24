@@ -79,21 +79,21 @@ export async function storageMock(page: Page, initial = [example]) {
 }
 
 export async function fillS3(page: Page, id = "new-s3") {
-  await page.getByLabel("저장소 ID", { exact: true }).fill(id);
+  await page.getByLabel("Storage ID", { exact: true }).fill(id);
   await page
     .getByLabel("Endpoint", { exact: true })
     .fill("https://s3.example.com");
   await page
-    .getByLabel("Public endpoint (선택)")
+    .getByLabel("Public endpoint (optional)")
     .fill("https://public.example.com");
-  await page.getByLabel("리전", { exact: true }).fill("ap-northeast-2");
-  await page.getByLabel("버킷", { exact: true }).fill("files");
+  await page.getByLabel("Region", { exact: true }).fill("ap-northeast-2");
+  await page.getByLabel("Bucket", { exact: true }).fill("files");
   await page.getByLabel("Access key", { exact: true }).fill("test-access");
   await page
     .getByLabel("Secret key", { exact: true })
     .fill("ephemeral-provider-secret");
   await page.getByLabel("Path-style", { exact: true }).check();
-  await page.getByLabel("릴레이 사용", { exact: true }).check();
-  await page.getByLabel("등록 용량", { exact: true }).fill("1.5");
-  await page.getByLabel("용량 단위").selectOption("TiB");
+  await page.getByLabel("Use relay", { exact: true }).check();
+  await page.getByLabel("Registered capacity", { exact: true }).fill("1.5");
+  await page.getByLabel("Capacity unit").selectOption("TiB");
 }

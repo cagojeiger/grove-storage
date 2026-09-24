@@ -25,7 +25,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         },
       ]);
       await page.goto(root);
-      await page.getByLabel("화면 테마").selectOption(theme);
+      await page.getByLabel("Theme").selectOption(theme);
       await expect(
         page.getByRole("link", { name: new RegExp(long.id) }),
       ).toBeVisible();
@@ -35,20 +35,20 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         page.getByRole("heading", { name: long.id, level: 1 }),
       ).toBeVisible();
       await expect(
-        page.getByRole("region", { name: "저장소 설정" }),
+        page.getByRole("region", { name: "Storage settings" }),
       ).toBeVisible();
       await screenshot("detail");
-      await page.getByRole("button", { name: "저장소 수정" }).click();
-      await expect(page.getByLabel("Secret key (재입력)")).toBeVisible();
+      await page.getByRole("button", { name: "Edit storage" }).click();
+      await expect(page.getByLabel("Secret key (re-enter)")).toBeVisible();
       await screenshot("editor");
       await page
-        .getByLabel("등록 용량", { exact: true })
+        .getByLabel("Registered capacity", { exact: true })
         .scrollIntoViewIfNeeded();
       await page
-        .getByRole("button", { name: "저장", exact: true })
+        .getByRole("button", { name: "Save", exact: true })
         .scrollIntoViewIfNeeded();
       await expect(
-        page.getByRole("button", { name: "저장", exact: true }),
+        page.getByRole("button", { name: "Save", exact: true }),
       ).toBeInViewport();
       await screenshot("editor-bottom");
       expect(
@@ -56,9 +56,9 @@ for (const width of [320, 390, 768, 1024, 1440]) {
           .locator("dialog")
           .evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
-      await page.getByRole("button", { name: "취소" }).click();
+      await page.getByRole("button", { name: "Cancel" }).click();
       await expect(
-        page.getByRole("button", { name: "저장소 수정" }),
+        page.getByRole("button", { name: "Edit storage" }),
       ).toBeFocused();
       async function screenshot(view: string) {
         expect(

@@ -15,10 +15,10 @@ try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(origin + "/api/admin/console/");
-  await page.getByLabel("개인 토큰").fill(token);
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await page.getByRole("heading", { name: "개요", exact: true }).waitFor();
-  await page.getByText("등록된 저장소가 없습니다.").waitFor();
+  await page.getByLabel("Personal token").fill(token);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await page.getByText("No storage registered.").waitFor();
   await storageChecks(page, fixture);
   await permissionChecks(browser, page, origin);
   const cookie = (await context.cookies()).find(
@@ -34,27 +34,27 @@ try {
     ).includes(token),
   );
   await page.reload();
-  await page.getByRole("heading", { name: "개요", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   const csrf = await page.evaluate(
     async () =>
       (await fetch("/api/admin/identity/v1/session", { method: "DELETE" })).status,
   );
   assert.equal(csrf, 403);
-  await page.getByRole("button", { name: "로그아웃" }).click();
-  await page.getByLabel("개인 토큰").waitFor();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByLabel("Personal token").waitFor();
   assert(
     !(await context.cookies()).some(
       (cookie) => cookie.name === "__Host-grove_session",
     ),
   );
   await page.reload();
-  await page.getByLabel("개인 토큰").waitFor();
+  await page.getByLabel("Personal token").waitFor();
   console.log(
     "PASS real HTTPS login, Secure/HttpOnly cookie, reload, CSRF rejection, logout",
   );
   async function login() {
-    await page.getByLabel("개인 토큰").fill(token);
-    await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await page.getByLabel("Personal token").fill(token);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("heading", { name: "console-live" }).waitFor();
   }
   await login();
@@ -75,8 +75,8 @@ try {
     ],
     { timeout: 10000, stdio: "pipe" },
   );
-  await page.getByRole("button", { name: "새로고침" }).click();
-  await page.getByLabel("개인 토큰").waitFor();
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByLabel("Personal token").waitFor();
   assert.equal(
     await page.getByRole("heading", { name: "console-live" }).count(),
     0,
@@ -89,12 +89,12 @@ try {
     return response.status;
   }, credentialId);
   assert.equal(revoked, 200);
-  await page.getByRole("button", { name: "새로고침" }).click();
-  await page.getByLabel("개인 토큰").waitFor();
-  await page.getByLabel("개인 토큰").fill(token);
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByLabel("Personal token").waitFor();
+  await page.getByLabel("Personal token").fill(token);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("alert").waitFor();
-  assert.equal(await page.getByLabel("개인 토큰").inputValue(), "");
+  assert.equal(await page.getByLabel("Personal token").inputValue(), "");
   console.log(
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );

@@ -63,8 +63,8 @@ export function App() {
           {session.data && (
             <button
               className="icon-button"
-              title="로그아웃"
-              aria-label="로그아웃"
+              title="Sign out"
+              aria-label="Sign out"
               onClick={() => void logout()}
               disabled={loggingOut}
             >
@@ -75,30 +75,30 @@ export function App() {
       </header>
       {session.isPending ? (
         <main className="connection" role="status">
-          세션 확인 중...
+          Checking session...
         </main>
       ) : session.isError ? (
         <main className="connection">
           <p role="alert">{message(session.error)}</p>
-          <button onClick={() => void session.refetch()}>다시 연결</button>
+          <button onClick={() => void session.refetch()}>Reconnect</button>
         </main>
       ) : session.data ? (
         <div className="workspace">
           <aside>
-            <nav aria-label="주 메뉴">
+            <nav aria-label="Main navigation">
               <a href="#" aria-current={!storagePage ? "page" : undefined}>
                 <LayoutDashboard size={18} />
-                <span>개요</span>
+                <span>Overview</span>
               </a>
               <a
                 href="#storages"
                 aria-current={storagePage ? "page" : undefined}
               >
                 <HardDrive size={18} />
-                <span>저장소</span>
+                <span>Storage</span>
               </a>
             </nav>
-            <span className="admin-label">{{ viewer: "Viewer · 읽기", operator: "Operator · 운영", admin: "Admin · 관리" }[session.data.role]}</span>
+            <span className="admin-label">{{ viewer: "Viewer · Read-only", operator: "Operator · Operations", admin: "Admin · Management" }[session.data.role]}</span>
           </aside>
           <div className="content">
             {logoutError && (

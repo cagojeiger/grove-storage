@@ -6,12 +6,12 @@ export class ApiError extends Error {
   ) {
     super(
       status === 401
-        ? "로그인이 필요합니다."
+        ? "Sign in to continue."
         : status === 403
-          ? "이 작업을 수행할 권한이 없습니다."
+          ? "You do not have permission to perform this action."
           : status === 429
-            ? "로그인 요청이 많습니다. 잠시 후 다시 시도하세요."
-            : "요청을 완료하지 못했습니다. 다시 시도해 주세요.",
+            ? "Too many sign-in attempts. Please try again later."
+            : "The request could not be completed. Please try again.",
     );
   }
 }
@@ -83,5 +83,5 @@ export type Usage = {
 export function message(error: unknown): string {
   return error instanceof ApiError
     ? error.message
-    : "서버에 연결하지 못했습니다. 연결 상태를 확인해 주세요.";
+    : "Unable to connect to the server. Check your connection.";
 }

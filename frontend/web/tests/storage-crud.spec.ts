@@ -6,10 +6,10 @@ test("S3 registration sends all options with CSRF and removes the secret", async
 }) => {
   const { writes } = await storageMock(page, []);
   await page.goto(root);
-  await page.getByRole("button", { name: "등록", exact: true }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
   await fillS3(page);
   const sent = page.waitForRequest((req) => req.method() === "POST");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   expect((await sent).headers()["x-grove-csrf"]).toBe("1");
   await expect(
     page.getByRole("heading", { name: "new-s3", exact: true }),
@@ -39,11 +39,11 @@ test("S3 registration sends all options with CSRF and removes the secret", async
       JSON.stringify({ ...localStorage, ...sessionStorage }),
     ),
   ).not.toContain("ephemeral-provider-secret");
-  await page.getByRole("button", { name: "저장소 수정" }).click();
-  await expect(page.getByLabel("Secret key (재입력)")).toHaveValue("");
-  await page.getByLabel("Secret key (재입력)").fill("replacement-secret");
-  await page.getByLabel("등록 용량", { exact: true }).fill("1000");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "Edit storage" }).click();
+  await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
+  await page.getByLabel("Secret key (re-enter)").fill("replacement-secret");
+  await page.getByLabel("Registered capacity", { exact: true }).fill("1000");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(writes[1].command).toBe("storage.replace");
   expect(writes[1].input.spec).toMatchObject({
@@ -59,15 +59,15 @@ test("kind switch clears secret; fs creation, reload, history and deletion", asy
 }) => {
   const { writes } = await storageMock(page, []);
   await page.goto(root);
-  await page.getByRole("button", { name: "등록", exact: true }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
   await fillS3(page, "list");
-  await page.getByLabel("종류", { exact: true }).selectOption("fs");
+  await page.getByLabel("Type", { exact: true }).selectOption("fs");
   await expect(page.getByLabel("Secret key", { exact: true })).toHaveCount(0);
-  await page.getByLabel("종류", { exact: true }).selectOption("s3");
+  await page.getByLabel("Type", { exact: true }).selectOption("s3");
   await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
-  await page.getByLabel("종류", { exact: true }).selectOption("fs");
-  await page.getByLabel("루트 경로").fill("/data/objects");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByLabel("Type", { exact: true }).selectOption("fs");
+  await page.getByLabel("Root path").fill("/data/objects");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "list", exact: true }),
   ).toBeVisible();
@@ -81,14 +81,14 @@ test("kind switch clears secret; fs creation, reload, history and deletion", asy
   });
   await page.reload();
   await expect(page.getByText("/data/objects", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "저장소 삭제" }).click();
-  const confirm = page.getByRole("button", { name: "삭제 확인" });
+  await page.getByRole("button", { name: "Delete storage" }).click();
+  const confirm = page.getByRole("button", { name: "Confirm delete" });
   await expect(confirm).toBeDisabled();
-  await page.getByLabel("삭제할 저장소 ID").fill("wrong");
+  await page.getByLabel("Storage ID to delete").fill("wrong");
   await expect(confirm).toBeDisabled();
-  await page.getByLabel("삭제할 저장소 ID").fill("list");
+  await page.getByLabel("Storage ID to delete").fill("list");
   await confirm.click();
-  await expect(page.getByText("등록된 저장소가 없습니다.")).toBeVisible();
+  await expect(page.getByText("No storage registered.")).toBeVisible();
   expect(writes[1].command).toBe("storage.delete");
 });
 
@@ -97,14 +97,14 @@ test("search, cancel and keyboard focus do not mutate registry", async ({
 }) => {
   const { writes } = await storageMock(page);
   await page.goto(root);
-  await page.getByRole("button", { name: "등록", exact: true }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "등록", exact: true }),
+    page.getByRole("button", { name: "Register", exact: true }),
   ).toBeFocused();
-  await page.getByRole("searchbox", { name: "저장소 검색" }).fill("missing");
-  await expect(page.getByText("검색 결과가 없습니다.")).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search storage" }).fill("missing");
+  await expect(page.getByText("No matching storage.")).toBeVisible();
   await page.getByRole("searchbox").fill("HOME");
   await page.getByRole("link", { name: new RegExp(example.id) }).click();
   await expect(page.getByRole("heading", { name: example.id })).toBeVisible();

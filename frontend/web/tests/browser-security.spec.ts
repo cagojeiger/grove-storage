@@ -12,9 +12,9 @@ test("built console loads with restrictive browser headers", async ({ page }) =>
   expect(headers?.["x-content-type-options"]).toBe("nosniff");
   expect(headers?.["referrer-policy"]).toBe("no-referrer");
   expect(headers?.["cache-control"]).toBe("no-store");
-  await expect(page.getByRole("heading", { name: "개요", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "저장소", exact: true }).click();
-  await page.getByRole("button", { name: "등록", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Storage", exact: true }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -64,5 +64,5 @@ test("built console cannot be embedded in an iframe", async ({ page }) => {
   }));
   await page.goto("http://127.0.0.1:5180/frame-test");
   await expect.poll(() => blocked).toBe(true);
-  await expect(page.frameLocator("iframe").getByRole("heading", { name: "개요", exact: true })).toHaveCount(0);
+  await expect(page.frameLocator("iframe").getByRole("heading", { name: "Overview", exact: true })).toHaveCount(0);
 });

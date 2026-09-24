@@ -1,5 +1,8 @@
 # Grove Storage Console
 
+The console uses English labels and messages, `lang="en"`, and `en-US` number
+formatting. The UI language is independent of the browser locale.
+
 ## Browser Preview
 
 Run `npm run build` and `node scripts/preview.mjs` in this directory. The printed

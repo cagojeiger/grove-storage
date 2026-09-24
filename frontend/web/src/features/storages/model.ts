@@ -44,7 +44,7 @@ export function capacityBytes(value: string, unit: string): number {
   };
   const invalid = () =>
     new Error(
-      "용량은 0 이상의 정수 bytes여야 하며 9,007,199,254,740,991 bytes까지 입력할 수 있습니다.",
+      "Capacity must be a whole number of bytes between 0 and 9,007,199,254,740,991.",
     );
   const match = /^(\d+)(?:\.(\d+))?$/.exec(value);
   if (!match || value.length > 64 || !Object.hasOwn(multiplier, unit))
@@ -80,7 +80,7 @@ export function storageSpec(
     try {
       url = new URL(value);
     } catch {
-      throw new Error("Endpoint는 HTTP 또는 HTTPS 주소여야 합니다.");
+      throw new Error("Endpoint must be an HTTP or HTTPS URL.");
     }
     if (
       !["http:", "https:"].includes(url.protocol) ||
@@ -88,7 +88,7 @@ export function storageSpec(
       url.password
     )
       throw new Error(
-        "Endpoint는 사용자 인증 정보가 없는 HTTP 또는 HTTPS 주소여야 합니다.",
+        "Endpoint must be an HTTP or HTTPS URL without embedded credentials.",
       );
   }
   return {
@@ -118,21 +118,21 @@ export function mutationMessage(
   action: "create" | "replace" | "delete",
 ) {
   if (uncertain(error))
-    return "변경 결과를 확인하지 못했습니다. 최신 목록과 상세를 확인한 후 다시 진행해 주세요.";
+    return "The change outcome is unconfirmed. Check the latest list and details before trying again.";
   if (error instanceof ApiError) {
     if (error.status === 409)
       return action === "delete"
-        ? "연결된 클라이언트 또는 파일 위치가 남아 있어 삭제할 수 없습니다. 최신 상태를 확인해 주세요."
+        ? "Storage is referenced by clients or file locations. Refresh and try again."
         : action === "replace"
-          ? "파일 위치가 남아 있어 저장소 주소를 변경할 수 없습니다. 최신 상태를 확인해 주세요."
-          : "이미 등록된 ID입니다. 최신 목록을 확인해 주세요.";
+          ? "The storage address cannot be changed while file locations exist. Refresh and try again."
+          : "This ID is already registered. Refresh the list.";
     if (error.status === 404)
-      return "저장소가 더 이상 존재하지 않습니다. 최신 목록을 확인해 주세요.";
+      return "This storage no longer exists. Refresh the list.";
     if (error.status === 400 || error.status === 422)
-      return "입력값과 저장소 접근 권한을 확인해 주세요. 등록 경로·버킷·인증 정보가 유효해야 합니다.";
+      return "Check the input and storage access. The path, bucket, and credentials must be valid.";
     return error.message;
   }
-  return "요청을 완료하지 못했습니다.";
+  return "The request could not be completed.";
 }
 
 export async function refreshStorages(cache: QueryClient) {

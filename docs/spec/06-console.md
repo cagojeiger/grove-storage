@@ -18,6 +18,7 @@ Grove Storage
 | 항목 | 구현 계약 |
 |---|---|
 | UI | React·TypeScript·Vite, 기존 NoteGate 참고 기록의 semantic token·공통 UI 패턴 |
+| 기본 언어 | 영어 문구·접근성 라벨, HTML `lang=en`, 숫자 `en-US`; 언어 선택기는 현재 범위 밖 |
 | 데이터 | 같은 origin의 `/api/admin/console-commands/v1`; CLI/MCP와 공통 실행기·명령 계약 공유 |
 | 인증 | 개인 `gsm_` 토큰 → `/api/admin/identity/v1/session` → HttpOnly User 쿠키; 원문 즉시 제거 |
 | 변경 요청 | `X-Grove-CSRF: 1`, 서버의 Origin 검사 적용; POST 기반 조회 명령에도 적용 |

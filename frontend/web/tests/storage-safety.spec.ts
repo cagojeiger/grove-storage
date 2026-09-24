@@ -8,20 +8,20 @@ test("zero file count does not bypass delete 409; refreshed registry is shown", 
   const { reads } = await storageMock(page);
   await page.goto(root);
   await page.getByRole("link", { name: new RegExp(example.id) }).click();
-  await expect(page.getByText("0 파일").first()).toBeVisible();
+  await expect(page.getByText("Files: 0").first()).toBeVisible();
   await intercept(page, "storage.delete", (route) =>
       route.fulfill({ status: 409, json: { ...failure(409), message: "secret-server-error" } }),
   );
-  await page.getByRole("button", { name: "저장소 삭제" }).click();
-  await page.getByLabel("삭제할 저장소 ID").fill(example.id);
-  await page.getByRole("button", { name: "삭제 확인" }).click();
-  await expect(page.getByRole("alert")).toContainText("클라이언트 또는 파일");
+  await page.getByRole("button", { name: "Delete storage" }).click();
+  await page.getByLabel("Storage ID to delete").fill(example.id);
+  await page.getByRole("button", { name: "Confirm delete" }).click();
+  await expect(page.getByRole("alert")).toContainText("clients or file");
   await expect(page.getByRole("alert")).not.toContainText(
     "secret-server-error",
   );
-  await expect(page.getByLabel("삭제할 저장소 ID")).toHaveValue("");
-  await page.getByRole("button", { name: "취소" }).click();
-  await page.getByRole("link", { name: "저장소", exact: true }).first().click();
+  await expect(page.getByLabel("Storage ID to delete")).toHaveValue("");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("link", { name: "Storage", exact: true }).first().click();
   await expect(
     page.getByRole("link", { name: new RegExp(example.id) }),
   ).toBeVisible();
@@ -33,16 +33,16 @@ test("replace conflict clears secret and retains editable nonsecret settings", a
 }) => {
   await storageMock(page);
   await page.goto(`${root}/${example.id}`);
-  await page.getByRole("button", { name: "저장소 수정" }).click();
-  await page.getByLabel("Secret key (재입력)").fill("never-retain");
+  await page.getByRole("button", { name: "Edit storage" }).click();
+  await page.getByLabel("Secret key (re-enter)").fill("never-retain");
   await intercept(page, "storage.replace", (route) =>
       route.fulfill({ status: 409, json: failure(409) }),
   );
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "주소를 변경할 수 없습니다",
+    "address cannot be changed",
   );
-  await expect(page.getByLabel("Secret key (재입력)")).toHaveValue("");
+  await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
   await expect(page.getByLabel("Endpoint", { exact: true })).toHaveValue(
     example.endpoint!,
   );
@@ -59,19 +59,19 @@ test("lost response blocks resubmission and refreshes instead of retrying", asyn
     return route.abort("connectionreset");
   });
   await page.goto(root);
-  await page.getByRole("button", { name: "등록", exact: true }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
   await fillS3(page);
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "변경 결과를 확인하지 못했습니다",
+    "change outcome is unconfirmed",
   );
   await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
   await expect(
-    page.getByRole("button", { name: "저장", exact: true }),
+    page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
   expect(posts).toBe(1);
   expect(reads.list).toBeGreaterThan(1);
-  await page.getByRole("button", { name: "닫고 확인" }).click();
+  await page.getByRole("button", { name: "Close and review" }).click();
   await expect(page.getByRole("link", { name: /new-s3/ })).toBeVisible();
 });
 
@@ -80,12 +80,12 @@ test("storage read 401 returns to login without cached detail", async ({
 }) => {
   await storageMock(page);
   await page.goto(`${root}/${example.id}`);
-  await expect(page.getByRole("region", { name: "저장소 설정" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
   await intercept(page, "storage.show", (route) =>
     route.fulfill({ status: 401, json: failure(401) }),
   );
-  await page.getByRole("button", { name: "새로고침" }).click();
-  await expect(page.getByLabel("개인 토큰")).toBeVisible();
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByLabel("Personal token")).toBeVisible();
   await expect(page.getByRole("heading", { name: example.id })).toHaveCount(0);
 });
 
@@ -96,14 +96,14 @@ for (const method of ["POST", "PUT", "DELETE"]) {
     await storageMock(page);
     await page.goto(method === "POST" ? root : `${root}/${example.id}`);
     if (method === "DELETE") {
-      await page.getByRole("button", { name: "저장소 삭제" }).click();
-      await page.getByLabel("삭제할 저장소 ID").fill(example.id);
+      await page.getByRole("button", { name: "Delete storage" }).click();
+      await page.getByLabel("Storage ID to delete").fill(example.id);
     } else if (method === "POST") {
-      await page.getByRole("button", { name: "등록", exact: true }).click();
+      await page.getByRole("button", { name: "Register", exact: true }).click();
       await fillS3(page);
     } else {
-      await page.getByRole("button", { name: "저장소 수정" }).click();
-      await page.getByLabel("Secret key (재입력)").fill("secret");
+      await page.getByRole("button", { name: "Edit storage" }).click();
+      await page.getByLabel("Secret key (re-enter)").fill("secret");
     }
     const command = { POST: "storage.create", PUT: "storage.replace", DELETE: "storage.delete" }[method]!;
     await intercept(page, command, (route) =>
@@ -111,11 +111,11 @@ for (const method of ["POST", "PUT", "DELETE"]) {
     );
     await page
       .getByRole("button", {
-        name: method === "DELETE" ? "삭제 확인" : "저장",
+        name: method === "DELETE" ? "Confirm delete" : "Save",
         exact: true,
       })
       .click();
-    await expect(page.getByLabel("개인 토큰")).toBeVisible();
+    await expect(page.getByLabel("Personal token")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: example.id })).toHaveCount(
       0,
@@ -138,14 +138,14 @@ test("pending write clears secret, prevents double submit and holds dialog", asy
     return route.fulfill({ status: 400, json: failure(400) });
   });
   await page.goto(root);
-  await page.getByRole("button", { name: "등록", exact: true }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
   await fillS3(page);
-  await page.getByRole("button", { name: "저장", exact: true }).click();
-  await expect(page.getByRole("button", { name: "저장 중..." })).toBeDisabled();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeVisible();
   expect(posts).toBe(1);
   release();
-  await expect(page.getByRole("alert")).toContainText("접근 권한");
+  await expect(page.getByRole("alert")).toContainText("storage access");
 });

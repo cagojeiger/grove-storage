@@ -77,11 +77,11 @@ test("S3 optional public endpoint is omitted and URL credentials are rejected", 
 
 test("mutation errors separate conflicts from unknown outcomes", () => {
   expect(mutationMessage(new ApiError(409), "delete")).toContain(
-    "클라이언트 또는 파일",
+    "clients or file",
   );
-  expect(mutationMessage(new ApiError(409), "replace")).toContain("주소");
-  expect(mutationMessage(new ApiError(409), "create")).toContain("이미 등록");
-  expect(mutationMessage(new ApiError(500), "create")).toContain("변경 결과");
+  expect(mutationMessage(new ApiError(409), "replace")).toContain("address");
+  expect(mutationMessage(new ApiError(409), "create")).toContain("already registered");
+  expect(mutationMessage(new ApiError(500), "create")).toContain("change outcome");
   expect(mutationMessage(new Error("secret"), "create")).not.toContain(
     "secret",
   );

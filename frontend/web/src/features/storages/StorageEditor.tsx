@@ -42,7 +42,7 @@ export function StorageEditor({
       body = storageSpec(data, kind);
     } catch (error) {
       setError(
-        error instanceof Error ? error.message : "입력값을 확인해 주세요.",
+        error instanceof Error ? error.message : "Check the input values.",
       );
       return;
     }
@@ -72,14 +72,14 @@ export function StorageEditor({
   }
   return (
     <Dialog
-      title={storage ? "저장소 수정" : "저장소 등록"}
+      title={storage ? "Edit storage" : "Register storage"}
       busy={busy}
       onClose={onClose}
     >
       <form onSubmit={(event) => void save(event)} autoComplete="off">
         <fieldset disabled={busy || unknown} className="storage-form">
           <label>
-            저장소 ID
+            Storage ID
             <input
               name="id"
               required
@@ -87,26 +87,26 @@ export function StorageEditor({
               maxLength={64}
               defaultValue={storage?.id}
               readOnly={Boolean(storage)}
-              title="소문자, 숫자, 하이픈으로 구성된 1~64자 ID"
+              title="1-64 lowercase letters, digits, or hyphens"
             />
           </label>
           <label>
-            종류
+            Type
             <select
               name="kind"
-              aria-label="종류"
+              aria-label="Type"
               value={kind}
               onChange={(event) =>
                 setKind(event.target.value as Storage["kind"])
               }
             >
               <option value="s3">S3</option>
-              <option value="fs">파일시스템</option>
+              <option value="fs">Filesystem</option>
             </select>
           </label>
           {kind === "fs" ? (
             <label className="full-field">
-              루트 경로
+              Root path
               <input
                 key="root_path"
                 name="root_path"
@@ -130,7 +130,7 @@ export function StorageEditor({
                 />
               </label>
               <label className="full-field">
-                Public endpoint (선택)
+                Public endpoint (optional)
                 <input
                   name="public_endpoint"
                   type="url"
@@ -139,7 +139,7 @@ export function StorageEditor({
                 />
               </label>
               <label>
-                리전
+                Region
                 <input
                   name="region"
                   required
@@ -147,7 +147,7 @@ export function StorageEditor({
                 />
               </label>
               <label>
-                버킷
+                Bucket
                 <input
                   name="bucket"
                   required
@@ -165,7 +165,7 @@ export function StorageEditor({
                 />
               </label>
               <label className="full-field">
-                {storage ? "Secret key (재입력)" : "Secret key"}
+                {storage ? "Secret key (re-enter)" : "Secret key"}
                 <input
                   name="secret_key"
                   type="password"
@@ -187,21 +187,21 @@ export function StorageEditor({
                   type="checkbox"
                   defaultChecked={storage?.force_relay}
                 />
-                릴레이 사용
+                Use relay
               </label>
             </>
           )}
           <label className="full-field">
-            등록 용량
+            Registered capacity
             <div className="capacity-input">
               <input
                 name="capacity"
-                aria-label="등록 용량"
+                aria-label="Registered capacity"
                 inputMode="decimal"
                 required
                 defaultValue={storage?.capacity_bytes ?? "0"}
               />
-              <select name="unit" aria-label="용량 단위" defaultValue="B">
+              <select name="unit" aria-label="Capacity unit" defaultValue="B">
                 <option>B</option>
                 <option>GiB</option>
                 <option>TiB</option>
@@ -216,11 +216,11 @@ export function StorageEditor({
         )}
         <div className="dialog-actions">
           <button type="button" disabled={busy} onClick={onClose}>
-            {unknown ? "닫고 확인" : "취소"}
+            {unknown ? "Close and review" : "Cancel"}
           </button>
           <button className="primary" type="submit" disabled={busy || unknown}>
             <Save size={16} />
-            {busy ? "저장 중..." : "저장"}
+            {busy ? "Saving..." : "Save"}
           </button>
         </div>
       </form>

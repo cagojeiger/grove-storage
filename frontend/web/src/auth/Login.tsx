@@ -42,9 +42,9 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
         alt=""
       />
       <h1>Grove Storage</h1>
-      <h2>사용자 로그인</h2>
+      <h2>User sign-in</h2>
       <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="token">개인 토큰</label>
+        <label htmlFor="token">Personal token</label>
         <input
           id="token"
           type="password"
@@ -61,7 +61,7 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           type="submit"
           disabled={pending || !token.trim() || wait > 0}
         >
-          {pending ? "로그인 중" : wait ? `${wait}초 후 재시도` : "로그인"}
+          {pending ? "Signing in" : wait ? `Retry in ${wait}s` : "Sign in"}
           <ArrowRight size={16} aria-hidden="true" />
         </button>
       </form>

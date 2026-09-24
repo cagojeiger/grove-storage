@@ -61,19 +61,19 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
       {id && (
         <a className="back-link" href="#storages">
           <ArrowLeft size={16} />
-          저장소
+          Storage
         </a>
       )}
       <div className="page-heading">
         <div>
           <p className="eyebrow">REGISTRY</p>
-          <h1>{id || "저장소"}</h1>
+          <h1>{id || "Storage"}</h1>
         </div>
         <div className="page-actions">
           <button
             className="icon-button"
-            title="새로고침"
-            aria-label="새로고침"
+            title="Refresh"
+            aria-label="Refresh"
             disabled={refreshing}
             onClick={() => void refreshStorages(cache)}
           >
@@ -83,8 +83,8 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
             <>
               <button
                 className="icon-button"
-                title="저장소 수정"
-                aria-label="저장소 수정"
+                title="Edit storage"
+                aria-label="Edit storage"
                 disabled={!detail.data || current.isError}
                 onClick={() => setDialog("edit")}
               >
@@ -92,8 +92,8 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
               </button>
               <button
                 className="icon-button danger"
-                title="저장소 삭제"
-                aria-label="저장소 삭제"
+                title="Delete storage"
+                aria-label="Delete storage"
                 disabled={!detail.data || current.isError}
                 onClick={() => setDialog("delete")}
               >
@@ -106,14 +106,14 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
               onClick={() => setDialog("edit")}
             >
               <Plus size={17} />
-              등록
+              Register
             </button>
           ))}
         </div>
       </div>
       {current.isPending ? (
         <p className="empty" role="status">
-          저장소 조회 중...
+          Loading storage...
         </p>
       ) : current.isError ? (
         <p className="query-error" role="alert">
@@ -123,7 +123,7 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
         <>
           {usage.isError && (
             <p className="query-error" role="alert">
-              점유 정보를 조회하지 못했습니다. {message(usage.error)}
+              Unable to load usage. {message(usage.error)}
             </p>
           )}
           <StorageDetail
@@ -139,21 +139,21 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
         <>
           <div className="list-toolbar">
             <label>
-              <span className="sr-only">저장소 검색</span>
+              <span className="sr-only">Search storage</span>
               <input
                 type="search"
-                placeholder="저장소 검색"
+                placeholder="Search storage"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
-            <span className="muted">{list.data?.length ?? 0}개</span>
+            <span className="muted">{(list.data?.length ?? 0).toLocaleString("en-US")}</span>
           </div>
           <div className="registry-list">
             <div className="registry-labels" aria-hidden="true">
-              <span>저장소</span>
-              <span>주소</span>
-              <span>등록 용량</span>
+              <span>Storage</span>
+              <span>Address</span>
+              <span>Registered capacity</span>
               <span />
             </div>
             {rows?.map((storage) => (
@@ -167,7 +167,7 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
                   <div>
                     <h2>{storage.id}</h2>
                     <span className="muted">
-                      {storage.kind === "fs" ? "파일시스템" : "S3"}
+                      {storage.kind === "fs" ? "Filesystem" : "S3"}
                     </span>
                   </div>
                 </div>
@@ -185,7 +185,7 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
             ))}
             {rows?.length === 0 && (
               <p className="empty">
-                {search ? "검색 결과가 없습니다." : "등록된 저장소가 없습니다."}
+                {search ? "No matching storage." : "No storage registered."}
               </p>
             )}
           </div>

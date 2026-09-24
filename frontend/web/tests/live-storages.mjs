@@ -26,33 +26,33 @@ export async function storageChecks(
     );
   }
   async function createFs(id) {
-    await page.getByRole("button", { name: "등록", exact: true }).click();
-    await page.getByLabel("저장소 ID", { exact: true }).fill(id);
-    await page.getByLabel("종류", { exact: true }).selectOption("fs");
-    await page.getByLabel("루트 경로").fill(objects);
-    await page.getByLabel("등록 용량", { exact: true }).fill("1");
-    await page.getByLabel("용량 단위").selectOption("GiB");
-    await page.getByRole("button", { name: "저장", exact: true }).click();
+    await page.getByRole("button", { name: "Register", exact: true }).click();
+    await page.getByLabel("Storage ID", { exact: true }).fill(id);
+    await page.getByLabel("Type", { exact: true }).selectOption("fs");
+    await page.getByLabel("Root path").fill(objects);
+    await page.getByLabel("Registered capacity", { exact: true }).fill("1");
+    await page.getByLabel("Capacity unit").selectOption("GiB");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: id, exact: true }),
     ).toBeVisible();
   }
   async function deleteStorage(id) {
-    await page.getByRole("button", { name: "저장소 삭제" }).click();
-    await page.getByLabel("삭제할 저장소 ID").fill(id);
-    await page.getByRole("button", { name: "삭제 확인" }).click();
+    await page.getByRole("button", { name: "Delete storage" }).click();
+    await page.getByLabel("Storage ID to delete").fill(id);
+    await page.getByRole("button", { name: "Confirm delete" }).click();
   }
   async function list() {
     await page
       .getByRole("navigation")
-      .getByRole("link", { name: "저장소", exact: true })
+      .getByRole("link", { name: "Storage", exact: true })
       .click();
   }
   await list();
   await createFs("console-live");
-  await page.getByRole("button", { name: "저장소 수정" }).click();
-  await page.getByLabel("등록 용량", { exact: true }).fill("2147483648");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "Edit storage" }).click();
+  await page.getByLabel("Registered capacity", { exact: true }).fill("2147483648");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   assert.equal(
     (await command("storage.show", { id: "console-live" })).body.capacity_bytes,
@@ -70,8 +70,8 @@ export async function storageChecks(
     200,
   );
   await deleteStorage("console-live");
-  await expect(page.getByRole("alert")).toContainText("클라이언트 또는 파일");
-  await page.getByRole("button", { name: "취소" }).click();
+  await expect(page.getByRole("alert")).toContainText("clients or file");
+  await page.getByRole("button", { name: "Cancel" }).click();
   const raw = "console-isolated-native-key";
   const key_hash = `sha256:${createHash("sha256").update(raw).digest("hex")}`;
   assert.equal(
@@ -87,22 +87,22 @@ export async function storageChecks(
     body: JSON.stringify({ declared_size: 0 }),
   });
   assert.equal(allocated.status, 201);
-  await page.getByRole("button", { name: "저장소 수정" }).click();
-  await page.getByLabel("루트 경로").fill(otherObjects);
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "Edit storage" }).click();
+  await page.getByLabel("Root path").fill(otherObjects);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "주소를 변경할 수 없습니다",
+    "address cannot be changed",
   );
   assert.equal(
     (await command("storage.show", { id: "console-live" })).body.root_path,
     objects,
   );
-  await page.getByRole("button", { name: "취소" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
   await list();
   await createFs("console-removable");
   await deleteStorage("console-removable");
   await expect(
-    page.getByRole("heading", { name: "저장소", exact: true }),
+    page.getByRole("heading", { name: "Storage", exact: true }),
   ).toBeVisible();
   assert.equal((await command("storage.show", { id: "console-removable" })).status, 404);
   console.log(
@@ -110,20 +110,20 @@ export async function storageChecks(
   );
 
   if (minio) {
-    await page.getByRole("button", { name: "등록", exact: true }).click();
-    await page.getByLabel("저장소 ID", { exact: true }).fill("console-minio");
+    await page.getByRole("button", { name: "Register", exact: true }).click();
+    await page.getByLabel("Storage ID", { exact: true }).fill("console-minio");
     await page.getByLabel("Endpoint", { exact: true }).fill(minio.endpoint);
-    await page.getByLabel("Public endpoint (선택)").fill(minio.endpoint);
-    await page.getByLabel("리전", { exact: true }).fill(minio.region);
-    await page.getByLabel("버킷", { exact: true }).fill(minio.bucket);
+    await page.getByLabel("Public endpoint (optional)").fill(minio.endpoint);
+    await page.getByLabel("Region", { exact: true }).fill(minio.region);
+    await page.getByLabel("Bucket", { exact: true }).fill(minio.bucket);
     await page.getByLabel("Access key", { exact: true }).fill(minio.access_key);
     await page.getByLabel("Secret key", { exact: true }).fill(minio.secret_key);
     await page.getByLabel("Path-style", { exact: true }).check();
-    await page.getByLabel("릴레이 사용", { exact: true }).check();
+    await page.getByLabel("Use relay", { exact: true }).check();
     await page
-      .getByLabel("등록 용량", { exact: true })
+      .getByLabel("Registered capacity", { exact: true })
       .fill(String(minio.capacity_bytes));
-    await page.getByRole("button", { name: "저장", exact: true }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "console-minio", exact: true }),
     ).toBeVisible();
@@ -132,11 +132,11 @@ export async function storageChecks(
     assert.equal(saved.force_path_style, true);
     assert.equal(saved.public_endpoint, minio.endpoint);
     assert(!JSON.stringify(saved).includes(minio.secret_key));
-    await page.getByRole("button", { name: "저장소 수정" }).click();
-    await expect(page.getByLabel("Secret key (재입력)")).toHaveValue("");
-    await page.getByLabel("Secret key (재입력)").fill(minio.secret_key);
-    await page.getByLabel("등록 용량", { exact: true }).fill("2147483648");
-    await page.getByRole("button", { name: "저장", exact: true }).click();
+    await page.getByRole("button", { name: "Edit storage" }).click();
+    await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
+    await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
+    await page.getByLabel("Registered capacity", { exact: true }).fill("2147483648");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     assert.equal(
       (await command("storage.show", { id: "console-minio" })).body.capacity_bytes,
@@ -151,7 +151,7 @@ export async function storageChecks(
     );
     await deleteStorage("console-minio");
     await expect(
-      page.getByRole("heading", { name: "저장소", exact: true }),
+      page.getByRole("heading", { name: "Storage", exact: true }),
     ).toBeVisible();
     assert.equal((await command("storage.show", { id: "console-minio" })).status, 404);
     console.log(
@@ -160,7 +160,7 @@ export async function storageChecks(
   }
   await page
     .getByRole("navigation")
-    .getByRole("link", { name: "개요", exact: true })
+    .getByRole("link", { name: "Overview", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "console-live", exact: true }),
