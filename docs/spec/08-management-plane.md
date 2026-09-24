@@ -1,6 +1,6 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 설계, DB migration·API·MCP·UI 미구현.
+- 상태: 순수 권한 정책 구현·테스트, 서버 미연결. DB migration·새 인증 API·MCP·UI 미구현.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
 - `management`는 제안된 PostgreSQL schema다. 기존 migration과 runtime 테이블은 유지한다.
@@ -38,6 +38,22 @@ Operator는 Client 서비스 키를 다루는 강한 운영 권한이다. 발급
 Agent는 viewer/operator로 제한하고 소유 User의 활성 상태·권한으로 상한을 적용한다.
 역할 변경·비활성화는 이후 요청에 반영하며 이미 허용된 작업은 완료될 수 있다.
 마지막 활성 Admin의 삭제·비활성화·강등과 첫 Admin 생성은 DB 잠금으로 직렬화한다.
+
+### 정책 구현 경계
+
+`grove-management-policy`는 I/O·외부 dependency 없이 검증된 Caller snapshot과
+서버가 정한 Surface, Action을 받아 `Scope` 또는 거부 사유를 반환한다.
+
+| 현재 구현 | 연결 단계의 책임 |
+|---|---|
+| User/Agent 역할·활성 상태·소유자 권한 상한 | DB에서 현재 상태를 읽고 알 수 없는 role/kind를 거부 |
+| credential 만료/폐기/invalid 상태 거부 | token 검증·세션과 원본 token 결합·master 세대 검증 |
+| 콘솔 세션과 machine Bearer의 조합 검사 | 서버 route에서 Surface 지정, Origin/CSRF와 쿠키 검증 |
+| Installation / SelfOnly / SelfAndOwnedAgents / SetupRecovery | 인증된 ID로 조회/변경 범위 적용; 기존 자원 제약 유지 |
+
+정책 허용은 DB 쿼리의 소유권 필터·첫/마지막 Admin 잠금·삭제 조건을 대신하지 않는다.
+현재 API의 기존 인증 경로는 아직 이 crate를 호출하지 않는다. CLI/MCP 동등성 테스트는
+정책 입력에 대한 결과 비교이며 실제 전송·도구 목록·응답 schema 검증은 후속이다.
 
 ## 초기 설정·로그인·복구
 
@@ -167,7 +183,8 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 
 | 단계 | 변경 | 검증 |
 |---|---|---|
-| 1 | identity/policy·command 계약의 독립 로직 | role×surface×credential 표 기반 테스트; Admin Bearer의 identity 호출 거부 |
+| 1a (로컬 구현·검증) | `management-policy`: 순수 신원·권한 규칙 | 역할/표면/인증 상태, Agent 상한, 감사 조회 scope, master 제한; 14개 테스트 |
+| 1b (다음) | resource command 입력·출력·오류·권한 매핑 | 현행 CLI 기능과 정확히 대응; identity/history 명령 제외 |
 | 2 | 추가 DB migration·관리 서비스·audit | 첫/마지막 Admin 경합, 발급/폐기 경합, 감사 실패 rollback, 삭제 후 이력 |
 | 3 | master/User 로그인·identity API | CSRF, Agent 로그인 거부, token/session 폐기, 복구, master 세대 불일치 |
 | 4 | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |

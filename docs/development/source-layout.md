@@ -2,6 +2,10 @@
 
 ```text
 backend/crates/
+├── management-policy/    관리 User·Agent·role·진입 경계의 순수 권한 규칙 (API 미연결)
+│   ├── src/identity.rs   주체·역할·계정/자격증명 상태·인증 방식·Surface
+│   ├── src/policy.rs     Action → 허용 Scope 또는 거부 사유
+│   └── tests/           resources·console·agents·authentication (DB·서버 독립)
 ├── s3-protocol/           S3 XML·SigV4 순수 프로토콜 계약
 │   ├── src/multipart.rs  Complete XML 구조·엔티티·namespace 검증
 │   ├── src/completion.rs 완료 목록·원장 ETag·비최종 part 최소 크기 검증
@@ -50,6 +54,7 @@ backend/crates/
 
 | 모듈 | 입력 → 결과 | 정합성 경계 |
 |---|---|---|
+| `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 후속 adapter/service 책임 |
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
 | `object-service/multipart_create` | 예약된 업로드 → vendor·relay 준비 | 실패 시 알려진 upload ID로 보상, 원래 오류 유지 |
 | `api/routes`, `api/admin` | HTTP → 인증된 요청 | 표면별 인증·예약 경로 |
@@ -73,6 +78,7 @@ detach는 같은 트랜잭션을 공유한다.
 
 | 범위 | 테스트 |
 |---|---|
+| 관리 권한·콘솔 전용 경계·Agent 상한·감사 조회 scope | `cargo test -p grove-management-policy --locked`; 실제 API 연결과 구분 |
 | S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
 | S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
 | S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |

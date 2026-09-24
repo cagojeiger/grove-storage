@@ -1,0 +1,73 @@
+#![allow(dead_code)]
+
+use grove_management_policy::*;
+
+pub const ROLES: [Role; 3] = [Role::Viewer, Role::Operator, Role::Admin];
+pub const AGENT_ROLES: [AgentRole; 2] = [AgentRole::Viewer, AgentRole::Operator];
+pub const METHODS: [AuthMethod; 3] = [
+    AuthMethod::UserSession,
+    AuthMethod::ManagementToken,
+    AuthMethod::MasterSession,
+];
+pub const SURFACES: [Surface; 4] = [
+    Surface::Console,
+    Surface::Cli,
+    Surface::Mcp,
+    Surface::ResourceApi,
+];
+pub const MACHINE_SURFACES: [Surface; 3] = [Surface::Cli, Surface::Mcp, Surface::ResourceApi];
+pub const ACTIONS: [Action; 12] = [
+    Action::ReadResources,
+    Action::WriteResources,
+    Action::ManageServiceCredentials,
+    Action::ReadOwnSessions,
+    Action::RevokeOwnSessions,
+    Action::ReadIdentities,
+    Action::ManageIdentities,
+    Action::ReadAuditHistory,
+    Action::ReadInvocationHistory,
+    Action::ReadSecurityEvents,
+    Action::BootstrapAdmin,
+    Action::RecoverAdmin,
+];
+pub const CONSOLE_ACTIONS: [Action; 7] = [
+    Action::ReadOwnSessions,
+    Action::RevokeOwnSessions,
+    Action::ReadIdentities,
+    Action::ManageIdentities,
+    Action::ReadAuditHistory,
+    Action::ReadInvocationHistory,
+    Action::ReadSecurityEvents,
+];
+
+pub fn user(role: Role, method: AuthMethod) -> Caller {
+    Caller {
+        actor: Actor::User {
+            role,
+            state: AccountState::Active,
+        },
+        method,
+        credential_state: CredentialState::Active,
+    }
+}
+
+pub fn agent(role: AgentRole, owner_role: Role) -> Caller {
+    Caller {
+        actor: Actor::Agent {
+            role,
+            state: AccountState::Active,
+            owner_role,
+            owner_state: AccountState::Active,
+        },
+        method: AuthMethod::ManagementToken,
+        credential_state: CredentialState::Active,
+    }
+}
+
+pub fn master() -> Caller {
+    Caller {
+        actor: Actor::Master,
+        method: AuthMethod::MasterSession,
+        credential_state: CredentialState::Active,
+    }
+}

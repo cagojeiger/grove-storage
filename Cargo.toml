@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "backend/crates/management-policy",
     "backend/crates/s3-protocol",
     "backend/crates/object-service",
     "backend/crates/object-policy",
