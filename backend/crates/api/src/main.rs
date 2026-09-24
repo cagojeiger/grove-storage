@@ -8,6 +8,8 @@ mod console_identity;
 mod cors;
 mod error;
 mod lease;
+mod logging;
+mod mcp;
 mod reconciler;
 mod resource_commands;
 mod routes;
@@ -211,11 +213,5 @@ impl ShutdownSignals {
 }
 
 fn init_tracing(format: LogFormat) {
-    let builder = tracing_subscriber::fmt().with_env_filter(
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-    );
-    match format {
-        LogFormat::Json => builder.json().init(),
-        LogFormat::Pretty => builder.init(),
-    }
+    logging::init(format);
 }

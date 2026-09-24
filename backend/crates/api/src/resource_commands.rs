@@ -63,7 +63,7 @@ pub(crate) async fn execute(
     }
 }
 
-fn token(headers: &HeaderMap) -> Option<&str> {
+pub(crate) fn token(headers: &HeaderMap) -> Option<&str> {
     if headers.contains_key(header::COOKIE)
         || headers.get_all(header::AUTHORIZATION).iter().count() != 1
     {
@@ -112,4 +112,4 @@ fn reply(status: StatusCode, body: serde_json::Value, request_id: Uuid) -> Respo
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

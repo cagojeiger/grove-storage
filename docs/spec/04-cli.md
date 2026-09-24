@@ -2,7 +2,7 @@
 
 - 구현: `gscli` 원격 19개 명령 → [공통 명령 API](09-management-commands.md), User/Agent 관리 토큰.
 - 유지: 명령 이름·table/JSON·변경 확인·비밀 파일·수동 update.
-- 후속: MCP adapter·연결 profile·운영 인증 이관. 권한·콘솔 전용 경계는 [spec 08](08-management-plane.md).
+- 후속: 연결 profile·운영 인증 이관. 권한·콘솔 전용 경계는 [spec 08](08-management-plane.md).
 
 ## 책임 경계
 
@@ -26,13 +26,13 @@ filegate status → 로컬 DB·복호 키·저장소 probe
 토큰이 있는 서버를 대상으로 하며 이전 REST로 자동 fallback하지 않는다. 운영 인증 전환
 전의 서버는 기존 CLI 바이너리를 사용한다. 패키지 버전과 command protocol은 별개다.
 
-## CLI·MCP 동등성 계획
+## CLI·MCP 대응
 
-| 현재 구현 | 다음 단계 |
+| CLI | MCP |
 |---|---|
-| CLI 19개 → 같은 schema·명령명·권한·결과 | MCP tool adapter를 같은 계약에 연결 |
-| User/Agent 토큰 → 서버가 현재 권한 판정 | 실제 MCP 전송·오류·비밀 전달 검증 |
-| HTTP 호출의 서버 surface는 `resource_api` | 진입점별 surface 계약은 서버에서 결정 |
+| 19개 → 공통 schema·명령명·권한·결과 | 같은 19개 tool·실행기, 실제 HTTP/CLI 결과 대조 |
+| User/Agent 토큰 → 서버가 현재 권한 판정 | 같은 토큰·현재 권한; [전송·비밀 전달 차이](10-management-mcp.md) |
+| HTTP 호출의 서버 surface는 `resource_api` | MCP 진입점은 서버가 `mcp`로 기록 |
 
 User·Agent·role·관리 토큰·관리 이력은 콘솔 세션 API 소유다. `credential`·`client-key`는
 Client의 서비스 키를 다룬다. CLI의 User-Agent는 신원이나 `surface=cli`의 증거가 아니다.
@@ -167,7 +167,7 @@ help·결과는 stdout, 프롬프트·진단은 stderr다. 파서 오류는 stde
 |---|---|
 | CLI adapter (4c-1) | 19개 typed 명령·User/Agent 토큰·wire/outcome 검증·비밀/확인/출력 회귀 |
 | 실제 CLI E2E | 임시 PG·서버·CLI에서 master 설정·User/Agent 발급·19개 명령·기존 REST 조회 비교·owner 상한·폐기·관리 audit |
-| MCP adapter (4c-2) | 후속: 같은 명령 schema·결과·거부와 실제 전송 검증 |
+| MCP adapter (4c-2) | 같은 명령 schema·결과·거부·실제 HTTP 전송 검증 |
 | 운영 이관 | 후속: DB backup·기존 인증 매핑·proxy·소비자 호환·롤백 |
 
 테스트는 `cli/tests`의 설정·조회·입력·변경·비밀·status·wire 파일로 분리한다.

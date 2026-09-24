@@ -1,7 +1,7 @@
 # spec 09: 공통 자원 명령 계약
 
 - 상태: `grove-management-command` + 조회 10개·변경 9개 실행기 + Bearer HTTP 구현.
-- CLI의 원격 19개 명령을 공통 HTTP에 연결했다. MCP adapter는 후속 단계다.
+- CLI의 원격 19개 명령과 MCP 19개 tool을 같은 실행기에 연결했다. [MCP 전송 계약](10-management-mcp.md).
 - 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
 
 ## 구성
@@ -15,7 +15,7 @@ gscli                   인자·파일·확인 → commands HTTP → 표 / JSON
 
 commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → DB 조회 / 변경 + 감사
 Storage 생성/교체: 권한 확인 → 잠금 해제 → 접근 probe → 현재 권한 재확인 → 변경 + 감사
-후속: MCP tool adapter
+MCP tools/call → 같은 resources 실행기 (surface=mcp)
 ```
 
 | 항목 | 현재 계약 |
@@ -29,7 +29,7 @@ Storage 생성/교체: 권한 확인 → 잠금 해제 → 접근 probe → 현�
 | 로컬 처리 | `--from`, `--key-file`, `--secret-out`, `--yes`, update는 CLI 소유 |
 
 CLI는 typed 입력 검증·직렬화와 응답 검증을 수행하고, 현재 권한은 서버가 적용한다.
-공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 adapter 단계에서 확정한다.
+공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 같은 명령명을 사용한다.
 
 ## 공통 자원 HTTP (4a·4b)
 
@@ -61,7 +61,7 @@ Content-Type: application/json
 
 CLI HTTP는 User/Agent 토큰을 사용하며 서버가 `resource_api`로 기록한다.
 CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 CLI 전송은 E2E로
-검증하며 MCP 전송은 후속이다. 기존 `/api/admin/v1`은 이전 UI·CLI용으로 유지한다.
+검증하며 실제 MCP HTTP도 CLI 결과와 대조한다. 기존 `/api/admin/v1`은 이전 UI·CLI용으로 유지한다.
 
 ## 명령 목록
 
@@ -177,6 +177,7 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 | `cli/tests/command_contract.rs` | 실제 clap 원격 명령과 catalog의 일대일 대응 |
 | `cli/tests/` | command HTTP·protocol/명령/대상 ID 검증·JSON·설정 우선순위·비밀 파일·변경 결과·단일 status |
 | `scripts/e2e-cli.py` | 실제 CLI/서버/PG의 19개 명령·기존 REST 결과 비교·User/Agent·owner 강등·폐기·감사·비밀 제외 |
+| `api/src/mcp/tests/`, `scripts/e2e-mcp.py` | 19개 tool schema·실제 HTTP/CLI 결과·MCP 감사·owner·폐기·rollback·unknown·서버 비밀 로그 제외 |
 | `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·Agent owner 상한·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
 | `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
 | `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
@@ -188,4 +189,4 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 | Storage 서버 smoke | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |
 
 현재 검증은 순수 계약·PG 서비스·HTTP 라우터와 자원 변경/audit transaction을 포함한다.
-실제 MCP 전송 전환은 후속 단계다. S3 대역 검증은 외부 Provider 운영 검증과 구분한다.
+외부 MCP 앱·운영 proxy는 별도 검증이다. S3 대역 검증은 외부 Provider 운영 검증과 구분한다.

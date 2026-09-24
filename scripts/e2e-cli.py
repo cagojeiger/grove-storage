@@ -174,7 +174,7 @@ def check_lifecycle(endpoint, directory):
 
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
-         reconciler_interval=1, management=False):
+         reconciler_interval=1, management=False, verify_log=None):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -237,6 +237,9 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                     except subprocess.TimeoutExpired:
                         server.kill()
                         server.wait(timeout=5)
+                if verify_log:
+                    log.seek(0)
+                    verify_log(log.read())
     finally:
         subprocess.run(["docker", "rm", "-f", container],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=True)

@@ -11,6 +11,7 @@ path = "src/main.rs"
 grove-management-service.workspace = true
 grove-management-command.workspace = true
 grove-management-policy.workspace = true
+rmcp.workspace = true
 crc32fast = "1.5"
 grove-s3-protocol = { workspace = true }
 grove-object-service = { workspace = true }

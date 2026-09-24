@@ -42,6 +42,11 @@ backend/crates/
 │   │   └── update/        업데이트 흐름·다운로드·설치 기록·파일 교체, 분리된 tests/
 │   └── tests/             설정·조회·변경·비밀·실패·status·update 테스트
 ├── api/src/
+│   ├── mcp/              stateless HTTP·19개 공통 tool·실행기 연결
+│   │   ├── contract.rs  command schema·도구 설명·annotation
+│   │   ├── server.rs    SDK handler → 공통 실행기, surface=mcp
+│   │   └── tests/       catalog·경계·권한·결과 대조·실패
+│   ├── logging.rs       운영 subscriber·SDK payload 로그 차단
 │   ├── resource_commands.rs  공통 자원 Bearer HTTP·envelope·서버 Surface
 │   ├── resource_commands/tests/  기존 REST 비교·인증/입력·변경·감사/commit 장애
 │   ├── console_identity/  새 인증·신원·이력 HTTP (기존 UI 전환 전)
@@ -103,6 +108,7 @@ backend/crates/
 | `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; User 로그인 예산·인증 이력 |
 | `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 19개 전체; Storage probe는 잠금 밖, 이후 role/owner·참조 재확인·audit 원자성 |
 | `api/resource_commands` | CLI 등 Bearer·JSON → 공통 자원 실행기 | Cookie 거부·server Surface·명령/envelope 검증; 이전 REST 인증과 분리 |
+| `api/mcp` | MCP Bearer·tool 입력 → 같은 자원 실행기 | 요청별 인증·Origin/Cookie 차단·공통 schema·surface=mcp; 권한 cache 없음 |
 | `api/console_identity` | HTTP token/cookie·입력 → 신원/이력 service | Origin/CSRF·별도 쿠키·해시 domain·비밀 없는 목록; 기존 UI·자원 API 전환과 분리 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
 | `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
@@ -131,6 +137,7 @@ detach는 같은 트랜잭션을 공유한다.
 |---|---|
 | 관리 권한·콘솔 전용 경계·Agent 상한·감사 조회 scope | `cargo test -p grove-management-policy --locked`; 실제 API 연결과 구분 |
 | 관리 명령·입출력·오류·CLI 대응 | `cargo test -p grove-management-command --locked`; `cli/tests/command_contract.rs` |
+| MCP 실제 전송·CLI 대응 | `api/src/mcp/tests/`, `scripts/e2e-mcp.py`; PG/HTTP·19개 lifecycle·서버 로그·owner/폐기 |
 | 신원 DB·변경 감사·이관 | `db/tests/management_{accounts,credentials,credential_limits,sessions,schema,upgrade}.rs`; 실제 PostgreSQL 필요 |
 | 관리 서비스 권한·범위·로그 장애 | `cargo test -p grove-management-service --locked`; PostgreSQL의 `DATABASE_URL` 필요 |
 | User/master·신원/이력 HTTP·브라우저 요청 경계 | `cargo test -p filegate-api console_identity --locked`; 실제 PostgreSQL, 브라우저 E2E와 구분 |

@@ -103,6 +103,7 @@ jobs:
         run: |
           cargo build --bin filegate --bin gscli --locked
           python3 scripts/e2e-cli.py
+          python3 -B scripts/e2e-mcp.py
           python3 -B -u scripts/e2e-relay-upload.py
 
       - name: S3 SDK contract

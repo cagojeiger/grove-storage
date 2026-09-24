@@ -1,4 +1,5 @@
 //! Shared resource execution; external probes run outside the identity fence.
+mod admission;
 mod reads;
 mod storage;
 mod writes;
@@ -16,6 +17,8 @@ use grove_management_command::{
 use grove_management_policy::{Scope, Surface, authorize};
 use std::future::Future;
 use uuid::Uuid;
+
+pub use admission::admit_mcp;
 
 pub struct Execution {
     pub request_id: Uuid,
