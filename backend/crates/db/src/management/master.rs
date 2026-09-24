@@ -72,8 +72,8 @@ pub async fn create_session(
         (SELECT id FROM management.sessions WHERE auth_method='master' AND revoked_at IS NULL ORDER BY created_at DESC,id DESC OFFSET 7) RETURNING id")
         .fetch_all(&mut *tx.inner).await?;
     let session: Session = sqlx::query_as(
-        "INSERT INTO management.sessions(id,session_hash,auth_method,master_generation,expires_at)
-        VALUES($1,$2,'master',$3,clock_timestamp()+interval '10 minutes') RETURNING id,expires_at",
+        "INSERT INTO management.sessions(id,session_hash,auth_method,master_generation,created_at,expires_at)
+        VALUES($1,$2,'master',$3,statement_timestamp(),statement_timestamp()+interval '10 minutes') RETURNING id,expires_at",
     )
     .bind(Uuid::new_v4())
     .bind(hash)

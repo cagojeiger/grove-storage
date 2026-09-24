@@ -94,7 +94,7 @@ async fn master_session_expiry_eviction_and_shared_budget_are_bounded(pool: PgPo
     for n in 100..109 {
         login(&pool, &cfg, 900, n).await;
     }
-    let (count,bounded): (i64,bool) = sqlx::query_as("SELECT count(*),bool_and(expires_at<=created_at+interval '10 minutes') FROM management.sessions WHERE auth_method='master' AND revoked_at IS NULL")
+    let (count,bounded): (i64,bool) = sqlx::query_as("SELECT count(*),bool_and(expires_at=created_at+interval '10 minutes') FROM management.sessions WHERE auth_method='master' AND revoked_at IS NULL")
         .fetch_one(&pool).await.unwrap();
     assert_eq!(count, 8);
     assert!(bounded);
