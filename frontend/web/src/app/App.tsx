@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, LayoutDashboard, HardDrive } from "lucide-react";
-import { admin, ApiError, message, request, Session } from "../api/http";
+import { identity, ApiError, currentSession, message, request } from "../api/http";
 import { Login } from "../auth/Login";
 import { ThemePicker } from "../design/Theme";
 import { Overview } from "../features/overview/Overview";
@@ -19,7 +19,7 @@ export function App() {
     queryKey: ["session"],
     queryFn: async ({ signal }) => {
       try {
-        return await request<Session>(`${admin}/session`, { signal });
+        return await currentSession(signal);
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           cache.removeQueries({
@@ -36,7 +36,7 @@ export function App() {
     setLoggingOut(true);
     setLogoutError("");
     try {
-      await request(`${admin}/session`, { method: "DELETE" });
+      await request(`${identity}/session`, { method: "DELETE" });
       clearSession(cache);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -98,7 +98,7 @@ export function App() {
                 <span>저장소</span>
               </a>
             </nav>
-            <span className="admin-label">관리자</span>
+            <span className="admin-label">{{ viewer: "Viewer · 읽기", operator: "Operator · 운영", admin: "Admin · 관리" }[session.data.role]}</span>
           </aside>
           <div className="content">
             {logoutError && (
@@ -107,7 +107,7 @@ export function App() {
               </p>
             )}
             {storagePage ? (
-              <Storages key={route} route={route} />
+              <Storages key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "viewer"} />
             ) : (
               <Overview />
             )}

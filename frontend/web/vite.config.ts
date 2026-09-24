@@ -24,7 +24,7 @@ export default defineConfig(() => {
           ? { key: readFileSync(key), cert: readFileSync(cert) }
           : undefined,
       proxy: Object.fromEntries(
-        ["/api/admin/v1", "/readyz"].map((path) => [
+        ["/api/admin/identity/v1", "/api/admin/console-commands/v1", "/readyz"].map((path) => [
           path,
           { target, changeOrigin: false },
         ]),

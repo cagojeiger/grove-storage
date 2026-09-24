@@ -9,7 +9,8 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { admin, message, request, Usage } from "../../api/http";
+import { message, Usage } from "../../api/http";
+import { command } from "../../api/commands";
 import { storageLink } from "../../app/navigation";
 import { bytes } from "../../design/format";
 import { Storage, refreshStorages } from "./model";
@@ -17,7 +18,7 @@ import { StorageEditor } from "./StorageEditor";
 import { DeleteStorage } from "./DeleteStorage";
 import { StorageDetail } from "./StorageDetail";
 
-export function Storages({ route }: { route: string }) {
+export function Storages({ route, canWrite }: { route: string; canWrite: boolean }) {
   const cache = useQueryClient();
   const [dialog, setDialog] = useState<"edit" | "delete" | null>(null);
   const [search, setSearch] = useState("");
@@ -31,19 +32,17 @@ export function Storages({ route }: { route: string }) {
     queryKey: ["storages", "list"],
     enabled: !id,
     queryFn: ({ signal }) =>
-      request<Storage[]>(`${admin}/storages`, { signal }),
+      command<Storage[]>("storage.list", {}, signal),
   });
   const detail = useQuery({
     queryKey: ["storages", "detail", id],
     enabled: Boolean(id),
     queryFn: ({ signal }) =>
-      request<Storage>(`${admin}/storages/${encodeURIComponent(id)}`, {
-        signal,
-      }),
+      command<Storage>("storage.show", { id }, signal),
   });
   const usage = useQuery({
     queryKey: ["storage-usage"],
-    queryFn: ({ signal }) => request<Usage[]>(`${admin}/usage`, { signal }),
+    queryFn: ({ signal }) => command<Usage[]>("usage.storages", {}, signal),
   });
   const current = id ? detail : list;
   const refreshing = current.isFetching || usage.isFetching;
@@ -80,7 +79,7 @@ export function Storages({ route }: { route: string }) {
           >
             <RefreshCw size={17} className={refreshing ? "spin" : ""} />
           </button>
-          {id ? (
+          {canWrite && (id ? (
             <>
               <button
                 className="icon-button"
@@ -109,7 +108,7 @@ export function Storages({ route }: { route: string }) {
               <Plus size={17} />
               등록
             </button>
-          )}
+          ))}
         </div>
       </div>
       {current.isPending ? (
@@ -192,7 +191,7 @@ export function Storages({ route }: { route: string }) {
           </div>
         </>
       )}
-      {dialog === "edit" && (
+      {canWrite && dialog === "edit" && (
         <StorageEditor
           storage={id ? detail.data : undefined}
           onClose={close}
@@ -202,7 +201,7 @@ export function Storages({ route }: { route: string }) {
           }}
         />
       )}
-      {dialog === "delete" && (
+      {canWrite && dialog === "delete" && (
         <DeleteStorage id={id} onClose={close} onReturnToList={showList} />
       )}
     </main>

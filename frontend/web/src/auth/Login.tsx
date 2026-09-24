@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { admin, ApiError, message, request, Session } from "../api/http";
+import { identity, ApiError, currentSession, message, request, Session } from "../api/http";
 
 export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   const [token, setToken] = useState("");
@@ -21,12 +21,11 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
     setError("");
     // Keep credentials out of query/mutation caches and browser storage.
     try {
-      onLogin(
-        await request<Session>(`${admin}/session`, {
-          method: "POST",
-          body: JSON.stringify({ token: value }),
-        }),
-      );
+      await request(`${identity}/session`, {
+        method: "POST",
+        body: JSON.stringify({ token: value }),
+      });
+      onLogin(await currentSession());
     } catch (failure) {
       setError(message(failure));
       if (failure instanceof ApiError && failure.status === 429)
@@ -43,9 +42,9 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
         alt=""
       />
       <h1>Grove Storage</h1>
-      <h2>관리자 로그인</h2>
+      <h2>사용자 로그인</h2>
       <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="token">관리자 토큰</label>
+        <label htmlFor="token">개인 토큰</label>
         <input
           id="token"
           type="password"

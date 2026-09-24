@@ -1,7 +1,8 @@
 import { FormEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { admin, ApiError, request } from "../../api/http";
+import { ApiError } from "../../api/http";
+import { command } from "../../api/commands";
 import { clearSession } from "../../auth/session";
 import { Dialog } from "../../design/Dialog";
 import { mutationMessage, refreshStorages, uncertain } from "./model";
@@ -28,9 +29,7 @@ export function DeleteStorage({
     setBusy(true);
     setError("");
     try {
-      await request(`${admin}/storages/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
+      await command("storage.delete", { id });
       cache.removeQueries({ queryKey: ["storages", "detail", id] });
       await refreshStorages(cache);
       onReturnToList();
@@ -40,6 +39,8 @@ export function DeleteStorage({
         return;
       }
       setError(mutationMessage(error, "delete"));
+      if (error instanceof ApiError && error.status === 403)
+        void cache.invalidateQueries({ queryKey: ["session"] });
       setUnknown(uncertain(error));
       setConfirmation("");
       await refreshStorages(cache);

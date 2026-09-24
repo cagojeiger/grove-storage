@@ -8,6 +8,7 @@ mod inputs;
 mod master;
 pub(crate) mod master_config;
 mod output;
+pub(crate) mod resources;
 pub(crate) mod secrets;
 mod session;
 

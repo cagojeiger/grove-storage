@@ -203,7 +203,7 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                 env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
             if management:
                 env.update(FILEGATE_MASTER_TOKEN=MASTER_TOKEN, FILEGATE_MASTER_GENERATION="1",
-                           FILEGATE_CONSOLE_ORIGIN="https://console.test")
+                           FILEGATE_CONSOLE_ORIGIN=console_origin or "https://console.test")
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:

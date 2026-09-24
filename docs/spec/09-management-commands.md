@@ -61,7 +61,15 @@ Content-Type: application/json
 
 CLI HTTP는 User/Agent 토큰을 사용하며 서버가 `resource_api`로 기록한다.
 CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 CLI 전송은 E2E로
-검증하며 실제 MCP HTTP도 CLI 결과와 대조한다. 기존 `/api/admin/v1`은 이전 UI·CLI용으로 유지한다.
+검증하며 실제 MCP HTTP도 CLI 결과와 대조한다. 기존 `/api/admin/v1`은 이전 소비자용으로 유지한다.
+
+### 브라우저 전송
+
+`POST /api/admin/console-commands/v1`은 같은 19개 명령과 응답 계약을 사용한다.
+User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 실행기에 연결하며
+표면은 서버가 `console`로 지정한다. Bearer·master 설정 세션·기존 운영자 쿠키는 거부한다.
+진입 guard의 401/403은 신원 API 오류 형식이고 실행기 진입 후 오류는 공통 envelope다.
+현재 UI는 개요·저장소 명령만 연결했다. 신원/이력은 별도 세션 API에 유지한다.
 
 ## 명령 목록
 

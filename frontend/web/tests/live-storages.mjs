@@ -6,23 +6,23 @@ export async function storageChecks(
   page,
   { objects, otherObjects, endpoint, minio },
 ) {
-  async function admin(method, path, body) {
+  async function command(command, input) {
     return page.evaluate(
-      async ({ method, path, body }) => {
-        const response = await fetch(`/api/admin/v1/${path}`, {
-          method,
+      async ({ command, input }) => {
+        const response = await fetch("/api/admin/console-commands/v1", {
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-FileGate-CSRF": "1",
+            "X-Grove-CSRF": "1",
           },
-          body: body ? JSON.stringify(body) : undefined,
+          body: JSON.stringify({ protocol: 1, command, input }),
         });
         return {
           status: response.status,
-          body: response.status === 204 ? null : await response.json(),
+          body: (await response.json()).result,
         };
       },
-      { method, path, body },
+      { command, input },
     );
   }
   async function createFs(id) {
@@ -55,19 +55,19 @@ export async function storageChecks(
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   assert.equal(
-    (await admin("GET", "storages/console-live")).body.capacity_bytes,
+    (await command("storage.show", { id: "console-live" })).body.capacity_bytes,
     2147483648,
   );
 
   // A second actor adds a client after the page observed an empty storage.
   assert.equal(
     (
-      await admin("POST", "clients", {
+      await command("client.create", {
         id: "console-client",
         storage_id: "console-live",
       })
     ).status,
-    201,
+    200,
   );
   await deleteStorage("console-live");
   await expect(page.getByRole("alert")).toContainText("클라이언트 또는 파일");
@@ -75,8 +75,8 @@ export async function storageChecks(
   const raw = "console-isolated-native-key";
   const key_hash = `sha256:${createHash("sha256").update(raw).digest("hex")}`;
   assert.equal(
-    (await admin("POST", "clients/console-client/keys", { key_hash })).status,
-    201,
+    (await command("client-key.register", { client_id: "console-client", key_hash })).status,
+    200,
   );
   const allocated = await fetch(`${endpoint}/api/v1/files`, {
     method: "POST",
@@ -94,7 +94,7 @@ export async function storageChecks(
     "주소를 변경할 수 없습니다",
   );
   assert.equal(
-    (await admin("GET", "storages/console-live")).body.root_path,
+    (await command("storage.show", { id: "console-live" })).body.root_path,
     objects,
   );
   await page.getByRole("button", { name: "취소" }).click();
@@ -104,7 +104,7 @@ export async function storageChecks(
   await expect(
     page.getByRole("heading", { name: "저장소", exact: true }),
   ).toBeVisible();
-  assert.equal((await admin("GET", "storages/console-removable")).status, 404);
+  assert.equal((await command("storage.show", { id: "console-removable" })).status, 404);
   console.log(
     "PASS real filesystem UI create/replace/delete, concurrent client delete 409, pending-file address replace 409",
   );
@@ -127,7 +127,7 @@ export async function storageChecks(
     await expect(
       page.getByRole("heading", { name: "console-minio", exact: true }),
     ).toBeVisible();
-    const saved = (await admin("GET", "storages/console-minio")).body;
+    const saved = (await command("storage.show", { id: "console-minio" })).body;
     assert.equal(saved.force_relay, true);
     assert.equal(saved.force_path_style, true);
     assert.equal(saved.public_endpoint, minio.endpoint);
@@ -139,7 +139,7 @@ export async function storageChecks(
     await page.getByRole("button", { name: "저장", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     assert.equal(
-      (await admin("GET", "storages/console-minio")).body.capacity_bytes,
+      (await command("storage.show", { id: "console-minio" })).body.capacity_bytes,
       2147483648,
     );
     assert(
@@ -153,7 +153,7 @@ export async function storageChecks(
     await expect(
       page.getByRole("heading", { name: "저장소", exact: true }),
     ).toBeVisible();
-    assert.equal((await admin("GET", "storages/console-minio")).status, 404);
+    assert.equal((await command("storage.show", { id: "console-minio" })).status, 404);
     console.log(
       "PASS real MinIO UI registration, all S3 options, secret re-entry, replacement and deletion",
     );

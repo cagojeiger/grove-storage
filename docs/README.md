@@ -34,8 +34,8 @@
 | 배치 | client에 storage 하나 고정 | 현행 배치 유지 | 조인·배치·이동 모델 설계 |
 | 복구 | 업로드 완료·삭제·만료 복구 | 현행 복구 유지 | Node 장애·작업 복구 설계 |
 | 관리 | 운영자 API, gscli 조회·변경, Terraform 비교 예제 | 등록부 Terraform 운영 이관 | Storage Server·Agent 조인 |
-| 관리 인증 | 관리자 토큰·토큰에 귀속된 콘솔 세션 | master 설정·복구, 개인 토큰 로그인, 콘솔 전용 User/Agent/권한 관리 | 노드 조인 자격증명은 별도 계약 |
-| 관리 명령·감사 | REST CLI·HTTP intent/status 기록 | CLI/MCP 공통 자원 명령, 확정 변경 audit·호출·보안 로그, 콘솔 조회 | 데이터 경로의 로그와 별도 |
+| 관리 인증 | master·User/Agent·권한 API, 개인 User 토큰 로그인·자원 UI; 이전 운영자 REST 유지 | master·신원·토큰 관리 UI, 이전 인증 이관 | 노드 조인 자격증명은 별도 계약 |
+| 관리 명령·감사 | CLI/MCP/콘솔 공통 자원 실행기, 변경 audit·호출·보안 로그 및 조회 API | 콘솔 이력·세션 UI, 운영 전환 | 데이터 경로의 로그와 별도 |
 | 실행 이름 | 서버 `filegate`·`FILEGATE_*`, CLI `gscli`·`GROVE_*` | 기존 서버 계약 유지 | 서버 이름 변경은 별도 릴리스 |
 
 Grove Storage는 후속 제품명이다. 현재 fs adapter는 서버 로컬 구현이며, 2차의 독립

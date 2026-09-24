@@ -643,6 +643,10 @@ dialog::backdrop {
     padding: 8px 18px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
   }
   nav {
     display: flex;
@@ -655,7 +659,8 @@ dialog::backdrop {
     border-bottom: 2px solid transparent;
   }
   .admin-label {
-    display: none;
+    margin: 0 0 0 auto;
+    padding: 4px 0;
   }
   .storages .page-heading {
     flex-wrap: wrap;

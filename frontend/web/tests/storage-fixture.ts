@@ -1,5 +1,6 @@
 import { Page } from "@playwright/test";
 import { Storage } from "../src/features/storages/model";
+import { commandUrl, envelope, failure, session } from "./command-fixture";
 
 export const root = "/api/admin/console/#storages";
 export const example: Storage = {
@@ -18,23 +19,18 @@ export const example: Storage = {
 
 export async function storageMock(page: Page, initial = [example]) {
   const rows = new Map(initial.map((row) => [row.id, row]));
-  const writes: { method: string; body: Record<string, unknown> | null }[] = [];
+  const writes: { command: string; input: Record<string, unknown> }[] = [];
   const reads = { list: 0 };
   await page.route("**/readyz", (route) =>
     route.fulfill({ json: { status: "ready" } }),
   );
-  await page.route("**/api/admin/v1/**", async (route) => {
+  await page.route("**/api/admin/identity/v1/session", (route) => route.fulfill({ json: session }));
+  await page.route(commandUrl, async (route) => {
     const req = route.request();
-    const path = new URL(req.url()).pathname;
-    if (path.endsWith("/session")) {
+    const { command, input } = req.postDataJSON() as { command: string; input: { id?: string; spec?: Record<string, unknown> } };
+    if (command === "usage.storages") {
       await route.fulfill({
-        json: { principal: "admin", credential_id: "test" },
-      });
-      return;
-    }
-    if (path.endsWith("/usage")) {
-      await route.fulfill({
-        json: [...rows.values()].map((row) => ({
+        json: envelope(command, [...rows.values()].map((row) => ({
           storage_id: row.id,
           kind: row.kind,
           capacity_bytes: row.capacity_bytes,
@@ -45,41 +41,38 @@ export async function storageMock(page: Page, initial = [example]) {
           reserved_files: 0,
           purge_pending_files: 0,
           remaining_bytes: row.capacity_bytes,
-        })),
+        }))),
       });
       return;
     }
-    if (path.endsWith("/clients")) {
-      await route.fulfill({ json: [] });
+    if (command === "client.list") {
+      await route.fulfill({ json: envelope(command, []) });
       return;
     }
-    const suffix = path.split("/storages")[1];
-    const id = suffix ? decodeURIComponent(suffix.slice(1)) : "";
-    if (req.method() === "GET") {
+    const id = input.id ?? "";
+    if (["storage.list", "storage.show"].includes(command)) {
       if (!id) reads.list++;
       await route.fulfill({
         status: id && !rows.has(id) ? 404 : 200,
-        json: id ? (rows.get(id) ?? {}) : [...rows.values()],
+        json: id && !rows.has(id) ? failure(404) : envelope(command, id ? rows.get(id) : [...rows.values()]),
       });
       return;
     }
-    const body = req.postDataJSON() as Record<string, unknown> | null;
-    writes.push({ method: req.method(), body });
-    if (req.method() === "DELETE") {
+    writes.push({ command, input });
+    if (command === "storage.delete") {
       rows.delete(id);
-      await route.fulfill({ status: 204 });
+      await route.fulfill({ json: envelope(command, { resource: "storage", id }) });
       return;
     }
     const saved = {
       ...example,
-      ...body,
-      id: id || String(body?.id),
+      ...input.spec,
+      id,
     } as Storage & { secret_key?: string };
     delete saved.secret_key;
     rows.set(saved.id, saved);
     await route.fulfill({
-      status: req.method() === "POST" ? 201 : 200,
-      json: saved,
+      json: envelope(command, saved),
     });
   });
   return { rows, writes, reads };

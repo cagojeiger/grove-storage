@@ -1,6 +1,6 @@
 # spec 06: 관리 콘솔
 
-- 상태: A·B단계 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
+- 상태: A·B + 인증 전환 5a 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 - 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
@@ -18,11 +18,12 @@ Grove Storage
 | 항목 | 구현 계약 |
 |---|---|
 | UI | React·TypeScript·Vite, 기존 NoteGate 참고 기록의 semantic token·공통 UI 패턴 |
-| 데이터 | 같은 origin의 `/api/admin/v1`; 서버 상태와 폼 입력 상태 분리 |
-| 인증 | 토큰으로 세션 발급 후 입력값 제거, 이후 HttpOnly 쿠키 사용 |
-| 변경 요청 | `X-FileGate-CSRF: 1`, 서버의 Origin 검사 적용 |
+| 데이터 | 같은 origin의 `/api/admin/console-commands/v1`; CLI/MCP와 공통 실행기·명령 계약 공유 |
+| 인증 | 개인 `gsm_` 토큰 → `/api/admin/identity/v1/session` → HttpOnly User 쿠키; 원문 즉시 제거 |
+| 변경 요청 | `X-Grove-CSRF: 1`, 서버의 Origin 검사 적용; POST 기반 조회 명령에도 적용 |
+| 역할 | Viewer는 조회, Operator/Admin은 자원 변경; 서버가 매 요청에 현재 권한 확인 |
 | 브라우저 저장 | 테마 설정만 영속화, 토큰·세션·provider secret은 영속화 대상에서 제외 |
-| 배포 경로 | 전용 관리 호스트의 `/api/admin/console/`에 정적 파일, `/api/admin/v1`·`/readyz`만 서버로 전달 |
+| 배포 경로 | 전용 관리 호스트의 `/api/admin/console/`에 정적 파일, `/api/admin/identity/v1`·`/api/admin/console-commands/v1`·`/readyz`만 서버로 전달 |
 | HTTPS | 앞단 TLS 종료, `FILEGATE_CONSOLE_ORIGIN`과 실제 origin 일치 |
 | 개발 | 동일 origin HTTPS 프록시 아래 UI·API 연결; Secure 쿠키 계약 유지 |
 
@@ -32,17 +33,17 @@ Grove Storage
 
 ## CLI 대응
 
-아래 API 경로는 `/api/admin/v1` 기준이다. 상태·프로브는 서버의 기존 경로를 사용한다.
+원격 작업은 [공통 명령](09-management-commands.md)을 사용한다. 클라이언트·키 화면은 후속이다.
 
 | CLI 기능 | 화면 | API / 의미 |
 |---|---|---|
 | `status` | 개요 | readyz·등록부 조회 조합; 저장소 실물 점검과 구분 |
-| `storage list/show` | 저장소 목록·상세 | GET `/storages`, `/storages/{id}` |
-| `storage create/replace/delete` | 등록·교체·삭제 | POST `/storages`, PUT/DELETE `/storages/{id}` |
-| `client list/show/create/delete` | 클라이언트 | GET/POST `/clients`, GET/DELETE `/clients/{id}` |
-| `client-key list/register/delete` | Native 키 | `/clients/{id}/keys`; 입력 raw key의 SHA-256 등록 계약 공유 |
-| `credential list/create/delete` | S3 키 | `/clients/{id}/s3-credentials`; secret은 발급 응답에서 한 번 제공 |
-| `usage storages/clients/history` | 개요·상세 | `/usage`, `/usage/clients`, `/usage/history?days=N` |
+| `storage list/show` | 저장소 목록·상세 | `storage.list/show` |
+| `storage create/replace/delete` | 등록·교체·삭제 | `storage.create/replace/delete` |
+| `client list/show/create/delete` | 클라이언트 | `client.*`; 목록은 현재 개요의 개수에 사용 |
+| `client-key list/register/delete` | Native 키 | `client-key.*`; 입력 raw key의 SHA-256 등록 계약 공유 |
+| `credential list/create/delete` | S3 키 | `credential.*`; secret은 발급 응답에서 한 번 제공 |
+| `usage storages/clients/history` | 개요·상세 | `usage.*`; 현재 화면은 `usage.storages` 사용 |
 | `update` | CLI 설치 안내 영역 | 사용자 PC의 바이너리 교체는 CLI의 로컬 기능 |
 
 동등성 대상은 위 등록부 원격 작업이다. 현재 `filegate admin init/recover`는 운영자 로컬
@@ -50,7 +51,8 @@ Grove Storage
 
 ## 로그인·토큰 관리 전환
 
-[ADR 009](../adr/009-management-identity-and-command-boundary.md)의 채택된 방향이며 미구현이다.
+[ADR 009](../adr/009-management-identity-and-command-boundary.md)의 개인 토큰 로그인·역할 표시·자원 연결을 구현했다.
+최초 설정/복구·User/Agent·토큰·이력 UI는 후속이며 대응 HTTP API는 구현되어 있다.
 권한·DB·전환 순서는 [관리 영역 설계](08-management-plane.md)를 따른다.
 
 ```text
@@ -77,7 +79,7 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 | S3 등록 | id, endpoint, public_endpoint, region, bucket, path-style, access key, secret, capacity, relay | 서버 필드 검증·접근 검증 |
 | fs 등록 | id, root_path, capacity | 서버 경로·쓰기 검증 |
 | 등록 용량 | B/GiB/TiB 입력을 정수 bytes로 변환, JSON 정수 정밀도 상한 2^53-1 | 서버 i64 범위의 부분집합 |
-| 저장소 교체 | 전체 명세 PUT; secret 재입력, 기존 secret은 조회되지 않음 | location 존재 시 주소 변경 409 |
+| 저장소 교체 | `storage.replace` 전체 명세; secret 재입력, 기존 secret은 조회되지 않음 | location 존재 시 주소 변경 409 |
 | 삭제 | 대상 ID 확인, 진행 중 중복 제출 차단, 409 시 이유와 최신 목록 표시 | DB 제약·서버 판단 |
 | Native 키 | 평문은 폼 처리 동안만 유지, 등록 후 제거 | 기존 hash 등록 계약 |
 | S3 키 발급 | 일회성 secret 표시·다운로드, 닫으면 제거 | 서버 발급·폐기 |
@@ -94,7 +96,8 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 |---|---|---|
 | A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
 | B (구현) | 저장소 조회·등록·교체·삭제 | 실제 fs/MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
-| 인증 전환 (다음) | master 설정·복구, 개인 토큰 로그인·User/Agent 관리 | spec 08의 단계 1~3·5, 실제 HTTPS 세션·역할·콘솔 전용 API 검증 |
+| 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·Agent 로그인 거부·console 감사 |
+| 5b (다음) | master 설정·복구·User/Agent·관리 토큰 UI | 일회성 발급·마지막 Admin·응답 불명·콘솔 전용 API |
 | 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
 | D | 반응형·접근성·배포 | 320/390/768/1024/1440px, light/dark/system, 키보드·초점, 같은 origin 배포 |
@@ -115,6 +118,7 @@ frontend/web/src/     현재 구현
 
 현재 셸은 `app/App.tsx`가 소유한다. 해시 경로로 목록·상세 새로고침과 뒤로 가기를 지원한다.
 등록·수정 입력은 폼에 두며 변경 요청의 secret은 query/mutation 캐시에 넣지 않는다.
-응답 유실·5xx는 미확정으로 표시하고 재제출을 잠근 뒤 조회로 대조한다.
+응답 유실·계약 불일치·`unknown/applied` 오류는 재제출을 잠근 뒤 조회로 대조한다.
+검증된 `not_applied` 오류는 변경 전 거부로 표시한다. 자동 변경 재전송은 없다.
 실행·검증은 [콘솔 README](../../frontend/web/README.md)를 따른다.
 개요는 저장소·클라이언트 수와 저장소별 점유를 제공하며, 이력과 클라이언트 상세는 후속이다.

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { example, fillS3, root, storageMock } from "./storage-fixture";
+import { failure, intercept } from "./command-fixture";
 
 test("zero file count does not bypass delete 409; refreshed registry is shown", async ({
   page,
@@ -8,10 +9,8 @@ test("zero file count does not bypass delete 409; refreshed registry is shown", 
   await page.goto(root);
   await page.getByRole("link", { name: new RegExp(example.id) }).click();
   await expect(page.getByText("0 파일").first()).toBeVisible();
-  await page.route("**/storages/home-archive", (route) =>
-    route.request().method() === "DELETE"
-      ? route.fulfill({ status: 409, json: { message: "secret-server-error" } })
-      : route.fallback(),
+  await intercept(page, "storage.delete", (route) =>
+      route.fulfill({ status: 409, json: { ...failure(409), message: "secret-server-error" } }),
   );
   await page.getByRole("button", { name: "저장소 삭제" }).click();
   await page.getByLabel("삭제할 저장소 ID").fill(example.id);
@@ -36,10 +35,8 @@ test("replace conflict clears secret and retains editable nonsecret settings", a
   await page.goto(`${root}/${example.id}`);
   await page.getByRole("button", { name: "저장소 수정" }).click();
   await page.getByLabel("Secret key (재입력)").fill("never-retain");
-  await page.route("**/storages/home-archive", (route) =>
-    route.request().method() === "PUT"
-      ? route.fulfill({ status: 409, json: {} })
-      : route.fallback(),
+  await intercept(page, "storage.replace", (route) =>
+      route.fulfill({ status: 409, json: failure(409) }),
   );
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
@@ -56,8 +53,7 @@ test("lost response blocks resubmission and refreshes instead of retrying", asyn
 }) => {
   const { reads, rows } = await storageMock(page, []);
   let posts = 0;
-  await page.route("**/storages", (route) => {
-    if (route.request().method() !== "POST") return route.fallback();
+  await intercept(page, "storage.create", (route) => {
     posts++;
     rows.set("new-s3", { ...example, id: "new-s3" });
     return route.abort("connectionreset");
@@ -85,11 +81,11 @@ test("storage read 401 returns to login without cached detail", async ({
   await storageMock(page);
   await page.goto(`${root}/${example.id}`);
   await expect(page.getByRole("region", { name: "저장소 설정" })).toBeVisible();
-  await page.route("**/storages/home-archive", (route) =>
-    route.fulfill({ status: 401, json: {} }),
+  await intercept(page, "storage.show", (route) =>
+    route.fulfill({ status: 401, json: failure(401) }),
   );
   await page.getByRole("button", { name: "새로고침" }).click();
-  await expect(page.getByLabel("관리자 토큰")).toBeVisible();
+  await expect(page.getByLabel("개인 토큰")).toBeVisible();
   await expect(page.getByRole("heading", { name: example.id })).toHaveCount(0);
 });
 
@@ -109,10 +105,9 @@ for (const method of ["POST", "PUT", "DELETE"]) {
       await page.getByRole("button", { name: "저장소 수정" }).click();
       await page.getByLabel("Secret key (재입력)").fill("secret");
     }
-    await page.route("**/storages**", (route) =>
-      route.request().method() === method
-        ? route.fulfill({ status: 401, json: {} })
-        : route.fallback(),
+    const command = { POST: "storage.create", PUT: "storage.replace", DELETE: "storage.delete" }[method]!;
+    await intercept(page, command, (route) =>
+        route.fulfill({ status: 401, json: failure(401) }),
     );
     await page
       .getByRole("button", {
@@ -120,7 +115,7 @@ for (const method of ["POST", "PUT", "DELETE"]) {
         exact: true,
       })
       .click();
-    await expect(page.getByLabel("관리자 토큰")).toBeVisible();
+    await expect(page.getByLabel("개인 토큰")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: example.id })).toHaveCount(
       0,
@@ -137,11 +132,10 @@ test("pending write clears secret, prevents double submit and holds dialog", asy
     release = resolve;
   });
   let posts = 0;
-  await page.route("**/storages", async (route) => {
-    if (route.request().method() !== "POST") return route.fallback();
+  await intercept(page, "storage.create", async (route) => {
     posts++;
     await pending;
-    return route.fulfill({ status: 400, json: {} });
+    return route.fulfill({ status: 400, json: failure(400) });
   });
   await page.goto(root);
   await page.getByRole("button", { name: "등록", exact: true }).click();

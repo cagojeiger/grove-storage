@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { consoleHeaders } from "../security-headers.mjs";
@@ -79,7 +80,7 @@ async function response(req, res) {
   const path = new URL(req.url, "http://127.0.0.1").pathname;
   const method = req.method;
   if (path === "/readyz") return json(res, 200, { status: "ready" });
-  if (path === "/api/admin/v1/session") {
+  if (path === "/api/admin/identity/v1/session") {
     if (method === "POST") signedIn = true;
     if (method === "DELETE") {
       signedIn = false;
@@ -89,41 +90,36 @@ async function response(req, res) {
     return json(
       res,
       signedIn ? 200 : 401,
-      signedIn ? { principal: "preview", credential_id: "preview" } : {},
+      signedIn ? { principal: "user", role: "admin", user_id: "preview", session_id: "preview", credential_id: "preview" } : {},
     );
   }
-  if (path.startsWith("/api/admin/v1/")) {
+  if (path === "/api/admin/console-commands/v1" && method === "POST") {
     if (!signedIn) return json(res, 401, {});
-    if (path === "/api/admin/v1/clients" && method === "GET")
-      return json(res, 200, [{ id: "notegate" }]);
-    if (path === "/api/admin/v1/usage" && method === "GET")
-      return json(res, 200, [...storages.values()].map(usage));
-    const match = /^\/api\/admin\/v1\/storages(?:\/([^/]+))?$/.exec(path);
-    if (!match) return json(res, 404, {});
-    const id = match[1] ? decodeURIComponent(match[1]) : null;
-    if (method === "GET")
-      return json(
-        res,
-        id && !storages.has(id) ? 404 : 200,
-        id ? (storages.get(id) ?? {}) : [...storages.values()],
-      );
-    if (method === "DELETE") {
-      if (!storages.has(id)) return json(res, 404, {});
-      if (id === "home-archive") return json(res, 409, {});
-      storages.delete(id);
-      res.writeHead(204, { "Cache-Control": "no-store" });
-      return res.end();
-    }
-    if (method !== "POST" && method !== "PUT") return json(res, 405, {});
     let raw = "";
     for await (const chunk of req) {
       raw += chunk;
       if (raw.length > 65536) return json(res, 413, {});
     }
-    const body = JSON.parse(raw);
-    const storageId = id ?? body.id;
-    if (method === "POST" && storages.has(storageId)) return json(res, 409, {});
-    if (method === "PUT" && !storages.has(storageId)) return json(res, 404, {});
+    const { command, input } = JSON.parse(raw);
+    const envelope = { protocol: 1, request_id: randomUUID() };
+    const success = (result) => json(res, 200, { ...envelope, command, result });
+    const failure = (status, code) => json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
+    if (command === "client.list") return success(["notegate"]);
+    if (command === "usage.storages") return success([...storages.values()].map(usage));
+    if (command === "storage.list") return success([...storages.values()]);
+    const storageId = input.id;
+    if (command === "storage.show")
+      return storages.has(storageId) ? success(storages.get(storageId)) : failure(404, "not_found");
+    if (command === "storage.delete") {
+      if (!storages.has(storageId)) return failure(404, "not_found");
+      if (storageId === "home-archive") return failure(409, "conflict");
+      storages.delete(storageId);
+      return success({ resource: "storage", id: storageId });
+    }
+    if (!["storage.create", "storage.replace"].includes(command)) return failure(400, "unknown_command");
+    if (command === "storage.create" && storages.has(storageId)) return failure(409, "conflict");
+    if (command === "storage.replace" && !storages.has(storageId)) return failure(404, "not_found");
+    const body = input.spec;
     const saved = {
       id: storageId,
       kind: body.kind,
@@ -138,7 +134,7 @@ async function response(req, res) {
       capacity_bytes: body.capacity_bytes,
     };
     storages.set(storageId, saved);
-    return json(res, method === "POST" ? 201 : 200, saved);
+    return success(saved);
   }
   if (!path.startsWith(base)) return json(res, 404, {});
   const relative = path.slice(base.length) || "index.html";

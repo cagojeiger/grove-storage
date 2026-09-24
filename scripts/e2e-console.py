@@ -31,13 +31,17 @@ def check(endpoint, directory, database, origin, serve, minio):
         if time.monotonic() > deadline:
             raise RuntimeError('API readiness timeout')
         time.sleep(.2)
-    port = HARNESS['docker']('port', database, '5432').rsplit(':', 1)[1]
-    env = {k: v for k, v in os.environ.items() if not k.startswith('FILEGATE_')}
-    env.update(FILEGATE_DATABASE_URL=f'postgres://filegate:filegate@127.0.0.1:{port}/filegate',
-               FILEGATE_ENC_ROOT_SECRET='local-cli-integration-root-secret-32bytes')
-    issued = subprocess.run([str(HARNESS['SERVER']), 'admin', 'init'], env=env,
-                            capture_output=True, text=True, check=True, timeout=30)
-    credential = json.loads(issued.stdout)
+    headers = {'Origin': origin, 'X-Grove-CSRF': '1', 'Content-Type': 'application/json'}
+    def identity(path, body):
+        request = urllib.request.Request(endpoint + '/api/admin/identity/v1' + path,
+                                         headers=headers, data=json.dumps(body).encode())
+        with opener.open(request, timeout=5) as response:
+            cookie = response.headers.get('Set-Cookie')
+            if cookie:
+                headers['Cookie'] = cookie.split(';', 1)[0]
+            return json.loads(response.read())
+    identity('/master/session', {'token': HARNESS['MASTER_TOKEN']})
+    credential = identity('/master/bootstrap', {'display_name': 'Console test owner'})
     token = credential['token']
     objects = Path(directory) / 'objects'
     objects.mkdir()
@@ -64,20 +68,19 @@ def check(endpoint, directory, database, origin, serve, minio):
                         raise RuntimeError('HTTPS Vite readiness timeout')
                     time.sleep(.2)
             if serve:
-                token_file = Path(directory) / 'operator-token'
+                token_file = Path(directory) / 'user-token'
                 fd = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(fd, 'w') as output:
                     output.write(token)
                 print('Console:', origin + '/api/admin/console/', flush=True)
-                print('Local disposable admin token:', token_file, flush=True)
+                print('Local disposable User token:', token_file, flush=True)
                 print('Local filesystem root:', objects, flush=True)
                 while vite.poll() is None:
                     time.sleep(1)
             else:
                 subprocess.run(['node', 'tests/live.mjs'], cwd=ROOT / 'frontend/web',
-                               input=json.dumps({'origin': origin, 'token': token, 'credentialId': credential['id'],
-                                                 'database': database, 'server': str(HARNESS['SERVER']),
-                                                 'serverEnv': env, 'objects': str(objects),
+                               input=json.dumps({'origin': origin, 'token': token, 'credentialId': credential['credential_id'],
+                                                 'database': database, 'objects': str(objects),
                                                  'otherObjects': str(other_objects), 'endpoint': endpoint,
                                                  'minio': minio.spec if minio else None}), text=True,
                                check=True, timeout=90)
@@ -105,4 +108,4 @@ if __name__ == '__main__':
     fixture = minio_backend() if args.with_minio else nullcontext()
     with fixture as minio:
         HARNESS['main'](lambda endpoint, directory, database: check(endpoint, directory, database, origin, args.serve, minio),
-                        with_database=True, console_origin=origin)
+                        with_database=True, console_origin=origin, management=True)

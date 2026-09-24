@@ -1,6 +1,6 @@
 # spec 07: 관리 브라우저의 보안 경계
 
-- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더·User/master 세션·설정/복구·신원/이력 HTTP 경계 구현. 운영 호스팅·새 UI E2E는 후속.
+- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더·User/master·신원/이력 HTTP 구현. User UI 로그인·자원 연결은 실제 HTTPS 검증; master/신원 UI·운영 호스팅은 후속.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [콘솔](06-console.md).
 - 새 User 세션 HTTP·신원/진입 경계: [spec 08](08-management-plane.md#user-세션-http-3a).
 
@@ -9,7 +9,7 @@
 ```text
 console.example.com               data.example.com
 ├── /api/admin/console/           ├── /{bucket}/{key}
-├── /api/admin/v1/                ├── /blobs/...
+├── /api/admin/console-commands/v1 ├── /blobs/...
 ├── /api/admin/identity/v1/       │   기존 데이터 인증 유지
 └── /readyz                       └── /api/v1/...
     나머지 경로: 404                  업로드·다운로드 경로
@@ -34,7 +34,8 @@ Grove 관리 권한으로 해석하지 않는다. 콘솔에서 호출하는 API�
 기계용 401/403은 JSON/MCP 오류로 반환하고 OAuth 로그인 페이지로 redirect하지 않는다.
 현재 `/api/admin/commands/v1`은 Bearer 전용 조회·변경 진입점이며 Cookie를 거부한다.
 CLI는 이 경로를 사용하고 MCP는 `/api/admin/mcp`의 Bearer 전용 경로를 사용한다.
-MCP는 Origin이 있는 요청도 거부한다. 기존 UI·REST 인증은 별도로 유지한다.
+MCP는 Origin이 있는 요청도 거부한다. UI는 세션 전용 `/api/admin/console-commands/v1`을 사용한다.
+이전 `/api/admin/v1` REST 인증은 별도로 유지하며 새 콘솔 프록시 허용 경로에서 제외한다.
 SigV4의 Authorization·Host·path·query와 presigned URL은 서명 계약에 맞게 보존한다.
 TLS 종료 뒤의 직접 접근 경로·신뢰 proxy 헤더·callback 쿠키·로그아웃을 배포 E2E로 검증한다.
 
@@ -74,10 +75,10 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 
 헤더는 정적 HTML 응답에 실려야 한다. API 응답에만 CSP를 붙이거나 HTML meta만 사용하는
 것으로 frame-ancestors를 대신할 수 없다. 운영 ingress의 실제 응답 헤더를 배포 후 확인한다.
-로컬 HTTP 샘플 서버는 인증을 모사한다. 기존 세션의 브라우저 근거는 HTTPS fixture다.
+로컬 HTTP 샘플 서버는 인증을 모사한다. 새 User 세션의 브라우저 근거는 HTTPS fixture다.
 새 User/master 세션과 신원/이력 API는 PG+HTTP 라우터로 검증했다.
 신원 변경은 Admin User 세션으로 제한하며 Bearer/master·cross-origin 요청의 거부를 확인한다.
-새 쿠키의 실제 브라우저 검증은 UI 연결 때 수행한다.
+새 User 쿠키·CSRF·폐기·역할 강등·Agent 로그인 거부는 실제 HTTPS UI에서 검증했다.
 
 ## master·개인 토큰 로그인 완료 조건 (설계)
 
@@ -101,7 +102,8 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 | 로그인·401·secret 제거·CRUD·반응형 | 기존 Playwright suite에 함께 실행 |
 | 파일 HTML을 관리 origin에서 열 수 있는 배포 조건 | 코드·계약에서 확인한 조건부 위험; 운영 ingress는 이번 점검 범위 밖 |
 | 운영 호스트 경로 제한·TLS·응답 헤더 | 배포 완료 조건; 미검증 |
-| 새 master/User 로그인·세션 관리·다중 탭 | 인증 전환 구현 단계의 필수 회귀 테스트 |
+| User 로그인·자원 UI·역할·폐기 | 실제 HTTPS·PG·fs/MinIO fixture |
+| master UI·세션 관리·다중 탭 복원 | 후속 인증 화면 단계의 필수 회귀 테스트 |
 | OAuth2 Proxy·기계용 API 분리 | 배포 전 401/403, Bearer 보존, 신원 API 우회 거부 검증 |
 
 근거: [OWASP CSP](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html),

@@ -10,7 +10,7 @@ below to test authentication and the real API.
 
 | Implemented | Follow-up |
 |---|---|
-| Admin cookie login/logout, session restore and 401 handling | Client and credential mutation screens |
+| Personal User token login/logout, current role, session restore and 401 handling | Master setup/recovery, User/Agent/token/session/history screens |
 | Storage list/detail, S3/fs create/replace/delete, conflict guards | Client detail and key lifecycle |
 | API readiness, client count, per-storage usage | Usage history and client detail |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
@@ -63,7 +63,9 @@ GROVE_DEV_TLS_CERT=/absolute/path/cert.pem npm run dev
 ```
 
 Set the API's `FILEGATE_CONSOLE_ORIGIN` to the exact HTTPS Vite origin and initialize
-a DB admin token using `filegate admin init`. Legacy environment tokens do not log
+a User token through `/api/admin/identity/v1/master/session` and `/master/bootstrap`
+with the configured master token. The fixture automates this setup on its disposable DB.
+The setup/recovery UI is a follow-up. Legacy operator and Agent tokens do not log
 into the console. The default UI port is 5173; an occupied port fails instead of
 silently changing the allowed origin. Override with `-- --port PORT` and update the origin.
 
@@ -71,7 +73,8 @@ The [Vite HTTPS/proxy configuration](https://vite.dev/config/server-options) ret
 the browser Origin. API routes and `/readyz` are proxied; browser requests use
 same-origin cookies. Token/provider secrets never belong in `VITE_*` variables.
 For release hosting, use a dedicated HTTPS console host. Mount `dist` at
-`/api/admin/console/` and proxy only `/api/admin/v1` (including its subpaths) and
+`/api/admin/console/` and proxy only `/api/admin/identity/v1` (including its subpaths),
+`/api/admin/console-commands/v1`, and
 `/readyz`. Return 404 for all other paths. Serve S3, relay and uploaded files on a
 different host: uploaded HTML running on the console origin could act with the
 administrator's cookies. This does not require a separate backend process.
@@ -95,6 +98,8 @@ rules; generated build, browser reports and local TLS files are excluded.
 | Test | Boundary |
 |---|---|
 | `tests/api.spec.ts` | Transport options, cancellation signal, error sanitization, formatting |
+| `tests/commands.spec.ts` | Shared command envelope, outcome certainty, no automatic mutation retries |
+| `tests/permissions.spec.ts` | Viewer controls, live demotion and form removal |
 | `tests/console.spec.ts` | Mock API state/error handling, 320/390/768/1024/1440px, themes, screenshots |
 | `tests/browser-security.spec.ts` | Built assets under CSP, blocked inline scripts/external connections/iframe embedding |
 | `tests/storage-model.spec.ts` | Exact capacity conversion, backend-specific payloads, sanitized errors |
@@ -103,6 +108,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/storage-layout.spec.ts` | List/detail/editor across five widths and both themes; focus restoration |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI fs/MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
+| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Viewer enforcement, Agent login rejection and Console audit |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
 Run `npm run build` before `npm test`: the browser security suite serves `dist` on

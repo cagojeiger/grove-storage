@@ -1,9 +1,9 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 신원·이력·세션 HTTP와 공통 자원 19개(조회 10·변경 9)/Bearer HTTP·CLI·MCP 연결 구현·테스트. 새 UI는 후속.
+- 상태: 신원·이력·세션 HTTP와 공통 자원 19개/Bearer HTTP·CLI·MCP 연결 구현·테스트. UI 5a(User 로그인·역할·기존 자원 화면 전환) 구현; 신원·이력 화면은 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
-- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`과 UI는 `admin_*`를 사용하며 새 CLI는 `management` User/Agent를 사용한다.
+- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`은 `admin_*`를 유지한다. 새 UI는 `management` User 세션, CLI/MCP는 User/Agent 토큰을 사용한다.
 
 ## 책임과 접근
 
@@ -107,13 +107,15 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 | 상관 | 서버 발급 request_id를 응답 헤더와 audit/invocation/security에 사용; 인증 전 거부는 보안 이력만 기록 |
 | 응답 불명 | commit 오류는 503/outcome_unknown, 쿠키 발급·자동 재시도 생략; 잠재 세션은 고정 TTL/개수 상한 적용 |
 | 로그아웃 | 현재 세션만 폐기; 원본 토큰과 다른 세션 유지; 이미 무효한 세션은 401과 쿠키 제거 |
-| 검증 범위 | 실제 PostgreSQL + Axum HTTP 라우터; TLS·브라우저 쿠키 적용·OAuth2 Proxy E2E는 후속 |
+| 검증 범위 | 실제 PostgreSQL + Axum HTTP + 로컬 HTTPS 브라우저 User 쿠키; OAuth2 Proxy·운영 TLS는 후속 |
 
 기존 `fgop_`·`__Host-filegate_session`과 새 토큰·쿠키는 양방향으로 분리한다.
-새 세션은 기존 전체권한 자원 API의 증거가 되지 않는다. 현재 UI 동작은 유지한다.
+새 세션은 기존 전체권한 자원 API의 증거가 되지 않는다. UI 자원 요청은
+`POST /api/admin/console-commands/v1`에서 User 세션·Origin·CSRF 확인 후 공통 실행기로 연결한다.
+서버가 `Console` 표면을 지정하며 Bearer·master·기존 쿠키는 이 경로의 인증이 되지 않는다.
 CLI는 새 User/Agent Bearer를 공통 자원 API에 전달한다.
-최초 User·개인 토큰 발급은 아래 master HTTP 흐름으로 제공한다. 기존 UI의 로그인 화면은
-아직 이 경로로 전환하지 않았으며 운영 DB 수동 삽입을 설치 절차로 제공하지 않는다.
+최초 User·개인 토큰 발급은 아래 master HTTP 흐름으로 제공한다. UI는 개인 토큰 로그인까지
+연결했으며 master 설정/복구 화면은 후속이다. 운영 DB 수동 삽입을 설치 절차로 제공하지 않는다.
 
 ### Master 설정·복구 HTTP (3b)
 
@@ -151,7 +153,7 @@ DELETE는 해당 세션 종료만 제공한다. 일반 User·자원·이력 조�
 | 실행 검증 | 임시 PG + 실제 서버 프로세스에서 운영자 토큰 없이 부팅·설정·User 로그인·복구·이전 접근 차단 확인; TLS/브라우저/proxy E2E는 후속 |
 
 master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는다. 새 설치는 master 설정으로
-부팅할 수 있고 CLI는 새 신원으로 자원을 관리한다. UI 전환과 이전 인증 종료는 후속이다. master를 잠시
+부팅할 수 있고 CLI·UI는 새 신원으로 자원을 관리한다. master UI와 이전 인증 종료는 후속이다. master를 잠시
 비활성화하려면 모든 replica에서 설정 쌍을 제거한다. 같은 설정을 다시 켜면 남은 유효 세션도
 재사용할 수 있으므로, 세션까지 영구 무효화하려면 세대를 올려 교체한다. 교체 시에는 두 값을 함께
 배포하고 `/master/session` 응답으로 경로를 검증한다. 낮은 세대로의 rollback 대신 더 큰
@@ -372,7 +374,9 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 4b-2 (로컬 구현·검증) | Storage 변경 3개 + 감사 transaction | 8개 PG 서비스 + 6개 PG HTTP; probe 중 폐기/권한/참조 변경·fs/S3 대역 검사·키 교체·삭제/주소 제약·rollback·unknown |
 | 4c-1 (로컬 구현·검증) | CLI command HTTP adapter | 19개 명령·User/Agent·owner 강등/폐기·wire 검증·비밀 파일·기존 REST 결과 대조 |
 | 4c-2 (로컬 구현·검증) | MCP adapter | 같은 19개 명령·실제 HTTP/CLI 결과 대조·MCP 감사·owner·폐기·secret 로그 제외 |
-| 5 (다음) | 콘솔 User/Agent/role/token/history | 역할별 표시·API 거부, 원문 한 번 표시, 응답 불명, light/dark·phone/tablet/desktop |
+| 5a (로컬 구현·검증) | 개인 토큰 로그인·현재 역할·개요/저장소 공통 명령 연결 | User 쿠키·CSRF·현재 권한·폐기·console 감사; 실제 HTTPS·fs/MinIO·반응형 |
+| 5b (다음) | master 설정/복구·User/Agent/role/token UI | 원문 한 번 표시·마지막 Admin·응답 불명·권한별 표시 |
+| 5c | 세션·관리 이력 UI | 조회 scope·cursor·상관 ID·secret 제외 |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
 
 기존 관리 token은 사람·Agent·role의 대상 매핑을 명시적으로 승인한 뒤 전환한다.

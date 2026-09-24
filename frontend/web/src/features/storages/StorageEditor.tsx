@@ -1,7 +1,8 @@
 import { FormEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
-import { admin, ApiError, request } from "../../api/http";
+import { ApiError } from "../../api/http";
+import { command } from "../../api/commands";
 import { clearSession } from "../../auth/session";
 import { Dialog } from "../../design/Dialog";
 import {
@@ -51,13 +52,7 @@ export function StorageEditor({
     setBusy(true);
     setError("");
     try {
-      await request(
-        `${admin}/storages${storage ? `/${encodeURIComponent(id)}` : ""}`,
-        {
-          method: storage ? "PUT" : "POST",
-          body: JSON.stringify(storage ? body : { id, ...body }),
-        },
-      );
+      await command(storage ? "storage.replace" : "storage.create", { id, spec: body });
       await refreshStorages(cache);
       onSaved(id);
     } catch (error) {
@@ -66,6 +61,8 @@ export function StorageEditor({
         return;
       }
       setError(mutationMessage(error, storage ? "replace" : "create"));
+      if (error instanceof ApiError && error.status === 403)
+        void cache.invalidateQueries({ queryKey: ["session"] });
       setUnknown(uncertain(error));
       await refreshStorages(cache);
     } finally {

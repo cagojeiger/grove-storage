@@ -49,7 +49,7 @@ backend/crates/
 │   ├── logging.rs       운영 subscriber·SDK payload 로그 차단
 │   ├── resource_commands.rs  공통 자원 Bearer HTTP·envelope·서버 Surface
 │   ├── resource_commands/tests/  기존 REST 비교·인증/입력·변경·감사/commit 장애
-│   ├── console_identity/  새 인증·신원·이력 HTTP (기존 UI 전환 전)
+│   ├── console_identity/  인증·신원·이력 HTTP + 세션 전용 자원 adapter
 │   │   ├── browser.rs    Origin·CSRF·cookie·Bearer 분리
 │   │   ├── secrets.rs    token/session 형식·해시 domain
 │   │   ├── session.rs    로그인·현재 세션·로그아웃 adapter
@@ -109,7 +109,7 @@ backend/crates/
 | `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 19개 전체; Storage probe는 잠금 밖, 이후 role/owner·참조 재확인·audit 원자성 |
 | `api/resource_commands` | CLI 등 Bearer·JSON → 공통 자원 실행기 | Cookie 거부·server Surface·명령/envelope 검증; 이전 REST 인증과 분리 |
 | `api/mcp` | MCP Bearer·tool 입력 → 같은 자원 실행기 | 요청별 인증·Origin/Cookie 차단·공통 schema·surface=mcp; 권한 cache 없음 |
-| `api/console_identity` | HTTP token/cookie·입력 → 신원/이력 service | Origin/CSRF·별도 쿠키·해시 domain·비밀 없는 목록; 기존 UI·자원 API 전환과 분리 |
+| `api/console_identity` | HTTP token/cookie·입력 → 신원/이력 service; `resources.rs` → 공통 자원 실행기 | Origin/CSRF·별도 쿠키·해시 domain·비밀 없는 목록; 현재 UI는 User 세션 사용 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
 | `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw, HardDrive } from "lucide-react";
-import { admin, message, request, Usage } from "../../api/http";
+import { message, request, Usage } from "../../api/http";
+import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
 
 export function Overview() {
@@ -8,8 +9,8 @@ export function Overview() {
     queryKey: ["overview"],
     queryFn: async ({ signal }) => {
       const [usage, clients, ready] = await Promise.all([
-        request<Usage[]>(`${admin}/usage`, { signal }),
-        request<{ id: string }[]>(`${admin}/clients`, { signal }),
+        command<Usage[]>("usage.storages", {}, signal),
+        command<string[]>("client.list", {}, signal),
         request<{ status: string }>("/readyz", { signal }).then(
           (value) => value.status === "ready",
           () => false,

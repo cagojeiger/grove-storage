@@ -5,6 +5,7 @@ mod identity;
 mod lifecycle;
 mod master;
 mod master_recovery;
+mod resources;
 
 use super::{browser::COOKIE, secrets};
 use axum::{

@@ -1,4 +1,4 @@
-//! Bearer-only resource transport. Surface and actor are always server-owned.
+//! Shared HTTP command envelope and Bearer adapter; authority is server-owned.
 use crate::{console_identity::secrets, routes::AppState};
 use axum::{
     Json,
@@ -25,8 +25,17 @@ pub(crate) async fn execute(
     headers: HeaderMap,
     body: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> Response {
-    let request_id = Uuid::new_v4();
     let hash = token(&headers).map(secrets::token_hash).unwrap_or_default();
+    execute_with(state, Proof::Token(&hash), Surface::ResourceApi, body).await
+}
+
+pub(crate) async fn execute_with(
+    state: AppState,
+    proof: Proof<'_>,
+    surface: Surface,
+    body: Result<Json<serde_json::Value>, JsonRejection>,
+) -> Response {
+    let request_id = Uuid::new_v4();
     let Ok(Json(value)) = body else {
         return failure(CommandError::rejected(ErrorCode::InvalidInput), request_id);
     };
@@ -45,8 +54,8 @@ pub(crate) async fn execute(
         &state.pool,
         &state.crypto,
         |input| crate::admin::verify_storage_command(&state, input),
-        Proof::Token(&hash),
-        Surface::ResourceApi,
+        proof,
+        surface,
         command,
     )
     .await;

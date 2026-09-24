@@ -10,15 +10,16 @@ test("S3 registration sends all options with CSRF and removes the secret", async
   await fillS3(page);
   const sent = page.waitForRequest((req) => req.method() === "POST");
   await page.getByRole("button", { name: "저장", exact: true }).click();
-  expect((await sent).headers()["x-filegate-csrf"]).toBe("1");
+  expect((await sent).headers()["x-grove-csrf"]).toBe("1");
   await expect(
     page.getByRole("heading", { name: "new-s3", exact: true }),
   ).toBeVisible();
   expect(writes).toEqual([
     {
-      method: "POST",
-      body: {
+      command: "storage.create",
+      input: {
         id: "new-s3",
+        spec: {
         kind: "s3",
         endpoint: "https://s3.example.com",
         public_endpoint: "https://public.example.com",
@@ -29,6 +30,7 @@ test("S3 registration sends all options with CSRF and removes the secret", async
         capacity_bytes: 1.5 * 1024 ** 4,
         force_path_style: true,
         force_relay: true,
+        },
       },
     },
   ]);
@@ -43,13 +45,13 @@ test("S3 registration sends all options with CSRF and removes the secret", async
   await page.getByLabel("등록 용량", { exact: true }).fill("1000");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(writes[1].method).toBe("PUT");
-  expect(writes[1].body).toMatchObject({
+  expect(writes[1].command).toBe("storage.replace");
+  expect(writes[1].input.spec).toMatchObject({
     endpoint: "https://s3.example.com",
     capacity_bytes: 1000,
     secret_key: "replacement-secret",
   });
-  expect(writes[1].body).not.toHaveProperty("id");
+  expect(writes[1].input.id).toBe("new-s3");
 });
 
 test("kind switch clears secret; fs creation, reload, history and deletion", async ({
@@ -69,11 +71,13 @@ test("kind switch clears secret; fs creation, reload, history and deletion", asy
   await expect(
     page.getByRole("heading", { name: "list", exact: true }),
   ).toBeVisible();
-  expect(writes[0].body).toEqual({
+  expect(writes[0].input).toEqual({
     id: "list",
+    spec: {
     kind: "fs",
     root_path: "/data/objects",
     capacity_bytes: 1.5 * 1024 ** 4,
+    },
   });
   await page.reload();
   await expect(page.getByText("/data/objects", { exact: true })).toBeVisible();
@@ -85,7 +89,7 @@ test("kind switch clears secret; fs creation, reload, history and deletion", asy
   await page.getByLabel("삭제할 저장소 ID").fill("list");
   await confirm.click();
   await expect(page.getByText("등록된 저장소가 없습니다.")).toBeVisible();
-  expect(writes[1].method).toBe("DELETE");
+  expect(writes[1].command).toBe("storage.delete");
 });
 
 test("search, cancel and keyboard focus do not mutate registry", async ({

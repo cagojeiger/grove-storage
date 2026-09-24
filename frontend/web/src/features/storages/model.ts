@@ -106,6 +106,8 @@ export function storageSpec(
 }
 
 export function uncertain(error: unknown) {
+  if (error instanceof ApiError && error.outcome)
+    return error.outcome !== "not_applied";
   return (
     !(error instanceof ApiError) || error.status >= 500 || error.status === 408
   );

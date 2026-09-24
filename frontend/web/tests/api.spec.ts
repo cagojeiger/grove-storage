@@ -16,13 +16,13 @@ test('transport uses same-origin cookies, CSRF, no-store and handles 204', async
     globalThis.fetch = (_url, options) => {
       expect(options?.credentials).toBe('same-origin');
       expect(options?.cache).toBe('no-store');
-      expect(new Headers(options?.headers).get('X-FileGate-CSRF')).toBe('1');
+      expect(new Headers(options?.headers).get('X-Grove-CSRF')).toBe('1');
       expect(new Headers(options?.headers).has('Authorization')).toBe(false);
       controller.abort();
       expect(options?.signal?.aborted).toBe(true);
       return Promise.resolve(new Response(null, { status: 204 }));
     };
-    expect(await request('/api/admin/v1/session', { method: 'DELETE', signal: controller.signal })).toBeUndefined();
+    expect(await request('/api/admin/identity/v1/session', { method: 'DELETE', signal: controller.signal })).toBeUndefined();
   } finally { globalThis.fetch = original; }
 });
 
@@ -30,7 +30,7 @@ test('transport exposes retry delay but never echoes response secrets', async ()
   const original = globalThis.fetch;
   try {
     globalThis.fetch = () => Promise.resolve(new Response('secret-from-server', { status: 429, headers: { 'Retry-After': '60' } }));
-    try { await request('/api/admin/v1/session'); throw new Error('expected failure'); }
+    try { await request('/api/admin/identity/v1/session'); throw new Error('expected failure'); }
     catch (error) {
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).retryAfter).toBe(60);

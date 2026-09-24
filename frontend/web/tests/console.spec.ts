@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { commandUrl, envelope, failure, intercept, session } from "./command-fixture";
 
 const root = "/api/admin/console/";
 async function mock(page: Page, signedIn = true) {
@@ -6,7 +7,7 @@ async function mock(page: Page, signedIn = true) {
   await page.route("**/readyz", (route) =>
     route.fulfill({ json: { status: "ready" } }),
   );
-  await page.route("**/api/admin/v1/**", async (route) => {
+  await page.route("**/api/admin/identity/v1/session", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/session")) {
       if (route.request().method() === "POST") loggedIn = true;
@@ -17,13 +18,17 @@ async function mock(page: Page, signedIn = true) {
       }
       await route.fulfill({
         status: loggedIn ? 200 : 401,
-        json: loggedIn ? { principal: "admin", credential_id: "test" } : {},
+        json: loggedIn ? session : {},
       });
-    } else if (path.endsWith("/clients"))
-      await route.fulfill({ json: [{ id: "notegate" }] });
+    }
+  });
+  await page.route(commandUrl, async (route) => {
+    const { command } = route.request().postDataJSON() as { command: string };
+    if (command === "client.list")
+      await route.fulfill({ json: envelope(command, ["notegate"]) });
     else
       await route.fulfill({
-        json: [
+        json: envelope(command, [
           {
             storage_id: "home-storage-long-identifier",
             kind: "s3",
@@ -33,8 +38,10 @@ async function mock(page: Page, signedIn = true) {
             purge_pending_bytes: 0,
             remaining_bytes: 1024 ** 3 * 896,
             active_files: 1240,
+            reserved_files: 0,
+            purge_pending_files: 0,
           },
-        ],
+        ]),
       });
   });
 }
@@ -42,7 +49,7 @@ async function mock(page: Page, signedIn = true) {
 test("login clears token; logout removes overview", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
-  await page.getByLabel("관리자 토큰").fill("test-token");
+  await page.getByLabel("개인 토큰").fill("test-token");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "개요", exact: true }),
@@ -53,7 +60,7 @@ test("login clears token; logout removes overview", async ({ page }) => {
     ),
   ).not.toContain("test-token");
   await page.getByRole("button", { name: "로그아웃" }).click();
-  await expect(page.getByLabel("관리자 토큰")).toHaveValue("");
+  await expect(page.getByLabel("개인 토큰")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 
@@ -65,7 +72,7 @@ for (const status of [307, 308]) {
       if (new URL(request.url()).pathname === "/redirect-target")
         forwarded.push(request.postData() ?? "");
     });
-    await page.route("**/api/admin/v1/session", async (route) => {
+    await page.route("**/api/admin/identity/v1/session", async (route) => {
       if (route.request().method() === "POST") {
         await route.fulfill({ status, headers: { Location: "/redirect-target" } });
       } else {
@@ -73,21 +80,21 @@ for (const status of [307, 308]) {
       }
     });
     await page.goto(root);
-    await page.getByLabel("관리자 토큰").fill("fixture-secret-not-for-redirect");
+    await page.getByLabel("개인 토큰").fill("fixture-secret-not-for-redirect");
     await page.getByRole("button", { name: "로그인", exact: true }).click();
     await expect(
       page.getByRole("alert").or(page.getByRole("heading", { name: "개요", exact: true })),
     ).toBeVisible();
     expect(forwarded).toEqual([]);
     await expect(page.getByRole("alert")).toContainText("서버에 연결하지 못했습니다");
-    await expect(page.getByLabel("관리자 토큰")).toHaveValue("");
+    await expect(page.getByLabel("개인 토큰")).toHaveValue("");
   });
 }
 
 test("429 clears input and honors Retry-After", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
-  await expect(page.getByLabel("관리자 토큰")).toBeVisible();
+  await expect(page.getByLabel("개인 토큰")).toBeVisible();
   await page.route("**/session", (route) =>
     route.request().method() === "POST"
       ? route.fulfill({
@@ -97,10 +104,10 @@ test("429 clears input and honors Retry-After", async ({ page }) => {
         })
       : route.fallback(),
   );
-  await page.getByLabel("관리자 토큰").fill("do-not-persist");
+  await page.getByLabel("개인 토큰").fill("do-not-persist");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("요청이 많습니다");
-  await expect(page.getByLabel("관리자 토큰")).toHaveValue("");
+  await expect(page.getByLabel("개인 토큰")).toHaveValue("");
   await expect(
     page.getByRole("button", { name: /초 후 재시도/ }),
   ).toBeDisabled();
@@ -110,25 +117,25 @@ test("overview 401 removes cached private data", async ({ page }) => {
   await mock(page);
   await page.goto(root);
   await expect(page.getByText("home-storage-long-identifier")).toBeVisible();
-  await page.route("**/usage", (route) =>
-    route.fulfill({ status: 401, json: {} }),
+  await intercept(page, "usage.storages", (route) =>
+    route.fulfill({ status: 401, json: failure(401) }),
   );
   await page.getByRole("button", { name: "새로고침" }).click();
-  await expect(page.getByLabel("관리자 토큰")).toBeVisible();
+  await expect(page.getByLabel("개인 토큰")).toBeVisible();
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 
 test("empty, API failure, retry, and logout failure", async ({ page }) => {
   await mock(page);
-  await page.route("**/usage", (route) => route.fulfill({ json: [] }));
+  await intercept(page, "usage.storages", (route) => route.fulfill({ json: envelope("usage.storages", []) }));
   await page.goto(root);
   await expect(page.getByText("등록된 저장소가 없습니다.")).toBeVisible();
-  await page.route("**/usage", (route) =>
-    route.fulfill({ status: 500, json: {} }),
+  await intercept(page, "usage.storages", (route) =>
+    route.fulfill({ status: 500, json: failure(500) }),
   );
   await page.getByRole("button", { name: "새로고침" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await page.route("**/usage", (route) => route.fulfill({ json: [] }));
+  await intercept(page, "usage.storages", (route) => route.fulfill({ json: envelope("usage.storages", []) }));
   await page.getByRole("button", { name: "새로고침" }).click();
   await expect(page.getByText("등록된 저장소가 없습니다.")).toBeVisible();
   await page.route("**/session", (route) =>
@@ -151,6 +158,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await expect(
         page.getByText("home-storage-long-identifier"),
       ).toBeVisible();
+      await expect(page.getByText("Admin · 관리")).toBeVisible();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
