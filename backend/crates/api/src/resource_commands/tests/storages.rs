@@ -20,8 +20,14 @@ impl Drop for Root {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn storage_http_lifecycle_matches_legacy_reads_and_preserves_references(pool: PgPool) {
     let token = owner(&pool).await;
-    let root = Root::new();
-    let response = call(&pool, &token, "storage.create", root.input("local", 100)).await;
+    let root = super::storage_s3::Provider::start(false).await;
+    let response = call(
+        &pool,
+        &token,
+        "storage.create",
+        root.input_for("local", 100),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
     let created = json_body(response).await;
@@ -42,7 +48,13 @@ async fn storage_http_lifecycle_matches_legacy_reads_and_preserves_references(po
     filegate_db::registry::delete_client(&pool, "app")
         .await
         .unwrap();
-    let response = call(&pool, &token, "storage.replace", root.input("local", 200)).await;
+    let response = call(
+        &pool,
+        &token,
+        "storage.replace",
+        root.input_for("local", 200),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(json_body(response).await["result"]["capacity_bytes"], 200);
     for _ in 0..2 {
@@ -95,7 +107,10 @@ async fn invalid_storage_fields_and_probe_failure_are_sanitized(pool: PgPool) {
     }
     let mut state = crate::routes::tests::test_state();
     state.public_url = None;
-    let input = serde_json::from_value(root.input("local", 1)).unwrap();
+    let input = serde_json::from_value(
+        json!({"id":"relay","spec":{"kind":"s3","force_relay":true,"capacity_bytes":1}}),
+    )
+    .unwrap();
     assert!(matches!(
         crate::storage_registration::verify_command(
             &state.crypto,
@@ -116,8 +131,8 @@ async fn invalid_storage_fields_and_probe_failure_are_sanitized(pool: PgPool) {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn legacy_storage_writes_share_registration_with_commands(pool: PgPool) {
     let token = owner(&pool).await;
-    let root = Root::new();
-    let mut body = root.input("legacy", 100)["spec"].clone();
+    let root = super::storage_s3::Provider::start(false).await;
+    let mut body = root.input_for("legacy", 100)["spec"].clone();
     body["id"] = json!("legacy");
     let response = request(
         &pool,
@@ -149,4 +164,82 @@ async fn legacy_storage_writes_share_registration_with_commands(pool: PgPool) {
             .status(),
         StatusCode::OK
     );
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn filesystem_create_and_replace_are_rejected_without_mutation(pool: PgPool) {
+    let token = owner(&pool).await;
+    let provider = super::storage_s3::Provider::start(false).await;
+    assert_eq!(
+        call(
+            &pool,
+            &token,
+            "storage.create",
+            provider.input_for("retained", 100)
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let before = filegate_db::registry::get_storage(&pool, "retained")
+        .await
+        .unwrap()
+        .unwrap();
+    let spec = json!({"kind":"fs","root_path":"/never-probed","capacity_bytes":1});
+    for (method, path, command, id) in [
+        (
+            "POST",
+            "/api/admin/v1/storages",
+            "storage.create",
+            "blocked",
+        ),
+        (
+            "PUT",
+            "/api/admin/v1/storages/retained",
+            "storage.replace",
+            "retained",
+        ),
+    ] {
+        let mut body = spec.clone();
+        body["id"] = json!(id);
+        assert_eq!(
+            request(
+                &pool,
+                method,
+                path,
+                &[("authorization", "Bearer test-operator-token")],
+                body
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            call(&pool, &token, command, json!({"id":id,"spec":spec}))
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let after = filegate_db::registry::get_storage(&pool, "retained")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.kind, before.kind);
+    assert_eq!(after.endpoint, before.endpoint);
+    assert_eq!(after.capacity_bytes, before.capacity_bytes);
+    assert_eq!(
+        filegate_db::registry::list_storages(&pool)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    let audits: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.audit_events WHERE action LIKE 'storage.%'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audits, 1);
 }

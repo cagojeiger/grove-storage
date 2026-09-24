@@ -116,9 +116,9 @@ async fn replacement_rechecks_resource_state_after_probe(pool: PgPool) {
             .await
             .unwrap()
             .unwrap()
-            .root_path
+            .endpoint
             .as_deref(),
-        Some("/fixture")
+        Some("https://storage.test/fixture")
     );
     let verify = |input| async {
         sqlx::query("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('new','fs','/concurrent',1)")

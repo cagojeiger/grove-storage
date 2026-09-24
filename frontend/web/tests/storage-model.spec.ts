@@ -36,7 +36,7 @@ test("capacity conversion is exact and rejects unsafe integers", () => {
   expect(() => capacityBytes("999999999", "TiB")).toThrow();
 });
 
-test("fs payload excludes every S3 field including credentials", () => {
+test("filesystem submissions are rejected", () => {
   const data = new FormData();
   for (const [key, value] of Object.entries({
     root_path: "/data",
@@ -47,11 +47,7 @@ test("fs payload excludes every S3 field including credentials", () => {
     force_relay: "on",
   }))
     data.set(key, value);
-  expect(storageSpec(data, "fs")).toEqual({
-    kind: "fs",
-    root_path: "/data",
-    capacity_bytes: 42,
-  });
+  expect(() => storageSpec(data, "fs")).toThrow("Only S3-compatible storage");
 });
 
 test("S3 optional public endpoint is omitted and URL credentials are rejected", () => {

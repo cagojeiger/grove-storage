@@ -34,7 +34,8 @@ fn storage_spec_object<'de, D: serde::Deserializer<'de>>(
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StorageSpec {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "s3_kind")]
+    #[schemars(extend("enum" = ["s3"]))]
     pub kind: StorageKind,
     #[serde(default)]
     pub force_relay: bool,
@@ -48,6 +49,15 @@ pub struct StorageSpec {
     pub access_key: Option<String>,
     pub secret_key: Option<String>,
     pub capacity_bytes: i64,
+}
+
+fn s3_kind<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<StorageKind, D::Error> {
+    match StorageKind::deserialize(deserializer)? {
+        StorageKind::S3 => Ok(StorageKind::S3),
+        StorageKind::Fs => Err(serde::de::Error::custom(
+            "only S3-compatible storage is supported",
+        )),
+    }
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -130,7 +140,11 @@ impl Validate for ResourceInput {
 
 impl Validate for StorageInput {
     fn validate(&self) -> Result<(), CommandError> {
-        require(resource_id(&self.id) && self.spec.capacity_bytes >= 0)
+        require(
+            resource_id(&self.id)
+                && self.spec.capacity_bytes >= 0
+                && self.spec.kind == StorageKind::S3,
+        )
     }
 }
 

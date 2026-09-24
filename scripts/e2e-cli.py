@@ -29,6 +29,12 @@ def docker(*args):
 
 
 def check_lifecycle(endpoint, directory):
+    from s3_backend_fixture import minio_backend
+    with minio_backend() as backend:
+        check_s3_lifecycle(endpoint, directory, backend)
+
+
+def check_s3_lifecycle(endpoint, directory, backend):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def request(method, path, body=None, token=TOKEN):
@@ -55,8 +61,6 @@ def check_lifecycle(endpoint, directory):
     admin = "/api/admin/v1"
     from cli_management_fixture import Management
     management = Management(endpoint, MASTER_TOKEN)
-    root = Path(directory) / "objects"
-    root.mkdir()
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FILEGATE_", "GROVE_"))}
     env.pop("DATABASE_URL", None)
     env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
@@ -77,10 +81,10 @@ def check_lifecycle(endpoint, directory):
 
     storage_spec = Path(directory) / "storage.json"
     storage_spec.write_text(json.dumps({
-        "kind": "fs", "root_path": str(root), "capacity_bytes": 1073741824,
+        **backend.spec, "capacity_bytes": 1073741824,
     }))
-    run_cli("storage", "create", "cli-test-fs", "--from", str(storage_spec))
-    run_cli("client", "create", "cli-test", "--storage", "cli-test-fs")
+    run_cli("storage", "create", "cli-test-s3", "--from", str(storage_spec))
+    run_cli("client", "create", "cli-test", "--storage", "cli-test-s3")
 
     raw_key = "cli-test-native-key"
     key_file = Path(directory) / "client-key"
@@ -103,14 +107,14 @@ def check_lifecycle(endpoint, directory):
     assert secret_file.stat().st_mode & 0o777 == 0o600
 
     storage_spec.write_text(json.dumps({
-        "kind": "fs", "root_path": str(root), "capacity_bytes": 2147483648,
+        **backend.spec, "capacity_bytes": 2147483648,
     }))
-    run_cli("storage", "replace", "cli-test-fs", "--from", str(storage_spec), "--yes")
+    run_cli("storage", "replace", "cli-test-s3", "--from", str(storage_spec), "--yes")
 
     cases = [
         (["status"], None),
         (["storage", "list"], "/storages"),
-        (["storage", "show", "cli-test-fs"], "/storages/cli-test-fs"),
+        (["storage", "show", "cli-test-s3"], "/storages/cli-test-s3"),
         (["client", "list"], "/clients"),
         (["client", "show", "cli-test"], "/clients/cli-test"),
         (["credential", "list", "--client", "cli-test"], "/clients/cli-test/s3-credentials"),
@@ -133,34 +137,33 @@ def check_lifecycle(endpoint, directory):
     run_cli("credential", "delete", "--client", "cli-test", access_key_id, "--yes")
     run_cli("client-key", "delete", "--client", "cli-test", key, "--yes")
     run_cli("client", "delete", "cli-test", "--yes")
-    run_cli("storage", "delete", "cli-test-fs", "--yes")
+    run_cli("storage", "delete", "cli-test-s3", "--yes")
     assert request("GET", admin + "/clients") == []
     assert request("GET", admin + "/storages") == []
     print("PASS registry lifecycle completed without Terraform")
 
     # A separate fixture remains in the disposable database until container teardown.
-    run_cli("storage", "create", "cli-test-fs", "--from", str(storage_spec))
-    run_cli("client", "create", "cli-test", "--storage", "cli-test-fs")
+    run_cli("storage", "create", "cli-test-s3", "--from", str(storage_spec))
+    run_cli("client", "create", "cli-test", "--storage", "cli-test-s3")
     run_cli("client-key", "register", "--client", "cli-test", "--key-file", str(key_file))
     request("POST", "/api/v1/files", {"declared_size": 0}, token=raw_key)
-    run_cli("storage", "replace", "cli-test-fs", "--from", str(storage_spec), "--yes")
-    other_root = Path(directory) / "other-objects"
-    other_root.mkdir()
-    replacement = {"kind": "fs", "root_path": str(other_root), "capacity_bytes": 2147483648}
+    run_cli("storage", "replace", "cli-test-s3", "--from", str(storage_spec), "--yes")
+    replacement = {**backend.spec, "public_endpoint": backend.spec["endpoint"] + "/changed",
+                   "capacity_bytes": 2147483648}
     try:
-        request("PUT", admin + "/storages/cli-test-fs", replacement)
+        request("PUT", admin + "/storages/cli-test-s3", replacement)
     except urllib.error.HTTPError as error:
         assert error.code == 409, error.code
     else:
         raise AssertionError("storage address replacement should be rejected")
     storage_spec.write_text(json.dumps(replacement))
     rejected = subprocess.run(
-        [str(CLI), "--output", "json", "storage", "replace", "cli-test-fs",
+        [str(CLI), "--output", "json", "storage", "replace", "cli-test-s3",
          "--from", str(storage_spec), "--yes"],
         cwd=directory, env=env, capture_output=True, text=True, timeout=10,
     )
     assert rejected.returncode != 0, rejected.stdout
-    assert request("GET", admin + "/storages/cli-test-fs")["root_path"] == str(root)
+    assert request("GET", admin + "/storages/cli-test-s3")["public_endpoint"] == backend.spec["endpoint"]
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
     def run_as(args, token, expected):

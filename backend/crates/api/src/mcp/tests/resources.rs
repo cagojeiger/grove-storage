@@ -147,3 +147,25 @@ async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool:
         StatusCode::UNAUTHORIZED
     );
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn mcp_rejects_filesystem_storage_commands(pool: PgPool) {
+    let token = owner(&pool).await;
+    for name in ["storage.create", "storage.replace"] {
+        let response = rpc(&pool, &token, "tools/call",
+            json!({"name":name,"arguments":{"id":"local","spec":{"kind":"fs","root_path":"/never-probed","capacity_bytes":1}}})).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = json_body(response).await;
+        assert_eq!(body["error"]["code"], -32602);
+        assert_eq!(
+            body["error"]["data"],
+            json!({"code":"invalid_input","outcome":"not_applied"})
+        );
+    }
+    assert!(
+        filegate_db::registry::list_storages(&pool)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

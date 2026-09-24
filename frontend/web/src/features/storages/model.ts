@@ -15,24 +15,18 @@ export type Storage = {
   access_key: string | null;
 };
 
-export type StorageSpec =
-  | {
-      kind: "fs";
-      root_path: string;
-      capacity_bytes: number;
-    }
-  | {
-      kind: "s3";
-      endpoint: string;
-      public_endpoint?: string;
-      region: string;
-      bucket: string;
-      access_key: string;
-      secret_key: string;
-      capacity_bytes: number;
-      force_relay: boolean;
-      force_path_style: boolean;
-    };
+export type StorageSpec = {
+  kind: "s3";
+  endpoint: string;
+  public_endpoint?: string;
+  region: string;
+  bucket: string;
+  access_key: string;
+  secret_key: string;
+  capacity_bytes: number;
+  force_relay: boolean;
+  force_path_style: boolean;
+};
 
 export const idPattern = "[a-z0-9]([a-z0-9\\-]{0,62}[a-z0-9])?";
 
@@ -72,7 +66,7 @@ export function storageSpec(
   };
   const capacity_bytes = capacityBytes(field("capacity"), field("unit"));
   if (kind === "fs")
-    return { kind, root_path: field("root_path").trim(), capacity_bytes };
+    throw new Error("Only S3-compatible storage can be registered or replaced.");
   const endpoint = field("endpoint").trim();
   const public_endpoint = field("public_endpoint").trim();
   for (const value of [endpoint, public_endpoint].filter(Boolean)) {
@@ -129,7 +123,7 @@ export function mutationMessage(
     if (error.status === 404)
       return "This storage no longer exists. Refresh the list.";
     if (error.status === 400 || error.status === 422)
-      return "Check the input and storage access. The path, bucket, and credentials must be valid.";
+      return "Check the input and storage access. The endpoint, bucket, and credentials must be valid.";
     return error.message;
   }
   return "The request could not be completed.";

@@ -116,14 +116,14 @@ User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 
 
 ```text
 identity lock → 인증·권한·입력·교체 대상 확인 → 읽기 transaction 종료
-    → 기존 S3/fs 접근 검사·Provider Secret 암호화 (DB 잠금 밖)
+    → S3 접근 검사·Provider Secret 암호화 (DB 잠금 밖)
     → identity lock → 현재 토큰·role·Agent owner 재확인
     → Storage 행 잠금·현재 참조 검사 → 변경 + 감사 commit
 ```
 
 | 경계 | 계약 |
 |---|---|
-| 검사 재사용 | 기존 REST의 필드·URL·relay 설정 검사; S3 HeadBucket + ListMultipartUploads, fs 경로·쓰기 probe |
+| 검사 재사용 | 기존 REST의 필드·URL·relay 설정 검사; S3 HeadBucket + ListMultipartUploads; FS create/replace rejected before probe |
 | 권한 변경 | 검사 중 폐기·강등·owner 변경 상태를 commit 전 재확인; 거부 시 등록부 변경 없이 종료 |
 | 교체 | 없는 대상은 probe 전 404; 검사 중 삭제된 대상도 404, 검사 중 생성된 참조도 최종 판단에 포함 |
 | 주소 | 기존 Storage 행 잠금과 파일 예약 직렬화 유지; locations가 남은 물리 주소 변경은 409 |
@@ -134,16 +134,18 @@ identity lock → 인증·권한·입력·교체 대상 확인 → 읽기 transa
 | 원자성 | DB 변경·감사만 같은 transaction; 접근 검사는 시점 관찰이며 외부 I/O의 rollback·지속 가용성과 구분 |
 
 서비스는 접근 검사 함수를 주입받는다. 서비스 테스트는 제어 가능한 검사 대역으로 경합을
-검증하고, API 테스트는 실제 fs probe와 로컬 HTTP S3 대역을 사용한다.
+검증하고, API 테스트는 로컬 HTTP S3 대역과 FS 등록 거부를 확인한다. 기존 FS 행의
+부팅·status·runtime 검증은 이관 전 호환성 테스트로 유지한다.
 
 ## 검증과 비밀
 
 | 경계 | 검사·보장 |
 |---|---|
 | 입력 구조 | object만 허용; 알 수 없는 필드 거부; storage spec도 동일 |
+| Backend | Storage create/replace accept only S3 (default); read responses retain legacy FS |
 | 값 | ID의 빈 값·dot segment·제어 문자 거부, history 1–3650, 용량 0 이상 |
 | 서비스 키 | Native key는 `sha256:` + 소문자 hex 64자; S3 access ID는 소문자 영숫자 8–64자 |
-| 서비스 검증 | 생성 slug·예약 Client명·S3/fs 필수 필드·URL·접근 probe·참조/삭제 조건 |
+| 서비스 검증 | 생성 slug·예약 Client명·S3 필수 필드·URL·접근 probe·참조/삭제 조건 |
 | 응답 | 기존 CLI DTO 형태 유지; 알 수 없는 응답 필드는 typed 출력에서 제외 |
 | 비밀 전달 | S3 발급 응답의 secret_key는 의도한 일회성 전달; CLI는 기존 비밀 파일 저장 유지 |
 | 진단 | Command/Output의 Debug는 명령명만 출력; StorageSpec/IssuedCredential은 Debug 미제공 |
@@ -191,7 +193,7 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 | `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
 | 같은 경로의 `writes.rs`, `write_failures.rs` | 4개 PG HTTP 테스트: 변경 왕복·기존 키 조회/인증·409/400·감사 rollback·원문 없는 unknown |
 | `management-service/tests/storage_writes.rs` + `storage_writes/` | 8개 PG 테스트: 변경 3개·참조·probe 중 폐기/owner 강등·참조 경합·감사 rollback·unknown |
-| `api/src/resource_commands/tests/storage*.rs` | 6개 PG HTTP 테스트: fs probe·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
+| `api/src/resource_commands/tests/storage*.rs` | PG HTTP 테스트: FS 등록/교체 거부·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
 | 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 10개·Agent owner 상한·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
 | 변경 서버 smoke | 변경 6개·기존 S3 키 목록·Native PUT/commit/GET 바이트 일치·파일 참조 삭제 409·키 폐기 후 401·비밀 없는 감사 확인; S3 실제 전송은 이번 검증에서 제외 |
 | Storage 서버 smoke | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |

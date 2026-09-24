@@ -7,10 +7,11 @@
 
 ## Phase-One Scope
 
-External S3-compatible storage is the supported backend. The target registration
-form and connection test accept S3 only. Native/S3 client keys remain supported.
-The current UI/API still accepts FS: admission enforcement and existing-FS migration
-are pending, not completed by this specification change.
+External S3-compatible storage is the supported backend. Console, CLI, MCP and
+legacy REST accept only S3 registration/replacement. Native/S3 client keys remain
+supported. Legacy FS rows remain visible with editing disabled; runtime I/O and
+reference-protected deletion are retained pending inventory and migration.
+The separate on-demand connection test is still pending.
 
 ## Current Coverage
 
@@ -92,7 +93,7 @@ This section specifies the next contract; no test command/button is implemented 
 
 | Order | Deliverable | Acceptance |
 |---|---|---|
-| 0 | S3-only admission | Console/API/CLI/MCP reject new FS registration consistently; existing FS inventory and migration/rollback handled before runtime removal |
+| 0 (Implemented) | S3-only admission | Console/API/CLI/MCP reject FS create/replace; legacy FS runtime retained. Inventory and migration/rollback remain before runtime removal |
 | 1 | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User/Agent tokens; last-Admin and one-time-secret safeguards |
 | 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
 | 3 | Shared connection test | Saved/draft S3 probes via API, Console, CLI and MCP; real MinIO failures plus permission/timeout/concurrency tests |
@@ -166,7 +167,7 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 | 영역 | 화면 계약 | 최종 집행 |
 |---|---|---|
 | S3 등록 | id, endpoint, public_endpoint, region, bucket, path-style, access key, secret, capacity, relay | 서버 필드 검증·접근 검증 |
-| fs 등록 | id, root_path, capacity | 서버 경로·쓰기 검증 |
+| Legacy FS | Read-only detail; Edit disabled | Server rejects FS create/replace; delete retains reference guards |
 | 등록 용량 | B/GiB/TiB 입력을 정수 bytes로 변환, JSON 정수 정밀도 상한 2^53-1 | 서버 i64 범위의 부분집합 |
 | 저장소 교체 | `storage.replace` 전체 명세; secret 재입력, 기존 secret은 조회되지 않음 | location 존재 시 주소 변경 409 |
 | 삭제 | 대상 ID 확인, 진행 중 중복 제출 차단, 409 시 이유와 최신 목록 표시 | DB 제약·서버 판단 |
@@ -184,7 +185,7 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 | 단계 | 산출물 | 완료 기준 |
 |---|---|---|
 | A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
-| B (구현) | 저장소 조회·등록·교체·삭제 | 실제 fs/MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
+| B (구현) | 저장소 조회·등록·교체·삭제 | 실제 MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
 | 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·Agent 로그인 거부·console 감사 |
 | 5b (다음) | master 설정·복구·User/Agent·관리 토큰 UI | 일회성 발급·마지막 Admin·응답 불명·콘솔 전용 API |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |

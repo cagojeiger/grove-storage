@@ -5,13 +5,13 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-struct Provider {
+pub(super) struct Provider {
     endpoint: String,
     calls: Arc<AtomicUsize>,
     task: tokio::task::JoinHandle<()>,
 }
 impl Provider {
-    async fn start(deny_list: bool) -> Self {
+    pub(super) async fn start(deny_list: bool) -> Self {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
         let calls = Arc::new(AtomicUsize::new(0));
@@ -37,6 +37,12 @@ impl Provider {
             calls,
             task,
         }
+    }
+    pub(super) fn input_for(&self, id: &str, capacity: i64) -> Value {
+        let mut value = self.input("fixture-provider-secret");
+        value["id"] = json!(id);
+        value["spec"]["capacity_bytes"] = json!(capacity);
+        value
     }
     fn input(&self, secret: &str) -> Value {
         json!({"id":"vendor","spec":{"kind":"s3","endpoint":self.endpoint,"region":"us-east-1","bucket":"bucket",

@@ -82,8 +82,7 @@ pub(crate) async fn verified_row(
     }
     match body.kind.as_str() {
         "s3" => verified_s3_row(crypto, relay_base_ready, id, body).await,
-        "fs" => verified_fs_row(relay_base_ready, id, body).await,
-        _ => Err(bad_request("kind must be 's3' or 'fs'")),
+        _ => Err(bad_request("only S3-compatible storage is supported")),
     }
 }
 
@@ -177,58 +176,6 @@ fn encrypted_s3_row(
         secret_key_nonce: Some(encrypted.nonce),
         enc_key_id: Some(crypto.active_key_id().to_owned()),
         capacity_bytes,
-    })
-}
-
-async fn verified_fs_row(
-    relay_base_ready: bool,
-    id: &str,
-    body: Submission,
-) -> Result<StorageRow, ApiError> {
-    let present = |v: &Option<String>| v.as_deref().is_some_and(|s| !s.is_empty());
-    if present(&body.endpoint)
-        || present(&body.public_endpoint)
-        || present(&body.region)
-        || present(&body.bucket)
-        || present(&body.access_key)
-        || body.secret_key.is_some()
-        || body.force_relay
-        || body.force_path_style
-    {
-        return Err(bad_request(
-            "fs storage takes only root_path and capacity_bytes",
-        ));
-    }
-    if !relay_base_ready {
-        return Err(bad_request(
-            "relay storage requires FILEGATE_PUBLIC_URL to be configured",
-        ));
-    }
-    let root_path = body
-        .root_path
-        .filter(|v| !v.is_empty())
-        .ok_or_else(|| bad_request("fs storage requires root_path"))?;
-    if let Err(error) = filegate_infra::fs::connect(&root_path).await {
-        tracing::error!(event = "storage.verify_failed", storage = %id, kind = "fs");
-        return Err(bad_request(&format!(
-            "storage verification failed: {error}"
-        )));
-    }
-    Ok(StorageRow {
-        id: id.to_owned(),
-        kind: "fs".to_owned(),
-        force_relay: false,
-        root_path: Some(root_path),
-        endpoint: None,
-        public_endpoint: None,
-        region: None,
-        bucket: None,
-        force_path_style: false,
-        access_key: None,
-        secret_key_ciphertext: None,
-        secret_key_nonce: None,
-        enc_key_id: None,
-        capacity_bytes: body.capacity_bytes,
     })
 }
 

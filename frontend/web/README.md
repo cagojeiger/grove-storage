@@ -18,7 +18,7 @@ preview; production uses DB-backed User credentials and browser sessions.
 | Implemented | Follow-up |
 |---|---|
 | Personal User token login/logout, current role, session restore and 401 handling | Master setup/recovery, User/Agent/token/session/history screens |
-| Storage list/detail, S3/fs create/replace/delete, conflict guards | Client detail and key lifecycle |
+| Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Client detail and key lifecycle |
 | API readiness, client count, per-storage usage | Usage history and client detail |
 | Backend access checks during real storage registration/replacement | On-demand **Test connection** command and UI; sample preview performs no probes |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
@@ -37,23 +37,23 @@ npm run build
 npm run lint
 npm test
 cd ../..
-python3 -B -u scripts/e2e-console.py
-python3 -B -u scripts/e2e-console.py --serve
 ```
 
-For real S3 registration/replacement checks, use the existing SDK fixture environment:
+The HTTPS fixture always uses a disposable MinIO backend:
 
 ```sh
 python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
-/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-console.py --with-minio
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-console.py
+# Keep the same disposable fixture open for manual browser checks:
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-console.py --serve
 ```
 
-CI runs this MinIO variant. It creates and removes its own MinIO container and volume.
+CI runs the same fixture; `--with-minio` remains a compatibility alias. It creates and removes its own MinIO container and volume.
 
 The fixture needs Docker, Python 3, Node 22.13+ (22.x) or 24+ and OpenSSL. It creates a disposable
 PostgreSQL database, API and HTTPS Vite server. `--serve` prints the URL and a local
-mode-0600 token file and a writable filesystem root for storage registration. The certificate is self-signed and scoped to this local fixture;
+mode-0600 token file. The certificate is self-signed and scoped to this local fixture;
 the browser may show a trust warning. Ctrl-C or SIGTERM cleans up the fixture.
 No production endpoint or credentials are used. The initial overview is empty.
 
@@ -110,20 +110,19 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/permissions.spec.ts` | Viewer controls, live demotion and form removal |
 | `tests/console.spec.ts` | Mock API state/error handling, 320/390/768/1024/1440px, themes, screenshots |
 | `tests/browser-security.spec.ts` | Built assets under CSP, blocked inline scripts/external connections/iframe embedding |
-| `tests/storage-model.spec.ts` | Exact capacity conversion, backend-specific payloads, sanitized errors |
-| `tests/storage-crud.spec.ts` | All S3 options, complete replacement, fs, ID confirmation, navigation |
+| `tests/storage-model.spec.ts` | Exact capacity conversion, S3 payloads and FS rejection, sanitized errors |
+| `tests/storage-crud.spec.ts` | All S3 options, complete replacement, legacy FS editing guard, ID confirmation, navigation |
 | `tests/storage-safety.spec.ts` | 409, 401, lost response, secret clearing, duplicate submit guard |
 | `tests/storage-layout.spec.ts` | List/detail/editor across five widths and both themes; focus restoration |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
-| `tests/live-storages.mjs` via Python fixture | UI fs/MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
+| `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 | `tests/live-permissions.mjs` via Python fixture | Real role demotion, Viewer enforcement, Agent login rejection and Console audit |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
 Run `npm run build` before `npm test`: the browser security suite serves `dist` on
 loopback port 5180, alongside the existing Vite test server on 5179. Login regression
 tests verify that 307/308 redirects do not forward token bodies.
-Real storage registration uses temporary filesystem roots and, with `--with-minio`,
-a disposable S3 backend. Mutation requests are not retried automatically; unknown
+Real storage registration uses a disposable S3 backend. Mutation requests are not retried automatically; unknown
 outcomes require a fresh read. S3 secrets are cleared at submission and never stored
 in browser storage or the query/mutation cache. Capacity input is limited to exact
 JSON integers (0 through 2^53-1 bytes); the backend's wider i64 contract is unchanged.

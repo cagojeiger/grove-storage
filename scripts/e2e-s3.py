@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run SDK contracts against a disposable filesystem or MinIO backend."""
+"""Run SDK contracts against a disposable legacy filesystem fixture or MinIO backend."""
 
 import json
 import os
@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent
 HARNESS = runpy.run_path(str(ROOT / "e2e-cli.py"))
 
 
-def check(endpoint, directory, backend=None):
+def check(endpoint, directory, database, backend=None):
     from botocore.auth import S3SigV4Auth
     from botocore.awsrequest import AWSRequest
     from botocore.credentials import Credentials
@@ -50,10 +50,13 @@ def check(endpoint, directory, backend=None):
     if backend is None:
         root = Path(directory) / "s3-objects"
         root.mkdir()
-        spec = {"kind": "fs", "root_path": str(root), "capacity_bytes": 1073741824}
+        # Existing filesystem rows remain readable during the migration window.
+        HARNESS["docker"]("exec", database, "psql", "-U", "filegate", "-d", "filegate",
+                          "-v", "ON_ERROR_STOP=1", "-c",
+                          "INSERT INTO storages(id,kind,root_path,capacity_bytes) "
+                          "VALUES('s3-test-backend','fs','" + str(root).replace("'", "''") + "',1073741824)")
     else:
-        spec = backend.spec
-    admin("POST", "/api/admin/v1/storages", {"id": "s3-test-backend", **spec})
+        admin("POST", "/api/admin/v1/storages", {"id": "s3-test-backend", **backend.spec})
     admin("POST", "/api/admin/v1/clients", {"id": "s3-test", "storage_id": "s3-test-backend"})
     credential = admin("POST", "/api/admin/v1/clients/s3-test/s3-credentials", {})
     env = dict(os.environ, S3_ENDPOINT=endpoint, S3_BUCKET="s3-test",
@@ -133,11 +136,12 @@ def check(endpoint, directory, backend=None):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", choices=["fs", "minio"], default="fs")
+    parser.add_argument("--backend", choices=["fs", "minio"], default="minio",
+                        help="minio: supported backend; fs: seeded legacy compatibility fixture")
     args = parser.parse_args()
     if args.backend == "minio":
         from s3_backend_fixture import minio_backend
         with minio_backend() as backend:
-            HARNESS["main"](lambda endpoint, directory: check(endpoint, directory, backend))
+            HARNESS["main"](lambda endpoint, directory, database: check(endpoint, directory, database, backend), with_database=True)
     else:
-        HARNESS["main"](check)
+        HARNESS["main"](check, with_database=True)

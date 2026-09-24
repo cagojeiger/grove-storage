@@ -23,6 +23,7 @@ export async function permissionChecks(browser, admin, origin) {
     await page.getByLabel("Personal token").fill(credential.token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Edit storage" }).click();
+    await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "viewer" });
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Viewer · Read-only")).toBeVisible();

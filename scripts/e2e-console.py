@@ -2,7 +2,6 @@
 """Real HTTPS browser session checks against a disposable PostgreSQL/API."""
 
 import argparse
-from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -43,10 +42,6 @@ def check(endpoint, directory, database, origin, serve, minio):
     identity('/master/session', {'token': HARNESS['MASTER_TOKEN']})
     credential = identity('/master/bootstrap', {'display_name': 'Console test owner'})
     token = credential['token']
-    objects = Path(directory) / 'objects'
-    objects.mkdir()
-    other_objects = Path(directory) / 'other-objects'
-    other_objects.mkdir()
     key, cert = Path(directory) / 'key.pem', Path(directory) / 'cert.pem'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                     '-keyout', str(key), '-out', str(cert), '-days', '1',
@@ -74,15 +69,13 @@ def check(endpoint, directory, database, origin, serve, minio):
                     output.write(token)
                 print('Console:', origin + '/api/admin/console/', flush=True)
                 print('Local disposable User token:', token_file, flush=True)
-                print('Local filesystem root:', objects, flush=True)
                 while vite.poll() is None:
                     time.sleep(1)
             else:
                 subprocess.run(['node', 'tests/live.mjs'], cwd=ROOT / 'frontend/web',
                                input=json.dumps({'origin': origin, 'token': token, 'credentialId': credential['credential_id'],
-                                                 'database': database, 'objects': str(objects),
-                                                 'otherObjects': str(other_objects), 'endpoint': endpoint,
-                                                 'minio': minio.spec if minio else None}), text=True,
+                                                 'database': database, 'endpoint': endpoint,
+                                                 'minio': minio.spec}), text=True,
                                check=True, timeout=90)
         finally:
             vite.terminate()
@@ -103,9 +96,7 @@ if __name__ == '__main__':
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
     origin = f'https://127.0.0.1:{port}'
-    if args.with_minio:
-        from s3_backend_fixture import minio_backend
-    fixture = minio_backend() if args.with_minio else nullcontext()
-    with fixture as minio:
+    from s3_backend_fixture import minio_backend
+    with minio_backend() as minio:
         HARNESS['main'](lambda endpoint, directory, database: check(endpoint, directory, database, origin, args.serve, minio),
                         with_database=True, console_origin=origin, management=True)

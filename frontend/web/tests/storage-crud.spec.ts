@@ -54,33 +54,23 @@ test("S3 registration sends all options with CSRF and removes the secret", async
   expect(writes[1].input.id).toBe("new-s3");
 });
 
-test("kind switch clears secret; fs creation, reload, history and deletion", async ({
+test("S3-only creation, reload, history and deletion", async ({
   page,
 }) => {
   const { writes } = await storageMock(page, []);
   await page.goto(root);
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await fillS3(page, "list");
-  await page.getByLabel("Type", { exact: true }).selectOption("fs");
-  await expect(page.getByLabel("Secret key", { exact: true })).toHaveCount(0);
-  await page.getByLabel("Type", { exact: true }).selectOption("s3");
-  await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
-  await page.getByLabel("Type", { exact: true }).selectOption("fs");
-  await page.getByLabel("Root path").fill("/data/objects");
+  await expect(page.getByLabel("Type", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Root path")).toHaveCount(0);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "list", exact: true }),
   ).toBeVisible();
-  expect(writes[0].input).toEqual({
-    id: "list",
-    spec: {
-    kind: "fs",
-    root_path: "/data/objects",
-    capacity_bytes: 1.5 * 1024 ** 4,
-    },
-  });
+  expect(writes[0].input.spec).toMatchObject({ kind: "s3" });
+  expect(writes[0].input.spec).not.toHaveProperty("root_path");
   await page.reload();
-  await expect(page.getByText("/data/objects", { exact: true })).toBeVisible();
+  await expect(page.getByText("https://s3.example.com", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Delete storage" }).click();
   const confirm = page.getByRole("button", { name: "Confirm delete" });
   await expect(confirm).toBeDisabled();
@@ -110,5 +100,16 @@ test("search, cancel and keyboard focus do not mutate registry", async ({
   await expect(page.getByRole("heading", { name: example.id })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("searchbox")).toBeVisible();
+  expect(writes).toEqual([]);
+});
+
+test("legacy filesystem storage remains visible but cannot be edited", async ({ page }) => {
+  const { writes } = await storageMock(page, [{
+    ...example, id: "legacy-files", kind: "fs", root_path: "/legacy/objects",
+  }]);
+  await page.goto(root);
+  await page.getByRole("link", { name: /legacy-files/ }).click();
+  await expect(page.getByText("/legacy/objects", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit storage" })).toBeDisabled();
   expect(writes).toEqual([]);
 });

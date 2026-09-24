@@ -18,6 +18,12 @@ SECRETS = []
 
 
 def check(endpoint, directory):
+    from s3_backend_fixture import minio_backend
+    with minio_backend() as backend:
+        check_s3(endpoint, directory, backend)
+
+
+def check_s3(endpoint, directory, backend):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 20
     while True:
@@ -80,9 +86,20 @@ def check(endpoint, directory):
     call("storage.create", {"id": "incomplete-provider", "spec": {
         "kind": "s3", "capacity_bytes": 1024, "secret_key": provider_secret,
     }}, error="invalid_input")
-    root = Path(directory) / "mcp-objects"
-    root.mkdir()
-    spec = {"kind": "fs", "root_path": str(root), "capacity_bytes": 1024 * 1024}
+    spec = dict(backend.spec)
+    SECRETS.append(spec["secret_key"])
+    for name in ("storage.create", "storage.replace"):
+        try:
+            rpc("tools/call", {"name": name, "arguments": {"id": "mcp-storage", "spec": {
+                "kind": "fs", "root_path": "/not-probed", "capacity_bytes": 1,
+            }}})
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
+            rejected = json.loads(error.read())["error"]
+            assert rejected["code"] == -32602
+            assert rejected["data"] == {"code": "invalid_input", "outcome": "not_applied"}
+        else:
+            raise AssertionError("MCP accepted filesystem registration")
     call("storage.create", {"id": "mcp-storage", "spec": spec})
     call("client.create", {"id": "mcp-client", "storage_id": "mcp-storage"})
     key = "sha256:" + hashlib.sha256(b"mcp-local-service-key").hexdigest()

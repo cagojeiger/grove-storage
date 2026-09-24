@@ -46,10 +46,10 @@ The phase-one product supports external S3-compatible backends only. Native and
 S3-compatible client APIs remain in scope; this decision restricts backend storage,
 not the client protocol. Mounted-filesystem Storage Nodes belong to phase two.
 
-The existing server-local FS adapter is still implemented. Enforcing S3-only
-admission across Console, shared commands and legacy REST is pending. Inventory
-existing FS references and define migration/rollback before removing its runtime
-or schema; this decision does not delete existing data or mounts.
+Console, shared commands (CLI/MCP) and legacy REST accept only S3 registration
+and replacement. The server-local FS adapter remains for existing rows and runtime
+compatibility. Runtime/schema removal follows an FS inventory and a verified
+migration/rollback plan; this change preserves existing data and mounts.
 
 ## 책임 경계
 

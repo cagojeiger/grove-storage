@@ -52,9 +52,13 @@ def check(endpoint, directory, database, backend=None):
     admin = HARNESS["TOKEN"]
     root = Path(directory) / "objects"
     root.mkdir()
-    spec = ({"kind": "fs", "root_path": str(root), "capacity_bytes": 1000000}
-            if backend is None else {**backend.spec, "force_relay": True})
-    request("POST", "/api/admin/v1/storages", {"id": "relay", **spec}, admin, 201)
+    if backend is None:
+        # Seed a legacy row; new filesystem registration is intentionally rejected.
+        sql("INSERT INTO storages(id,kind,root_path,capacity_bytes) "
+            "VALUES('relay','fs','" + str(root).replace("'", "''") + "',1000000)")
+    else:
+        request("POST", "/api/admin/v1/storages",
+                {"id": "relay", **backend.spec, "force_relay": True}, admin, 201)
     request("POST", "/api/admin/v1/clients", {"id": "relay", "storage_id": "relay"}, admin, 201)
     request("POST", "/api/admin/v1/clients/relay/keys",
         {"key_hash": "sha256:" + hashlib.sha256(key.encode()).hexdigest()}, admin, 201)
@@ -140,7 +144,8 @@ def check(endpoint, directory, database, backend=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", choices=["fs", "minio"], default="fs")
+    parser.add_argument("--backend", choices=["fs", "minio"], default="minio",
+                        help="minio: supported backend; fs: seeded legacy compatibility fixture")
     args = parser.parse_args()
     if args.backend == "minio":
         from s3_backend_fixture import minio_backend

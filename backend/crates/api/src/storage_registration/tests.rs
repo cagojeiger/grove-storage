@@ -29,9 +29,10 @@ fn require_http_url_accepts_http_https_only() {
 }
 
 #[tokio::test]
-async fn fs_rejects_s3_only_force_path_style() {
+async fn filesystem_submission_is_rejected_before_probe() {
+    let state = crate::routes::tests::test_state();
     assert!(
-        verified_fs_row(true, "fs-test", fs_body(true))
+        verified_row(&state.crypto, true, "fs-test", fs_body(false))
             .await
             .is_err()
     );
@@ -63,12 +64,17 @@ async fn status_collects_all_checks_while_startup_rejects_failure(pool: PgPool) 
     let state = crate::routes::tests::test_state();
     let root = std::env::temp_dir().join(format!("grove-registration-{}", uuid::Uuid::new_v4()));
     tokio::fs::create_dir(&root).await.unwrap();
-    let mut body = fs_body(false);
-    body.root_path = Some(root.to_string_lossy().into_owned());
-    let mut row = verified_row(&state.crypto, true, "healthy", body)
+    sqlx::query(
+        "INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('healthy','fs',$1,1)",
+    )
+    .bind(root.to_string_lossy().as_ref())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut row = registry::get_storage(&pool, "healthy")
         .await
-        .unwrap_or_else(|_| panic!("temporary filesystem registration failed"));
-    registry::insert_storage(&pool, &row).await.unwrap();
+        .unwrap()
+        .unwrap();
     row.id = "missing".into();
     row.root_path = Some(root.join("absent").to_string_lossy().into_owned());
     registry::insert_storage(&pool, &row).await.unwrap();

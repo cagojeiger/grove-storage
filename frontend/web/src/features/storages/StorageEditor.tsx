@@ -26,7 +26,6 @@ export function StorageEditor({
   const cache = useQueryClient();
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [kind, setKind] = useState<Storage["kind"]>(storage?.kind ?? "s3");
   const [error, setError] = useState("");
   const [unknown, setUnknown] = useState(false);
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -39,7 +38,7 @@ export function StorageEditor({
       const data = new FormData(form);
       const identifier = data.get("id");
       id = storage?.id ?? (typeof identifier === "string" ? identifier : "");
-      body = storageSpec(data, kind);
+      body = storageSpec(data, "s3");
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Check the input values.",
@@ -90,107 +89,78 @@ export function StorageEditor({
               title="1-64 lowercase letters, digits, or hyphens"
             />
           </label>
-          <label>
-            Type
-            <select
-              name="kind"
-              aria-label="Type"
-              value={kind}
-              onChange={(event) =>
-                setKind(event.target.value as Storage["kind"])
-              }
-            >
-              <option value="s3">S3</option>
-              <option value="fs">Filesystem</option>
-            </select>
+          <label className="full-field">
+            Endpoint
+            <input
+              key="endpoint"
+              name="endpoint"
+              type="url"
+              required
+              defaultValue={storage?.endpoint ?? ""}
+              placeholder="https://s3.example.com"
+              spellCheck={false}
+            />
           </label>
-          {kind === "fs" ? (
-            <label className="full-field">
-              Root path
-              <input
-                key="root_path"
-                name="root_path"
-                required
-                defaultValue={storage?.root_path ?? ""}
-                spellCheck={false}
-              />
-            </label>
-          ) : (
-            <>
-              <label className="full-field">
-                Endpoint
-                <input
-                  key="endpoint"
-                  name="endpoint"
-                  type="url"
-                  required
-                  defaultValue={storage?.endpoint ?? ""}
-                  placeholder="https://s3.example.com"
-                  spellCheck={false}
-                />
-              </label>
-              <label className="full-field">
-                Public endpoint (optional)
-                <input
-                  name="public_endpoint"
-                  type="url"
-                  defaultValue={storage?.public_endpoint ?? ""}
-                  spellCheck={false}
-                />
-              </label>
-              <label>
-                Region
-                <input
-                  name="region"
-                  required
-                  defaultValue={storage?.region ?? "us-east-1"}
-                />
-              </label>
-              <label>
-                Bucket
-                <input
-                  name="bucket"
-                  required
-                  defaultValue={storage?.bucket ?? ""}
-                  spellCheck={false}
-                />
-              </label>
-              <label className="full-field">
-                Access key
-                <input
-                  name="access_key"
-                  required
-                  defaultValue={storage?.access_key ?? ""}
-                  spellCheck={false}
-                />
-              </label>
-              <label className="full-field">
-                {storage ? "Secret key (re-enter)" : "Secret key"}
-                <input
-                  name="secret_key"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                />
-              </label>
-              <label className="check-field">
-                <input
-                  name="force_path_style"
-                  type="checkbox"
-                  defaultChecked={storage?.force_path_style}
-                />
-                Path-style
-              </label>
-              <label className="check-field">
-                <input
-                  name="force_relay"
-                  type="checkbox"
-                  defaultChecked={storage?.force_relay}
-                />
-                Use relay
-              </label>
-            </>
-          )}
+          <label className="full-field">
+            Public endpoint (optional)
+            <input
+              name="public_endpoint"
+              type="url"
+              defaultValue={storage?.public_endpoint ?? ""}
+              spellCheck={false}
+            />
+          </label>
+          <label>
+            Region
+            <input
+              name="region"
+              required
+              defaultValue={storage?.region ?? "us-east-1"}
+            />
+          </label>
+          <label>
+            Bucket
+            <input
+              name="bucket"
+              required
+              defaultValue={storage?.bucket ?? ""}
+              spellCheck={false}
+            />
+          </label>
+          <label className="full-field">
+            Access key
+            <input
+              name="access_key"
+              required
+              defaultValue={storage?.access_key ?? ""}
+              spellCheck={false}
+            />
+          </label>
+          <label className="full-field">
+            {storage ? "Secret key (re-enter)" : "Secret key"}
+            <input
+              name="secret_key"
+              type="password"
+              required
+              autoComplete="new-password"
+            />
+          </label>
+          <label className="check-field">
+            <input
+              name="force_path_style"
+              type="checkbox"
+              defaultChecked={storage?.force_path_style}
+            />
+            Path-style
+          </label>
+          <label className="check-field">
+            <input
+              name="force_relay"
+              type="checkbox"
+              defaultChecked={storage?.force_relay}
+            />
+            Use relay
+          </label>
           <label className="full-field">
             Registered capacity
             <div className="capacity-input">

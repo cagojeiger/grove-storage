@@ -4,7 +4,7 @@ import { expect } from "@playwright/test";
 
 export async function storageChecks(
   page,
-  { objects, otherObjects, endpoint, minio },
+  { endpoint, minio },
 ) {
   async function command(command, input) {
     return page.evaluate(
@@ -25,11 +25,16 @@ export async function storageChecks(
       { command, input },
     );
   }
-  async function createFs(id) {
+  async function createS3(id) {
     await page.getByRole("button", { name: "Register", exact: true }).click();
     await page.getByLabel("Storage ID", { exact: true }).fill(id);
-    await page.getByLabel("Type", { exact: true }).selectOption("fs");
-    await page.getByLabel("Root path").fill(objects);
+    await expect(page.getByLabel("Root path")).toHaveCount(0);
+    await page.getByLabel("Endpoint", { exact: true }).fill(minio.endpoint);
+    await page.getByLabel("Region", { exact: true }).fill(minio.region);
+    await page.getByLabel("Bucket", { exact: true }).fill(minio.bucket);
+    await page.getByLabel("Access key", { exact: true }).fill(minio.access_key);
+    await page.getByLabel("Secret key", { exact: true }).fill(minio.secret_key);
+    await page.getByLabel("Path-style", { exact: true }).check();
     await page.getByLabel("Registered capacity", { exact: true }).fill("1");
     await page.getByLabel("Capacity unit").selectOption("GiB");
     await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -49,8 +54,9 @@ export async function storageChecks(
       .click();
   }
   await list();
-  await createFs("console-live");
+  await createS3("console-live");
   await page.getByRole("button", { name: "Edit storage" }).click();
+  await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
   await page.getByLabel("Registered capacity", { exact: true }).fill("2147483648");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -88,25 +94,26 @@ export async function storageChecks(
   });
   assert.equal(allocated.status, 201);
   await page.getByRole("button", { name: "Edit storage" }).click();
-  await page.getByLabel("Root path").fill(otherObjects);
+  await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
+  await page.getByLabel("Public endpoint (optional)").fill(minio.endpoint + "/changed");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
     "address cannot be changed",
   );
   assert.equal(
-    (await command("storage.show", { id: "console-live" })).body.root_path,
-    objects,
+    (await command("storage.show", { id: "console-live" })).body.public_endpoint,
+    minio.endpoint,
   );
   await page.getByRole("button", { name: "Cancel" }).click();
   await list();
-  await createFs("console-removable");
+  await createS3("console-removable");
   await deleteStorage("console-removable");
   await expect(
     page.getByRole("heading", { name: "Storage", exact: true }),
   ).toBeVisible();
   assert.equal((await command("storage.show", { id: "console-removable" })).status, 404);
   console.log(
-    "PASS real filesystem UI create/replace/delete, concurrent client delete 409, pending-file address replace 409",
+    "PASS real S3 UI create/replace/delete, concurrent client delete 409, pending-file address replace 409",
   );
 
   if (minio) {

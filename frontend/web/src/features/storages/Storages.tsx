@@ -85,7 +85,7 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
                 className="icon-button"
                 title="Edit storage"
                 aria-label="Edit storage"
-                disabled={!detail.data || current.isError}
+                disabled={!detail.data || detail.data.kind !== "s3" || current.isError}
                 onClick={() => setDialog("edit")}
               >
                 <Pencil size={17} />
@@ -191,7 +191,7 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
           </div>
         </>
       )}
-      {canWrite && dialog === "edit" && (
+      {canWrite && dialog === "edit" && (!id || detail.data?.kind === "s3") && (
         <StorageEditor
           storage={id ? detail.data : undefined}
           onClose={close}

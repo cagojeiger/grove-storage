@@ -18,7 +18,10 @@ async fn audit_failure_rolls_back_all_three_storage_mutations(pool: PgPool) {
         let rows = registry::list_storages(&pool).await.unwrap();
         assert_eq!(rows.len(), 1);
         let row = rows.first().unwrap();
-        assert_eq!(row.root_path.as_deref(), Some("/fixture"));
+        assert_eq!(
+            row.endpoint.as_deref(),
+            Some("https://storage.test/fixture")
+        );
         assert_eq!(row.capacity_bytes, 100);
         assert_eq!(audit_count(&pool).await, before);
     }

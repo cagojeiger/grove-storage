@@ -24,18 +24,18 @@ const storages = new Map([
     },
   ],
   [
-    "local-files",
+    "backup-s3",
     {
-      id: "local-files",
-      kind: "fs",
+      id: "backup-s3",
+      kind: "s3",
       force_relay: false,
-      root_path: "/mnt/grove/objects",
-      endpoint: null,
+      root_path: null,
+      endpoint: "https://backup.example.com",
       public_endpoint: null,
-      region: null,
-      bucket: null,
+      region: "us-east-1",
+      bucket: "backup",
       force_path_style: false,
-      access_key: null,
+      access_key: "sample-backup-key",
       capacity_bytes: 2199023255552,
     },
   ],
@@ -54,7 +54,7 @@ function usage(storage) {
   const active =
     storage.id === "home-archive"
       ? 137438953472
-      : storage.id === "local-files"
+      : storage.id === "backup-s3"
         ? 21474836480
         : 0;
   return {
@@ -68,7 +68,7 @@ function usage(storage) {
     active_files:
       storage.id === "home-archive"
         ? 1240
-        : storage.id === "local-files"
+        : storage.id === "backup-s3"
           ? 32
           : 0,
     reserved_files: 0,
@@ -128,6 +128,7 @@ async function response(req, res) {
     if (command === "storage.create" && storages.has(storageId)) return failure(409, "conflict");
     if (command === "storage.replace" && !storages.has(storageId)) return failure(404, "not_found");
     const body = input.spec;
+    if (body.kind !== "s3") return failure(400, "invalid_input");
     const saved = {
       id: storageId,
       kind: body.kind,

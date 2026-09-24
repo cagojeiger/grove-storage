@@ -7,11 +7,7 @@ use support::*;
 fn destructive_commands_require_yes_without_a_tty() {
     let server = Server::new(vec![]);
     let input = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(
-        input.path(),
-        r#"{"kind":"fs","root_path":"/tmp","capacity_bytes":1}"#,
-    )
-    .unwrap();
+    std::fs::write(input.path(), r#"{"kind":"s3","capacity_bytes":1}"#).unwrap();
     let replace_path = input.path().to_str().unwrap();
     let hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     for args in [

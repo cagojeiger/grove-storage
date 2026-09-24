@@ -7,7 +7,10 @@
 Product scope: phase one supports external S3-compatible backends only
 ([ADR 007](../adr/007-grove-storage-foundation.md#phase-one-supported-backends)).
 The FS contract below describes retained code, not phase-one product support.
-S3-only registration enforcement and existing-FS migration remain pending.
+Console, CLI, MCP and legacy REST accept S3 create/replace requests only.
+Existing FS rows retain read, runtime I/O and reference-protected deletion until
+migration. FS inventory and migration/rollback are pending; no schema/data removal
+is included in this change.
 
 ## 등록 관계
 
@@ -36,7 +39,7 @@ PostgreSQL이 정본이고 운영자 API가 변경 경계다. `gscli`과 API 클
 | 조건 | 계약 |
 |---|---|
 | id | 운영자가 지정한 안정 슬러그, 생성 후 고정 |
-| fs | 준비된 root_path·capacity_bytes |
+| Legacy fs | Existing root_path·capacity_bytes remain readable; create/replace returns invalid input |
 | S3 | endpoint·public_endpoint·region·bucket·자격증명 |
 | 중계 storage | 서버에 FILEGATE_PUBLIC_URL 설정 |
 | 등록·부팅 | 저장소 접근 검증 |
@@ -47,7 +50,7 @@ PostgreSQL이 정본이고 운영자 API가 변경 경계다. `gscli`과 API 클
 | 사용 중 허용 갱신 | 자격증명·암호 키 회전, capacity_bytes·force_relay |
 | client 삭제 | 파일 정리 후 수행, 키·S3 자격증명·논리키는 cascade |
 
-현재 fs 검증은 디렉터리 존재·쓰기 가능 확인이다. mount 식별·상실 정책은
+기존 FS 행의 부팅 검증은 디렉터리 존재·쓰기 가능 확인이다. mount 식별·상실 정책은
 [Grove 경계](../adr/007-grove-storage-foundation.md)에서 추가로 정한다.
 
 주소 보호는 파일 크기나 active 상태가 아닌 location 존재로 판단한다. pending·0바이트·

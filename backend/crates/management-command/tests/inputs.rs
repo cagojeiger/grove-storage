@@ -161,7 +161,9 @@ fn credential_ids_preserve_ascii_length_rules() {
 fn storage_defaults_and_capacity_shape_are_shared_without_running_a_probe() {
     let input =
         json!({"id":"local", "spec":{"kind":"fs", "root_path":"/not-opened", "capacity_bytes":0}});
-    assert!(decode(1, "storage.create", input).is_ok());
+    for name in ["storage.create", "storage.replace"] {
+        assert!(decode(1, name, input.clone()).is_err());
+    }
     let Command::StorageCreate(input) = decode(
         1,
         "storage.create",
@@ -182,6 +184,28 @@ fn storage_defaults_and_capacity_shape_are_shared_without_running_a_probe() {
                 json!({"id":"s3", "spec":{"capacity_bytes":capacity}})
             )
             .is_err()
+        );
+    }
+}
+
+#[test]
+fn programmatic_filesystem_commands_cannot_bypass_admission() {
+    for name in [CommandName::StorageCreate, CommandName::StorageReplace] {
+        let mut command = decode(1, name.as_str(), support::input(name)).unwrap();
+        match &mut command {
+            Command::StorageCreate(input) | Command::StorageReplace(input) => {
+                input.spec.kind = model::StorageKind::Fs;
+            }
+            _ => panic!("storage command"),
+        }
+        assert_eq!(
+            command.validate().unwrap_err().code,
+            ErrorCode::InvalidInput
+        );
+        let schema = serde_json::to_value(name.input_schema()).unwrap();
+        assert_eq!(
+            schema.pointer("/$defs/StorageSpec/properties/kind/enum"),
+            Some(&json!(["s3"]))
         );
     }
 }

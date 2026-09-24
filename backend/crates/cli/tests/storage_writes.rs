@@ -4,13 +4,13 @@ mod support;
 use serde_json::{Value, json};
 use support::*;
 
-fn fs_storage(id: &str, capacity: i64) -> Value {
+fn s3_storage(id: &str, capacity: i64) -> Value {
     json!({
         "id": id,
-        "kind": "fs",
+        "kind": "s3",
         "force_relay": false,
-        "root_path": "/srv/files",
-        "endpoint": null,
+        "root_path": null,
+        "endpoint": "https://storage.test",
         "public_endpoint": null,
         "region": null,
         "bucket": null,
@@ -26,12 +26,12 @@ fn storage_create_replace_and_delete_use_distinct_contracts() {
         (
             "POST",
             "storage.create",
-            Reply::status(200, fs_storage("archive", 1024)),
+            Reply::status(200, s3_storage("archive", 1024)),
         ),
         (
             "POST",
             "storage.replace",
-            Reply::status(200, fs_storage("archive", 2048)),
+            Reply::status(200, s3_storage("archive", 2048)),
         ),
         (
             "POST",
@@ -44,12 +44,12 @@ fn storage_create_replace_and_delete_use_distinct_contracts() {
     let replace = directory.path().join("replace.json");
     std::fs::write(
         &create,
-        r#"{"kind":"fs","root_path":"/srv/files","capacity_bytes":1024}"#,
+        r#"{"kind":"s3","endpoint":"https://storage.test","capacity_bytes":1024}"#,
     )
     .unwrap();
     std::fs::write(
         &replace,
-        r#"{"kind":"fs","root_path":"/srv/files","capacity_bytes":2048}"#,
+        r#"{"kind":"s3","endpoint":"https://storage.test","capacity_bytes":2048}"#,
     )
     .unwrap();
 

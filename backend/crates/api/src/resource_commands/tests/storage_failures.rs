@@ -1,22 +1,27 @@
-use super::storages::Root;
+use super::storage_s3::Provider;
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn storage_http_audit_failure_rolls_back_every_mutation(pool: PgPool) {
     let token = owner(&pool).await;
-    let root = Root::new();
+    let root = Provider::start(false).await;
     assert_eq!(
-        call(&pool, &token, "storage.create", root.input("local", 100))
-            .await
-            .status(),
+        call(
+            &pool,
+            &token,
+            "storage.create",
+            root.input_for("local", 100)
+        )
+        .await
+        .status(),
         StatusCode::OK
     );
     sqlx::raw_sql("CREATE FUNCTION management.reject_storage_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private-detail'; END $$;
         CREATE TRIGGER reject_storage_audit BEFORE INSERT ON management.audit_events FOR EACH ROW EXECUTE FUNCTION management.reject_storage_audit();")
         .execute(&pool).await.unwrap();
     for (name, input) in [
-        ("storage.create", root.input("new", 1)),
-        ("storage.replace", root.input("local", 200)),
+        ("storage.create", root.input_for("new", 1)),
+        ("storage.replace", root.input_for("local", 200)),
         ("storage.delete", json!({"id":"local"})),
     ] {
         let response = call(&pool, &token, name, input).await;
@@ -37,11 +42,16 @@ async fn storage_http_audit_failure_rolls_back_every_mutation(pool: PgPool) {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn storage_http_commit_failure_is_unknown_without_retry(pool: PgPool) {
     let token = owner(&pool).await;
-    let root = Root::new();
+    let root = Provider::start(false).await;
     assert_eq!(
-        call(&pool, &token, "storage.create", root.input("local", 100))
-            .await
-            .status(),
+        call(
+            &pool,
+            &token,
+            "storage.create",
+            root.input_for("local", 100)
+        )
+        .await
+        .status(),
         StatusCode::OK
     );
     sqlx::raw_sql("CREATE SEQUENCE public.storage_attempts;
@@ -51,8 +61,8 @@ async fn storage_http_commit_failure_is_unknown_without_retry(pool: PgPool) {
         DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.reject_storage_commit();")
         .execute(&pool).await.unwrap();
     for (name, input) in [
-        ("storage.create", root.input("new", 1)),
-        ("storage.replace", root.input("local", 200)),
+        ("storage.create", root.input_for("new", 1)),
+        ("storage.replace", root.input_for("local", 200)),
         ("storage.delete", json!({"id":"local"})),
     ] {
         let response = call(&pool, &token, name, input).await;

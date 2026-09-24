@@ -161,3 +161,21 @@ async fn console_commands_reject_other_credentials_and_cross_site_requests(pool:
         StatusCode::BAD_REQUEST
     );
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn console_rejects_filesystem_storage_commands(pool: PgPool) {
+    let (_, _, token) = account(&pool, Role::Admin).await;
+    let cookie = cookie(&login(app(&pool), &token).await);
+    for name in ["storage.create", "storage.replace"] {
+        let response = call(&pool, &cookie, name,
+            json!({"id":"local","spec":{"kind":"fs","root_path":"/never-probed","capacity_bytes":1}})).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(json(response).await["error"]["code"], "invalid_input");
+    }
+    assert!(
+        filegate_db::registry::list_storages(&pool)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

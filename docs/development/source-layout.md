@@ -74,7 +74,7 @@ backend/crates/
 │   ├── spool/tests.rs      청크별 누적 해시·네이티브 계측 유지
 │   ├── storage_access.rs   등록부에서 backend 구성·물리 작업
 │   ├── storage_registration.rs  REST·공통 명령·부팅·status의 검증·접근 확인·암호화
-│   ├── storage_registration/tests.rs  URL·기본값·FS 필드·부팅/status 계약
+│   ├── storage_registration/tests.rs  URL·기본값·FS 등록 거부·기존 FS 부팅/status 계약
 │   ├── status.rs           현재 로컬 DB·저장소 진단 CLI
 │   └── reconciler/         완료 복구
 │       └── reclaim.rs      만료 회수의 물리 정리·재시도
@@ -141,7 +141,7 @@ detach는 같은 트랜잭션을 공유한다.
 | Grove Storage / `gscli` | Product / remote management CLI |
 | User / Agent | Human operator / automation identity owned by a User |
 | Client | Runtime consumer with file API keys or S3 credentials |
-| Storage | Registered filesystem or external S3 backend |
+| Storage | External S3 backend; legacy filesystem rows retained during migration |
 | Admin / Operator / Viewer | Management roles, separate from runtime Client credentials |
 | `management-*` | Operator identities, permissions and resource commands |
 | `object-*` | File lifecycle decisions and execution ordering |
@@ -182,7 +182,7 @@ Split tests by scenario; keep lock and transaction ownership together.
 | 관리 서비스 권한·범위·로그 장애 | `cargo test -p grove-management-service --locked`; PostgreSQL의 `DATABASE_URL` 필요 |
 | User/master·신원/이력 HTTP·브라우저 요청 경계 | `cargo test -p filegate-api console_identity --locked`; 실제 PostgreSQL, 브라우저 E2E와 구분 |
 | S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
-| S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
+| S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버; fs는 기존 행 직접 seed); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
 | S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |
 | 응답 유실 후 프로세스 재시작 | 같은 스크립트의 `--restart`; SIGKILL·새 PID·동일 DB로 복구 확인 |
 | DB 커밋 거부 후 복구 | 같은 스크립트의 `--db-failure`; `s3_db_fault.py`가 격리 DB의 deferred trigger로 커밋 실패 주입 |
