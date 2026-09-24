@@ -33,10 +33,8 @@ use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
 use crate::storage_access::{CommitErr, StorageBackend, backend_from_row, commit_temp_to_backend};
 
-/// 파드당 동시 fs part 승격 상한. 승격은 claim(DB 행 락 + 풀 커넥션)을 쥔 채
-/// 디스크 복사를 하므로, 상한 없이 몰리면 커넥션 풀이 승격에 잠식돼 요청
-/// 경로의 DB 작업이 굶는다. 네트워크 수신은 claim 밖(스풀)에서 끝난 뒤라
-/// 복사 시간만 점유한다 — 상한은 그 점유를 풀 크기(기본 20)보다 한참 아래로 묶는다.
+/// 단일 relay 수신과 fs part 승격이 공유하는 DB claim 상한.
+/// 풀(기본 20)의 나머지 연결은 인증·확정·회수 요청에 남긴다.
 pub const PART_PROMOTION_LIMIT: usize = 4;
 
 pub fn routes(cors_allowed_origins: &[String]) -> Router<AppState> {
@@ -125,6 +123,16 @@ async fn upload(
     // S3 중계는 공유 임시 볼륨에 스풀한다 — 동시 스풀 볼륨 고갈(DoS)을 막는
     // 슬롯을 잡는다(스코프 종료 시 자동 반납). fs는 상한 밖이라 None.
     let _spool_slot = spool::acquire_spool_slot(&backend, &state.spool_slots).await;
+    // Share the bounded DB-claim budget with part promotion. Waiting requests
+    // hold no DB connection and must claim again after admission.
+    let _promotion = state
+        .part_promotions
+        .acquire()
+        .await
+        .map_err(|error| internal(format!("promotion semaphore closed: {error}")))?;
+    let claim = files::claim_relay_upload(&state.pool, lease.file_id, lease_id)
+        .await?
+        .ok_or_else(|| status(StatusCode::CONFLICT, "upload is busy or no longer writable"))?;
     // 같은 lease의 재PUT이 겹쳐도 서로 다른 임시 파일에 쓴다 — 이름을
     // lease_id로만 지으면 truncate로 두 스트림이 섞여 손상본이 커밋될 수 있다.
     let temp_name = format!("{lease_id}-{}", Uuid::new_v4());
@@ -135,6 +143,33 @@ async fn upload(
 
     let (written, md5_hex) =
         spool_measured(body, &mut writer, &temp_path, lease.declared_size).await?;
+
+    if claim
+        .declared_md5
+        .as_ref()
+        .is_some_and(|expected| !expected.eq_ignore_ascii_case(&md5_hex))
+    {
+        fs_backend::abort_write(&temp_path).await;
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "uploaded content does not match declared md5",
+        ));
+    }
+    // Published measurements are immutable. This also prevents a failed DB
+    // commit after a retry from restoring old measurements over new bytes.
+    if let Some((size, md5)) = &claim.recorded {
+        fs_backend::abort_write(&temp_path).await;
+        if *size != written || md5 != &md5_hex {
+            return Err(status(
+                StatusCode::CONFLICT,
+                "upload already contains different content",
+            ));
+        }
+        claim
+            .done(written, &md5_hex, WRITE_LEASE_TTL.as_secs() as i64)
+            .await?;
+        return Ok(ok_with_etag(&md5_hex));
+    }
 
     // 버퍼 잔량을 파일로 내리고 원본 핸들을 되찾는다 — 이후 확정 단계는
     // 버퍼를 모른다 (fs는 sync+rename, s3는 스풀 업로드).
@@ -162,7 +197,9 @@ async fn upload(
         });
     }
 
-    files::record_upload(&state.pool, lease_id, written, &md5_hex).await?;
+    claim
+        .done(written, &md5_hex, WRITE_LEASE_TTL.as_secs() as i64)
+        .await?;
     tracing::info!(event = "blobs.uploaded", lease = %lease_id, file = %lease.file_id, size = written);
 
     Ok(ok_with_etag(&md5_hex))

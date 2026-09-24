@@ -159,7 +159,8 @@ def check_lifecycle(endpoint, directory):
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
 
-def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None):
+def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
+         reconciler_interval=1):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -183,7 +184,7 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                 FILEGATE_PUBLIC_URL=endpoint, FILEGATE_LOG_FORMAT="json",
             )
             if with_database:
-                env["FILEGATE_RECONCILER_INTERVAL_SECS"] = "1"
+                env["FILEGATE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
             if console_origin:
                 env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
             deadline = time.monotonic() + 20

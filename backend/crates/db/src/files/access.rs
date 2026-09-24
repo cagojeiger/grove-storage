@@ -180,23 +180,6 @@ pub async fn byte_lease(
     }))
 }
 
-/// 중계 쓰기가 스트림 중 직접 계산한 실측을 기록한다 — commit의 사후
-/// 검증이 head_object 대신 이것을 대조한다.
-pub async fn record_upload(
-    pool: &PgPool,
-    lease_id: Uuid,
-    size: i64,
-    md5: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE leases SET uploaded_size = $2, uploaded_md5 = $3 WHERE id = $1")
-        .bind(lease_id)
-        .bind(size)
-        .bind(md5)
-        .execute(pool)
-        .await
-        .map(|_| ())
-}
-
 /// 이 파일의 중계 업로드 실측 (없으면 아직 업로드 전).
 /// write lease는 파일당 하나다(create가 유일한 발급 지점) — 정렬이 필요 없다.
 pub async fn recorded_upload(

@@ -53,11 +53,20 @@ sequenceDiagram
 | fs·force_relay | 전송 주체 ↔ FileGate ↔ 저장소 | 스트림 크기·MD5 계측 후 확정 |
 | blobs 인증 | `/blobs/{lease}?s=...` | lease secret·상태·만료 |
 | blobs Content-Length | 필수 | 누락 411, 선언과 불일치 400, 초과 413 |
+| 단일 blobs PUT 소유권 | 수신 전 file→lease 행 잠금 | 수신·저장·실측 기록 동안 commit/회수와 직렬화; 완료 시 TTL 15분 갱신 |
+| 단일 blobs PUT 동시 요청 | 이미 소유 중이면 409 | 대기 슬롯 획득 후 만료·pending 상태 재검사 |
+| 단일 blobs PUT 재전송 | pending 상태에서 같은 크기·MD5는 200 | 성공한 바이트는 유지; 다른 내용은 409, 새 파일로 생성 |
+| 선언 MD5 불일치 | 물리 저장 전 400 | 같은 URL로 올바른 내용 재시도 |
 | 브라우저 | 설정된 CORS allowlist | preflight 처리 |
 | fs 쓰기 | 같은 filesystem의 임시 파일 → rename | 원자적 이름 전환 |
 
 파일명 표현은 RFC 5987로 인코딩한다. 서비스 URL은 서비스가 소유하고,
 발급된 접근 URL을 유효기간 내 전달한다.
+
+단일 중계 PUT과 fs part 승격은 파드당 4개의 DB claim 슬롯을 공유한다.
+단일 PUT은 수신 동안 연결 하나를 점유한다. 요청 취소 시 트랜잭션을 롤백하고,
+처음 업로드의 물리 저장 후 DB 기록이 실패하면 실측 없이 pending으로 남아
+재전송 또는 만료 회수한다. 확정 이후 중계 PUT은 기존 lease 인증에서 거부한다.
 
 ## 상태와 정리
 
