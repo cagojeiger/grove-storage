@@ -158,15 +158,24 @@ aside {
   flex-direction: column;
   gap: 24px;
 }
-.nav-current {
-  border-left: 3px solid var(--accent);
-  background: var(--selected);
-  color: var(--accent);
+nav {
+  display: grid;
+  gap: 6px;
+}
+nav a {
+  border-left: 3px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 11px 14px;
   font-size: 14px;
+}
+nav a[aria-current="page"] {
+  border-color: var(--accent);
+  background: var(--selected);
+  color: var(--accent);
 }
 .admin-label {
   color: var(--muted);
@@ -368,6 +377,212 @@ progress::-webkit-progress-value {
     transform: rotate(360deg);
   }
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.storages h1,
+.storages h2 {
+  overflow-wrap: anywhere;
+}
+.storages .page-heading {
+  align-items: flex-start;
+}
+.storages .page-heading > div:first-child {
+  min-width: 0;
+}
+.page-actions,
+.action-button,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-actions {
+  flex-shrink: 0;
+}
+.page-actions .primary,
+.dialog-actions .primary {
+  margin: 0;
+  gap: 8px;
+}
+.back-link {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  min-height: 44px;
+  margin-bottom: 10px;
+}
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 28px 0 18px;
+}
+.list-toolbar label {
+  width: min(300px, 80%);
+}
+.storages input,
+dialog input:not([type="checkbox"]),
+dialog select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+}
+.registry-labels,
+.registry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(
+      90px,
+      0.5fr
+    ) 16px;
+  gap: 20px;
+  align-items: center;
+  padding: 20px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.registry-labels {
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+  padding-block: 12px;
+}
+.registry-row {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+}
+.registry-row:hover {
+  background: var(--selected);
+}
+.registry-row h2 {
+  font-size: 14px;
+}
+.storage-address {
+  overflow-wrap: anywhere;
+}
+.storage-address .muted {
+  display: block;
+  margin-top: 6px;
+}
+.storage-size {
+  font-variant-numeric: tabular-nums;
+}
+.storage-section {
+  margin-top: 32px;
+}
+.storage-section h2 {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.detail-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 32px;
+  padding-top: 24px;
+}
+.detail-fields dd {
+  margin-top: 8px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.usage-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  padding-top: 24px;
+}
+.usage-fields dd {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.query-error {
+  margin-top: 28px;
+}
+dialog {
+  width: min(620px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  overflow-y: auto;
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+.dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.dialog-heading h2 {
+  font-size: 18px;
+}
+.storage-form {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+.storage-form label,
+.confirmation {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+.full-field {
+  grid-column: 1/-1;
+}
+.storage-form .check-field {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+}
+.check-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.capacity-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px;
+  gap: 8px;
+}
+.dialog-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.form-error {
+  margin-top: 20px;
+}
+.delete-summary {
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  overflow-wrap: anywhere;
+}
 @media (prefers-reduced-motion: reduce) {
   .spin {
     animation: none;
@@ -425,7 +640,61 @@ progress::-webkit-progress-value {
     min-height: calc(100vh - 64px);
   }
   aside {
+    padding: 8px 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  nav {
+    display: flex;
+    gap: 8px;
+  }
+  nav a {
+    min-height: 44px;
+    padding: 10px 14px;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+  }
+  .admin-label {
     display: none;
+  }
+  .storages .page-heading {
+    flex-wrap: wrap;
+  }
+  .registry-labels {
+    display: none;
+  }
+  .registry-row {
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    gap: 14px;
+    padding-inline: 0;
+  }
+  .registry-row .storage-address {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+  .registry-list {
+    border-top: 1px solid var(--line);
+  }
+  .detail-fields {
+    grid-template-columns: 1fr;
+  }
+  .usage-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  dialog {
+    padding: 18px;
+  }
+  dialog input:not([type="checkbox"]),
+  dialog select,
+  .storages input {
+    min-height: 44px;
+  }
+  .storage-form {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .dialog-heading {
+    margin-bottom: 18px;
   }
   .overview {
     padding: 24px 18px;

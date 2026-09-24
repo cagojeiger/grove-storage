@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { execFileSync, spawnSync } from "node:child_process";
+import { storageChecks } from "./live-storages.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
-const { origin, token, credentialId, database, server, serverEnv, objects } =
-  JSON.parse(input);
+const fixture = JSON.parse(input);
+const { origin, token, credentialId, database, server, serverEnv } = fixture;
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -17,22 +18,7 @@ try {
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await page.getByRole("heading", { name: "개요", exact: true }).waitFor();
   await page.getByText("등록된 저장소가 없습니다.").waitFor();
-  const registered = await page.evaluate(async (root) => {
-    const response = await fetch("/api/admin/v1/storages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-FileGate-CSRF": "1" },
-      body: JSON.stringify({
-        id: "console-live",
-        kind: "fs",
-        root_path: root,
-        capacity_bytes: 1073741824,
-      }),
-    });
-    return response.status;
-  }, objects);
-  assert.equal(registered, 201);
-  await page.getByRole("button", { name: "새로고침" }).click();
-  await page.getByRole("heading", { name: "console-live" }).waitFor();
+  await storageChecks(page, fixture);
   const cookie = (await context.cookies()).find(
     (cookie) => cookie.name === "__Host-filegate_session",
   );

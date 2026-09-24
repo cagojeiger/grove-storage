@@ -1,6 +1,6 @@
 # spec 06: 관리 콘솔
 
-- 상태: A단계 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
+- 상태: A·B단계 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 
@@ -52,6 +52,7 @@ Grove Storage
 |---|---|---|
 | S3 등록 | id, endpoint, public_endpoint, region, bucket, path-style, access key, secret, capacity, relay | 서버 필드 검증·접근 검증 |
 | fs 등록 | id, root_path, capacity | 서버 경로·쓰기 검증 |
+| 등록 용량 | B/GiB/TiB 입력을 정수 bytes로 변환, JSON 정수 정밀도 상한 2^53-1 | 서버 i64 범위의 부분집합 |
 | 저장소 교체 | 전체 명세 PUT; secret 재입력, 기존 secret은 조회되지 않음 | location 존재 시 주소 변경 409 |
 | 삭제 | 대상 ID 확인, 진행 중 중복 제출 차단, 409 시 이유와 최신 목록 표시 | DB 제약·서버 판단 |
 | Native 키 | 평문은 폼 처리 동안만 유지, 등록 후 제거 | 기존 hash 등록 계약 |
@@ -68,7 +69,7 @@ Grove Storage
 | 단계 | 산출물 | 완료 기준 |
 |---|---|---|
 | A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
-| B | 저장소 조회·등록·교체·삭제 | 모든 필드, S3/fs 입력, 실제 409·동시 변경, secret 미보관 |
+| B (구현) | 저장소 조회·등록·교체·삭제 | 실제 fs/MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
 | D | 반응형·접근성·배포 | 320/390/768/1024/1440px, light/dark/system, 키보드·초점, 같은 origin 배포 |
 
@@ -79,11 +80,15 @@ Grove Storage
 frontend/web/src/     현재 구현
 ├── app/              라우팅·초기화
 ├── api/              HTTP·오류·응답 타입
-├── auth/             세션·로그인
-├── design/           테마 토큰
-└── features/overview/ 개요·저장소 점유
+├── auth/             세션·로그인·401 캐시 제거
+├── design/           테마·모달·용량 표시
+└── features/
+    ├── overview/     개요·저장소 점유
+    └── storages/     목록·상세·폼·삭제·입력 변환
 ```
 
-현재 셸은 `app/App.tsx`가 소유한다. 공유 UI·별도 layout·storages/clients는 후속
-화면에서 재사용이 생길 때 추가한다. 실행·검증은 [콘솔 README](../../frontend/web/README.md)를 따른다.
+현재 셸은 `app/App.tsx`가 소유한다. 해시 경로로 목록·상세 새로고침과 뒤로 가기를 지원한다.
+등록·수정 입력은 폼에 두며 변경 요청의 secret은 query/mutation 캐시에 넣지 않는다.
+응답 유실·5xx는 미확정으로 표시하고 재제출을 잠근 뒤 조회로 대조한다.
+실행·검증은 [콘솔 README](../../frontend/web/README.md)를 따른다.
 개요는 저장소·클라이언트 수와 저장소별 점유를 제공하며, 이력과 클라이언트 상세는 후속이다.

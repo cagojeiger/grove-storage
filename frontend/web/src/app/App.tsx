@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, LayoutDashboard } from "lucide-react";
+import { LogOut, LayoutDashboard, HardDrive } from "lucide-react";
 import { admin, ApiError, message, request, Session } from "../api/http";
 import { Login } from "../auth/Login";
 import { ThemePicker } from "../design/Theme";
 import { Overview } from "../features/overview/Overview";
+import { Storages } from "../features/storages/Storages";
+import { clearSession } from "../auth/session";
+import { useRoute } from "./navigation";
 
 export function App() {
   const cache = useQueryClient();
+  const route = useRoute();
+  const storagePage = route === "storages" || route.startsWith("storages/");
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const session = useQuery({
@@ -17,7 +22,9 @@ export function App() {
         return await request<Session>(`${admin}/session`, { signal });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          cache.removeQueries({ queryKey: ["overview"] });
+          cache.removeQueries({
+            predicate: (query) => query.queryKey[0] !== "session",
+          });
           return null;
         }
         throw error;
@@ -30,10 +37,12 @@ export function App() {
     setLogoutError("");
     try {
       await request(`${admin}/session`, { method: "DELETE" });
-      await cache.cancelQueries();
-      cache.clear();
-      cache.setQueryData(["session"], null);
+      clearSession(cache);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearSession(cache);
+        return;
+      }
       setLogoutError(message(error));
     } finally {
       setLoggingOut(false);
@@ -76,10 +85,19 @@ export function App() {
       ) : session.data ? (
         <div className="workspace">
           <aside>
-            <div className="nav-current">
-              <LayoutDashboard size={18} />
-              <span>개요</span>
-            </div>
+            <nav aria-label="주 메뉴">
+              <a href="#" aria-current={!storagePage ? "page" : undefined}>
+                <LayoutDashboard size={18} />
+                <span>개요</span>
+              </a>
+              <a
+                href="#storages"
+                aria-current={storagePage ? "page" : undefined}
+              >
+                <HardDrive size={18} />
+                <span>저장소</span>
+              </a>
+            </nav>
             <span className="admin-label">관리자</span>
           </aside>
           <div className="content">
@@ -88,7 +106,11 @@ export function App() {
                 {logoutError}
               </p>
             )}
-            <Overview />
+            {storagePage ? (
+              <Storages key={route} route={route} />
+            ) : (
+              <Overview />
+            )}
           </div>
         </div>
       ) : (

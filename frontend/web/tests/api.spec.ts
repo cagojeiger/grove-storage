@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ApiError, request } from '../src/api/http';
-import { bytes } from '../src/features/overview/Overview';
+import { bytes } from '../src/design/format';
 
 test('byte formatting includes zero and over-capacity values', () => {
   expect(bytes(0)).toBe('0 B');

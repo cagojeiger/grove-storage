@@ -2,7 +2,8 @@
 
 | Implemented | Follow-up |
 |---|---|
-| Admin cookie login/logout, session restore and 401 handling | Storage/client mutation screens |
+| Admin cookie login/logout, session restore and 401 handling | Client and credential mutation screens |
+| Storage list/detail, S3/fs create/replace/delete, conflict guards | Client detail and key lifecycle |
 | API readiness, client count, per-storage usage | Usage history and client detail |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 
@@ -24,9 +25,19 @@ python3 -B -u scripts/e2e-console.py
 python3 -B -u scripts/e2e-console.py --serve
 ```
 
+For real S3 registration/replacement checks, use the existing SDK fixture environment:
+
+```sh
+python3 -m venv /tmp/grove-s3-sdk
+/tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-console.py --with-minio
+```
+
+CI runs this MinIO variant. It creates and removes its own MinIO container and volume.
+
 The fixture needs Docker, Python 3, Node 22.13+ (22.x) or 24+ and OpenSSL. It creates a disposable
 PostgreSQL database, API and HTTPS Vite server. `--serve` prints the URL and a local
-mode-0600 token file. The certificate is self-signed and scoped to this local fixture;
+mode-0600 token file and a writable filesystem root for storage registration. The certificate is self-signed and scoped to this local fixture;
 the browser may show a trust warning. Ctrl-C or SIGTERM cleans up the fixture.
 No production endpoint or credentials are used. The initial overview is empty.
 
@@ -67,7 +78,16 @@ rules; generated build, browser reports and local TLS files are excluded.
 |---|---|
 | `tests/api.spec.ts` | Transport options, cancellation signal, error sanitization, formatting |
 | `tests/console.spec.ts` | Mock API state/error handling, 320/390/768/1024/1440px, themes, screenshots |
+| `tests/storage-model.spec.ts` | Exact capacity conversion, backend-specific payloads, sanitized errors |
+| `tests/storage-crud.spec.ts` | All S3 options, complete replacement, fs, ID confirmation, navigation |
+| `tests/storage-safety.spec.ts` | 409, 401, lost response, secret clearing, duplicate submit guard |
+| `tests/storage-layout.spec.ts` | List/detail/editor across five widths and both themes; focus restoration |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
+| `tests/live-storages.mjs` via Python fixture | UI fs/MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
-Real storage registration in the browser fixture uses a temporary filesystem root.
+Real storage registration uses temporary filesystem roots and, with `--with-minio`,
+a disposable S3 backend. Mutation requests are not retried automatically; unknown
+outcomes require a fresh read. S3 secrets are cleared at submission and never stored
+in browser storage or the query/mutation cache. Capacity input is limited to exact
+JSON integers (0 through 2^53-1 bytes); the backend's wider i64 contract is unchanged.

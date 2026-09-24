@@ -126,7 +126,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-          python3 -B -u ../../scripts/e2e-console.py
+          /tmp/grove-s3-sdk/bin/python -B -u ../../scripts/e2e-console.py --with-minio
 
   audit:
     name: Audit
