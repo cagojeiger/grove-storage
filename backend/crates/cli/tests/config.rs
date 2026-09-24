@@ -61,7 +61,7 @@ fn endpoint_rejects_paths_credentials_fragments_and_nonliteral_http_hosts() {
     ] {
         let output = bare()
             .args(["--endpoint", endpoint, "--output", "json", "status"])
-            .env("GROVE_OPERATOR_TOKEN", TOKEN)
+            .env("GROVE_TOKEN", TOKEN)
             .output()
             .unwrap();
         let result = envelope(&output, 2);
@@ -72,10 +72,10 @@ fn endpoint_rejects_paths_credentials_fragments_and_nonliteral_http_hosts() {
 
 #[test]
 fn endpoint_flag_overrides_environment_and_trailing_slash_is_accepted() {
-    let server = Server::new(vec![("/api/admin/v1/clients", Reply::json(json!([])))]);
+    let server = Server::new(vec![("client.list", Reply::json(json!([])))]);
     let output = bare()
         .env("GROVE_ENDPOINT", "https://unused.invalid")
-        .env("GROVE_OPERATOR_TOKEN", TOKEN)
+        .env("GROVE_TOKEN", TOKEN)
         .args([
             "client",
             "list",
@@ -90,7 +90,7 @@ fn endpoint_flag_overrides_environment_and_trailing_slash_is_accepted() {
     assert_eq!(server.seen().len(), 1);
     let output = bare()
         .env("GROVE_ENDPOINT", &server.endpoint)
-        .env("GROVE_OPERATOR_TOKEN", TOKEN)
+        .env("GROVE_TOKEN", TOKEN)
         .args(["client", "list", "--output", "json"])
         .output()
         .unwrap();
@@ -99,13 +99,14 @@ fn endpoint_flag_overrides_environment_and_trailing_slash_is_accepted() {
 
 #[test]
 fn token_file_precedes_environment_and_accepts_one_final_newline() {
-    let server = Server::new(vec![("/api/admin/v1/clients", Reply::json(json!([])))]);
+    let server = Server::new(vec![("client.list", Reply::json(json!([])))]);
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("operator-token");
     for ending in ["", "\n", "\r\n"] {
-        std::fs::write(&path, format!("from-file{ending}")).unwrap();
+        std::fs::write(&path, format!("{TOKEN}{ending}")).unwrap();
         let output = server
             .command()
+            .env("GROVE_TOKEN", format!("gsm_{}", "b".repeat(64)))
             .args(["client", "list", "--token-file"])
             .arg(&path)
             .output()
@@ -116,17 +117,25 @@ fn token_file_precedes_environment_and_accepts_one_final_newline() {
         server
             .seen()
             .iter()
-            .all(|r| r.authorization.as_deref() == Some("Bearer from-file"))
+            .all(|r| r.authorization.as_deref() == Some(&format!("Bearer {TOKEN}")))
     );
 }
 
 #[test]
 fn missing_or_invalid_tokens_are_rejected_before_http_without_leaks() {
     let server = Server::new(vec![]);
-    for token in ["", "has space", "secret\nnext", "secret\r", "비밀"] {
+    for token in [
+        "",
+        "has space",
+        "secret\nnext",
+        "secret\r",
+        "비밀",
+        "old-operator",
+        "gsmt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ] {
         let output = server
             .command()
-            .env("GROVE_OPERATOR_TOKEN", token)
+            .env("GROVE_TOKEN", token)
             .args(["status"])
             .output()
             .unwrap();
@@ -135,7 +144,7 @@ fn missing_or_invalid_tokens_are_rejected_before_http_without_leaks() {
     }
     let output = server
         .command()
-        .env_remove("GROVE_OPERATOR_TOKEN")
+        .env_remove("GROVE_TOKEN")
         .args(["status"])
         .output()
         .unwrap();
@@ -176,10 +185,7 @@ fn working_directory_dotenv_is_not_loaded() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join(".env"),
-        format!(
-            "GROVE_ENDPOINT={}\nGROVE_OPERATOR_TOKEN={TOKEN}\n",
-            server.endpoint
-        ),
+        format!("GROVE_ENDPOINT={}\nGROVE_TOKEN={TOKEN}\n", server.endpoint),
     )
     .unwrap();
     let output = bare()
@@ -189,4 +195,33 @@ fn working_directory_dotenv_is_not_loaded() {
         .unwrap();
     envelope(&output, 2);
     assert!(server.seen().is_empty());
+}
+
+#[test]
+fn new_token_setting_precedes_legacy_alias_without_invalid_value_fallback() {
+    let server = Server::new(vec![("client.list", Reply::json(json!([])))]);
+    let output = server
+        .command()
+        .env("GROVE_OPERATOR_TOKEN", "invalid-old-value")
+        .args(["client", "list"])
+        .output()
+        .unwrap();
+    envelope(&output, 0);
+    let output = server
+        .command()
+        .env_remove("GROVE_TOKEN")
+        .env("GROVE_OPERATOR_TOKEN", TOKEN)
+        .args(["client", "list"])
+        .output()
+        .unwrap();
+    envelope(&output, 0);
+    let output = server
+        .command()
+        .env("GROVE_TOKEN", "")
+        .env("GROVE_OPERATOR_TOKEN", TOKEN)
+        .args(["client", "list"])
+        .output()
+        .unwrap();
+    envelope(&output, 2);
+    assert_eq!(server.seen().len(), 2);
 }

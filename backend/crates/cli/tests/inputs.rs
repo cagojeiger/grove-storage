@@ -56,8 +56,8 @@ fn storage_document_can_be_read_from_stdin() {
     });
     let server = Server::routes(vec![(
         "POST",
-        "/api/admin/v1/storages",
-        Reply::status(201, response),
+        "storage.create",
+        Reply::status(200, response),
     )]);
     let mut child = server
         .command()

@@ -52,14 +52,15 @@ Compose는 PostgreSQL(`55432`), MinIO(`9000/9001`), 개발 버킷을 준비한�
 
 ```sh
 cargo install --path backend/crates/cli --locked
-gscli --endpoint https://filegate.example.com --token-file /path/to/operator-token status
-gscli --endpoint https://filegate.example.com --token-file /path/to/operator-token client list --output json
-gscli --endpoint https://filegate.example.com --token-file /path/to/operator-token \
+gscli --endpoint https://filegate.example.com --token-file /path/to/management-token status
+gscli --endpoint https://filegate.example.com --token-file /path/to/management-token client list --output json
+gscli --endpoint https://filegate.example.com --token-file /path/to/management-token \
   client create notegate --storage primary
 ```
 
-`GROVE_ENDPOINT`·`GROVE_OPERATOR_TOKEN`으로 연결 설정을 공급할 수 있다.
-CLI는 DB·마스터 키 없이 기존 관리자 API를 호출한다. 기존 `filegate status`는
+`GROVE_ENDPOINT`·`GROVE_TOKEN`으로 연결 설정을 공급할 수 있다.
+CLI는 User/Agent 토큰으로 공통 관리 명령 API를 호출한다. 이전 서버에는 이전 CLI를 사용한다.
+DB·마스터 키는 CLI에 전달하지 않는다. 기존 `filegate status`는
 서버 로컬 진단으로 유지한다. [명령·출력·후속 계약](docs/spec/04-cli.md).
 
 배포 채널은 GitHub Release의 Linux/macOS 실행 파일이다.

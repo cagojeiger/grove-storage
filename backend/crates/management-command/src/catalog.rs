@@ -18,6 +18,8 @@ macro_rules! commands {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub enum CommandName { $($variant),+ }
 
+        #[derive(Serialize)]
+        #[serde(untagged)]
         pub enum Command { $($variant($input)),+ }
 
         /// Typed wire results, including the intentional one-time secret reply.

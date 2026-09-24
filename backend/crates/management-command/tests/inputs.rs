@@ -5,6 +5,17 @@ use grove_management_command::*;
 use serde_json::json;
 
 #[test]
+fn typed_commands_serialize_to_the_same_input_contract() {
+    for &name in CommandName::ALL {
+        let command = decode(1, name.as_str(), support::input(name)).unwrap();
+        let wire = serde_json::to_value(&command).unwrap();
+        assert!(wire.is_object());
+        assert_eq!(decode(1, name.as_str(), wire).unwrap().name(), name);
+        assert!(!format!("{command:?}").contains(support::SECRET));
+    }
+}
+
+#[test]
 fn unknown_fields_null_and_nonobject_inputs_are_rejected_for_every_command() {
     for &name in CommandName::ALL {
         let mut extra = support::input(name);

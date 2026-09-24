@@ -5,13 +5,14 @@
 - 기존 토큰을 사용하는 콘솔 로그인·로그아웃·개요 조회는 실제 API 연결 및 로컬 HTTPS 검증 완료다. 운영 배포는 후속이다.
 - 후속 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 마스터 초기 설정·개인 토큰 로그인·콘솔 전용 신원 관리. 아래는 현재 구현 계약이다.
 - 새 권한·DB·CLI/MCP·감사 설계: [spec 08](08-management-plane.md). 브라우저 보안: [spec 07](07-browser-security.md).
-- 새 User 세션은 `/api/admin/identity/v1/session`에 별도로 연결했다. 아래의 기존 UI·CLI 인증과 쿠키·토큰을 공유하지 않는다.
+- 새 User 세션은 `/api/admin/identity/v1/session`에 별도로 연결했다. 아래의 기존 UI 인증과 쿠키·토큰을 공유하지 않는다.
+- 아래는 이전 UI·REST 인증 계약이다. 새 CLI는 [spec 04](04-cli.md)의 User/Agent 토큰과 공통 명령 API를 사용한다.
 
 ## 자격증명 경계
 
 | 종류 | 주체 → 대상 | 저장 | 권한 |
 |---|---|---|---|
-| 관리자 토큰 `fgop_` | 관리자·gscli → 관리 API | 도메인 분리 SHA-256 해시 | 등록부 조회·변경 |
+| 관리자 토큰 `fgop_` | 관리자·이전 gscli → 기존 관리 API | 도메인 분리 SHA-256 해시 | 등록부 조회·변경 |
 | 콘솔 세션 `fgss_` | 브라우저 → 관리 API | 도메인 분리 SHA-256 해시 | 발급한 관리자 토큰과 동일 |
 | Native client key | 서비스 → `/api/v1` | 기존 SHA-256 해시 | 해당 client 파일 |
 | Client S3 credential | 서비스 → S3 호환 API | access ID + 암호화 secret | 해당 client 버킷 |
@@ -21,7 +22,7 @@
 flowchart LR
     Local["filegate admin"] --> P["Principal: admin"]
     P --> T["관리자 토큰 여러 개"]
-    T --> CLI["gscli: Bearer"]
+    T --> CLI["이전 gscli: Bearer"]
     T --> Login["POST session"]
     Login --> Cookie["HttpOnly 세션 쿠키"]
     CLI --> API["관리 API"]
@@ -93,7 +94,7 @@ HTTPS origin을 설정한다. 미설정이면 브라우저 로그인을 비활�
 | 새 버전 배포 | 기존 `FILEGATE_OPERATOR_TOKENS` 계속 사용, 기존 파일 API 유지 |
 | 모든 replica 업데이트 확인 | 구버전 서버를 종료하고 운영 접근·복구 경로 확인 |
 | `filegate admin init` | DB 인증 활성화, 환경변수 토큰 즉시 비활성 |
-| CLI 교체 | 새 토큰을 기존 `GROVE_OPERATOR_TOKEN` 또는 `--token-file`로 전달 |
+| 이전 CLI의 토큰 교체 | 새 운영자 토큰을 `GROVE_OPERATOR_TOKEN` 또는 `--token-file`로 전달; 새 CLI는 별도 User/Agent 토큰 필요 |
 | 정리 | 환경변수 운영자 토큰 제거; 마스터 키는 유지 |
 
 초기화 전 환경변수 토큰은 관리 API Bearer 호환만 제공한다. 브라우저 로그인에는

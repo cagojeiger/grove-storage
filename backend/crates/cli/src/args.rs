@@ -9,7 +9,7 @@ pub struct Args {
     /// Management API origin.
     #[arg(long, global = true, env = "GROVE_ENDPOINT", hide_env_values = true)]
     pub endpoint: Option<String>,
-    /// Read the operator token from a file (overrides GROVE_OPERATOR_TOKEN).
+    /// Read a User/Agent token from a file (overrides GROVE_TOKEN).
     #[arg(long, global = true)]
     pub token_file: Option<PathBuf>,
     #[arg(long, global = true, value_enum, default_value = "table")]

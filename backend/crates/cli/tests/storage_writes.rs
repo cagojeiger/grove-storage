@@ -25,18 +25,18 @@ fn storage_create_replace_and_delete_use_distinct_contracts() {
     let server = Server::routes(vec![
         (
             "POST",
-            "/api/admin/v1/storages",
-            Reply::status(201, fs_storage("archive", 1024)),
+            "storage.create",
+            Reply::status(200, fs_storage("archive", 1024)),
         ),
         (
-            "PUT",
-            "/api/admin/v1/storages/archive",
+            "POST",
+            "storage.replace",
             Reply::status(200, fs_storage("archive", 2048)),
         ),
         (
-            "DELETE",
-            "/api/admin/v1/storages/archive",
-            Reply::empty(204),
+            "POST",
+            "storage.delete",
+            Reply::json(json!({"resource":"storage","id":"archive","client_id":null})),
         ),
     ]);
     let directory = tempfile::tempdir().unwrap();
@@ -82,9 +82,14 @@ fn storage_create_replace_and_delete_use_distinct_contracts() {
     assert_eq!(seen.len(), 3);
     let create_body: Value = serde_json::from_str(&seen[0].body).unwrap();
     let replace_body: Value = serde_json::from_str(&seen[1].body).unwrap();
-    assert_eq!(create_body["id"], "archive");
-    assert!(replace_body.get("id").is_none());
-    assert!(seen[2].body.is_empty());
+    assert_eq!(create_body["input"]["id"], "archive");
+    assert_eq!(replace_body["input"]["id"], "archive");
+    assert_eq!(create_body["input"]["spec"]["capacity_bytes"], 1024);
+    assert_eq!(replace_body["input"]["spec"]["capacity_bytes"], 2048);
+    assert!(
+        seen.iter()
+            .all(|r| r.method == "POST" && r.path == COMMAND_PATH)
+    );
     assert!(
         seen.iter().all(|request| {
             request.authorization.as_deref() == Some(&format!("Bearer {TOKEN}"))
@@ -97,8 +102,8 @@ fn s3_vendor_secret_is_sent_but_never_rendered() {
     let secret = "vendor-secret-that-must-not-be-rendered";
     let server = Server::routes(vec![(
         "POST",
-        "/api/admin/v1/storages",
-        Reply::status(201, storage()),
+        "storage.create",
+        Reply::status(200, storage()),
     )]);
     let input = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(
@@ -127,6 +132,6 @@ fn s3_vendor_secret_is_sent_but_never_rendered() {
     assert!(!String::from_utf8_lossy(&output.stdout).contains(secret));
     assert!(!String::from_utf8_lossy(&output.stderr).contains(secret));
     let body: Value = serde_json::from_str(&server.seen()[0].body).unwrap();
-    assert_eq!(body["kind"], "s3");
-    assert_eq!(body["secret_key"], secret);
+    assert_eq!(body["input"]["spec"]["kind"], "s3");
+    assert_eq!(body["input"]["spec"]["secret_key"], secret);
 }

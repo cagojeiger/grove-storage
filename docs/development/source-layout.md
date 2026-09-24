@@ -35,15 +35,16 @@ backend/crates/
 │   └── tests/            cleanup·cleanup_failures·multipart_create
 ├── object-policy/         grove-object-policy: 업로드 선언·파트·ETag·완료 복구 판단
 │   └── tests/             geometry·etag·validation·completion·completion_failures
-├── cli/                   gscli: 원격 관리자 API 조회·변경
+├── cli/                   gscli: User/Agent 공통 관리 명령 HTTP
 │   ├── src/               인자·설정·HTTP·입력·확인·비밀 출력·응답 출력
-│   │   ├── commands/      조회·변경 실행
+│   │   ├── commands/      typed 명령·공개 결과·비밀 파일 전달
+│   │   ├── http/wire.rs   protocol·명령·대상 대조·변경 결과 검증
 │   │   └── update/        업데이트 흐름·다운로드·설치 기록·파일 교체, 분리된 tests/
 │   └── tests/             설정·조회·변경·비밀·실패·status·update 테스트
 ├── api/src/
 │   ├── resource_commands.rs  공통 자원 Bearer HTTP·envelope·서버 Surface
 │   ├── resource_commands/tests/  기존 REST 비교·인증/입력·변경·감사/commit 장애
-│   ├── console_identity/  새 인증·신원·이력 HTTP (기존 UI·CLI 전환 전)
+│   ├── console_identity/  새 인증·신원·이력 HTTP (기존 UI 전환 전)
 │   │   ├── browser.rs    Origin·CSRF·cookie·Bearer 분리
 │   │   ├── secrets.rs    token/session 형식·해시 domain
 │   │   ├── session.rs    로그인·현재 세션·로그아웃 adapter
@@ -101,7 +102,7 @@ backend/crates/
 | `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 adapter/service 책임 |
 | `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; User 로그인 예산·인증 이력 |
 | `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 19개 전체; Storage probe는 잠금 밖, 이후 role/owner·참조 재확인·audit 원자성 |
-| `api/resource_commands` | Bearer·JSON → 공통 자원 실행기 | Cookie 거부·server Surface·명령/envelope 검증; 기존 CLI 인증과 분리 |
+| `api/resource_commands` | CLI 등 Bearer·JSON → 공통 자원 실행기 | Cookie 거부·server Surface·명령/envelope 검증; 이전 REST 인증과 분리 |
 | `api/console_identity` | HTTP token/cookie·입력 → 신원/이력 service | Origin/CSRF·별도 쿠키·해시 domain·비밀 없는 목록; 기존 UI·자원 API 전환과 분리 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
 | `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
@@ -116,7 +117,7 @@ backend/crates/
 | `infra/fs`, `infra/s3` | 물리 주소 → 바이트 I/O | filesystem·vendor 계약 |
 | `api/reconciler` | DB 후보·실물 관찰 → 복구 | 보존된 소유권·재시도 |
 | `api/status` | 로컬 Config → DB·저장소 접근·요약 | HTTP 독립, 부팅과 같은 storage 검사 |
-| `cli` | 운영자 인자 → 관리자 HTTP API → table·JSON | DB 의존성 없음, 기존 서버·로컬 status와 분리 |
+| `cli` | User/Agent 토큰·인자 → 공통 명령 HTTP → table·JSON | DB 의존성 없음; wire 검증·변경 결과·비밀 파일 관리; 로컬 status와 분리 |
 | `cli/update` | 공식 Release → 검증된 실행 파일 | 서버 인증 독립, 설치·업데이트의 동일 잠금·교체 |
 | `object-policy` | 값 → 업로드 검증·파트 계산·ETag·복구 결정 | HTTP·DB·런타임·환경 설정 독립 |
 | `core` | 환경 설정·암호·키 해시 | 기존 multipart import 경로는 policy 재노출 |
@@ -150,7 +151,7 @@ detach는 같은 트랜잭션을 공유한다.
 | S3 원자적 교체·완료·회수 | `db/tests/s3_*` |
 | filesystem 조립·임시 보호 | `infra/src/fs.rs` |
 | 현재 CLI 표현 | `api/src/status.rs` (바이트·용량 2개) |
-| 원격 CLI 조회·상태 | `cli/tests/{config,reads,failures,status}.rs`, `cli/src/output_tests.rs` |
+| 원격 CLI 조회·상태·wire | `cli/tests/{config,reads,failures,status,wire}.rs`, `cli/src/output_tests.rs` |
 | 원격 CLI 변경 | `cli/tests/{inputs,storage_writes,identity_writes,confirmations,secrets,mutation_failures}.rs` |
 | CLI·서버 응답 계약 | `scripts/e2e-cli.py` (CI, 격리 DB·실제 서버) |
 | CLI 설치·릴리스 계약 | `deploy/tests/test_{installer,manifest,version}.py` |

@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::PathBuf;
 
 pub use grove_management_command::model::{
-    Client, ClientKey, ClientUsage, Deleted, IssuedCredential, Snapshot, Storage, StorageUsage,
+    Client, ClientKey, ClientUsage, Deleted, Snapshot, Storage, StorageUsage,
 };
 
 #[derive(Serialize)]
@@ -11,17 +11,6 @@ pub struct CredentialDelivery {
     pub access_key_id: Option<String>,
     pub secret_file: PathBuf,
     pub file_state: &'static str,
-}
-
-#[derive(Deserialize)]
-pub struct Identity {
-    pub name: String,
-    pub version: String,
-}
-
-#[derive(Deserialize)]
-pub struct Health {
-    pub status: String,
 }
 
 #[derive(Serialize)]
@@ -39,5 +28,5 @@ pub enum Data {
     StorageUsage(Vec<StorageUsage>),
     ClientUsage(Vec<ClientUsage>),
     History(Vec<Snapshot>),
-    Status(crate::status::Status),
+    Status(grove_management_command::model::Status),
 }

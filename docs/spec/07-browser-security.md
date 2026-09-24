@@ -32,8 +32,8 @@ console.example.com               data.example.com
 프록시 OIDC 토큰을 Grove의 Authorization으로 주입하지 않고, 전달된 사용자 헤더도
 Grove 관리 권한으로 해석하지 않는다. 콘솔에서 호출하는 API는 콘솔 origin을 사용한다.
 기계용 401/403은 JSON/MCP 오류로 반환하고 OAuth 로그인 페이지로 redirect하지 않는다.
-현재 `/api/admin/commands/v1`은 Bearer 전용 조회 진입점이며 Cookie를 거부한다.
-기존 CLI REST와 MCP 전송은 아직 이 경로로 전환하지 않았다.
+현재 `/api/admin/commands/v1`은 Bearer 전용 조회·변경 진입점이며 Cookie를 거부한다.
+CLI는 이 경로를 사용하고 MCP 전송은 후속이다. 기존 UI·REST 인증은 별도로 유지한다.
 SigV4의 Authorization·Host·path·query와 presigned URL은 서명 계약에 맞게 보존한다.
 TLS 종료 뒤의 직접 접근 경로·신뢰 proxy 헤더·callback 쿠키·로그아웃을 배포 E2E로 검증한다.
 

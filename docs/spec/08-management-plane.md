@@ -1,9 +1,9 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 신원·이력·세션 HTTP와 공통 자원 19개(조회 10·변경 9)/Bearer HTTP 구현·테스트. CLI 전환·MCP·새 UI는 후속.
+- 상태: 신원·이력·세션 HTTP와 공통 자원 19개(조회 10·변경 9)/Bearer HTTP·CLI 연결 구현·테스트. MCP·새 UI는 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
-- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`과 UI·CLI는 `admin_*`를 계속 사용한다.
+- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`과 UI는 `admin_*`를 사용하며 새 CLI는 `management` User/Agent를 사용한다.
 
 ## 책임과 접근
 
@@ -52,9 +52,9 @@ Agent는 viewer/operator로 제한하고 소유 User의 활성 상태·권한으
 | Installation / SelfOnly / SelfAndOwnedAgents / SetupRecovery | 인증된 ID로 조회/변경 범위 적용; 기존 자원 제약 유지 |
 
 정책 허용은 DB 쿼리의 소유권 필터·첫/마지막 Admin 잠금·삭제 조건을 대신하지 않는다.
-새 User 세션의 조회·종료는 이 정책을 적용한다. 기존 자원 API 인증은 아직 전환하지 않았다. CLI/MCP 동등성 테스트는
-정책 입력에 대한 결과 비교다. [명령 계약](09-management-commands.md)은 실제 CLI 명령
-목록·입출력 DTO·schema를 검증하며 두 adapter의 전송 검증은 후속이다.
+새 User 세션의 조회·종료는 이 정책을 적용한다. 기존 자원 REST 인증은 유지한다.
+CLI/MCP 동등성 테스트는 정책 입력에 대한 결과 비교다. [명령 계약](09-management-commands.md)은
+실제 CLI 명령 목록·입출력 DTO·schema를 검증한다. CLI 전송은 실제 서버 E2E로 검증했고 MCP는 후속이다.
 
 ## 초기 설정·로그인·복구
 
@@ -110,7 +110,8 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 | 검증 범위 | 실제 PostgreSQL + Axum HTTP 라우터; TLS·브라우저 쿠키 적용·OAuth2 Proxy E2E는 후속 |
 
 기존 `fgop_`·`__Host-filegate_session`과 새 토큰·쿠키는 양방향으로 분리한다.
-새 세션은 기존 전체권한 자원 API의 증거가 되지 않는다. 현재 UI·CLI 동작은 유지한다.
+새 세션은 기존 전체권한 자원 API의 증거가 되지 않는다. 현재 UI 동작은 유지한다.
+CLI는 새 User/Agent Bearer를 공통 자원 API에 전달한다.
 최초 User·개인 토큰 발급은 아래 master HTTP 흐름으로 제공한다. 기존 UI의 로그인 화면은
 아직 이 경로로 전환하지 않았으며 운영 DB 수동 삽입을 설치 절차로 제공하지 않는다.
 
@@ -150,7 +151,7 @@ DELETE는 해당 세션 종료만 제공한다. 일반 User·자원·이력 조�
 | 실행 검증 | 임시 PG + 실제 서버 프로세스에서 운영자 토큰 없이 부팅·설정·User 로그인·복구·이전 접근 차단 확인; TLS/브라우저/proxy E2E는 후속 |
 
 master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는다. 새 설치는 master 설정으로
-부팅할 수 있으나, 자원 관리와 UI를 새 신원으로 전환하는 작업은 후속이다. master를 잠시
+부팅할 수 있고 CLI는 새 신원으로 자원을 관리한다. UI 전환과 이전 인증 종료는 후속이다. master를 잠시
 비활성화하려면 모든 replica에서 설정 쌍을 제거한다. 같은 설정을 다시 켜면 남은 유효 세션도
 재사용할 수 있으므로, 세션까지 영구 무효화하려면 세대를 올려 교체한다. 교체 시에는 두 값을 함께
 배포하고 `/master/session` 응답으로 경로를 검증한다. 낮은 세대로의 rollback 대신 더 큰
@@ -192,7 +193,7 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 | 반복 변경 | 같은 값·이미 폐기된 대상은 `changed:false`; 마지막 활성 Admin 변경은 409/conflict |
 | 실행 검증 | 임시 PG + 실제 서버에서 초기 설정·계정/토큰 변경·역할/이력 범위·폐기 후 차단 확인; 수동 쿠키의 HTTP 검증이며 TLS/브라우저/proxy E2E와 구분 |
 
-현재 화면·CLI는 기존 인증을 유지한다. 이 HTTP 연결은 자원 API의 인증 전환과 별도다.
+현재 화면은 기존 인증을 유지한다. CLI는 별도 공통 자원 API와 새 User/Agent 인증을 사용한다.
 
 ## DB 구현과 후속 설계
 
@@ -297,8 +298,8 @@ master 로그인은 master 주체로 보안/호출을 기록하고 설정/복구
 
 명령명 19개·protocol 1·입출력·오류·권한 매핑은 [spec 09](09-management-commands.md)에
 구현했다. 조회 10개·변경 9개는 공통 서버 실행기와 Bearer HTTP에 연결했다.
-CLI는 공통 DTO와 명령명을 재사용하며 기존 REST를 호출한다.
-CLI 전송·MCP adapter 연결은 후속이다.
+CLI는 공통 DTO와 명령명을 재사용하며 `/api/admin/commands/v1`을 호출한다.
+MCP adapter 연결은 후속이다. 이전 서버·운영자 토큰에는 이전 CLI를 사용한다.
 
 ```text
 CLI adapter ──┐
@@ -323,7 +324,7 @@ Console identity/history API ── User session + role → identity/history ser
 
 User·Agent·role·관리 credential·감사 검색은 콘솔 전용이다.
 Admin Bearer의 직접 호출도 identity/history API에서 거부한다.
-MCP tool명·HTTP path·전송 envelope는 adapter 구현 전에 고정하고 동일 fixture로 검증한다.
+CLI HTTP path·전송 envelope는 spec 09를 따른다. MCP tool명·전송 계약은 adapter 구현 전에 고정하고 동일 fixture로 검증한다.
 
 ## 관리 로그의 경계
 
@@ -369,7 +370,8 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 4a (로컬 구현·검증) | 공통 resource 조회 10개 + Bearer HTTP | 6개 PG 서비스 + 5개 PG HTTP; 기존 REST 결과·권한·owner·현재 role·비밀·미연결 변경 거부 |
 | 4b-1 (로컬 구현·검증) | Client/서비스 키 변경 6개 + 감사 transaction | 8개 PG 서비스 + 4개 PG HTTP; 삭제/참조·키 범위·현재 권한·감사 rollback·unknown·비밀 제외 |
 | 4b-2 (로컬 구현·검증) | Storage 변경 3개 + 감사 transaction | 8개 PG 서비스 + 6개 PG HTTP; probe 중 폐기/권한/참조 변경·fs/S3 대역 검사·키 교체·삭제/주소 제약·rollback·unknown |
-| 4c (다음) | CLI/MCP adapter | 같은 실행기·입력·결과·거부; 실제 전송·secret 로그 제외 |
+| 4c-1 (로컬 구현·검증) | CLI command HTTP adapter | 19개 명령·User/Agent·owner 강등/폐기·wire 검증·비밀 파일·기존 REST 결과 대조 |
+| 4c-2 (다음) | MCP adapter | 같은 실행기·입력·결과·거부; 실제 전송·secret 로그 제외 |
 | 5 | 콘솔 User/Agent/role/token/history | 역할별 표시·API 거부, 원문 한 번 표시, 응답 불명, light/dark·phone/tablet/desktop |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
 
@@ -379,4 +381,4 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 각 단계는 코드·테스트·대응 spec을 함께 커밋하고 공개·운영 전환은 별도로 수행한다.
 
 후속 구현 전에 고정할 값: 로그 보존 기간·최대 payload·접근 예산,
-자원 endpoint/tool명·전송 envelope, 이전 인증의 전환/복구 절차.
+MCP tool명·전송 계약, 이전 인증의 전환/복구 절차.

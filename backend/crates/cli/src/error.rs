@@ -1,3 +1,4 @@
+use grove_management_command::{CommandError, ErrorCode, Outcome};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -27,7 +28,11 @@ impl Error {
 
     pub fn response(status: u16) -> Self {
         let (code, message, exit) = match status {
-            401 | 403 => ("unauthorized", "Operator authentication failed", 3),
+            401 | 403 => (
+                "unauthorized",
+                "Management authentication or authorization failed",
+                3,
+            ),
             404 => ("not_found", "Resource not found", 4),
             409 => ("conflict", "Resource conflict", 6),
             400..=499 => ("request_rejected", "The API rejected the request", 7),
@@ -41,16 +46,76 @@ impl Error {
         }
     }
 
-    pub fn mutation_response(status: u16) -> Self {
+    pub fn untrusted_response(status: u16, mutation: bool) -> Self {
         let mut error = Self::response(status);
-        if (200..=299).contains(&status) {
-            error.exit = 8;
-            error.outcome = "applied";
-        } else if !(400..=499).contains(&status) {
+        if mutation {
             error.exit = 8;
             error.outcome = "unknown";
         }
         error
+    }
+
+    pub fn unverified_result(status: u16, mutation: bool) -> Self {
+        let mut error = Self::new(
+            "invalid_response",
+            "Response does not match the command contract",
+            5,
+        );
+        error.http_status = Some(status);
+        if mutation {
+            error.exit = 8;
+            error.outcome = "unknown";
+        }
+        error
+    }
+
+    pub fn command_status(code: ErrorCode) -> u16 {
+        match code {
+            ErrorCode::Unauthorized => 401,
+            ErrorCode::Forbidden => 403,
+            ErrorCode::NotFound => 404,
+            ErrorCode::Conflict => 409,
+            ErrorCode::Unavailable => 503,
+            ErrorCode::Internal | ErrorCode::InvalidResponse => 500,
+            _ => 400,
+        }
+    }
+
+    pub fn command(command: CommandError, status: u16) -> Self {
+        let (code, message, exit) = match command.code {
+            ErrorCode::ProtocolIncompatible => (
+                "protocol_incompatible",
+                "Server command protocol is incompatible",
+                7,
+            ),
+            ErrorCode::UnknownCommand => {
+                ("unknown_command", "Server does not support this command", 7)
+            }
+            ErrorCode::InvalidInput => ("invalid_input", "The API rejected the command input", 7),
+            ErrorCode::Unauthorized => ("unauthorized", "Management authentication failed", 3),
+            ErrorCode::Forbidden => ("forbidden", "Management permission denied", 3),
+            ErrorCode::NotFound => ("not_found", "Resource not found", 4),
+            ErrorCode::Conflict => ("conflict", "Resource conflict", 6),
+            ErrorCode::RequestRejected => ("request_rejected", "The API rejected the request", 7),
+            ErrorCode::InvalidResponse => ("invalid_response", "Invalid command response", 5),
+            ErrorCode::Unavailable => ("unavailable", "Management service unavailable", 5),
+            ErrorCode::Internal => ("internal", "Management service failed", 5),
+        };
+        Self {
+            code,
+            message,
+            http_status: Some(status),
+            outcome: match command.outcome {
+                Outcome::NotApplied => "not_applied",
+                Outcome::Applied => "applied",
+                Outcome::Unknown => "unknown",
+            },
+            exit: if command.outcome == Outcome::NotApplied {
+                exit
+            } else {
+                8
+            },
+        }
     }
 
     pub fn mutation_transport() -> Self {
@@ -76,13 +141,6 @@ impl Error {
         error
     }
 
-    pub fn applied_timeout(status: u16) -> Self {
-        let mut error = Self::new("timeout", "The command HTTP deadline was exceeded", 8);
-        error.http_status = Some(status);
-        error.outcome = "applied";
-        error
-    }
-
     pub fn applied_secret_write() -> Self {
         let mut error = Self::new(
             "secret_write_failed",
@@ -93,25 +151,14 @@ impl Error {
         error
     }
 
-    pub fn response_too_large(status: u16, applied: bool) -> Self {
+    pub fn response_too_large(status: u16, mutation: bool) -> Self {
         let mut error = Self::new("response_too_large", "Response exceeds 8 MiB", 5);
         error.http_status = Some(status);
-        if applied {
+        if mutation {
             error.exit = 8;
-            error.outcome = "applied";
+            error.outcome = "unknown";
         }
         error
-    }
-
-    pub fn invalid_response() -> Self {
-        Self {
-            http_status: Some(200),
-            ..Self::new(
-                "invalid_response",
-                "Response does not match the API contract",
-                5,
-            )
-        }
     }
 
     pub fn timeout() -> Self {

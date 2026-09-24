@@ -1,63 +1,107 @@
-mod read;
+mod result;
 mod write;
 
-use crate::args::{ClientCommand, ClientKeyCommand, Command, CredentialCommand, StorageCommand};
-use crate::error::Error;
-use crate::http::Api;
-use crate::model::Data;
+use crate::args::{
+    ClientCommand, ClientKeyCommand, Command, CredentialCommand, StorageCommand, Usage,
+};
+use crate::{error::Error, http::Api, model::Data};
+use grove_management_command::{Command as Remote, input::*};
 
 pub(super) type CommandResult = Result<(Data, Option<Error>), Error>;
 
 pub async fn run(api: &Api, command: &Command) -> CommandResult {
-    match command {
-        Command::Update { .. } | Command::Install { .. } => Err(Error::input(
-            "Local commands execute without the management API",
-        )),
-        Command::Status => {
-            let (status, error) = crate::status::inspect(api).await;
-            Ok((Data::Status(status), error))
+    let command = match command {
+        Command::Update { .. } | Command::Install { .. } => {
+            return Err(Error::input(
+                "Local commands execute without the management API",
+            ));
         }
-        Command::Storage(StorageCommand::List) => read::storage_list(api).await,
-        Command::Storage(StorageCommand::Show { id }) => read::storage_show(api, id).await,
+        Command::Status => Remote::Status(EmptyInput {}),
+        Command::Storage(StorageCommand::List) => Remote::StorageList(EmptyInput {}),
+        Command::Storage(StorageCommand::Show { id }) => Remote::StorageShow(resource(id)),
         Command::Storage(StorageCommand::Create { id, from }) => {
-            write::storage_create(api, id, from).await
+            return write::storage(api, id, from, false, false).await;
         }
         Command::Storage(StorageCommand::Replace { id, from, yes }) => {
-            write::storage_replace(api, id, from, *yes).await
+            return write::storage(api, id, from, true, *yes).await;
         }
         Command::Storage(StorageCommand::Delete { id, yes }) => {
-            write::storage_delete(api, id, *yes).await
+            write::confirm(api, *yes, "Delete", &format!("storage {id}"))?;
+            Remote::StorageDelete(resource(id))
         }
-        Command::Client(ClientCommand::List) => read::client_list(api).await,
-        Command::Client(ClientCommand::Show { id }) => read::client_show(api, id).await,
+        Command::Client(ClientCommand::List) => Remote::ClientList(EmptyInput {}),
+        Command::Client(ClientCommand::Show { id }) => Remote::ClientShow(resource(id)),
         Command::Client(ClientCommand::Create { id, storage }) => {
-            write::client_create(api, id, storage).await
+            Remote::ClientCreate(ClientCreateInput {
+                id: id.clone(),
+                storage_id: storage.clone(),
+            })
         }
         Command::Client(ClientCommand::Delete { id, yes }) => {
-            write::client_delete(api, id, *yes).await
+            write::confirm(api, *yes, "Delete", &format!("client {id}"))?;
+            Remote::ClientDelete(resource(id))
         }
         Command::Credential(CredentialCommand::List { client }) => {
-            read::credential_list(api, client).await
+            Remote::CredentialList(client_input(client))
         }
         Command::Credential(CredentialCommand::Create { client, secret_out }) => {
-            write::credential_create(api, client, secret_out).await
+            return write::credential_create(api, client, secret_out).await;
         }
         Command::Credential(CredentialCommand::Delete {
             client,
             access_key_id,
             yes,
-        }) => write::credential_delete(api, client, access_key_id, *yes).await,
+        }) => {
+            write::confirm(
+                api,
+                *yes,
+                "Delete",
+                &format!("credential {access_key_id} for client {client}"),
+            )?;
+            Remote::CredentialDelete(CredentialDeleteInput {
+                client_id: client.clone(),
+                access_key_id: access_key_id.clone(),
+            })
+        }
         Command::ClientKey(ClientKeyCommand::List { client }) => {
-            read::client_key_list(api, client).await
+            Remote::ClientKeyList(client_input(client))
         }
         Command::ClientKey(ClientKeyCommand::Register { client, key_file }) => {
-            write::client_key_register(api, client, key_file).await
+            Remote::ClientKeyRegister(ClientKeyInput {
+                client_id: client.clone(),
+                key_hash: crate::input::client_key_hash(key_file)?,
+            })
         }
         Command::ClientKey(ClientKeyCommand::Delete {
             client,
             key_hash,
             yes,
-        }) => write::client_key_delete(api, client, key_hash, *yes).await,
-        Command::Usage(usage) => read::usage(api, usage).await,
+        }) => {
+            write::confirm(
+                api,
+                *yes,
+                "Delete",
+                &format!("client key {key_hash} for client {client}"),
+            )?;
+            Remote::ClientKeyDelete(ClientKeyInput {
+                client_id: client.clone(),
+                key_hash: key_hash.clone(),
+            })
+        }
+        Command::Usage(Usage::Storages) => Remote::UsageStorages(EmptyInput {}),
+        Command::Usage(Usage::Clients) => Remote::UsageClients(EmptyInput {}),
+        Command::Usage(Usage::History { days }) => {
+            Remote::UsageHistory(HistoryInput { days: *days })
+        }
+    };
+    result::execute(api, command).await
+}
+
+fn resource(id: &str) -> ResourceInput {
+    ResourceInput { id: id.into() }
+}
+fn client_input(id: &str) -> ClientInput {
+    ClientInput {
+        client_id: id.into(),
     }
 }

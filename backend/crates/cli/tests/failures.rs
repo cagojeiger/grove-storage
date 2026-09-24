@@ -17,7 +17,7 @@ fn http_failures_map_to_exit_codes_without_echoing_bodies_or_tokens() {
         (503, 5),
         (204, 5),
     ] {
-        let server = Server::new(vec![("/api/admin/v1/clients", Reply::error(status))]);
+        let server = Server::new(vec![("client.list", Reply::error(status))]);
         let output = server.run(&["client", "list"]);
         let result = envelope(&output, exit);
         assert_eq!(result["error"]["http_status"], status);
@@ -34,7 +34,7 @@ fn redirects_never_forward_operator_credentials() {
     let target = Server::new(vec![("/", Reply::json(json!([])))]);
     let mut redirect = Reply::error(302);
     redirect.location = Some(target.endpoint.clone());
-    let server = Server::new(vec![("/api/admin/v1/clients", redirect)]);
+    let server = Server::new(vec![("client.list", redirect)]);
     let result = envelope(&server.run(&["client", "list"]), 5);
     assert_eq!(result["error"]["code"], "redirect");
     assert!(target.seen().is_empty());
@@ -50,7 +50,7 @@ fn malformed_and_wrong_shape_success_responses_are_failures() {
         Reply::json(json!({"clients":[]})),
         Reply::json(json!([{"id":"not-a-string"}])),
     ] {
-        let server = Server::new(vec![("/api/admin/v1/clients", reply)]);
+        let server = Server::new(vec![("client.list", reply)]);
         let output = server.run(&["client", "list"]);
         let result = envelope(&output, 5);
         assert_eq!(result["error"]["code"], "invalid_response");
@@ -64,7 +64,7 @@ fn response_size_is_bounded() {
         body: " ".repeat(8 * 1024 * 1024 + 1),
         ..Reply::json(json!([]))
     };
-    let server = Server::new(vec![("/api/admin/v1/clients", reply)]);
+    let server = Server::new(vec![("client.list", reply)]);
     let result = envelope(&server.run(&["client", "list"]), 5);
     assert_eq!(result["error"]["code"], "response_too_large");
 }
@@ -75,7 +75,7 @@ fn connection_failure_is_reported_without_internal_transport_details() {
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     drop(listener);
     let output = bare()
-        .env("GROVE_OPERATOR_TOKEN", TOKEN)
+        .env("GROVE_TOKEN", TOKEN)
         .args([
             "--endpoint",
             &endpoint,

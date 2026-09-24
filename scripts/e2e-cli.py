@@ -4,6 +4,7 @@
 import hashlib
 import json
 import os
+import secrets
 from pathlib import Path
 import socket
 import signal
@@ -20,6 +21,7 @@ TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
 SERVER = TARGET / "debug" / "filegate"
 CLI = TARGET / "debug" / "gscli"
 TOKEN = "cli-local-integration-token"
+MASTER_TOKEN = "gsmt_" + secrets.token_hex(32)
 
 
 def docker(*args):
@@ -51,11 +53,13 @@ def check_lifecycle(endpoint, directory):
         time.sleep(0.1)
 
     admin = "/api/admin/v1"
+    from cli_management_fixture import Management
+    management = Management(endpoint, MASTER_TOKEN)
     root = Path(directory) / "objects"
     root.mkdir()
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FILEGATE_", "GROVE_"))}
     env.pop("DATABASE_URL", None)
-    env.update(GROVE_ENDPOINT=endpoint, GROVE_OPERATOR_TOKEN=TOKEN, NO_PROXY="127.0.0.1")
+    env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
 
     def run_cli(*args):
         result = subprocess.run(
@@ -67,6 +71,7 @@ def check_lifecycle(endpoint, directory):
         output = json.loads(result.stdout)
         assert output["ok"] and output["error"] is None
         assert TOKEN not in result.stdout
+        assert management.token not in result.stdout
         print("PASS", " ".join(args))
         return output, result
 
@@ -158,9 +163,18 @@ def check_lifecycle(endpoint, directory):
     assert request("GET", admin + "/storages/cli-test-fs")["root_path"] == str(root)
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
+    def run_as(args, token, expected):
+        result = subprocess.run([str(CLI), "--output", "json", *args],
+                                cwd=directory, env=dict(env, GROVE_TOKEN=token),
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == expected, (args, result.returncode, expected)
+        assert token not in result.stdout + result.stderr
+        return json.loads(result.stdout)
+    management.verify(run_as)
+
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
-         reconciler_interval=1):
+         reconciler_interval=1, management=False):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -187,6 +201,9 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                 env["FILEGATE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
             if console_origin:
                 env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
+            if management:
+                env.update(FILEGATE_MASTER_TOKEN=MASTER_TOKEN, FILEGATE_MASTER_GENERATION="1",
+                           FILEGATE_CONSOLE_ORIGIN="https://console.test")
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
@@ -227,4 +244,4 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
 
 
 if __name__ == "__main__":
-    main()
+    main(management=True)

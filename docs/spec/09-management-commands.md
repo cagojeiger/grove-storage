@@ -1,7 +1,7 @@
 # spec 09: 공통 자원 명령 계약
 
 - 상태: `grove-management-command` + 조회 10개·변경 9개 실행기 + Bearer HTTP 구현.
-- CLI 전송 전환·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
+- CLI의 원격 19개 명령을 공통 HTTP에 연결했다. MCP adapter는 후속 단계다.
 - 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
 
 ## 구성
@@ -11,11 +11,11 @@ management-policy       Caller + Surface + Action → Scope / 거부
         ↑
 management-command      명령명 + 입력/출력 + schema + 권한 + 변경 여부
         ↑
-gscli                   인자·파일·확인 → 기존 REST → 표 / JSON
+gscli                   인자·파일·확인 → commands HTTP → 표 / JSON
 
 commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → DB 조회 / 변경 + 감사
 Storage 생성/교체: 권한 확인 → 잠금 해제 → 접근 probe → 현재 권한 재확인 → 변경 + 감사
-후속: CLI HTTP adapter / MCP tool adapter
+후속: MCP tool adapter
 ```
 
 | 항목 | 현재 계약 |
@@ -28,8 +28,8 @@ Storage 생성/교체: 권한 확인 → 잠금 해제 → 접근 probe → 현�
 | 인증 | 명령 metadata의 Action을 검증된 Caller·Surface와 함께 정책에 전달 |
 | 로컬 처리 | `--from`, `--key-file`, `--secret-out`, `--yes`, update는 CLI 소유 |
 
-현재 CLI는 새 `decode`·권한 정책·오류 타입을 실행하지 않는다. 공통 실행기 연결 시
-검증과 권한 적용을 함께 전환한다. 공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 adapter 단계에서 확정한다.
+CLI는 typed 입력 검증·직렬화와 응답 검증을 수행하고, 현재 권한은 서버가 적용한다.
+공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 adapter 단계에서 확정한다.
 
 ## 공통 자원 HTTP (4a·4b)
 
@@ -53,14 +53,15 @@ Content-Type: application/json
 | 조회 경계 | identity lock → 현재 신원·role·owner 확인 → 조회 → commit; 저장소 I/O probe 생략 |
 | DB 재사용 | 기존 registry/usage/S3 키 SQL이 pool 또는 현재 transaction에서 실행; SQL 조건·정렬 유지 |
 | 변경 경계 | 현재 권한 → 자원 변경 + audit → commit; 감사 실패는 rollback, commit 불명은 자동 재시도 없이 대조 |
-| 상태 | status는 서버의 신원/DB/등록부 관찰, 물리 storage는 `not_checked`; 실패 시 명령 오류, CLI의 네트워크 진단과 구분 |
+| 상태 | CLI도 단일 status 명령 사용; 서버의 신원/DB/등록부 관찰, 물리 storage는 `not_checked`; 실패 시 명령 오류 |
 | 일관성 | READ COMMITTED; 여러 SELECT의 등록부 상태를 고정 snapshot으로 보장하지 않음 |
 | 호출 기록 | service 실행 시 검증된 actor + 명령명 + 결과를 한 번 기록; 조회는 변경 감사 생성 없이 완료 |
 | 거부 기록 | 인증 실패는 보안 이벤트, 신원 확인 후 권한 거부는 호출·보안 이벤트; envelope/decode 거부는 HTTP 진단 범위 |
 | 비밀 | 응답은 명시적 DTO; S3 secret은 발급 commit 성공 시 한 번 전달; 로그는 요청/결과 payload 대신 ID·안정 코드 사용 |
 
-기존 CLI는 `/api/admin/v1`을 계속 호출한다. CLI/MCP Surface 동등성은 같은 실행기에
-검증된 토큰을 전달한 PG 테스트이며 실제 CLI/MCP 전송 연결은 후속이다.
+CLI HTTP는 User/Agent 토큰을 사용하며 서버가 `resource_api`로 기록한다.
+CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 CLI 전송은 E2E로
+검증하며 MCP 전송은 후속이다. 기존 `/api/admin/v1`은 이전 UI·CLI용으로 유지한다.
 
 ## 명령 목록
 
@@ -141,8 +142,8 @@ identity lock → 인증·권한·입력·교체 대상 확인 → 읽기 transa
 | 감사 | Serialize는 전달용; 저장 로그는 별도 allowlist와 크기 제한 적용 |
 
 JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하지 않는다.
-기존 CLI `status`는 클라이언트의 HTTP 관찰 결과다. 새 공통 실행기의 `status`는 서버
-관찰이며 같은 DTO를 사용한다. 물리 저장소 접근은 둘 다 `not_checked`다.
+CLI `status`는 서버 관찰 결과다. 이전 CLI의 5개 HTTP 진단 호출을 단일 명령으로
+교체했다. 호출 실패 시 부분 상태를 생성하지 않으며 물리 저장소는 `not_checked`다.
 
 ## 오류와 결과
 
@@ -162,7 +163,8 @@ JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하�
 | unknown | 전송 단절·응답 불명 등 적용 여부를 확정할 수 없음 |
 
 오류 코드만으로 변경 결과를 추론하지 않는다. `rejected` 생성자는 실행 전 거부에 사용한다.
-새 계약은 기존 CLI의 오류 envelope·종료 코드를 변경하지 않는다.
+CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outcome·종료 코드의
+대응은 [spec 04](04-cli.md)를 따른다. 변경 응답을 검증할 수 없으면 `unknown`이다.
 
 ## 검증
 
@@ -173,7 +175,8 @@ JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하�
 | `management-command/tests/outputs.rs` | wire fixture 왕복·비밀 필드 제거·진단 redaction |
 | `management-command/tests/errors.rs` | protocol 거부 순서·안정 코드·적용 결과 분리 |
 | `cli/tests/command_contract.rs` | 실제 clap 원격 명령과 catalog의 일대일 대응 |
-| 기존 CLI 테스트 | REST path·JSON·비밀 파일·변경 결과·status 동작 유지 |
+| `cli/tests/` | command HTTP·protocol/명령/대상 ID 검증·JSON·설정 우선순위·비밀 파일·변경 결과·단일 status |
+| `scripts/e2e-cli.py` | 실제 CLI/서버/PG의 19개 명령·기존 REST 결과 비교·User/Agent·owner 강등·폐기·감사·비밀 제외 |
 | `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·Agent owner 상한·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
 | `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
 | `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
@@ -185,4 +188,4 @@ JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하�
 | Storage 서버 smoke | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |
 
 현재 검증은 순수 계약·PG 서비스·HTTP 라우터와 자원 변경/audit transaction을 포함한다.
-실제 CLI/MCP 전송 전환은 후속 단계다. S3 대역 검증은 외부 Provider 운영 검증과 구분한다.
+실제 MCP 전송 전환은 후속 단계다. S3 대역 검증은 외부 Provider 운영 검증과 구분한다.
