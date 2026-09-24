@@ -40,7 +40,7 @@ const storages = new Map([
     },
   ],
 ]);
-let signedIn = true;
+let signedIn = false;
 
 function json(res, status, body) {
   res.writeHead(status, {
@@ -81,7 +81,15 @@ async function response(req, res) {
   const method = req.method;
   if (path === "/readyz") return json(res, 200, { status: "ready" });
   if (path === "/api/admin/identity/v1/session") {
-    if (method === "POST") signedIn = true;
+    if (method === "POST") {
+      let raw = "";
+      for await (const chunk of req) {
+        raw += chunk;
+        if (raw.length > 65536) return json(res, 413, {});
+      }
+      if (JSON.parse(raw)?.token !== "qwer1234") return json(res, 401, {});
+      signedIn = true;
+    }
     if (method === "DELETE") {
       signedIn = false;
       res.writeHead(204, { "Cache-Control": "no-store" });
