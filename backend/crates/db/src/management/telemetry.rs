@@ -24,16 +24,20 @@ impl Outcome {
 
 #[derive(Clone, Copy)]
 pub enum SecurityReason {
+    Authenticated,
     Unauthenticated,
     Forbidden,
     Unavailable,
+    RateLimited,
 }
 impl SecurityReason {
     fn fields(self) -> (&'static str, &'static str) {
         match self {
+            Self::Authenticated => ("authentication_succeeded", "authenticated"),
             Self::Unauthenticated => ("authentication_failed", "unauthenticated"),
             Self::Forbidden => ("permission_denied", "forbidden"),
             Self::Unavailable => ("authentication_unavailable", "unavailable"),
+            Self::RateLimited => ("authentication_rate_limited", "rate_limited"),
         }
     }
 }

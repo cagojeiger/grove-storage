@@ -15,6 +15,8 @@ pub enum Command<'a> {
     },
     RevokeCredential(Uuid),
     RevokeOwnSession(Uuid),
+    CurrentSession,
+    Logout,
     Accounts(Page<Uuid>),
     Credentials {
         account: Uuid,
@@ -45,6 +47,8 @@ impl Command<'_> {
             Self::IssueCredential { .. } => "identity.credential.issue",
             Self::RevokeCredential(_) => "identity.credential.revoke",
             Self::RevokeOwnSession(_) => "identity.session.revoke",
+            Self::CurrentSession => "identity.session.current",
+            Self::Logout => "identity.session.logout",
             Self::Accounts(_) => "identity.account.list",
             Self::Credentials { .. } => "identity.credential.list",
             Self::OwnSessions(_) => "identity.session.list",
@@ -59,9 +63,9 @@ impl Command<'_> {
             | Self::ChangeAccount { .. }
             | Self::IssueCredential { .. }
             | Self::RevokeCredential(_) => Action::ManageIdentities,
-            Self::RevokeOwnSession(_) => Action::RevokeOwnSessions,
+            Self::RevokeOwnSession(_) | Self::Logout => Action::RevokeOwnSessions,
             Self::Accounts(_) | Self::Credentials { .. } => Action::ReadIdentities,
-            Self::OwnSessions(_) => Action::ReadOwnSessions,
+            Self::OwnSessions(_) | Self::CurrentSession => Action::ReadOwnSessions,
             Self::Audit(_) => Action::ReadAuditHistory,
             Self::Invocations(_) => Action::ReadInvocationHistory,
             Self::Security(_) => Action::ReadSecurityEvents,

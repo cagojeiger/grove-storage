@@ -1,4 +1,4 @@
-use crate::{Error, Output};
+use crate::Error;
 use filegate_db::{
     PgPool,
     management::{
@@ -12,14 +12,14 @@ use uuid::Uuid;
 
 const LOG_TIMEOUT: Duration = Duration::from_millis(250);
 
-pub(super) async fn record(
+pub(super) async fn record<T>(
     pool: &PgPool,
     context: Option<&AuditContext>,
     request_id: Uuid,
     surface: Surface,
     operation: &'static str,
     elapsed: Duration,
-    result: &Result<Output, Error>,
+    result: &Result<T, Error>,
 ) {
     if let Some(context) = context {
         let (outcome, code) = match result {
@@ -43,13 +43,24 @@ pub(super) async fn record(
     let reason = match result {
         Err(Error::Unauthenticated) => Some(SecurityReason::Unauthenticated),
         Err(Error::Forbidden) => Some(SecurityReason::Forbidden),
+        Err(Error::RateLimited) => Some(SecurityReason::RateLimited),
         Err(_) if context.is_none() => Some(SecurityReason::Unavailable),
         _ => None,
     };
     if let Some(reason) = reason {
-        let write = telemetry::security(pool, context, request_id, surface, reason);
-        if !matches!(tokio::time::timeout(LOG_TIMEOUT, write).await, Ok(Ok(()))) {
-            tracing::warn!(%request_id, stream="security_events", "Management history write failed or timed out");
-        }
+        security(pool, context, request_id, surface, reason).await;
+    }
+}
+
+pub(super) async fn security(
+    pool: &PgPool,
+    context: Option<&AuditContext>,
+    request_id: Uuid,
+    surface: Surface,
+    reason: SecurityReason,
+) {
+    let write = telemetry::security(pool, context, request_id, surface, reason);
+    if !matches!(tokio::time::timeout(LOG_TIMEOUT, write).await, Ok(Ok(()))) {
+        tracing::warn!(%request_id, stream="security_events", "Management history write failed or timed out");
     }
 }

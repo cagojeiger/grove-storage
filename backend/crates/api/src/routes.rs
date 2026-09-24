@@ -77,6 +77,10 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
         .route("/", get(root))
         .merge(system_routes())
         .nest("/api/admin/v1", admin_guarded(state.clone()))
+        .nest(
+            "/api/admin/identity/v1",
+            crate::console_identity::routes(state.clone()),
+        )
         .nest("/api/v1", v1_guarded(state.clone()))
         .layer(RequestBodyLimitLayer::new(CONTROL_BODY_LIMIT))
         .layer(TimeoutLayer::with_status_code(

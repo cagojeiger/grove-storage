@@ -5,6 +5,7 @@
 mod command;
 mod dispatch;
 mod logging;
+pub mod sessions;
 pub use command::Command;
 pub use filegate_db::management::{Proof, queries::Page};
 
@@ -17,6 +18,7 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Output {
+    Identity(db::Identity),
     Account(Uuid),
     Changed(bool),
     Credential(db::Credential),
@@ -37,6 +39,7 @@ pub enum Error {
     InvalidInput,
     Unavailable,
     OutcomeUnknown,
+    RateLimited,
 }
 impl Error {
     pub fn code(self) -> &'static str {
@@ -48,6 +51,7 @@ impl Error {
             Self::InvalidInput => "invalid_input",
             Self::Unavailable => "unavailable",
             Self::OutcomeUnknown => "outcome_unknown",
+            Self::RateLimited => "rate_limited",
         }
     }
 }
@@ -148,7 +152,7 @@ async fn run(
         Ok(scope) => scope,
         Err(_) => return (Some(context), Err(Error::Forbidden)),
     };
-    let result = dispatch::run(tx, &context, identity.account_id, scope, command)
+    let result = dispatch::run(tx, &context, identity, scope, command)
         .await
         .map_err(Error::from);
     (Some(context), result)

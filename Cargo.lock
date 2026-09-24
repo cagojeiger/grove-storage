@@ -1018,6 +1018,8 @@ dependencies = [
  "filegate-db",
  "filegate-infra",
  "futures-util",
+ "grove-management-policy",
+ "grove-management-service",
  "grove-object-policy",
  "grove-object-service",
  "grove-s3-protocol",

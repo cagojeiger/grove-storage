@@ -43,9 +43,11 @@ fn commands(target: Uuid, key_hash: &str) -> Vec<(Command<'_>, bool)> {
         ),
         (Command::Security(Page::default()), true),
         (Command::OwnSessions(Page::default()), false),
+        (Command::CurrentSession, false),
         (Command::RevokeOwnSession(Uuid::new_v4()), false),
         (Command::Audit(Page::default()), false),
         (Command::Invocations(Page::default()), false),
+        (Command::Logout, false),
     ]
 }
 
@@ -72,6 +74,11 @@ fn identity_and_history_names_never_overlap_resource_commands() {
         assert!(command.name().starts_with("identity.") || command.name().starts_with("history."));
         assert!(grove_management_command::CommandName::parse(command.name()).is_none());
     }
+    assert_eq!(
+        Command::Logout.action(),
+        grove_management_policy::Action::RevokeOwnSessions
+    );
+    assert!(grove_management_command::CommandName::parse(Command::Logout.name()).is_none());
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

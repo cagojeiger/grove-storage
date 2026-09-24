@@ -19,6 +19,7 @@ version = "0.4.1"
 edition = "2024"
 
 [workspace.dependencies]
+grove-management-service = { path = "backend/crates/management-service" }
 grove-management-command = { path = "backend/crates/management-command" }
 grove-management-policy = { path = "backend/crates/management-policy" }
 grove-s3-protocol = { path = "backend/crates/s3-protocol" }

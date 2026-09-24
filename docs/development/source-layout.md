@@ -2,11 +2,12 @@
 
 ```text
 backend/crates/
-├── management-service/   신원·이력 정책 실행 (HTTP 미연결)
+├── management-service/   신원·이력 정책 실행 (User 세션 HTTP 연결)
 │   ├── src/command.rs    콘솔 내부 명령 → Action·이름공간
 │   ├── src/lib.rs        잠금·현재 신원·권한·server request ID
 │   ├── src/dispatch.rs   허용 scope → 저장소 연산
 │   ├── src/logging.rs    bounded best-effort 호출·보안 기록
+│   ├── src/sessions.rs   로그인 예산·User 토큰 교환·인증 이력
 │   └── tests/           authorization·history·logging (실제 PostgreSQL)
 ├── management-command/   자원 명령 19개·schema·권한 매핑 (서버 실행기 미연결)
 │   ├── src/catalog.rs    명령명·입출력·권한·변경 여부의 정본
@@ -14,7 +15,7 @@ backend/crates/
 │   ├── src/model.rs      CLI가 재사용하는 응답 DTO
 │   ├── src/error.rs      안정 오류 코드·변경 적용 여부
 │   └── tests/            catalog·inputs·outputs·errors (DB·서버 독립)
-├── management-policy/    관리 User·Agent·role·진입 경계의 순수 권한 규칙 (API 미연결)
+├── management-policy/    관리 User·Agent·role·진입 경계의 순수 권한 규칙
 │   ├── src/identity.rs   주체·역할·계정/자격증명 상태·인증 방식·Surface
 │   ├── src/policy.rs     Action → 허용 Scope 또는 거부 사유
 │   └── tests/           resources·console·agents·authentication (DB·서버 독립)
@@ -38,6 +39,11 @@ backend/crates/
 │   │   └── update/        업데이트 흐름·다운로드·설치 기록·파일 교체, 분리된 tests/
 │   └── tests/             설정·조회·변경·비밀·실패·status·update 테스트
 ├── api/src/
+│   ├── console_identity/  새 User 세션 HTTP (기존 UI·CLI 전환 전)
+│   │   ├── browser.rs    Origin·CSRF·cookie·Bearer 분리
+│   │   ├── secrets.rs    token/session 형식·해시 domain
+│   │   ├── session.rs    로그인·현재 세션·로그아웃 adapter
+│   │   └── tests/        browser·lifecycle·failures (실제 PostgreSQL)
 │   ├── admin/              등록부·운영자 인증·usage
 │   ├── s3/                 SigV4·라우팅·객체·multipart
 │   │   ├── object_response.rs Range·응답 헤더 정책
@@ -53,7 +59,7 @@ backend/crates/
 │   └── reconciler/         완료 복구
 │       └── reclaim.rs      만료 회수의 물리 정리·재시도
 ├── db/
-│   ├── src/management/     관리 신원 저장소 (기존 인증 API 미연결)
+│   ├── src/management/     관리 신원 저장소 (기존 admin_*와 분리)
 │   │   ├── accounts.rs    최초 Admin·User/Agent 생성·마지막 Admin 보호
 │   │   ├── credentials.rs 발급·폐기·대상 Admin 복구
 │   │   ├── sessions.rs    User 세션·원본 만료 상한·폐기·개수 상한
@@ -77,7 +83,8 @@ backend/crates/
 | 모듈 | 입력 → 결과 | 정합성 경계 |
 |---|---|---|
 | `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 adapter/service 책임 |
-| `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; Origin/CSRF·master·원문 token은 HTTP 연결 단계 |
+| `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; User 로그인 예산·인증 이력 |
+| `api/console_identity` | HTTP token/cookie → User 세션 service | Origin/CSRF·별도 쿠키·해시 domain; 기존 UI·자원 API 전환과 분리 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
 | `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
@@ -107,6 +114,7 @@ detach는 같은 트랜잭션을 공유한다.
 | 관리 명령·입출력·오류·CLI 대응 | `cargo test -p grove-management-command --locked`; `cli/tests/command_contract.rs` |
 | 신원 DB·변경 감사·이관 | `db/tests/management_{accounts,credentials,sessions,schema,upgrade}.rs`; 실제 PostgreSQL 필요 |
 | 관리 서비스 권한·범위·로그 장애 | `cargo test -p grove-management-service --locked`; PostgreSQL의 `DATABASE_URL` 필요 |
+| User 세션 HTTP·브라우저 요청 경계 | `cargo test -p filegate-api console_identity --locked`; 실제 PostgreSQL, 브라우저 E2E와 구분 |
 | S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
 | S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
 | S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |

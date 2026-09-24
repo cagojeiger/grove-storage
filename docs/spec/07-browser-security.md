@@ -1,8 +1,8 @@
 # spec 07: 관리 브라우저의 보안 경계
 
-- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더 구현. 운영 호스팅·새 master/User 인증 검증은 후속.
+- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더·새 User 세션 HTTP 경계 구현. 운영 호스팅·master·새 UI E2E는 후속.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [콘솔](06-console.md).
-- 후속 신원·진입 경계: [spec 08](08-management-plane.md), 미구현.
+- 새 User 세션 HTTP·후속 신원/진입 경계: [spec 08](08-management-plane.md#user-세션-http-3a).
 
 ## Origin 분리
 
@@ -10,6 +10,7 @@
 console.example.com               data.example.com
 ├── /api/admin/console/           ├── /{bucket}/{key}
 ├── /api/admin/v1/                ├── /blobs/...
+├── /api/admin/identity/v1/       │   기존 데이터 인증 유지
 └── /readyz                       └── /api/v1/...
     나머지 경로: 404                  업로드·다운로드 경로
 ```
@@ -70,8 +71,8 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 
 헤더는 정적 HTML 응답에 실려야 한다. API 응답에만 CSP를 붙이거나 HTML meta만 사용하는
 것으로 frame-ancestors를 대신할 수 없다. 운영 ingress의 실제 응답 헤더를 배포 후 확인한다.
-로컬 HTTP 샘플 서버는 인증을 모사한다. 실제 세션의 근거는 HTTPS fixture이며 새 master/User
-인증은 별도 구현·검증이 필요하다.
+로컬 HTTP 샘플 서버는 인증을 모사한다. 기존 세션의 브라우저 근거는 HTTPS fixture다.
+새 User 세션은 현재 PG+HTTP 라우터로 검증했다. 새 쿠키의 실제 브라우저 검증은 UI 연결 때 수행한다.
 
 ## master·개인 토큰 로그인 완료 조건 (설계)
 

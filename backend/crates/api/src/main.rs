@@ -4,6 +4,7 @@
 mod admin;
 mod admin_auth;
 mod blobs;
+mod console_identity;
 mod cors;
 mod error;
 mod lease;

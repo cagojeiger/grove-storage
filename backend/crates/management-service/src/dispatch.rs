@@ -1,16 +1,27 @@
 use crate::{Command, Output};
-use filegate_db::management::{AuditContext, Error, IdentityTransaction, history::HistoryScope};
+use filegate_db::management::{
+    AuditContext, Error, Identity, IdentityTransaction, history::HistoryScope,
+};
 use grove_management_policy::Scope;
 use uuid::Uuid;
 
 pub(super) async fn run(
     mut tx: IdentityTransaction<'_>,
     context: &AuditContext,
-    user: Uuid,
+    identity: Identity,
     scope: Scope,
     command: Command<'_>,
 ) -> Result<Output, Error> {
+    let user = identity.account_id;
     let output = match command {
+        Command::CurrentSession => Output::Identity(identity),
+        Command::Logout => {
+            let id = identity.session_id.ok_or(Error::InvalidInput)?;
+            return tx
+                .revoke_session(context, user, id)
+                .await
+                .map(Output::Changed);
+        }
         Command::CreateAccount(account) => {
             return tx
                 .create_account(context, account)

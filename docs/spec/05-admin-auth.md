@@ -5,6 +5,7 @@
 - 기존 토큰을 사용하는 콘솔 로그인·로그아웃·개요 조회는 실제 API 연결 및 로컬 HTTPS 검증 완료다. 운영 배포는 후속이다.
 - 후속 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 마스터 초기 설정·개인 토큰 로그인·콘솔 전용 신원 관리. 아래는 현재 구현 계약이다.
 - 새 권한·DB·CLI/MCP·감사 설계: [spec 08](08-management-plane.md). 브라우저 보안: [spec 07](07-browser-security.md).
+- 새 User 세션은 `/api/admin/identity/v1/session`에 별도로 연결했다. 아래의 기존 UI·CLI 인증과 쿠키·토큰을 공유하지 않는다.
 
 ## 자격증명 경계
 

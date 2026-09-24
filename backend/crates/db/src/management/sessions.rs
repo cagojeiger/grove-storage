@@ -13,7 +13,7 @@ pub struct Session {
     pub expires_at: DateTime<Utc>,
 }
 
-/// Raw token/session generation, login budgets, Origin and CSRF belong to HTTP.
+/// Raw secrets, login budgets, Origin and CSRF belong to service/HTTP callers.
 /// Preserve the existing eight-hour, 64-per-credential session bounds.
 pub async fn create_session(
     pool: &PgPool,
@@ -50,7 +50,11 @@ pub async fn create_session(
         audit::record(&mut tx, &context, "session.evict", "session", id).await?;
     }
     audit::record(&mut tx, &context, "session.create", "session", session.id).await?;
-    tx.commit().await?;
+    sqlx::query("UPDATE management.credentials SET last_used_at=clock_timestamp() WHERE id=$1")
+        .bind(actor.credential_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(Some(session))
 }
 
