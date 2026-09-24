@@ -5,6 +5,13 @@
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 - 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
 
+## Phase-One Scope
+
+External S3-compatible storage is the supported backend. The target registration
+form and connection test accept S3 only. Native/S3 client keys remain supported.
+The current UI/API still accepts FS: admission enforcement and existing-FS migration
+are pending, not completed by this specification change.
+
 ## Current Coverage
 
 | Capability | Console UI | API / CLI / MCP |
@@ -33,7 +40,7 @@ Grove Storage
 ├── Clients       list / detail / create / delete / Native keys / S3 credentials
 ├── Access        Users / Agents / management tokens (Admin only)
 ├── Activity      management audit / invocations / security (scoped)
-└── My sessions  current User sessions
+└── Settings      personal theme / own login sessions / allowlisted system information
 
 Entry screens    User sign-in / Master setup / recovery
 Header           theme / sign out
@@ -41,6 +48,19 @@ Header           theme / sign out
 
 User and Agent identify management callers. Client identifies a runtime consumer;
 its Native/S3 keys and file access logs remain separate from management tokens/audit.
+
+| Section | Boundary |
+|---|---|
+| Clients | App identity, assigned storage, file ownership, usage and service keys |
+| Access | Admin-managed Users, owned automation Agents, roles, management token issuance/revocation; separate from future Storage Node agents |
+| Activity | Management audit, invocations and security events under existing actor/owner scopes |
+| Settings | Personal appearance and own browser sessions; system information is allowlisted and read-only initially |
+
+Client detail can link to Activity filtered by Client ID, reusing the same management
+audit records. Server-side Client filtering is pending; filtering one fetched page
+in the browser is not a complete history. Runtime file access history is a separate
+future view, with the limits described in [management logs](08-management-plane.md#client-history-coverage).
+Settings does not duplicate Access or write deployment environment variables.
 
 ## Connection Test Proposal
 
@@ -54,7 +74,6 @@ This section specifies the next contract; no test command/button is implemented 
 | Saved storage | Resolve provider credentials on the server; return checks without secret values |
 | Draft fields | Probe without saving registry metadata; clear submitted secrets; allow registering only through the existing mutation |
 | S3 baseline | Internal endpoint `HeadBucket` and `ListMultipartUploads`, matching current registration checks |
-| FS baseline | Directory and temporary write probe; unique probe paths and cleanup tested before exposing concurrent manual checks |
 | Result | Per-check success/failure, server timestamp, duration, sanitized error; label the completed checks rather than general storage health |
 | Scope | S3 baseline does not prove object PUT/GET/DELETE permission, public endpoint reachability or browser CORS |
 | Execution | Bounded timeout/concurrency; an explicit click per run; clear stale results when target fields change |
@@ -65,10 +84,11 @@ This section specifies the next contract; no test command/button is implemented 
 
 | Order | Deliverable | Acceptance |
 |---|---|---|
+| 0 | S3-only admission | Console/API/CLI/MCP reject new FS registration consistently; existing FS inventory and migration/rollback handled before runtime removal |
 | 1 | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User/Agent tokens; last-Admin and one-time-secret safeguards |
 | 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
-| 3 | Shared connection test | Saved/draft probes via API, Console, CLI and MCP; real MinIO and FS failures plus permission/timeout/concurrency tests |
-| 4 | Activity and My sessions | Scoped queries, cursor paging, revocation and separation from Client file logs |
+| 3 | Shared connection test | Saved/draft S3 probes via API, Console, CLI and MCP; real MinIO failures plus permission/timeout/concurrency tests |
+| 4 | Activity and Settings | Scoped queries, server-side Client filter, cursor paging, own-session revocation and separation from Client file logs |
 
 Frontend command typing is supporting work within these slices. Existing backend
 identity/resource contracts are reused; new crates or a second authentication model
@@ -159,7 +179,7 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 | 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·Agent 로그인 거부·console 감사 |
 | 5b (다음) | master 설정·복구·User/Agent·관리 토큰 UI | 일회성 발급·마지막 Admin·응답 불명·콘솔 전용 API |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
-| 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 probe, 권한·timeout·비밀 보호·임시 파일 충돌 검사 |
+| 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 S3 probe, 권한·timeout·비밀 보호 |
 | 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
 | D | 반응형·접근성·배포 | 320/390/768/1024/1440px, light/dark/system, 키보드·초점, 같은 origin 배포 |
 

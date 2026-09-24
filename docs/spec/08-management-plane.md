@@ -330,6 +330,22 @@ CLI HTTP path·전송 envelope는 spec 09, 같은 명령명을 사용하는 MCP�
 
 ## 관리 로그의 경계
 
+### Client History Coverage
+
+| Record | Current evidence | Limit |
+|---|---|---|
+| Client/key management audit | New shared commands commit changes and `management.audit_events` together; metadata contains `client_id` | Legacy REST keeps its separate legacy audit; Client-specific query filter/UI is pending |
+| File lease history | `lease_history` stores Client/file/storage, read/write kind, time and size | Lease issuance is not proof of transfer completion; direct-read audit writes are best-effort |
+| Runtime events | Native/S3 handlers emit file and request-operation events through tracing | Not a complete durable Client request audit API; retention depends on log collection |
+| Presigned direct transfer | Grove observes URL issuance and its own metadata/commit operations | Direct download completion/repeated URL use require provider-side observations |
+
+Client detail's management Activity reuses the existing audit store with a
+server-side Client filter and the same actor/owner scope. Runtime file history
+remains separate from management Activity; scope, retention and ingestion require
+their own contract before a complete access-log feature is promised.
+
+### Management Streams
+
 | stream | 기록 대상 | 보장 |
 |---|---|---|
 | audit_events | User/Agent/role/token/session 관리, Storage/Client/서비스 키의 확정 변경, master 설정·복구 | DB 변경과 같은 transaction; insert 실패면 변경도 rollback |

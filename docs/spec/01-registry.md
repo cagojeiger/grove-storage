@@ -4,6 +4,11 @@
 - 근거: [ADR 004](../adr/004-config-layers.md)
 - 관리 CLI: [spec 04](04-cli.md) (gscli 조회·변경 구현)
 
+Product scope: phase one supports external S3-compatible backends only
+([ADR 007](../adr/007-grove-storage-foundation.md#phase-one-supported-backends)).
+The FS contract below describes retained code, not phase-one product support.
+S3-only registration enforcement and existing-FS migration remain pending.
+
 ## 등록 관계
 
 ```mermaid

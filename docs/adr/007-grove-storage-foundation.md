@@ -40,6 +40,17 @@ flowchart LR
 외부 S3 지원은 2차에도 유지한다. 현재 서버 로컬 fs adapter와 독립 Agent는 구분한다.
 자동 배치·이동·복제는 2차 이후 별도 계약과 검증 범위로 정한다.
 
+### Phase-One Supported Backends
+
+The phase-one product supports external S3-compatible backends only. Native and
+S3-compatible client APIs remain in scope; this decision restricts backend storage,
+not the client protocol. Mounted-filesystem Storage Nodes belong to phase two.
+
+The existing server-local FS adapter is still implemented. Enforcing S3-only
+admission across Console, shared commands and legacy REST is pending. Inventory
+existing FS references and define migration/rollback before removing its runtime
+or schema; this decision does not delete existing data or mounts.
+
 ## 책임 경계
 
 | 소유자 | 책임 |
