@@ -109,7 +109,7 @@ fn kind(value: &str) -> Result<StorageKind, Error> {
         _ => Err(Error::Unavailable),
     }
 }
-fn storage(r: StorageRow) -> Result<model::Storage, Error> {
+pub(super) fn storage(r: StorageRow) -> Result<model::Storage, Error> {
     Ok(model::Storage {
         id: r.id,
         kind: kind(&r.kind)?,

@@ -10,6 +10,10 @@ pub(super) async fn run(
     command: Command,
 ) -> Result<Output, Error> {
     Ok(match command {
+        Command::StorageDelete(input) => {
+            tx.delete_resource_storage(ctx, &input.id).await?;
+            Output::StorageDelete(deleted("storage", input.id, None))
+        }
         Command::ClientCreate(input) => {
             tx.create_resource_client(ctx, &input.id, &input.storage_id)
                 .await?;

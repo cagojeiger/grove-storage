@@ -46,7 +46,10 @@ pub(crate) const STORAGE_COLUMNS: &str = "id, kind, force_relay, root_path, endp
      force_path_style, access_key, secret_key_ciphertext, secret_key_nonce, enc_key_id, \
      capacity_bytes";
 
-pub async fn insert_storage(pool: &PgPool, row: &StorageRow) -> Result<(), sqlx::Error> {
+pub async fn insert_storage<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    row: &StorageRow,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO storages (id, kind, force_relay, root_path, endpoint, public_endpoint, \
          region, bucket, force_path_style, access_key, secret_key_ciphertext, secret_key_nonce, \
@@ -79,6 +82,16 @@ pub enum UpdateStorageOutcome {
     LocationInUse,
 }
 
+pub fn storage_address_changed(current: &StorageRow, row: &StorageRow) -> bool {
+    current.kind != row.kind
+        || current.root_path != row.root_path
+        || current.endpoint != row.endpoint
+        || current.public_endpoint != row.public_endpoint
+        || current.region != row.region
+        || current.bucket != row.bucket
+        || current.force_path_style != row.force_path_style
+}
+
 /// Serialize address replacement with file reservation. Credential rotation is
 /// allowed while locations exist; physical addressing remains stable.
 pub async fn update_storage(
@@ -86,28 +99,40 @@ pub async fn update_storage(
     row: &StorageRow,
 ) -> Result<UpdateStorageOutcome, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let current: Option<StorageRow> = sqlx::query_as(&format!(
+    let outcome = update_storage_in(&mut tx, row).await?;
+    if outcome == UpdateStorageOutcome::Updated {
+        tx.commit().await?;
+    }
+    Ok(outcome)
+}
+
+pub async fn lock_storage(
+    connection: &mut sqlx::PgConnection,
+    id: &str,
+) -> Result<Option<StorageRow>, sqlx::Error> {
+    sqlx::query_as(&format!(
         "SELECT {STORAGE_COLUMNS} FROM storages WHERE id = $1 FOR UPDATE"
     ))
-    .bind(&row.id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    .bind(id)
+    .fetch_optional(connection)
+    .await
+}
+
+/// The caller owns the transaction, including any audit and the final commit.
+pub async fn update_storage_in(
+    connection: &mut sqlx::PgConnection,
+    row: &StorageRow,
+) -> Result<UpdateStorageOutcome, sqlx::Error> {
+    let current = lock_storage(connection, &row.id).await?;
     let Some(current) = current else {
         return Ok(UpdateStorageOutcome::NotFound);
     };
-    let address_changed = current.kind != row.kind
-        || current.root_path != row.root_path
-        || current.endpoint != row.endpoint
-        || current.public_endpoint != row.public_endpoint
-        || current.region != row.region
-        || current.bucket != row.bucket
-        || current.force_path_style != row.force_path_style;
-    if address_changed {
+    if storage_address_changed(&current, row) {
         // Read after the lock wait so a just-committed reservation is visible.
         let in_use: bool =
             sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM locations WHERE storage_id = $1)")
                 .bind(&row.id)
-                .fetch_one(&mut *tx)
+                .fetch_one(&mut *connection)
                 .await?;
         if in_use {
             return Ok(UpdateStorageOutcome::LocationInUse);
@@ -133,9 +158,8 @@ pub async fn update_storage(
     .bind(&row.secret_key_nonce)
     .bind(&row.enc_key_id)
     .bind(row.capacity_bytes)
-    .execute(&mut *tx)
+    .execute(connection)
     .await?;
-    tx.commit().await?;
     Ok(UpdateStorageOutcome::Updated)
 }
 
@@ -166,11 +190,18 @@ pub async fn list_storages<'e>(
 /// 가리키거나(storage_id) 실물(location)이 남은 storage는 FK가 거부한다 —
 /// 참조가 있는 한 등록부에서 사라질 수 없다.
 pub async fn delete_storage(pool: &PgPool, id: &str) -> Result<(), sqlx::Error> {
+    delete_storage_rows(pool, id).await.map(|_| ())
+}
+
+pub async fn delete_storage_rows<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+) -> Result<u64, sqlx::Error> {
     sqlx::query("DELETE FROM storages WHERE id = $1")
         .bind(id)
         .execute(pool)
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected())
 }
 
 // ---- clients ----

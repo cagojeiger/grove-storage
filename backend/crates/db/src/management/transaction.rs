@@ -7,6 +7,7 @@ use super::{
 };
 
 /// Hashes produced by the trusted transport; intentionally not Debug/Serialize.
+#[derive(Clone, Copy)]
 pub enum Proof<'a> {
     Session(&'a str),
     Token(&'a str),

@@ -1,7 +1,7 @@
 # spec 09: 공통 자원 명령 계약
 
-- 상태: `grove-management-command` + 조회 10개·Client/서비스 키 변경 6개 실행기 + Bearer HTTP 구현.
-- Storage 변경 3개·CLI 전송 전환·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
+- 상태: `grove-management-command` + 조회 10개·변경 9개 실행기 + Bearer HTTP 구현.
+- CLI 전송 전환·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
 - 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
 
 ## 구성
@@ -14,7 +14,8 @@ management-command      명령명 + 입력/출력 + schema + 권한 + 변경 여
 gscli                   인자·파일·확인 → 기존 REST → 표 / JSON
 
 commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → DB 조회 / 변경 + 감사
-후속: Storage probe·변경, CLI HTTP adapter / MCP tool adapter
+Storage 생성/교체: 권한 확인 → 잠금 해제 → 접근 probe → 현재 권한 재확인 → 변경 + 감사
+후속: CLI HTTP adapter / MCP tool adapter
 ```
 
 | 항목 | 현재 계약 |
@@ -30,7 +31,7 @@ commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → DB �
 현재 CLI는 새 `decode`·권한 정책·오류 타입을 실행하지 않는다. 공통 실행기 연결 시
 검증과 권한 적용을 함께 전환한다. 공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 adapter 단계에서 확정한다.
 
-## 공통 자원 HTTP (4a·4b-1)
+## 공통 자원 HTTP (4a·4b)
 
 ```http
 POST /api/admin/commands/v1
@@ -42,16 +43,16 @@ Content-Type: application/json
 
 | 항목 | 현재 계약 |
 |---|---|
-| 지원 범위 | 조회 10개·Client/서비스 키 변경 6개; Storage 변경 3개는 권한 검사 후 `request_rejected/not_applied` |
+| 지원 범위 | 조회 10개·변경 9개, catalog의 19개 전체 |
 | 성공 | 200 `{protocol:1, request_id, command, result}`; result는 공통 typed Output |
 | 실패 | `{protocol:1, request_id, error:{code,outcome}}`; commit 전 거부는 `not_applied`, 변경 commit 실패는 `unavailable/unknown` |
-| HTTP 코드 | unauthorized 401, forbidden 403, not_found 404, conflict 409, unavailable 503; 입력/protocol/명령/미연결 변경은 400 |
+| HTTP 코드 | unauthorized 401, forbidden 403, not_found 404, conflict 409, unavailable 503; 입력/protocol/명령/접근 검사 거부는 400 |
 | 인증 | 활성 User/Agent 관리 토큰; Cookie가 있거나 Authorization이 중복이면 401; master·기존 운영자 토큰은 별도 namespace |
 | 표면 | 서버가 `resource_api`로 기록; 요청 body·User-Agent·proxy 사용자 헤더로 actor/surface 지정 생략 |
 | 응답 보안 | no-store·nosniff·서버 request_id; 관리 쿠키 발급·OAuth redirect·CORS 허용 생략 |
 | 조회 경계 | identity lock → 현재 신원·role·owner 확인 → 조회 → commit; 저장소 I/O probe 생략 |
 | DB 재사용 | 기존 registry/usage/S3 키 SQL이 pool 또는 현재 transaction에서 실행; SQL 조건·정렬 유지 |
-| 변경 경계 | 현재 권한 → Client/서비스 키 변경 + audit → commit; 감사 실패는 rollback, commit 불명은 자동 재시도 없이 대조 |
+| 변경 경계 | 현재 권한 → 자원 변경 + audit → commit; 감사 실패는 rollback, commit 불명은 자동 재시도 없이 대조 |
 | 상태 | status는 서버의 신원/DB/등록부 관찰, 물리 storage는 `not_checked`; 실패 시 명령 오류, CLI의 네트워크 진단과 구분 |
 | 일관성 | READ COMMITTED; 여러 SELECT의 등록부 상태를 고정 snapshot으로 보장하지 않음 |
 | 호출 기록 | service 실행 시 검증된 actor + 명령명 + 결과를 한 번 기록; 조회는 변경 감사 생성 없이 완료 |
@@ -101,6 +102,30 @@ Content-Type: application/json
 | 불명확한 발급 | `unknown`이면 원문 반환 없이 종료; 목록 대조·필요 시 폐기 후 명시적 재발급 |
 
 이 보장은 새 공통 실행기 범위다. 기존 `/api/admin/v1`은 기존 인증·기록을 유지한다.
+
+### Storage 변경 (4b-2)
+
+```text
+identity lock → 인증·권한·입력·교체 대상 확인 → 읽기 transaction 종료
+    → 기존 S3/fs 접근 검사·Provider Secret 암호화 (DB 잠금 밖)
+    → identity lock → 현재 토큰·role·Agent owner 재확인
+    → Storage 행 잠금·현재 참조 검사 → 변경 + 감사 commit
+```
+
+| 경계 | 계약 |
+|---|---|
+| 검사 재사용 | 기존 REST의 필드·URL·relay 설정 검사; S3 HeadBucket + ListMultipartUploads, fs 경로·쓰기 probe |
+| 권한 변경 | 검사 중 폐기·강등·owner 변경 상태를 commit 전 재확인; 거부 시 등록부 변경 없이 종료 |
+| 교체 | 없는 대상은 probe 전 404; 검사 중 삭제된 대상도 404, 검사 중 생성된 참조도 최종 판단에 포함 |
+| 주소 | 기존 Storage 행 잠금과 파일 예약 직렬화 유지; locations가 남은 물리 주소 변경은 409 |
+| 운영 변경 | 파일이 있어도 용량·Provider 키 교체 허용; 암호화 AAD·key ID 형식 유지 |
+| 삭제 | Client 또는 location 참조가 남으면 409; 실제 삭제 때만 감사, 반복 삭제는 성공 |
+| 감사 | Storage ID·종류/용량/relay 전후 값·주소 변경 여부; 주소·경로·access key·secret·암호문 제외 |
+| 오류 | probe 상세는 공통 응답과 관리 이력에서 제외; 운영 로그도 Provider 오류 원문 대신 storage ID·kind 기록 |
+| 원자성 | DB 변경·감사만 같은 transaction; 접근 검사는 시점 관찰이며 외부 I/O의 rollback·지속 가용성과 구분 |
+
+서비스는 접근 검사 함수를 주입받는다. 서비스 테스트는 제어 가능한 검사 대역으로 경합을
+검증하고, API 테스트는 실제 fs probe와 로컬 HTTP S3 대역을 사용한다.
 
 ## 검증과 비밀
 
@@ -153,8 +178,11 @@ JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하�
 | `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
 | `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
 | 같은 경로의 `writes.rs`, `write_failures.rs` | 4개 PG HTTP 테스트: 변경 왕복·기존 키 조회/인증·409/400·감사 rollback·원문 없는 unknown |
+| `management-service/tests/storage_writes.rs` + `storage_writes/` | 8개 PG 테스트: 변경 3개·참조·probe 중 폐기/owner 강등·참조 경합·감사 rollback·unknown |
+| `api/src/resource_commands/tests/storage*.rs` | 6개 PG HTTP 테스트: fs probe·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
 | 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 10개·Agent owner 상한·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
 | 변경 서버 smoke | 변경 6개·기존 S3 키 목록·Native PUT/commit/GET 바이트 일치·파일 참조 삭제 409·키 폐기 후 401·비밀 없는 감사 확인; S3 실제 전송은 이번 검증에서 제외 |
+| Storage 서버 smoke | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |
 
-현재 검증은 순수 계약·PG 서비스·HTTP 라우터와 Client/서비스 키 변경/audit transaction을
-포함한다. 실제 CLI/MCP 전송 전환과 Storage 변경은 후속 단계다.
+현재 검증은 순수 계약·PG 서비스·HTTP 라우터와 자원 변경/audit transaction을 포함한다.
+실제 CLI/MCP 전송 전환은 후속 단계다. S3 대역 검증은 외부 Provider 운영 검증과 구분한다.

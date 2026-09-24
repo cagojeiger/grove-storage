@@ -13,6 +13,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
             let result = resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Token(&login.token),
                 surface,
                 clients(),
@@ -24,6 +25,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
             let result = resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Token(&login.token),
                 surface,
                 keys(),
@@ -38,6 +40,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
             let result = resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Session(&login.session),
                 surface,
                 clients(),
@@ -50,6 +53,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
             resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Session(&login.session),
                 Surface::Console,
                 clients()
@@ -62,6 +66,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
             resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Token(&login.token),
                 Surface::Console,
                 clients()
@@ -85,10 +90,17 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
         .await
         .unwrap();
     assert!(
-        resources::execute(&pool, &crypto(), Proof::Token(&token), Surface::Mcp, keys())
-            .await
-            .result
-            .is_ok()
+        resources::execute(
+            &pool,
+            &crypto(),
+            unexpected_storage_probe,
+            Proof::Token(&token),
+            Surface::Mcp,
+            keys()
+        )
+        .await
+        .result
+        .is_ok()
     );
     operator(&pool, Role::Admin, 2).await;
     db::change_account(
@@ -99,8 +111,15 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
     )
     .await
     .unwrap();
-    let denied =
-        resources::execute(&pool, &crypto(), Proof::Token(&token), Surface::Mcp, keys()).await;
+    let denied = resources::execute(
+        &pool,
+        &crypto(),
+        unexpected_storage_probe,
+        Proof::Token(&token),
+        Surface::Mcp,
+        keys(),
+    )
+    .await;
     assert_eq!(denied.result.unwrap_err().code, ErrorCode::Forbidden);
     let recorded_owner: uuid::Uuid = sqlx::query_scalar(
         "SELECT owner_user_id FROM management.command_invocations WHERE request_id=$1",
@@ -114,6 +133,7 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
         resources::execute(
             &pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&token),
             Surface::Cli,
             clients()
@@ -129,6 +149,7 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
         resources::execute(
             &pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&token),
             Surface::Cli,
             clients()
@@ -156,6 +177,7 @@ async fn queued_resource_read_rechecks_role_after_identity_lock(pool: PgPool) {
         resources::execute(
             &task_pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&login.token),
             Surface::Mcp,
             keys(),

@@ -14,6 +14,7 @@ pub mod queries;
 mod resource_writes;
 mod resources;
 mod sessions;
+mod storage_writes;
 pub mod telemetry;
 mod transaction;
 

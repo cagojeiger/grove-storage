@@ -44,6 +44,7 @@ pub(crate) async fn execute(
     let execution = resources::execute(
         &state.pool,
         &state.crypto,
+        |input| crate::admin::verify_storage_command(&state, input),
         Proof::Token(&hash),
         Surface::ResourceApi,
         command,

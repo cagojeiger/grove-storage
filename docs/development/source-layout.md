@@ -9,9 +9,9 @@ backend/crates/
 │   ├── src/logging.rs    bounded best-effort 호출·보안 기록
 │   ├── src/sessions.rs   로그인 예산·User 토큰 교환·인증 이력
 │   ├── src/master.rs     설정 세대·master 세션·일회성 설정/복구 실행
-│   ├── src/resources/   공통 권한·commit·안정 오류; reads.rs / writes.rs 실행·DTO 변환
-│   └── tests/           authorization·history·logging·master_fencing·master_recovery·resources/·resource_writes/
-├── management-command/   자원 명령 19개·schema·권한 매핑 (조회 10개·변경 6개 연결)
+│   ├── src/resources/   공통 권한·commit·안정 오류; reads.rs / writes.rs / storage.rs
+│   └── tests/           authorization·history·logging·master_fencing·master_recovery·resources/·resource_writes/·storage_writes/
+├── management-command/   자원 명령 19개·schema·권한 매핑 (조회 10개·변경 9개 연결)
 │   ├── src/catalog.rs    명령명·입출력·권한·변경 여부의 정본
 │   ├── src/input.rs      공통 입력·순수 값 검증
 │   ├── src/model.rs      CLI가 재사용하는 응답 DTO
@@ -56,6 +56,7 @@ backend/crates/
 │   │   ├── master_config.rs  설정 쌍·형식 검증 (비밀 원문 오류 제외)
 │   │   └── tests/        browser·lifecycle·failures·master/·master_recovery·identity/
 │   ├── admin/              등록부·운영자 인증·usage
+│   │   └── storages.rs     기존 REST와 공통 명령의 S3/fs 접근 검사·Provider 암호화 재사용
 │   ├── s3/                 SigV4·라우팅·객체·multipart
 │   │   ├── object_response.rs Range·응답 헤더 정책
 │   │   ├── integrity.rs    실측값·HTTP 헤더 연결, checksum 오류 응답
@@ -80,6 +81,7 @@ backend/crates/
 │   │   ├── transaction.rs 권한 검사와 변경이 공유하는 transaction
 │   │   ├── resources.rs   신원 transaction 안에서 기존 registry/usage 조회 재사용
 │   │   ├── resource_writes.rs Client/서비스 키 SQL 재사용·같은 transaction 감사
+│   │   ├── storage_writes.rs Storage 변경·행 잠금·비밀 없는 전후 감사
 │   │   ├── queries.rs     비밀 없는 신원 목록·페이지 상한
 │   │   ├── history.rs     actor/owner scope·cursor 조회
 │   │   └── telemetry.rs   호출·보안 기록·공유 로그인 예산
@@ -98,7 +100,7 @@ backend/crates/
 |---|---|---|
 | `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 adapter/service 책임 |
 | `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; User 로그인 예산·인증 이력 |
-| `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 조회 10개·Client/서비스 키 변경 6개; role/owner 재확인·audit 원자성; Storage 변경은 후속 |
+| `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 19개 전체; Storage probe는 잠금 밖, 이후 role/owner·참조 재확인·audit 원자성 |
 | `api/resource_commands` | Bearer·JSON → 공통 자원 실행기 | Cookie 거부·server Surface·명령/envelope 검증; 기존 CLI 인증과 분리 |
 | `api/console_identity` | HTTP token/cookie·입력 → 신원/이력 service | Origin/CSRF·별도 쿠키·해시 domain·비밀 없는 목록; 기존 UI·자원 API 전환과 분리 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |

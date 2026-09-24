@@ -18,11 +18,17 @@ async fn viewers_agents_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) 
             Surface::Console,
         ] {
             for command in mutations() {
-                let error =
-                    resources::execute(&pool, &crypto(), Proof::Token(token), surface, command)
-                        .await
-                        .result
-                        .unwrap_err();
+                let error = resources::execute(
+                    &pool,
+                    &crypto(),
+                    unexpected_storage_probe,
+                    Proof::Token(token),
+                    surface,
+                    command,
+                )
+                .await
+                .result
+                .unwrap_err();
                 assert_eq!(error.code, ErrorCode::Forbidden);
                 assert_eq!(error.outcome, Outcome::NotApplied);
             }

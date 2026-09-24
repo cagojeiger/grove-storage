@@ -6,6 +6,13 @@ pub use fixtures::*;
 use grove_management_policy::Role;
 use uuid::Uuid;
 
+#[allow(clippy::panic)]
+pub async fn unexpected_storage_probe(
+    _: grove_management_command::input::StorageInput,
+) -> Result<filegate_db::registry::StorageRow, grove_management_service::Error> {
+    panic!("this command must not probe a storage")
+}
+
 pub struct Login {
     pub account: Uuid,
     pub credential: Uuid,

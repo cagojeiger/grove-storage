@@ -3,6 +3,7 @@
 
 mod clients;
 mod storages;
+pub(crate) use storages::verify_command as verify_storage_command;
 mod usage;
 
 pub use storages::{check_registered, verify_registered};

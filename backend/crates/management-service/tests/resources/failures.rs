@@ -2,7 +2,7 @@ use super::*;
 use grove_management_command::Outcome;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn storage_mutations_are_not_applied_and_direct_inputs_are_validated(pool: PgPool) {
+async fn referenced_storage_delete_is_rejected_and_direct_inputs_are_validated(pool: PgPool) {
     let admin = owner(&pool).await;
     seed(&pool).await;
     let before = audit_count(&pool).await;
@@ -12,6 +12,7 @@ async fn storage_mutations_are_not_applied_and_direct_inputs_are_validated(pool:
         let error = resources::execute(
             &pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&admin.token),
             Surface::Cli,
             command,
@@ -19,12 +20,13 @@ async fn storage_mutations_are_not_applied_and_direct_inputs_are_validated(pool:
         .await
         .result
         .unwrap_err();
-        assert_eq!(error.code, ErrorCode::RequestRejected);
+        assert_eq!(error.code, ErrorCode::Conflict);
         assert_eq!(error.outcome, Outcome::NotApplied);
     }
     let error = resources::execute(
         &pool,
         &crypto(),
+        unexpected_storage_probe,
         Proof::Token(&admin.token),
         Surface::Cli,
         Command::UsageHistory(input::HistoryInput { days: 0 }),
@@ -36,6 +38,7 @@ async fn storage_mutations_are_not_applied_and_direct_inputs_are_validated(pool:
     let result = resources::execute(
         &pool,
         &crypto(),
+        unexpected_storage_probe,
         Proof::Token(&admin.token),
         Surface::Cli,
         clients(),
@@ -61,6 +64,7 @@ async fn resource_database_failure_is_sanitized_and_telemetry_is_best_effort(poo
         resources::execute(
             &pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&admin.token),
             Surface::Cli,
             clients()
@@ -76,6 +80,7 @@ async fn resource_database_failure_is_sanitized_and_telemetry_is_best_effort(poo
     let error = resources::execute(
         &pool,
         &crypto(),
+        unexpected_storage_probe,
         Proof::Token(&admin.token),
         Surface::Cli,
         clients(),

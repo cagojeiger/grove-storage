@@ -37,6 +37,7 @@ async fn resources_read_status_is_server_observation_and_logs_once(pool: PgPool)
     let execution = resources::execute(
         &pool,
         &crypto(),
+        unexpected_storage_probe,
         Proof::Token(&admin.token),
         Surface::Cli,
         Command::Status(input::EmptyInput {}),

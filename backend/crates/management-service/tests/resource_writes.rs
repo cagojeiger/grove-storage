@@ -52,7 +52,15 @@ fn mutations() -> Vec<Command> {
     ]
 }
 async fn execute(pool: &PgPool, token: &str, command: Command) -> resources::Execution {
-    resources::execute(pool, &crypto(), Proof::Token(token), Surface::Cli, command).await
+    resources::execute(
+        pool,
+        &crypto(),
+        unexpected_storage_probe,
+        Proof::Token(token),
+        Surface::Cli,
+        command,
+    )
+    .await
 }
 async fn resource_counts(pool: &PgPool) -> (i64, i64, i64) {
     sqlx::query_as("SELECT (SELECT count(*) FROM clients),(SELECT count(*) FROM client_keys),(SELECT count(*) FROM s3_credentials)")

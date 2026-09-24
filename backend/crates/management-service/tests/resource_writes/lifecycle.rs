@@ -11,6 +11,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
         let execution = resources::execute(
             &pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&operator.token),
             surface,
             Command::ClientCreate(input::ClientCreateInput {
@@ -27,6 +28,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
             resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Token(&operator.token),
                 surface,
                 Command::ClientKeyRegister(input::ClientKeyInput {
@@ -41,6 +43,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
         let issued = resources::execute(
             &pool,
             &crypto(),
+            unexpected_storage_probe,
             Proof::Token(&operator.token),
             surface,
             Command::CredentialCreate(input::ClientInput {
@@ -81,6 +84,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
                 resources::execute(
                     &pool,
                     &crypto(),
+                    unexpected_storage_probe,
                     Proof::Token(&operator.token),
                     surface,
                     Command::CredentialDelete(input::CredentialDeleteInput {
@@ -97,6 +101,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
             resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Token(&operator.token),
                 surface,
                 Command::ClientKeyDelete(input::ClientKeyInput {
@@ -112,6 +117,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
             resources::execute(
                 &pool,
                 &crypto(),
+                unexpected_storage_probe,
                 Proof::Token(&operator.token),
                 surface,
                 Command::ClientDelete(input::ResourceInput { id: id.into() })

@@ -45,6 +45,40 @@ fn default_kind() -> String {
     "s3".to_owned()
 }
 
+/// Reuse the legacy field rules, backend probes and encryption without exposing
+/// provider diagnostics through the common command contract.
+pub(crate) async fn verify_command(
+    state: &AppState,
+    input: grove_management_command::input::StorageInput,
+) -> Result<StorageRow, grove_management_service::Error> {
+    let spec = input.spec;
+    let body = StorageSpecBody {
+        kind: match spec.kind {
+            grove_management_command::model::StorageKind::S3 => "s3",
+            grove_management_command::model::StorageKind::Fs => "fs",
+        }
+        .into(),
+        force_relay: spec.force_relay,
+        root_path: spec.root_path,
+        endpoint: spec.endpoint,
+        public_endpoint: spec.public_endpoint,
+        region: spec.region,
+        bucket: spec.bucket,
+        force_path_style: spec.force_path_style,
+        access_key: spec.access_key,
+        secret_key: spec.secret_key.map(SecretString::from),
+        capacity_bytes: spec.capacity_bytes,
+    };
+    verified_row(&state.crypto, state.public_url.is_some(), &input.id, body)
+        .await
+        .map_err(|error| match error {
+            ApiError::Status(StatusCode::BAD_REQUEST, _) => {
+                grove_management_service::Error::InvalidInput
+            }
+            _ => grove_management_service::Error::Unavailable,
+        })
+}
+
 #[derive(Deserialize)]
 pub(super) struct StorageCreateBody {
     id: String,
@@ -114,9 +148,8 @@ async fn verified_s3_row(
 ) -> Result<StorageRow, ApiError> {
     let submission = validated_s3_submission(relay_base_ready, body)?;
     if let Err(error) = s3_connect(&submission.spec).await {
-        // 운영자 표면·설정 시점이라 실패 사유를 응답에 실어 등록 디버깅을 돕는다.
-        // 다른 표면처럼 상세는 로그로도 남긴다 ("내부 상세는 항상 로그" 불변).
-        tracing::error!(event = "storage.verify_failed", storage = %id, kind = "s3", %error);
+        // Provider errors may contain submitted addresses or credentials.
+        tracing::error!(event = "storage.verify_failed", storage = %id, kind = "s3");
         return Err(bad_request(&format!(
             "storage verification failed: {error}"
         )));
@@ -228,7 +261,7 @@ async fn verified_fs_row(
         .filter(|v| !v.is_empty())
         .ok_or_else(|| bad_request("fs storage requires root_path"))?;
     if let Err(error) = filegate_infra::fs::connect(&root_path).await {
-        tracing::error!(event = "storage.verify_failed", storage = %id, kind = "fs", %error);
+        tracing::error!(event = "storage.verify_failed", storage = %id, kind = "fs");
         return Err(bad_request(&format!(
             "storage verification failed: {error}"
         )));

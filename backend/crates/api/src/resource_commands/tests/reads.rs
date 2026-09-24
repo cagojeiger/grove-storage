@@ -87,7 +87,7 @@ async fn all_resource_reads_match_legacy_payloads_without_provider_secrets(pool:
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn missing_resource_and_storage_mutation_have_stable_errors(pool: PgPool) {
+async fn missing_resource_and_referenced_storage_have_stable_errors(pool: PgPool) {
     let token = owner(&pool).await;
     seed(&pool).await;
     for (name, input) in [
@@ -104,10 +104,10 @@ async fn missing_resource_and_storage_mutation_have_stable_errors(pool: PgPool) 
         );
     }
     let response = call(&pool, &token, "storage.delete", json!({"id":"local"})).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::CONFLICT);
     assert_eq!(
         json_body(response).await["error"],
-        json!({"code":"request_rejected","outcome":"not_applied"})
+        json!({"code":"conflict","outcome":"not_applied"})
     );
     assert!(
         filegate_db::registry::client_exists(&pool, "app")
