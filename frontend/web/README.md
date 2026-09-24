@@ -1,5 +1,13 @@
 # Grove Storage Console
 
+## Browser Preview
+
+Run `npm run build` and `node scripts/preview.mjs` in this directory. The printed
+HTTP address opens in browsers that do not trust a local test certificate. It serves
+sample registry data in memory; edits reset when the preview server stops. It does
+not connect to PostgreSQL or validate S3 credentials. Use the isolated HTTPS fixture
+below to test authentication and the real API.
+
 | Implemented | Follow-up |
 |---|---|
 | Admin cookie login/logout, session restore and 401 handling | Client and credential mutation screens |
