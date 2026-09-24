@@ -1058,6 +1058,7 @@ name = "filegate-db"
 version = "0.4.1"
 dependencies = [
  "chrono",
+ "grove-management-policy",
  "sqlx",
  "tokio",
  "uuid",

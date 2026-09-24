@@ -2,6 +2,7 @@
 
 pub mod admin_auth;
 pub mod files;
+pub mod management;
 pub mod registry;
 pub mod s3_registry;
 pub mod usage;

@@ -47,6 +47,12 @@ backend/crates/
 │   └── reconciler/         완료 복구
 │       └── reclaim.rs      만료 회수의 물리 정리·재시도
 ├── db/
+│   ├── src/management/     관리 신원 저장소 (기존 인증 API 미연결)
+│   │   ├── accounts.rs    최초 Admin·User/Agent 생성·마지막 Admin 보호
+│   │   ├── credentials.rs 발급·폐기·대상 Admin 복구
+│   │   ├── sessions.rs    User 세션·원본 만료 상한·폐기·개수 상한
+│   │   ├── identity.rs    현재 DB 상태 → 정책용 Caller
+│   │   └── audit.rs       변경 transaction 내부 감사 기록
 │   ├── src/files/          파일·lease 상태 전이
 │   │   └── reclaim_cleanup.rs  reclaimed 정리 후보·확정
 │   ├── src/s3_registry/    자격증명·논리키·업로드 세션
@@ -62,6 +68,7 @@ backend/crates/
 |---|---|---|
 | `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 후속 adapter/service 책임 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
+| `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
 | `object-service/multipart_create` | 예약된 업로드 → vendor·relay 준비 | 실패 시 알려진 upload ID로 보상, 원래 오류 유지 |
 | `api/routes`, `api/admin` | HTTP → 인증된 요청 | 표면별 인증·예약 경로 |
@@ -87,6 +94,7 @@ detach는 같은 트랜잭션을 공유한다.
 |---|---|
 | 관리 권한·콘솔 전용 경계·Agent 상한·감사 조회 scope | `cargo test -p grove-management-policy --locked`; 실제 API 연결과 구분 |
 | 관리 명령·입출력·오류·CLI 대응 | `cargo test -p grove-management-command --locked`; `cli/tests/command_contract.rs` |
+| 신원 DB·변경 감사·이관 | `db/tests/management_{accounts,credentials,sessions,schema,upgrade}.rs`; 실제 PostgreSQL 필요 |
 | S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
 | S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
 | S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |

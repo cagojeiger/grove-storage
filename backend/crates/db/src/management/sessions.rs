@@ -1,0 +1,72 @@
+use chrono::{DateTime, Utc};
+use grove_management_policy::{Actor, Surface};
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use super::{AuditActor, AuditContext, Error, audit, identity, lock};
+
+#[derive(sqlx::FromRow, Debug)]
+pub struct Session {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub credential_id: Uuid,
+    pub expires_at: DateTime<Utc>,
+}
+
+/// Raw token/session generation, login budgets, Origin and CSRF belong to HTTP.
+/// Preserve the existing eight-hour, 64-per-credential session bounds.
+pub async fn create_session(
+    pool: &PgPool,
+    request_id: Uuid,
+    token_hash: &str,
+    session_hash: &str,
+) -> Result<Option<Session>, Error> {
+    let mut tx = lock(pool).await?;
+    let Some(actor) = identity::token(&mut tx, token_hash).await? else {
+        return Ok(None);
+    };
+    if !matches!(actor.caller.actor, Actor::User { .. }) {
+        return Ok(None);
+    }
+    sqlx::query("DELETE FROM management.sessions WHERE credential_id=$1 AND (expires_at<=clock_timestamp() OR revoked_at IS NOT NULL)")
+        .bind(actor.credential_id).execute(&mut *tx).await?;
+    let evicted: Vec<Uuid> = sqlx::query_scalar("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE id IN
+        (SELECT id FROM management.sessions WHERE credential_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC,id DESC OFFSET 63) RETURNING id")
+        .bind(actor.credential_id).fetch_all(&mut *tx).await?;
+    let session: Session = sqlx::query_as("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,credential_id,expires_at)
+        SELECT $1,$2,'token',account_id,id,LEAST(expires_at,clock_timestamp()+interval '8 hours') FROM management.credentials WHERE id=$3
+        RETURNING id,user_id,credential_id,expires_at")
+        .bind(Uuid::new_v4()).bind(session_hash).bind(actor.credential_id).fetch_one(&mut *tx).await?;
+    let context = AuditContext {
+        actor: AuditActor::User {
+            id: actor.account_id,
+            credential_id: actor.credential_id,
+            session_id: Some(session.id),
+        },
+        request_id,
+        surface: Surface::Console,
+    };
+    for id in evicted {
+        audit::record(&mut tx, &context, "session.evict", "session", id).await?;
+    }
+    audit::record(&mut tx, &context, "session.create", "session", session.id).await?;
+    tx.commit().await?;
+    Ok(Some(session))
+}
+
+/// The authenticated User ID constrains session ownership inside the mutation.
+pub async fn revoke_session(
+    pool: &PgPool,
+    context: &AuditContext,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<bool, Error> {
+    let mut tx = lock(pool).await?;
+    let changed = sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL")
+        .bind(session_id).bind(user_id).execute(&mut *tx).await?.rows_affected() > 0;
+    if changed {
+        audit::record(&mut tx, context, "session.revoke", "session", session_id).await?;
+    }
+    tx.commit().await?;
+    Ok(changed)
+}

@@ -1,6 +1,6 @@
 # ADR 009: 신원 관리는 콘솔로, 자원 관리는 공통 명령으로 제공한다
 
-- 상태: Accepted (제품 방향), 순수 권한·명령 계약 구현·새 서버 경로 미연결
+- 상태: Accepted (제품 방향), 순수 권한·명령 계약·신원 DB 기반 구현·새 서버 경로 미연결
 - 날짜: 2026-09-24
 - 선행: [ADR 007](007-grove-storage-foundation.md)
 - 대체: [ADR 008](008-local-owner-and-agent-credentials.md)
