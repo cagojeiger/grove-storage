@@ -4,12 +4,17 @@ use super::*;
 async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
     let (user, user_cookie) = actor(&pool, Role::Viewer).await;
-    let agent = create(&pool,&admin_cookie,serde_json::json!({"kind":"agent","display_name":"agent","role":"viewer","owner_user_id":user})).await;
+    let agent = create(
+        &pool,
+        &admin_cookie,
+        serde_json::json!({"kind":"user","display_name":"historical actor","role":"viewer"}),
+    )
+    .await;
     let key = issue(&pool, &admin_cookie, agent).await;
     let ctx = db::AuditContext {
-        actor: db::AuditActor::Agent {
+        actor: db::AuditActor::User {
             id: agent,
-            owner_user_id: user,
+            session_id: None,
             credential_id: key["credential_id"].as_str().unwrap().parse().unwrap(),
         },
         request_id: Uuid::new_v4(),
@@ -24,7 +29,7 @@ async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool:
     db::create_account(
         &pool,
         &ctx,
-        db::NewAccount::User {
+        db::NewAccount {
             display_name: "historic operation",
             role: Role::Viewer,
         },
@@ -49,6 +54,17 @@ async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool:
         serde_json::Value::Null,
     )
     .await;
+    // Old audit snapshots retain their owner scope after User unification.
+    for table in ["audit_events", "command_invocations"] {
+        sqlx::query(&format!(
+            "UPDATE management.{table} SET actor_kind='agent',owner_user_id=$1 WHERE request_id=$2"
+        ))
+        .bind(user)
+        .bind(ctx.request_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
     let first = get(&pool, &user_cookie, "/history/audit?limit=1").await;
     let event = &first["items"][0];
     assert_eq!(event["context"]["request_id"], ctx.request_id.to_string());

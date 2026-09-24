@@ -9,19 +9,20 @@ export const owner: Account = {
   role: "admin",
   is_active: true,
   deleted_at: null,
-  owner_user_id: null,
 };
-export const agent: Account = {
+export const otherUser: Account = {
   ...owner,
   id: "22222222-2222-2222-2222-222222222222",
-  kind: "agent",
-  display_name: "Backup agent",
+  kind: "user",
+  display_name: "Operator",
   role: "operator",
-  owner_user_id: owner.id,
 };
 export const rawToken = "gsm_" + "a".repeat(64);
 export const root = "/api/admin/console/#access/users";
-export async function accessMock(page: Page, rows: Account[] = [owner, agent]) {
+export async function accessMock(
+  page: Page,
+  rows: Account[] = [owner, otherUser],
+) {
   const accounts = rows.map((row) => ({ ...row }));
   const tokens: Credential[] = [];
   const writes: {

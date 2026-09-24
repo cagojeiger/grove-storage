@@ -135,7 +135,7 @@ def check_s3(endpoint, directory, backend):
     call("storage.delete", {"id": "mcp-storage"})
     assert calls == names
     audit = management.request("GET", "/history/audit?limit=100")
-    events = [item for item in audit["items"] if item["context"].get("actor_id") == management.agent_id]
+    events = [item for item in audit["items"] if item["context"].get("credential_id") == management.credential_id]
     assert len(events) == 9
     assert all(item["context"]["surface"] == "mcp" for item in events)
     assert all(secret not in json.dumps(audit) for secret in SECRETS)
@@ -150,7 +150,7 @@ def check_s3(endpoint, directory, backend):
         assert error.code == 401
     else:
         raise AssertionError("Revoked token could discover tools")
-    print("PASS MCP 19 commands, CLI parity, Agent audit, owner cap, revocation, and one-time secret")
+    print("PASS MCP 19 commands, CLI parity, token audit, User role, revocation, and one-time secret")
 
 
 def verify_log(data):

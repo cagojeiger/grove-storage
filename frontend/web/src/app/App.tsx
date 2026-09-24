@@ -123,7 +123,7 @@ export function App() {
             )}
             {accessPage ? (
               session.data.role === "admin" ? (
-                <Access key={route} kind={route === "access/agents" ? "agent" : "user"} />
+                <Access />
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )

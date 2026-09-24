@@ -7,9 +7,9 @@
 //!   /readyz            readiness (DB 체크)
 //!   /api/v1/*          클라이언트 API (클라이언트 키 — v1 모듈)
 //!   /api/admin/v1/*    운영자 API (관리자 토큰 또는 콘솔 세션)
-//!   /api/admin/commands/v1  공통 자원 명령 (User/Agent Bearer)
+//!   /api/admin/commands/v1  공통 자원 명령 (User Bearer)
 //!   /api/admin/console-commands/v1  공통 자원 명령 (User 세션 + CSRF)
-//!   /api/admin/mcp      같은 자원 명령의 stateless MCP (User/Agent Bearer)
+//!   /api/admin/mcp      같은 자원 명령의 stateless MCP (User Bearer)
 //!   /blobs/*           중계 바이트 엔드포인트 (lease secret — blobs 모듈)
 
 use std::sync::Arc;

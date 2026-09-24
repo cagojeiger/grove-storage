@@ -5,8 +5,8 @@ use std::time::Duration;
 async fn denied_callers_never_probe_or_modify_storage(pool: PgPool) {
     owner(&pool).await;
     let viewer = operator(&pool, Role::Viewer, 2).await;
-    let agent = agent(&pool, viewer.account).await;
-    db::issue_credential(&pool, &context(), agent, &key(&hash(500)))
+    let automation_user = viewer.account;
+    db::issue_credential(&pool, &context(), automation_user, &key(&hash(500)))
         .await
         .unwrap();
     seed(&pool).await;
@@ -29,13 +29,13 @@ async fn denied_callers_never_probe_or_modify_storage(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn probe_releases_identity_fence_and_rechecks_owner_role_and_revocation(pool: PgPool) {
+async fn probe_releases_identity_fence_and_rechecks_user_role_and_revocation(pool: PgPool) {
     owner(&pool).await;
     for revoke in [false, true] {
         let user = operator(&pool, Role::Operator, if revoke { 3 } else { 2 }).await;
-        let agent = agent(&pool, user.account).await;
+        let automation_user = user.account;
         let token = hash(if revoke { 501 } else { 500 });
-        let key = db::issue_credential(&pool, &context(), agent, &key(&token))
+        let key = db::issue_credential(&pool, &context(), automation_user, &key(&token))
             .await
             .unwrap();
         let verify = |input| async {

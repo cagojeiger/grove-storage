@@ -75,17 +75,16 @@ export async function accessChecks(
   await page.getByLabel("Label", { exact: true }).fill("Recovery fixture");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   const oldToken = await takeToken(page);
-  await page.getByRole("link", { name: "Agents", exact: true }).click();
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await page.getByRole("button", { name: "Users", exact: true }).click();
+  await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("CLI backup");
-  await page.getByLabel("Owner", { exact: true }).selectOption(userId);
   await page.getByLabel("Role", { exact: true }).selectOption("operator");
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await page.getByRole("button", { name: /CLI backup.*Active/ }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("CLI key");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
-  const agentToken = await takeToken(page);
+  const automationToken = await takeToken(page);
   async function status(token) {
     const response = await fetch(endpoint + "/api/admin/commands/v1", {
       method: "POST",
@@ -97,12 +96,12 @@ export async function accessChecks(
     });
     return response.status;
   }
-  assert.equal(await status(agentToken), 200);
+  assert.equal(await status(automationToken), 200);
   await page.getByRole("button", { name: "Revoke CLI key" }).click();
   await page.getByLabel("Revoke CLI key and its sessions").check();
   await page.getByRole("button", { name: "Revoke", exact: true }).click();
   await expect(page.getByText("Revoked", { exact: true })).toBeVisible();
-  assert.equal(await status(agentToken), 401);
+  assert.equal(await status(automationToken), 401);
   const recovery = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const other = await recovery.newPage();
@@ -128,6 +127,6 @@ export async function accessChecks(
   await expect(page.getByText("Deleted", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Overview", exact: true }).click();
   console.log(
-    "PASS real Access CRUD, last Admin guard, Agent token use/revocation and targeted master recovery",
+    "PASS real Access CRUD, last Admin guard, User token use/revocation and targeted master recovery",
   );
 }

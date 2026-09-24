@@ -67,16 +67,13 @@ async fn tokens_are_one_time_responses_and_revocation_invalidates_sessions(pool:
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn owner_deletion_retires_agent_credentials_and_session_scope_is_self_only(pool: PgPool) {
+async fn user_deletion_retires_all_credentials_and_session_scope_is_self_only(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
     let (user, user_cookie) = actor(&pool, Role::Viewer).await;
-    let agent = create(&pool,&admin_cookie,serde_json::json!({"kind":"agent","display_name":"job","role":"operator","owner_user_id":user})).await;
-    let key = issue(&pool, &admin_cookie, agent).await;
+    let key = issue(&pool, &admin_cookie, user).await;
     let raw = key["token"].as_str().unwrap();
-    assert_eq!(
-        login(app(&pool), raw).await.status(),
-        StatusCode::UNAUTHORIZED
-    );
+    let second_login = login(app(&pool), raw).await;
+    assert_eq!(second_login.status(), StatusCode::OK);
     let identity = db::authenticate(&pool, &secrets::token_hash(raw))
         .await
         .unwrap()
@@ -105,12 +102,16 @@ async fn owner_deletion_retires_agent_credentials_and_session_scope_is_self_only
         StatusCode::OK
     );
     let own = get(&pool, &user_cookie, "/sessions").await;
-    assert_eq!(own["items"].as_array().unwrap().len(), 1);
+    assert_eq!(own["items"].as_array().unwrap().len(), 2);
+    let current_id = json(current(app(&pool), &user_cookie).await).await["session_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let response = send(
         &pool,
         &user_cookie,
         "DELETE",
-        &format!("/sessions/{}", own["items"][0]["id"].as_str().unwrap()),
+        &format!("/sessions/{}", current_id),
         serde_json::Value::Null,
     )
     .await;

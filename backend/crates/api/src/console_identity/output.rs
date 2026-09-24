@@ -26,7 +26,6 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
             (r.id.to_string(), json!({
                 "id": r.id, "kind": r.kind, "display_name": r.display_name,
                 "role": r.role, "is_active": r.is_active, "deleted_at": r.deleted_at,
-                "owner_user_id": r.owner_user_id,
             }))
         }), limit),
         Output::Credentials(rows) => page(rows.into_iter().map(|r| {

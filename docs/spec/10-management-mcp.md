@@ -7,7 +7,7 @@
 ## 연결
 
 ```text
-MCP client ── User/Agent Bearer ── /api/admin/mcp
+MCP client ── User Bearer ── /api/admin/mcp
                                      │
                          현재 신원 확인 → SDK protocol 처리
                                      │ tools/call
@@ -19,7 +19,7 @@ MCP client ── User/Agent Bearer ── /api/admin/mcp
 | 항목 | 계약 |
 |---|---|
 | URL | `https://<api-host>/api/admin/mcp` |
-| 인증 | `Authorization: Bearer gsm_…`; 콘솔 세션 API에서 발급한 User/Agent 토큰 |
+| 인증 | `Authorization: Bearer gsm_…`; 콘솔 세션 API에서 발급한 User 토큰 |
 | Host | loopback 또는 `FILEGATE_PUBLIC_URL`의 authority; proxy는 허용된 Host를 전달 |
 | 브라우저 경계 | Origin이 있으면 403; Cookie·중복 Authorization·master/이전 운영자 토큰은 401 |
 | proxy | Bearer를 보존하는 기계용 API 경로; 콘솔 OAuth 로그인 redirect와 분리 |
@@ -39,7 +39,7 @@ MCP 클라이언트의 HTTP Bearer 설정에 토큰을 공급한다. `GROVE_TOKE
 |---|---|---|
 | 명령 | 원격 19개 | 동일한 19개 tool; `storage.list`, `client-key.register` 등 이름 그대로 |
 | 입력 | 인자/파일 → 공통 typed 입력 | tools/list의 inputSchema → 같은 decode/검증 |
-| 권한 | 현재 User/Agent·owner 상한 | 동일 |
+| 권한 | 현재 User·User 역할 | 동일 |
 | 실행 | 공통 resource service | 동일 |
 | 감사 표면 | `resource_api` | `mcp`; 서버가 확정 |
 | 조회 결과 | 공개 DTO·table/JSON | 같은 DTO를 `result`에 포함 |
@@ -88,7 +88,7 @@ tool annotation은 클라이언트 힌트이며 서버의 권한·참조 제약�
 | 운영 관찰 | 기존 request.end와 공통 command_invocations·audit_events·security_events |
 | 순수 테스트 | 19개 schema·이름·annotation·출력 참조, SDK 로그 차단 |
 | PG HTTP 테스트 | CLI API 결과 대조·권한·owner·폐기·경계·감사 rollback·unknown |
-| 실제 프로세스 | `scripts/e2e-mcp.py`: 19개 도구·CLI 결과·Agent audit·폐기·비밀 없는 서버 로그 |
+| 실제 프로세스 | `scripts/e2e-mcp.py`: 19개 도구·CLI 결과·토큰별 audit·폐기·비밀 없는 서버 로그 |
 
 로컬 E2E는 MCP HTTP 요청과 실제 서버/PG를 사용한다. 외부 MCP 앱 연결·운영 TLS·OAuth2
 Proxy·S3 Provider 실제 전송은 별도 검증이다.

@@ -1,12 +1,12 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn viewers_agents_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) {
+async fn viewer_tokens_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) {
     owner(&pool).await;
     let viewer = operator(&pool, Role::Viewer, 2).await;
     seed(&pool).await;
-    let agent = agent(&pool, viewer.account).await;
-    db::issue_credential(&pool, &context(), agent, &key(&hash(500)))
+    let automation_user = viewer.account;
+    db::issue_credential(&pool, &context(), automation_user, &key(&hash(500)))
         .await
         .unwrap();
     let before = audit_count(&pool).await;
@@ -39,13 +39,13 @@ async fn viewers_agents_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn queued_mutation_rechecks_revocation_and_owner_demotion(pool: PgPool) {
+async fn queued_mutation_rechecks_revocation_and_user_demotion(pool: PgPool) {
     owner(&pool).await;
     let login = operator(&pool, Role::Operator, 2).await;
     seed(&pool).await;
-    let agent = agent(&pool, login.account).await;
+    let automation_user = login.account;
     let token = hash(500);
-    let issued = db::issue_credential(&pool, &context(), agent, &key(&token))
+    let issued = db::issue_credential(&pool, &context(), automation_user, &key(&token))
         .await
         .unwrap();
     for revoke in [false, true] {

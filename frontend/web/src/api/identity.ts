@@ -3,12 +3,11 @@ import { ApiError, identity, send } from "./http";
 export type Role = "viewer" | "operator" | "admin";
 export type Account = {
   id: string;
-  kind: "user" | "agent";
+  kind: "user";
   display_name: string;
   role: Role;
   is_active: boolean;
   deleted_at: string | null;
-  owner_user_id: string | null;
 };
 export type Credential = {
   id: string;
@@ -38,11 +37,10 @@ const nullable = (v: unknown) => v === null || typeof v === "string";
 export const isAccount = (v: unknown): v is Account =>
   isObject(v) &&
   ["id", "display_name"].every((k) => typeof v[k] === "string") &&
-  ["user", "agent"].includes(String(v.kind)) &&
+  v.kind === "user" &&
   ["viewer", "operator", "admin"].includes(String(v.role)) &&
   typeof v.is_active === "boolean" &&
-  nullable(v.deleted_at) &&
-  nullable(v.owner_user_id);
+  nullable(v.deleted_at);
 export const isCredential = (v: unknown): v is Credential =>
   isObject(v) &&
   [
@@ -138,7 +136,7 @@ export function identityMessage(error: unknown): string {
     return "Change blocked. Keep an active Admin, check the account state and token limit, then refresh.";
   if (error.status === 404)
     return "The account, token, or master configuration is unavailable.";
-  if (error.status === 400) return "Check the name, role, owner and expiry.";
+  if (error.status === 400) return "Check the name, role and expiry.";
   return error.message;
 }
 

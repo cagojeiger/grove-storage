@@ -1,5 +1,5 @@
 use super::{
-    inputs::{self, AgentRole, Body, Id, QueryPage, Role},
+    inputs::{self, Body, Id, QueryPage, Role},
     output, session,
 };
 use crate::routes::AppState;
@@ -12,20 +12,11 @@ use axum::{
 use filegate_db::management::{AccountChange, NewAccount};
 use grove_management_service::Command;
 use serde::Deserialize;
-use uuid::Uuid;
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum Create {
-    User {
-        display_name: String,
-        role: Role,
-    },
-    Agent {
-        display_name: String,
-        role: AgentRole,
-        owner_user_id: Uuid,
-    },
+    User { display_name: String, role: Role },
 }
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
@@ -59,20 +50,9 @@ pub(super) async fn create(
         return inputs::invalid();
     };
     let account = match &body {
-        Create::User { display_name, role } if inputs::valid_label(display_name) => {
-            NewAccount::User {
-                display_name: display_name.trim(),
-                role: (*role).into(),
-            }
-        }
-        Create::Agent {
-            display_name,
-            role,
-            owner_user_id,
-        } if inputs::valid_label(display_name) => NewAccount::Agent {
+        Create::User { display_name, role } if inputs::valid_label(display_name) => NewAccount {
             display_name: display_name.trim(),
             role: (*role).into(),
-            owner_user_id: *owner_user_id,
         },
         _ => return inputs::invalid(),
     };

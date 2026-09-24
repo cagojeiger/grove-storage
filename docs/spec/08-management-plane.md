@@ -1,15 +1,15 @@
 # spec 08: 관리 신원·명령·감사
 
 - 상태: 신원·이력·세션 HTTP와 공통 자원 19개/Bearer HTTP·CLI·MCP 연결 구현·테스트. UI 5a·5b(User 로그인·자원·master 설정/복구·Access) 구현; 세션 목록·이력 화면은 후속.
-- 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
+- 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md), [User 통합 ADR 010](../adr/010-unified-users-and-named-tokens.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
-- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`은 `admin_*`를 유지한다. 새 UI는 `management` User 세션, CLI/MCP는 User/Agent 토큰을 사용한다.
+- `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`은 `admin_*`를 유지한다. 새 UI는 `management` User 세션, CLI/MCP는 User 토큰을 사용한다. `0012`의 User 통합은 아래 전환 계약을 따른다.
 
 ## 책임과 접근
 
 | 영역 | 주체·기능 | 경로 |
 |---|---|---|
-| 신원·권한 | User·Agent·관리 토큰·세션 관리 | 대시보드 전용 API |
+| 신원·권한 | User·관리 토큰·세션 관리 | 대시보드 전용 API |
 | 자원 운영 | Storage·Client·서비스 키·usage/status | 대시보드, CLI, MCP |
 | 관리 이력 | 변경 감사·관리 호출·보안 이벤트 조회 | 대시보드 전용 API |
 | 데이터 서비스 | Native/S3 파일 접근·Client 키 인증 | 기존 runtime API |
@@ -17,7 +17,7 @@
 
 서버는 `주체 + 자격증명 종류 + 진입 경계 + 작업 권한`을 함께 검사한다.
 User-Agent 헤더·Origin 문자열·도구 이름은 콘솔 권한의 증거가 아니다.
-직접 HTTP 호출도 같은 검사를 거치며 Agent 토큰은 사람의 콘솔 세션을 발급받지 않는다.
+모든 유효한 User 토큰은 콘솔 로그인과 CLI/MCP 인증에 사용할 수 있다. 토큰 이름은 용도 표시이며 권한 제한이 아니다.
 콘솔 전용은 세션·역할·CSRF의 인증 경계이며 실제 사람이 화면을 조작했다는 증명은 아니다.
 
 ## 권한
@@ -28,14 +28,14 @@ User-Agent 헤더·Origin 문자열·도구 이름은 콘솔 권한의 증거가
 | Storage·Client 등록·변경·삭제 | 거부 | 허용 | 허용 | 콘솔·CLI·MCP |
 | Native/S3 서비스 키 목록·발급/등록·폐기 | 거부 | 허용 | 허용 | 콘솔·CLI·MCP |
 | 자기 세션 조회·종료 | 허용 | 허용 | 허용 | 콘솔 세션 |
-| User·Agent·역할·관리 토큰 조회/생성/변경/폐기 | 거부 | 거부 | 허용 | 콘솔 세션 |
+| User·역할·관리 토큰 조회/생성/변경/폐기 | 거부 | 거부 | 허용 | 콘솔 세션 |
 | 관리 변경·호출 이력 조회 | 자기 범위 | 자기 범위 | 전체 | 콘솔 세션 |
 | 전체 보안 이벤트 조회 | 거부 | 거부 | 허용 | 콘솔 세션 |
 
-자기 범위는 본인과 소유 Agent의 관리 이력이며 조회 시 현재 권한을 확인한다.
+자기 범위는 본인 User와 그 토큰들의 관리 이력이다. 이전 Agent의 owner snapshot은 과거 이력 조회에만 보존한다.
 Operator는 Client 서비스 키를 다루는 강한 운영 권한이다. 발급 화면에서 이를 명시한다.
 기존 삭제·참조·주소 변경 제약은 Admin과 master를 포함한 모든 경로에서 유지한다.
-Agent는 viewer/operator로 제한하고 소유 User의 활성 상태·권한으로 상한을 적용한다.
+역할은 User에 귀속된다. 다른 권한이 필요한 자동화에는 별도 User를 만든다.
 역할 변경·비활성화는 이후 요청에 반영하며 이미 허용된 작업은 완료될 수 있다.
 마지막 활성 Admin의 삭제·비활성화·강등과 첫 Admin 생성은 DB 잠금으로 직렬화한다.
 
@@ -46,10 +46,10 @@ Agent는 viewer/operator로 제한하고 소유 User의 활성 상태·권한으
 
 | 현재 구현 | 연결 단계의 책임 |
 |---|---|
-| User/Agent 역할·활성 상태·소유자 권한 상한 | DB에서 현재 상태를 읽고 알 수 없는 role/kind를 거부 |
+| User 역할·활성 상태 | DB에서 현재 상태를 읽고 알 수 없는 role/kind를 거부 |
 | credential 만료/폐기/invalid 상태 거부 | token 검증·세션과 원본 token 결합·master 세대 검증 |
 | 콘솔 세션과 machine Bearer의 조합 검사 | 서버 route에서 Surface 지정, Origin/CSRF와 쿠키 검증 |
-| Installation / SelfOnly / SelfAndOwnedAgents / SetupRecovery | 인증된 ID로 조회/변경 범위 적용; 기존 자원 제약 유지 |
+| Installation / SelfOnly / SetupRecovery | 인증된 ID로 조회/변경 범위 적용; 기존 자원 제약 유지 |
 
 정책 허용은 DB 쿼리의 소유권 필터·첫/마지막 Admin 잠금·삭제 조건을 대신하지 않는다.
 새 User 세션의 조회·종료는 이 정책을 적용한다. 기존 자원 REST 인증은 유지한다.
@@ -61,7 +61,7 @@ CLI/MCP 동등성 테스트는 정책 입력에 대한 결과 비교다. [명령
 ```text
 설정 master → 제한된 설정 세션 → 최초 Admin + 개인 토큰 발급
 개인 토큰   → User 확인        → 일반 콘솔 세션
-User/Agent 토큰                → CLI/MCP 자원 명령
+User 토큰                → CLI/MCP 자원 명령
 설정 master → 제한된 복구 세션 → 기존 Admin 접근 복구
 ```
 
@@ -93,7 +93,7 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 | 항목 | 현재 계약 |
 |---|---|
 | 활성 조건 | 기존 `FILEGATE_CONSOLE_ORIGIN` 설정; 미설정 시 404 |
-| 개인/Agent 토큰 형식 | `gsm_` + 256-bit 난수의 소문자 hex 64자; 로그인은 DB에서 User만 허용 |
+| User 토큰 형식 | `gsm_` + 256-bit 난수의 소문자 hex 64자; 로그인은 DB에서 User만 허용 |
 | 검증용 해시 | SHA-256(`grove-management-token-v1` + NUL + 원문), hex; `hash_version=1` |
 | 세션 | `gss_` + 256-bit 난수; 해시 domain은 `grove-management-session-v1` |
 | 쿠키 | `__Host-grove_session`; Path=/, Secure, HttpOnly, SameSite=Strict, Domain 생략 |
@@ -101,7 +101,7 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 | 증거 선택 | Authorization이 있으면 401; proxy 사용자 헤더는 권한 증거로 사용하지 않음; 중복 인증 쿠키·Origin·CSRF 헤더 거부 |
 | 수명 | min(개인 토큰 만료, 8시간); credential당 활성 세션 64개; 재로그인은 새 세션, 다른 세션은 유지 |
 | 응답 | no-store·nosniff; 로그인 body는 user/credential/session 공개 ID와 expires_at, GET은 현재 role 포함 |
-| 실패 | 잘못된 토큰·Agent·만료·폐기는 동일 401; Origin/CSRF 403; 예산 초과 429 + Retry-After: 60 |
+| 실패 | 잘못된 토큰·만료·폐기는 동일 401; Origin/CSRF 403; 예산 초과 429 + Retry-After: 60 |
 | 예산 | 올바른 JSON envelope의 모든 토큰 시도는 공유 60회/분 소비; DB 장애 시 503으로 차단 |
 | 감사 | session.create/revoke와 login last_used_at은 변경과 함께 commit; 성공/실패 보안 로그와 호출 이력은 bounded best-effort |
 | 상관 | 서버 발급 request_id를 응답 헤더와 audit/invocation/security에 사용; 인증 전 거부는 보안 이력만 기록 |
@@ -113,7 +113,7 @@ DELETE /api/admin/identity/v1/session        → 현재 세션 폐기 + 쿠키 �
 새 세션은 기존 전체권한 자원 API의 증거가 되지 않는다. UI 자원 요청은
 `POST /api/admin/console-commands/v1`에서 User 세션·Origin·CSRF 확인 후 공통 실행기로 연결한다.
 서버가 `Console` 표면을 지정하며 Bearer·master·기존 쿠키는 이 경로의 인증이 되지 않는다.
-CLI는 새 User/Agent Bearer를 공통 자원 API에 전달한다.
+CLI는 새 User Bearer를 공통 자원 API에 전달한다.
 최초 User·개인 토큰 발급은 아래 master HTTP 흐름으로 제공한다. UI는 개인 토큰 로그인까지
 연결했으며 master 설정/복구 화면은 후속이다. 운영 DB 수동 삽입을 설치 절차로 제공하지 않는다.
 
@@ -145,7 +145,7 @@ DELETE는 해당 세션 종료만 제공한다. 일반 User·자원·이력 조�
 | 로그인 예산 | User/master가 설치 전체 60회/분 공유; 올바른 envelope의 실패 토큰도 소비 |
 | 첫 설정 | DB 신원 잠금에서 첫 계정 여부 확인; 첫 Admin·90일 개인 토큰·감사·master 세션 폐기 atomic |
 | 복구 | `user_id` UUID + `confirm:true`; 활성 Admin만 대상, 새 90일 토큰 발급과 대상의 이전 키/세션 폐기 atomic |
-| 보존 | 다른 User·소유 Agent·기존 admin_*·Client 키·Provider secret·파일/위치 레코드 유지 |
+| 보존 | 다른 User·기존 admin_*·Client 키·Provider secret·파일/위치 레코드 유지 |
 | 원문 전달 | 성공 응답 201에서 `user_id`, `credential_id`, `expires_at`, `token` 한 번 전달; no-store, 원문 재조회 없음 |
 | 재전송 | 성공한 master 세션은 폐기되므로 반복 변경은 401; 재복구는 새 master 로그인으로 명시적으로 시작 |
 | 실패 | 감사 실패 시 설정/복구/세션 소비 모두 rollback; commit 응답 불명은 outcome_unknown, 자동 재시도 없음 |
@@ -166,8 +166,8 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 
 | Method·경로 | 입력·결과 | 권한 |
 |---|---|---|
-| GET `/accounts` | User·Agent 목록, 삭제 상태 포함 | Admin |
-| POST `/accounts` | `{kind, display_name, role}`; Agent는 `owner_user_id` 추가 → 201 `{account_id}` | Admin |
+| GET `/accounts` | User 목록, 삭제 상태 포함 | Admin |
+| POST `/accounts` | `{kind:"user", display_name, role}` → 201 `{account_id}` | Admin |
 | PATCH `/accounts/{id}` | `{operation:"role", role}` 또는 `{operation:"active", is_active}` → `{changed}` | Admin |
 | DELETE `/accounts/{id}` | soft delete → `{changed}` | Admin |
 | GET `/accounts/{id}/credentials` | 공개 ID·label·prefix·생성/만료/폐기 시각 | Admin |
@@ -175,14 +175,14 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 | DELETE `/credentials/{id}` | 토큰·연결 세션 폐기 → `{changed}` | Admin |
 | GET `/sessions` | 자기 세션 목록, 만료/폐기 상태 포함 | 모든 User |
 | DELETE `/sessions/{id}` | 자기 세션만 폐기 → `{changed}` | 모든 User |
-| GET `/history/audit` | 확정된 관리 변경 | Admin 전체, 나머지 본인·소유 Agent |
-| GET `/history/invocations` | 관리 명령 시도·결과 | Admin 전체, 나머지 본인·소유 Agent |
+| GET `/history/audit` | 확정된 관리 변경 | Admin 전체, 나머지 본인 토큰의 기록 |
+| GET `/history/invocations` | 관리 명령 시도·결과 | Admin 전체, 나머지 본인 토큰의 기록 |
 | GET `/history/security` | 인증·권한 보안 이벤트 | Admin |
 
 | 계약 | 값·처리 |
 |---|---|
-| 입력 | 이름·label은 trim 후 1–80자; 선언한 필드만 수용; Agent role은 viewer/operator |
-| 계정 변경 | role·active·삭제만 제공; Agent 소유자 변경·삭제 계정 복원은 후속 범위 |
+| 입력 | 이름·label은 trim 후 1–80자; 선언한 필드만 수용; User role은 viewer/operator/admin |
+| 계정 변경 | role·active·삭제만 제공; 삭제 계정은 복원 대상에서 제외 |
 | 토큰 수명 | 기본 90일, 1–90일 선택; 유효 토큰은 계정당 32개, 초과 시 409/conflict |
 | 동시 발급 | identity lock 아래 한도 검사·발급; 만료/폐기 토큰은 한도에서 제외; 복구는 기존 키 폐기 후 발급 |
 | 원문 전달 | commit 성공 응답에서 한 번 전달; 목록·감사·호출·보안 응답에는 원문/해시 제외 |
@@ -195,7 +195,7 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 | 반복 변경 | 같은 값·이미 폐기된 대상은 `changed:false`; 마지막 활성 Admin 변경은 409/conflict |
 | 실행 검증 | 임시 PG + 실제 서버에서 초기 설정·계정/토큰 변경·역할/이력 범위·폐기 후 차단 확인; 수동 쿠키의 HTTP 검증이며 TLS/브라우저/proxy E2E와 구분 |
 
-현재 화면은 기존 인증을 유지한다. CLI는 별도 공통 자원 API와 새 User/Agent 인증을 사용한다.
+현재 화면은 User 토큰 로그인을 사용한다. CLI는 별도 공통 자원 API와 새 User 인증을 사용한다.
 
 ## DB 구현과 후속 설계
 
@@ -204,12 +204,14 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 accounts/users/agents/credentials/sessions/audit_events는 `0008`에 구현했다.
 command_invocations/security_events와 공통 로그인 예산은 `0009`에 구현했다.
 로그인 성공/제한 이벤트는 `0010`, master 구성 세대는 `0011`에 구현했다.
+`0012`는 Agent를 비활성 User로 전환하고 기존 Agent 토큰을 폐기한다. ID·역할·과거 로그는 유지하며 `agents` 테이블을 제거한다. 기존 User 토큰·세션과 데이터 서비스 테이블은 유지한다.
+
+배포 시 이전 서버의 쓰기를 중지한 뒤 migration과 새 서버를 함께 적용한다. 이전 바이너리는 새 스키마와 함께 운영하지 않는다.
 
 | 테이블 (`management.*`) | 주요 컬럼 |
 |---|---|
-| `accounts` | id, kind(user/agent), display_name, role, is_active, deleted_at, created_at, updated_at |
+| `accounts` | id, kind(user 고정), display_name, role, is_active, deleted_at, created_at, updated_at |
 | `users` | account_id PK/FK |
-| `agents` | account_id PK/FK, owner_user_id FK(users) |
 | `credentials` | id, account_id FK, label, token_prefix, token_hash UNIQUE, hash_version, created_at, expires_at, revoked_at, last_used_at |
 | `sessions` | id, session_hash UNIQUE, auth_method, user_id FK, credential_id FK, master_generation, created_at, expires_at, revoked_at |
 | `audit_events` | id, created_at, actor context, request_id, surface, action, resource_type, resource_id, metadata |
@@ -221,7 +223,6 @@ command_invocations/security_events와 공통 로그인 예산은 `0009`에 구�
 ```text
 accounts
 ├─ kind=user  → users(account_id PK/FK)
-├─ kind=agent → agents(account_id PK/FK, owner_user_id → users)
 └─ 1:N       → credentials(account_id FK)
 users + credentials ──1:N── sessions
 
@@ -231,13 +232,12 @@ audit / invocation / security ── actor snapshot + request_id
 
 | 제약 | 검증할 내용 |
 |---|---|
-| subtype | users는 kind=user, agents는 kind=agent; FK와 함께 종류·배타성 보장 |
-| 소유 | Agent owner는 User; 초기에는 소유자 변경 없이 운영하고, User 삭제 시 소유 Agent도 무효화 |
+| User | accounts.kind=user 고정; users FK로 세션 소유 관계 보장 |
 | 세션 | token 방식은 user_id와 같은 User의 credential 필수; master 방식은 둘 다 NULL이며 master_generation 필수 |
 | credential | 서버가 생성한 고엔트로피 값의 검증용 해시; 만료·폐기·소유자 상태를 매 요청 확인 |
 | actor context | actor_kind(user/agent/master/anonymous/system), actor_id, owner_user_id, credential_id, session_id |
 | 이력 보존 | actor/target은 snapshot ID; 계정·키 삭제와 독립적으로 보존 |
-| index | credential 소유자, Agent owner, 세션 폐기 조회, 로그의 시각+ID·actor·target |
+| index | credential 소유자, 세션 폐기 조회, 로그의 시각+ID·actor·target |
 
 기존 로그인 제한은 DB 공유 예산으로 이관한다. 공개 경로의 rate limit과 함께 적용하고
 제한 상태의 크기도 통제한다. 현행 `admin_*` 는 추가 migration으로 이관하며,
@@ -247,14 +247,14 @@ audit / invocation / security ── actor snapshot + request_id
 
 | 구현 | 보장·경계 |
 |---|---|
-| subtype FK | accounts의 kind별 generated ID + deferred FK로 commit 시 정확히 한 subtype 보장 |
+| subtype FK | accounts의 User generated ID + deferred FK로 commit 시 User 행 보장 |
 | 최초 설정 | 계정·첫 credential·감사 함께 commit; 기존 management 계정이 있으면 초기화 거부 |
 | 변경 직렬화 | bootstrap·계정 변경·발급·복구·폐기·로그인이 같은 transaction advisory lock 사용 |
 | 마지막 Admin | 활성 Admin의 강등·비활성화·삭제를 현재 DB 상태로 검사; 데이터 경로는 잠금 공유 없이 유지 |
 | credential | 해시 v1은 소문자 hex 64자·UNIQUE; master 설정/복구 90일, 일반 HTTP 1–90일; 계정당 유효 토큰 32개 |
-| 현재 신원 | 매 인증 조회에서 만료/폐기·계정·Agent 소유자 상태를 읽어 정책용 Caller 생성 |
-| User 세션 | User와 credential 소유자 일치 FK; Agent 로그인 거부; TTL=min(원본 만료, 8시간), 활성 세션은 credential당 64개 |
-| 비활성화·삭제 | 비활성화 시 세션 폐기; 삭제 시 자기/소유 Agent 키도 폐기; 삭제 계정 재활성화는 제공하지 않음 |
+| 현재 신원 | 매 인증 조회에서 만료/폐기·User 상태를 읽어 정책용 Caller 생성 |
+| User 세션 | User와 credential 소유자 일치 FK; TTL=min(원본 만료, 8시간), 활성 세션은 credential당 64개 |
+| 비활성화·삭제 | 비활성화 시 세션 폐기; 삭제 시 해당 User의 모든 키도 폐기; 삭제 계정 재활성화는 제공하지 않음 |
 | 복구 | 지정한 활성 Admin의 기존 키·세션을 폐기하고 새 키 발급; 다른 User·Client 키는 보존 |
 | 변경 감사 | 신원 변경·세션 생성/폐기/상한 회수와 같은 transaction; 감사 실패 시 전체 rollback; 재폐기·같은 값 변경은 중복 이벤트 생략 |
 | 감사 내용 | actor/request/target snapshot; 계정 변경의 role·active 전후 값; 자유 형식 payload 대신 내부 필드만 기록, metadata 8 KiB 상한 |
@@ -317,14 +317,14 @@ Console identity/history API ── User session + role → identity/history ser
 | 명령 정의 | 입력·출력·안정적인 error code·권한을 하나의 정의에서 제공 |
 | transport | CLI는 JSON HTTP, MCP는 tool 호출; 각각 서버의 공통 명령 실행기를 호출 |
 | protocol | package version과 별도의 호환성 식별자; 비호환은 실행 전에 거부 |
-| 인증 | 같은 User/Agent 토큰에 같은 허용 결과; 기계용 경로는 master·Cookie 거부 |
+| 인증 | 같은 User 토큰에 같은 허용 결과; 기계용 경로는 master·Cookie 거부 |
 | 부수 효과 | transport는 진입 정보를 전달; service는 호출 기록과 변경 감사를 각 경계에서 한 번 기록 |
 | 로컬 처리 | CLI의 update·설정·확인·비밀 파일 입출력은 adapter의 책임 |
 | Native key | CLI의 raw key 파일→hash 변환 유지; 공통 명령은 현재의 hash 등록 계약 |
 | 비밀 응답 | 의도한 서비스 키 발급 응답과 원문을 제외한 저장용 로그를 분리 |
 | 재시도 | 변경 응답 불명은 unknown; 명시적 대조·재발급 절차 유지 |
 
-User·Agent·role·관리 credential·감사 검색은 콘솔 전용이다.
+User·role·관리 credential·감사 검색은 콘솔 전용이다.
 Admin Bearer의 직접 호출도 identity/history API에서 거부한다.
 CLI HTTP path·전송 envelope는 spec 09, 같은 명령명을 사용하는 MCP는 [spec 10](10-management-mcp.md)을 따른다.
 
@@ -348,7 +348,7 @@ and ingestion contract remain pending. Management history is labeled
 | Operation | UI destination |
 |---|---|
 | Admin issues a Client service key | Activity / Audit |
-| Agent changes storage through CLI or MCP | Activity / Calls and, on committed change, Audit |
+| User token changes storage through CLI or MCP | Activity / Calls and, on committed change, Audit |
 | Client requests a file upload/download | Clients / client / Logs |
 | Management authentication or permission failure | Activity / Security |
 
@@ -356,12 +356,12 @@ and ingestion contract remain pending. Management history is labeled
 
 | stream | 기록 대상 | 보장 |
 |---|---|---|
-| audit_events | User/Agent/role/token/session 관리, Storage/Client/서비스 키의 확정 변경, master 설정·복구 | DB 변경과 같은 transaction; insert 실패면 변경도 rollback |
+| audit_events | User/role/token/session 관리, Storage/Client/서비스 키의 확정 변경, master 설정·복구 | DB 변경과 같은 transaction; insert 실패면 변경도 rollback |
 | command_invocations | 인증 후 관리 API·CLI·MCP 요청의 성공/실패/조회 | best-effort; 기록 실패 시 완료된 결과 유지 |
 | security_events | 인증 성공/실패·권한 거부·master 사용 | 인증 전은 actor 불명 허용; 저장 장애는 운영 로그로 알림 |
 
 ```text
-request_id=R: MCP agent → storage.replace
+request_id=R: MCP User token → storage.replace
   command_invocations: actor / credential / surface=mcp / outcome / duration
   audit_events:        actor / Storage ID / 허용된 변경 전후 / request_id=R
 ```
@@ -384,26 +384,28 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 
 ## 구현 순서와 완료 조건
 
+아래 단계별 수는 해당 단계의 기록이다. 현재 통합 계약은 ADR 010과 `0012` 전환 테스트를 포함한다.
+
 | 단계 | 변경 | 검증 |
 |---|---|---|
-| 1a (로컬 구현·검증) | `management-policy`: 순수 신원·권한 규칙 | 역할/표면/인증 상태, Agent 상한, 감사 조회 scope, master 제한; 14개 테스트 |
+| 1a (로컬 구현·검증) | `management-policy`: 순수 신원·권한 규칙 | 역할/표면/인증 상태, User 역할, 감사 조회 scope, master 제한; 9개 테스트 |
 | 1b (로컬 구현·검증) | `management-command`: 입력·출력·오류·schema·권한 매핑; CLI DTO 재사용 | 원격 19개 명령과 대응; identity/history 제외; 기존 CLI 회귀 테스트 |
 | 2a (로컬 구현·검증) | `0008` + `db::management`: 신원·credential·세션·변경 감사의 저장소 기반 | 첫/마지막 Admin 경합, 발급/폐기 경합, 감사 실패 rollback, subtype/세션 FK, 기존 DB upgrade; 19개 PG 테스트 |
 | 2b (로컬 구현·검증) | `management-service` + `0009`: 권한 연결·신원/이력 scope 조회·호출/보안 로그·로그인 예산 | 15개 PG 테스트 + 명령 이름공간 테스트; 역할·진입 경계·잠금 대기·scope·비밀 제외·로그 장애 |
-| 3a (로컬 구현·검증) | User 로그인·현재 세션 조회·로그아웃 HTTP; `0010` 보안 이벤트 | 9개 PG HTTP 테스트 + 형식 테스트; CSRF·Agent·legacy 격리·폐기·예산·감사 rollback·commit 불명 |
+| 3a (로컬 구현·검증) | User 로그인·현재 세션 조회·로그아웃 HTTP; `0010` 보안 이벤트 | 9개 PG HTTP 테스트 + 형식 테스트; CSRF·legacy 격리·폐기·예산·감사 rollback·commit 불명 |
 | 3b (로컬 구현·검증) | master 설정/복구 HTTP·`0011` 세대 fence | 7개 PG 서비스 + 4개 PG HTTP + 설정 단위 테스트; 최초 발급·동시 초기화·세대 변경·단일 사용·복구 원자성·기존 데이터 보존 |
 | 3c (로컬 구현·검증) | identity/history API | 10개 PG HTTP + 발급 한도 경합 DB 테스트; 세션/role/CSRF·마지막 Admin·원문 제외·scope/cursor·실패 rollback |
-| 4a (로컬 구현·검증) | 공통 resource 조회 10개 + Bearer HTTP | 6개 PG 서비스 + 5개 PG HTTP; 기존 REST 결과·권한·owner·현재 role·비밀·미연결 변경 거부 |
+| 4a (로컬 구현·검증) | 공통 resource 조회 10개 + Bearer HTTP | 6개 PG 서비스 + 5개 PG HTTP; 기존 REST 결과·권한·현재 User role·비밀·미연결 변경 거부 |
 | 4b-1 (로컬 구현·검증) | Client/서비스 키 변경 6개 + 감사 transaction | 8개 PG 서비스 + 4개 PG HTTP; 삭제/참조·키 범위·현재 권한·감사 rollback·unknown·비밀 제외 |
 | 4b-2 (로컬 구현·검증) | Storage 변경 3개 + 감사 transaction | 8개 PG 서비스 + 6개 PG HTTP; probe 중 폐기/권한/참조 변경·fs/S3 대역 검사·키 교체·삭제/주소 제약·rollback·unknown |
-| 4c-1 (로컬 구현·검증) | CLI command HTTP adapter | 19개 명령·User/Agent·owner 강등/폐기·wire 검증·비밀 파일·기존 REST 결과 대조 |
-| 4c-2 (로컬 구현·검증) | MCP adapter | 같은 19개 명령·실제 HTTP/CLI 결과 대조·MCP 감사·owner·폐기·secret 로그 제외 |
+| 4c-1 (로컬 구현·검증) | CLI command HTTP adapter | 19개 명령·User 강등/폐기·wire 검증·비밀 파일·기존 REST 결과 대조 |
+| 4c-2 (로컬 구현·검증) | MCP adapter | 같은 19개 명령·실제 HTTP/CLI 결과 대조·MCP 감사·User role·폐기·secret 로그 제외 |
 | 5a (로컬 구현·검증) | 개인 토큰 로그인·현재 역할·개요/저장소 공통 명령 연결 | User 쿠키·CSRF·현재 권한·폐기·console 감사; 실제 HTTPS·fs/MinIO·반응형 |
-| 5b (로컬 구현·검증) | master 설정/복구·User/Agent/role/token UI | 실제 HTTPS 최초 설정·대상 복구·Agent 토큰 사용/폐기·마지막 Admin; 원문 한 번 표시·응답 불명·권한별 표시 |
+| 5b (로컬 구현·검증) | master 설정/복구·User/role/token UI | 실제 HTTPS 최초 설정·대상 복구·User 토큰 사용/폐기·마지막 Admin; 원문 한 번 표시·응답 불명·권한별 표시 |
 | 5c | 세션·관리 이력 UI | 조회 scope·cursor·상관 ID·secret 제외 |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
 
-기존 관리 token은 사람·Agent·role의 대상 매핑을 명시적으로 승인한 뒤 전환한다.
+기존 관리 token은 User·role의 대상 매핑을 명시적으로 승인한 뒤 전환한다.
 전체 replica의 인증 지원을 맞추고 이전 token/session 종료와 이관을 직렬화한다.
 이전 audit는 이전 방식의 기록으로 보존하며, 새 확정 변경 이벤트와 구분한다.
 각 단계는 코드·테스트·대응 spec을 함께 커밋하고 공개·운영 전환은 별도로 수행한다.

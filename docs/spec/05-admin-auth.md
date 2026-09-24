@@ -6,7 +6,7 @@
 - 후속 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 마스터 초기 설정·개인 토큰 로그인·콘솔 전용 신원 관리. 아래는 현재 구현 계약이다.
 - 새 권한·DB·CLI/MCP·감사 설계: [spec 08](08-management-plane.md). 브라우저 보안: [spec 07](07-browser-security.md).
 - 새 UI는 `/api/admin/identity/v1/session`과 `/api/admin/console-commands/v1`을 사용한다. 아래의 기존 인증과 쿠키·토큰을 공유하지 않는다.
-- 아래는 이전 UI·REST 인증 계약이다. 새 CLI는 [spec 04](04-cli.md)의 User/Agent 토큰과 공통 명령 API를 사용한다.
+- 아래는 이전 UI·REST 인증 계약이다. 새 CLI는 [spec 04](04-cli.md)의 User 토큰과 공통 명령 API를 사용한다.
 
 ## 자격증명 경계
 
@@ -94,7 +94,7 @@ HTTPS origin을 설정한다. 미설정이면 브라우저 로그인을 비활�
 | 새 버전 배포 | 기존 `FILEGATE_OPERATOR_TOKENS` 계속 사용, 기존 파일 API 유지 |
 | 모든 replica 업데이트 확인 | 구버전 서버를 종료하고 운영 접근·복구 경로 확인 |
 | `filegate admin init` | DB 인증 활성화, 환경변수 토큰 즉시 비활성 |
-| 이전 CLI의 토큰 교체 | 새 운영자 토큰을 `GROVE_OPERATOR_TOKEN` 또는 `--token-file`로 전달; 새 CLI는 별도 User/Agent 토큰 필요 |
+| 이전 CLI의 토큰 교체 | 새 운영자 토큰을 `GROVE_OPERATOR_TOKEN` 또는 `--token-file`로 전달; 새 CLI는 별도 User 토큰 필요 |
 | 정리 | 환경변수 운영자 토큰 제거; 마스터 키는 유지 |
 
 초기화 전 환경변수 토큰은 관리 API Bearer 호환만 제공한다. 브라우저 로그인에는
@@ -126,7 +126,7 @@ DB 토큰을 사용한다. 초기화 이후 구버전으로 롤백하면 환경�
 | 최초 설정 | 로컬 명령으로 관리자 토큰 발급 | 설정 master → 제한된 콘솔 설정 세션 → 첫 Admin |
 | 사람 로그인 | 공통 관리자 토큰 → 세션 | 개인 토큰 → 명명된 User 세션 |
 | 역할 | 공통 관리자 | viewer / operator / admin |
-| 자동화 | 관리자 토큰에 이름 지정 | User 소유 Agent와 토큰 |
+| 자동화 | 관리자 토큰에 이름 지정 | User의 용도별 토큰 |
 | 신원 관리 | 서버 로컬 명령 | 콘솔 세션 전용; CLI/MCP는 자원 관리만 제공 |
 | 복구 | 로컬 명령으로 전체 토큰 재발급 | 설정 master로 대상 Admin 접근 복구 |
 | 감사 | HTTP intent + status | 확정 변경 audit + 관리 호출 + 보안 이벤트 |

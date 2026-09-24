@@ -19,7 +19,7 @@ The separate on-demand connection test is still pending.
 |---|---|---|
 | Personal token login, Overview, Storage CRUD | Implemented | Implemented; browser sessions and Bearer remain separate |
 | Master setup/recovery | Implemented | Console-only identity API implemented |
-| User, Agent, management tokens | Implemented; Admin only | Console-only identity API implemented |
+| User, management tokens | Implemented; Admin only | Console-only identity API implemented |
 | Client, Native keys, S3 credentials | Pending | Shared resource commands implemented in API, CLI and MCP |
 | Sessions, management audit/call/security history | Pending | Console-only scoped APIs implemented |
 | On-demand storage connection test | Pending | New shared command required; `gscli status` reads metadata |
@@ -44,7 +44,7 @@ Grove Storage
 │       ├── Overview   assigned storage / usage
 │       ├── Keys       Native keys / S3 credentials
 │       └── Logs       runtime file requests / observed results
-├── Access        Users / Agents / management tokens (Admin only)
+├── Access        Users / management tokens (Admin only)
 ├── Activity      scoped management history
 │   ├── Audit     committed management changes
 │   ├── Calls     Console / CLI / MCP management invocations
@@ -55,13 +55,13 @@ Entry screens    User sign-in / Master setup / recovery
 Header           theme / sign out
 ```
 
-User and Agent identify management callers. Client identifies a runtime consumer;
+User identifies the management account; credential_id identifies each token. Client identifies a runtime consumer;
 its Native/S3 keys and file access logs remain separate from management tokens/audit.
 
 | Section | Boundary |
 |---|---|
 | Clients | App identity, assigned storage, file ownership, usage and service keys; Logs is runtime file history |
-| Access | Admin-managed Users, owned automation Agents, roles, management token issuance/revocation; separate from future Storage Node agents |
+| Access | Admin-managed Users, roles, management token issuance/revocation; separate from future Storage Node agents |
 | Activity | Audit / Calls / Security under existing actor/owner scopes; classify by operation, not transport |
 | Settings | Personal appearance and own browser sessions; system information is allowlisted and read-only initially |
 
@@ -80,7 +80,7 @@ This section specifies the next contract; no test command/button is implemented 
 |---|---|
 | Entry points | **Test connection** in Storage detail and registration/replacement form |
 | Shared command | `storage.test` through the same Console, CLI and MCP executor; input selects registered ID or draft fields |
-| Permissions | Operator/Admin resource permission, rechecked on each call; User/Agent ownership limits remain effective |
+| Permissions | Operator/Admin resource permission, rechecked on each call; User role limits remain effective |
 | Saved storage | Resolve provider credentials on the server; return checks without secret values |
 | Draft fields | Probe without saving registry metadata; clear submitted secrets; allow registering only through the existing mutation |
 | S3 baseline | Internal endpoint `HeadBucket` and `ListMultipartUploads`, matching current registration checks |
@@ -95,7 +95,7 @@ This section specifies the next contract; no test command/button is implemented 
 | Order | Deliverable | Acceptance |
 |---|---|---|
 | 0 (Implemented) | S3-only admission | Console/API/CLI/MCP reject FS create/replace; legacy FS runtime retained. Inventory and migration/rollback remain before runtime removal |
-| 1 (Implemented) | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User/Agent tokens; last-Admin and one-time-secret safeguards |
+| 1 (Implemented) | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User tokens; last-Admin and one-time-secret safeguards |
 | 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
 | 3 | Shared connection test | Saved/draft S3 probes via API, Console, CLI and MCP; real MinIO failures plus permission/timeout/concurrency tests |
 | 4 | Activity and Settings | Scoped queries, server-side Client filter, cursor paging, own-session revocation and separation from Client file logs |
@@ -143,14 +143,14 @@ are not required for these screens.
 ## 로그인·토큰 관리 전환
 
 [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 개인 토큰 로그인·역할 표시·자원 연결을 구현했다.
-최초 설정/복구·User/Agent·관리 토큰 UI를 구현했다. 세션 목록·이력 UI는 후속이다.
+최초 설정/복구·User·관리 토큰 UI를 구현했다. 세션 목록·이력 UI는 후속이다.
 권한·DB·전환 순서는 [관리 영역 설계](08-management-plane.md)를 따른다.
 
 | Access flow | Current UI contract |
 |---|---|
 | Initial setup | Master token opens a limited setup session; first Admin token is shown once; User login is a separate step |
 | Recovery | Known active Admin UUID and explicit confirmation replace that Admin's tokens and revoke its sessions |
-| Accounts | Cursor-paged Users/Agents; create, change role, enable/disable and delete; Agent owner is selected from loaded active Users |
+| Accounts | Cursor-paged Users; create, change role, enable/disable and delete; named tokens share the User role |
 | Tokens | Label, prefix, expiry and status; issue with 1–90 day expiry, copy once, acknowledge before closing; revoke with confirmation |
 | Safety | Server enforces last-Admin and owner/role rules; disable/delete require the account name; unknown outcomes block resubmission |
 | Paging | Search filters loaded accounts; Load more fetches the next server page |
@@ -159,15 +159,14 @@ are not required for these screens.
 초기 설정 / 복구         master → 제한된 설정·복구 세션
 로그인                  개인 관리 토큰 → User 세션
 설정 / 접근 관리         Admin 전용
-├── 사용자              생성 · 역할 · 활성 상태 · 개인 토큰
-└── 관리 Agent          소유 User · 역할 · 활성 상태 · Agent 토큰
+└── 사용자              생성 · 역할 · 활성 상태 · 용도별 토큰
 내 세션                 조회 · 종료
 활동 이력               관리 변경 / 관리 호출 / 보안 이벤트
 ```
 
 토큰 목록은 이름·접두사·만료·상태를 표시한다. 발급 결과에서 원문을 한 번
-표시하고 닫을 때 제거한다. User 토큰은 사람 로그인·자원 API 사용, Agent 토큰은 자동화에 사용한다.
-`gscli`·MCP는 둘 다 전달할 수 있으며 자원 작업만 제공한다. 신원·관리 토큰·감사 조회 API는
+표시하고 닫을 때 제거한다. User 토큰은 콘솔 로그인과 CLI/MCP에 사용한다. 용도별 label과 credential_id로 기록·폐기를 구분한다.
+`gscli`·MCP는 같은 User 토큰을 전달하며 자원 작업만 제공한다. 신원·관리 토큰·감사 조회 API는
 사람의 콘솔 세션과 역할로 보호한다. Admin Bearer도 이 경계를 대신하지 않는다.
 Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한다. 전체 보안 이력은 Admin 전용이다.
 클라이언트 화면에서 제공할 Native/S3 키는 파일 서비스 자격증명으로 구분한다.
@@ -196,8 +195,8 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 |---|---|---|
 | A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
 | B (구현) | 저장소 조회·등록·교체·삭제 | 실제 MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
-| 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·Agent 로그인 거부·console 감사 |
-| 5b (구현) | master 설정·복구·User/Agent·관리 토큰 UI | 실제 HTTPS 최초 설정·대상 복구·Agent 토큰 사용/폐기·마지막 Admin; 응답 불명·중복 제출·권한 변경·반응형 |
+| 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·토큰별 로그인·console 감사 |
+| 5b (구현) | master 설정·복구·User·관리 토큰 UI | 실제 HTTPS 최초 설정·대상 복구·User 토큰 사용/폐기·마지막 Admin; 응답 불명·중복 제출·권한 변경·반응형 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
 | 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 S3 probe, 권한·timeout·비밀 보호 |
 | 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
@@ -213,12 +212,12 @@ frontend/web/src/     현재 구현
 ├── auth/             세션·로그인·master 설정/복구·401 캐시 제거
 ├── design/           테마·모달·용량 표시
 └── features/
-    ├── access/       User/Agent·역할·관리 토큰·일회성 비밀 표시
+    ├── access/       User·역할·관리 토큰·일회성 비밀 표시
     ├── overview/     개요·저장소 점유
     └── storages/     목록·상세·폼·삭제·입력 변환
 ```
 
-현재 셸은 `app/App.tsx`가 소유한다. 저장소 목록·상세와 Access Users/Agents 탭은 해시 경로를 사용한다.
+현재 셸은 `app/App.tsx`가 소유한다. 저장소 목록·상세와 Access Users 목록은 해시 경로를 사용한다.
 Access 계정 선택은 컴포넌트 상태이며 새로고침하면 해당 탭의 목록으로 돌아간다.
 등록·수정 입력은 폼에 두며 변경 요청의 secret은 query/mutation 캐시에 넣지 않는다.
 응답 유실·계약 불일치·`unknown/applied` 오류는 재제출을 잠근 뒤 조회로 대조한다.

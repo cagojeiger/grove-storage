@@ -18,15 +18,12 @@ class Management:
         self.user_id = self.request("POST", "/accounts", {
             "kind": "user", "role": "operator", "display_name": "CLI operator",
         }, expected=201)["account_id"]
-        self.user_token = self.request("POST", f"/accounts/{self.user_id}/credentials", {
+        personal = self.request("POST", f"/accounts/{self.user_id}/credentials", {
             "label": "cli-user", "expires_in_days": 1,
-        }, expected=201)["token"]
-        self.agent_id = self.request("POST", "/accounts", {
-            "kind": "agent", "role": "operator", "display_name": "CLI agent",
-            "owner_user_id": self.user_id,
-        }, expected=201)["account_id"]
-        issued = self.request("POST", f"/accounts/{self.agent_id}/credentials", {
-            "label": "cli-agent", "expires_in_days": 1,
+        }, expected=201)
+        self.user_token, self.personal_credential_id = personal["token"], personal["credential_id"]
+        issued = self.request("POST", f"/accounts/{self.user_id}/credentials", {
+            "label": "cli-automation", "expires_in_days": 1,
         }, expected=201)
         self.token, self.credential_id = issued["token"], issued["credential_id"]
 
@@ -54,11 +51,16 @@ class Management:
             except urllib.error.HTTPError as error:
                 assert error.code in (401, 403)
             else:
-                raise AssertionError("Agent bearer entered console-only identity boundary")
+                raise AssertionError("User bearer entered console-only identity boundary")
         audit = self.request("GET", "/history/audit?limit=100")
-        events = [item for item in audit["items"] if item["context"].get("actor_id") == self.agent_id]
+        events = [item for item in audit["items"] if item["context"].get("credential_id") == self.credential_id]
         assert events and any(item["action"] == "storage.create" for item in events)
         assert all(item["context"]["surface"] == "resource_api" for item in events)
+        assert all(item["context"]["actor_id"] == self.user_id for item in events)
+        calls = self.request("GET", "/history/invocations?limit=100")
+        token_ids = {item["context"]["credential_id"] for item in calls["items"]
+                     if item["context"].get("actor_id") == self.user_id}
+        assert {self.personal_credential_id, self.credential_id} <= token_ids
         text = json.dumps(audit)
         assert self.token not in text and self.user_token not in text
         self.request("PATCH", f"/accounts/{self.user_id}", {"operation": "role", "role": "viewer"})
@@ -66,4 +68,5 @@ class Management:
         run(["client", "create", "blocked", "--storage", "cli-test-fs"], self.token, 3)
         self.request("DELETE", f"/credentials/{self.credential_id}")
         run(["status"], self.token, 3)
-        print("PASS real User/Agent CLI authentication, console isolation, audit actor, owner cap, and revocation")
+        run(["status"], self.user_token, 0)
+        print("PASS real named User token CLI authentication, console isolation, audit actor, User role, and revocation")

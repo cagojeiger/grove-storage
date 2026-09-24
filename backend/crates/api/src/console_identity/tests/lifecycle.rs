@@ -105,22 +105,9 @@ async fn login_current_logout_and_secret_free_correlated_history(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn agents_invalid_credentials_and_expiry_never_become_console_users(pool: PgPool) {
+async fn invalid_credentials_and_expiry_never_become_console_users(pool: PgPool) {
     let (user, _, _) = account(&pool, Role::Operator).await;
-    let agent = db::create_account(
-        &pool,
-        &context(),
-        db::NewAccount::Agent {
-            display_name: "agent",
-            role: grove_management_policy::AgentRole::Operator,
-            owner_user_id: user,
-        },
-    )
-    .await
-    .unwrap();
-    let (_, agent_token) = credential(&pool, agent).await;
     for token in [
-        agent_token,
         format!("gsm_{}", filegate_core::generate_url_secret()),
         format!("fgop_{}", filegate_core::generate_url_secret()),
         String::new(),

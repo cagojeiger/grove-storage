@@ -32,18 +32,17 @@ async fn revocation_and_login_are_serialized(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn agents_cannot_login_and_disabled_users_cannot_resume_old_sessions(pool: PgPool) {
+async fn tokens_can_login_and_disabled_users_cannot_resume_old_sessions(pool: PgPool) {
     bootstrap(&pool).await;
     let owner = user(&pool, Role::Operator).await;
-    let agent = agent(&pool, owner).await;
-    db::issue_credential(&pool, &context(), agent, &key(&hash(2)))
+    db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
         .await
         .unwrap();
     assert!(
         db::create_session(&pool, Uuid::new_v4(), &hash(2), &hash(10))
             .await
             .unwrap()
-            .is_none()
+            .is_some()
     );
     db::issue_credential(&pool, &context(), owner, &key(&hash(3)))
         .await

@@ -14,14 +14,14 @@ below to test authentication and the real API.
 The sample preview starts signed out. Use `qwer1234` in **Personal token**.
 This fixed demo token and process-wide sample session are only for the loopback
 preview; production uses DB-backed User credentials and browser sessions.
-The preview includes Admin-only Access with sample Users/Agents and token lifecycle.
+The preview includes Admin-only Access with sample Users and token lifecycle.
 Its setup/recovery entry accepts the same demo master token and starts initialized.
 The real fixture below verifies first-Admin bootstrap against an empty database.
 
 | Implemented | Follow-up |
 |---|---|
 | Personal User token login/logout, current role, session restore and 401 handling | Own-session and management history screens |
-| Master setup/recovery, Admin-only Users/Agents, roles, enable/disable/delete, token issue/revoke | Account rename and owner transfer require separate backend contracts |
+| Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Account rename requires a separate backend contract |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Client detail and key lifecycle |
 | API readiness, client count, per-storage usage | Usage history and client detail |
 | Backend access checks during real storage registration/replacement | On-demand **Test connection** command and UI; sample preview performs no probes |
@@ -80,7 +80,7 @@ token to issue the first Admin's personal token. Save it, then sign in separatel
 Recovery requires an existing active Admin UUID and explicit confirmation; it replaces
 that Admin's tokens and revokes its sessions. The browser fixture verifies both flows
 against a disposable DB; `--serve` pre-creates a User token for manual checks.
-Legacy operator and Agent tokens do not log
+Legacy operator tokens do not log
 into the console. The default UI port is 5173; an occupied port fails instead of
 silently changing the allowed origin. Override with `-- --port PORT` and update the origin.
 
@@ -121,14 +121,14 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/storage-crud.spec.ts` | All S3 options, complete replacement, legacy FS editing guard, ID confirmation, navigation |
 | `tests/storage-safety.spec.ts` | 409, 401, lost response, secret clearing, duplicate submit guard |
 | `tests/storage-layout.spec.ts` | List/detail/editor across five widths and both themes; focus restoration |
-| `tests/access.spec.ts` | User/Agent creation, roles, last-Admin conflict, one-time token issuance/revocation and paging |
+| `tests/access.spec.ts` | User creation, roles, last-Admin conflict, one-time token issuance/revocation and paging |
 | `tests/access-safety.spec.ts` | Role loss, expired sessions, duplicate submission and issued-token account correlation |
 | `tests/access-layout.spec.ts` | Account detail and token dialog across five widths and both themes |
 | `tests/master-setup.spec.ts` | Separate master/User sessions, initial setup, targeted recovery and unknown outcomes |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
-| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Viewer enforcement, Agent login rejection and Console audit |
-| `tests/live-access.mjs` via Python fixture | Real first-Admin bootstrap, User/Agent lifecycle, token use/revocation, last-Admin protection and targeted master recovery |
+| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Viewer enforcement, named User token login and Console audit |
+| `tests/live-access.mjs` via Python fixture | Real first-Admin bootstrap, User lifecycle, token use/revocation, last-Admin protection and targeted master recovery |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
 Run `npm run build` before `npm test`: the browser security suite serves `dist` on
@@ -140,5 +140,5 @@ in browser storage or the query/mutation cache. Capacity input is limited to exa
 JSON integers (0 through 2^53-1 bytes); the backend's wider i64 contract is unchanged.
 Issued management tokens stay in component state only. Closing requires an explicit
 saved-token acknowledgement; the token is then discarded. Access search filters
-loaded pages; **Load more** fetches the next server page. User/Agent identity actions
+loaded pages; **Load more** fetches the next server page. User identity actions
 use console-only APIs, separate from resource commands available to CLI/MCP.

@@ -11,17 +11,13 @@ import { useAction } from "./useAction";
 
 export type AccountAction = "create" | "role" | "active" | "delete";
 export function AccountDialog({
-  kind,
   account,
   action,
-  owners,
   onClose,
   onSaved,
 }: {
-  kind: "user" | "agent";
   account?: Account;
   action: AccountAction;
-  owners: Account[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -29,7 +25,7 @@ export function AccountDialog({
   const [confirmation, setConfirmation] = useState("");
   const title =
     action === "create"
-      ? `Create ${kind}`
+      ? "Create user"
       : action === "role"
         ? "Change role"
         : action === "delete"
@@ -48,12 +44,9 @@ export function AccountDialog({
         await identityRequest("/accounts", isCreated, {
           method: "POST",
           body: JSON.stringify({
-            kind,
+            kind: "user",
             display_name: field(data, "display_name").trim(),
             role: data.get("role"),
-            ...(kind === "agent"
-              ? { owner_user_id: data.get("owner_user_id") }
-              : {}),
           }),
         });
       } else if (account) {
@@ -103,40 +96,19 @@ export function AccountDialog({
               >
                 <option value="viewer">Viewer</option>
                 <option value="operator">Operator</option>
-                {kind === "user" && <option value="admin">Admin</option>}
-              </select>
-            </label>
-          )}
-          {action === "create" && kind === "agent" && (
-            <label>
-              Owner
-              <select
-                name="owner_user_id"
-                aria-label="Owner"
-                required
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select user
-                </option>
-                {owners.map((owner) => (
-                  <option key={owner.id} value={owner.id}>
-                    {owner.display_name} ({owner.id})
-                  </option>
-                ))}
+                <option value="admin">Admin</option>
               </select>
             </label>
           )}
           {action === "delete" && (
             <p className="full-field danger">
-              Account tokens will be revoked. Deleting a User also revokes its
-              Agents' tokens.
+              All tokens and sessions belonging to this User will be revoked.
             </p>
           )}
           {action === "active" && account?.is_active && (
             <p className="full-field danger">
-              Access is suspended. User sessions are revoked and owned Agents
-              lose access.
+              Access is suspended for all of this User's tokens. Existing
+              sessions are revoked.
             </p>
           )}
           {dangerous && (

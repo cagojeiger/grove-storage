@@ -14,11 +14,6 @@ pub enum AuditActor {
         credential_id: Uuid,
         session_id: Option<Uuid>,
     },
-    Agent {
-        id: Uuid,
-        owner_user_id: Uuid,
-        credential_id: Uuid,
-    },
 }
 
 #[derive(Clone, Copy)]
@@ -55,17 +50,6 @@ pub(super) fn columns(actor: Option<AuditActor>) -> ActorColumns {
             owner: None,
             credential: Some(credential_id),
             session: session_id,
-        },
-        Some(AuditActor::Agent {
-            id,
-            owner_user_id,
-            credential_id,
-        }) => ActorColumns {
-            kind: "agent",
-            actor: Some(id),
-            owner: Some(owner_user_id),
-            credential: Some(credential_id),
-            session: None,
         },
         None => ActorColumns {
             kind: "anonymous",

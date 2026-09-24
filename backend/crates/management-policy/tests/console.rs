@@ -29,12 +29,12 @@ fn console_matrix_preserves_role_and_query_scope() {
             ),
             (
                 Action::ReadAuditHistory,
-                Ok(Scope::SelfAndOwnedAgents),
+                Ok(Scope::SelfOnly),
                 Ok(Scope::Installation),
             ),
             (
                 Action::ReadInvocationHistory,
-                Ok(Scope::SelfAndOwnedAgents),
+                Ok(Scope::SelfOnly),
                 Ok(Scope::Installation),
             ),
             (

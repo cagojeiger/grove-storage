@@ -5,13 +5,6 @@ pub enum Role {
     Admin,
 }
 
-/// Agents cannot hold the identity-administration role.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentRole {
-    Viewer,
-    Operator,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccountState {
     Active,
@@ -31,16 +24,7 @@ pub enum CredentialState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Actor {
-    User {
-        role: Role,
-        state: AccountState,
-    },
-    Agent {
-        role: AgentRole,
-        state: AccountState,
-        owner_role: Role,
-        owner_state: AccountState,
-    },
+    User { role: Role, state: AccountState },
     Master,
 }
 

@@ -13,14 +13,14 @@ use uuid::Uuid;
 async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: PgPool) {
     let admin = owner(&pool).await;
     let viewer = operator(&pool, Role::Viewer, 2).await;
-    let own_agent = agent(&pool, viewer.account).await;
+    let own_agent = user(&pool, Role::Viewer).await;
     let agent_key = db::issue_credential(&pool, &context(), own_agent, &key(&hash(3)))
         .await
         .unwrap();
     let ctx = AuditContext {
-        actor: AuditActor::Agent {
+        actor: AuditActor::User {
             id: own_agent,
-            owner_user_id: viewer.account,
+            session_id: None,
             credential_id: agent_key.id,
         },
         request_id: Uuid::new_v4(),
@@ -30,7 +30,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     db::create_account(
         &pool,
         &ctx,
-        NewAccount::User {
+        NewAccount {
             display_name: "historic-target",
             role: Role::Viewer,
         },
@@ -47,11 +47,22 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     )
     .await
     .unwrap();
+    // Preserve the pre-unification owner snapshot independently of live accounts.
+    for table in ["audit_events", "command_invocations"] {
+        sqlx::query(&format!(
+            "UPDATE management.{table} SET actor_kind='agent',owner_user_id=$1 WHERE request_id=$2"
+        ))
+        .bind(viewer.account)
+        .bind(ctx.request_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
     let foreign = context();
     db::create_account(
         &pool,
         &foreign,
-        NewAccount::User {
+        NewAccount {
             display_name: "foreign-target",
             role: Role::Viewer,
         },
@@ -64,7 +75,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         .execute(&mut *tx)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM management.agents WHERE account_id=$1")
+    sqlx::query("DELETE FROM management.users WHERE account_id=$1")
         .bind(own_agent)
         .execute(&mut *tx)
         .await

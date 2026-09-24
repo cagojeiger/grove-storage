@@ -1,4 +1,4 @@
-use crate::{AccountState, Actor, AgentRole, AuthMethod, Caller, CredentialState, Role, Surface};
+use crate::{AccountState, Actor, AuthMethod, Caller, CredentialState, Role, Surface};
 
 /// Management operations only; runtime Client file access has a separate policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +24,6 @@ pub enum Action {
 pub enum Scope {
     Installation,
     SelfOnly,
-    SelfAndOwnedAgents,
     SetupRecovery,
 }
 
@@ -33,7 +32,6 @@ pub enum Scope {
 pub enum Denial {
     InvalidCredential,
     InactiveAccount,
-    InactiveOwner,
     InvalidAuthenticationContext,
     ConsoleSessionRequired,
     InsufficientRole,
@@ -55,7 +53,7 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
             AuthMethod::UserSession,
             Surface::Console
         ) | (
-            Actor::User { .. } | Actor::Agent { .. },
+            Actor::User { .. },
             AuthMethod::ManagementToken,
             Surface::Cli | Surface::Mcp | Surface::ResourceApi
         ) | (Actor::Master, AuthMethod::MasterSession, Surface::Console)
@@ -93,7 +91,7 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
             require_console_session(caller)?;
             Ok(match role {
                 Role::Admin => Scope::Installation,
-                Role::Viewer | Role::Operator => Scope::SelfAndOwnedAgents,
+                Role::Viewer | Role::Operator => Scope::SelfOnly,
             })
         }
         Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
@@ -115,21 +113,6 @@ fn effective_role(actor: Actor) -> Result<Option<Role>, Denial> {
         Actor::User { role, state } => {
             require_active(state)?;
             Ok(Some(role))
-        }
-        Actor::Agent {
-            role,
-            state,
-            owner_role,
-            owner_state,
-        } => {
-            require_active(state)?;
-            if owner_state != AccountState::Active {
-                return Err(Denial::InactiveOwner);
-            }
-            Ok(Some(match (role, owner_role) {
-                (AgentRole::Viewer, _) | (_, Role::Viewer) => Role::Viewer,
-                (AgentRole::Operator, Role::Operator | Role::Admin) => Role::Operator,
-            }))
         }
     }
 }

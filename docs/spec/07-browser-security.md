@@ -24,7 +24,7 @@ console.example.com               data.example.com
 | 진입 호스트 예시 | 앞단·서버 인증 | 경로 제한 |
 |---|---|---|
 | console.example.com | OAuth2 Proxy + Grove User 세션 | 콘솔·세션·신원·관리 자원·감사 API; master는 설정/복구 경로만 |
-| api.example.com | User/Agent Bearer; 대화형 OAuth 로그인 없음 | 자원 CLI/MCP/API만; 신원·감사·세션 발급 경로 제외 |
+| api.example.com | User Bearer; 대화형 OAuth 로그인 없음 | 자원 CLI/MCP/API만; 신원·감사·세션 발급 경로 제외 |
 | data.example.com | 기존 Client key / SigV4 / 발급 URL | 기존 데이터 경로만 |
 
 호스트 허용 목록뿐 아니라 backend가 자격증명 종류와 작업 권한을 검사한다.
@@ -55,7 +55,7 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 | 렌더링 | 외부 문자열은 React text로 표시 | 현행 화면; 향후 파일 미리보기는 데이터 origin 사용 |
 | 세션 종료 | 서버 세션 폐기, 진행 중 조회 취소, 비공개 캐시 제거 | 현행 로그아웃·401 테스트 |
 | 여러 탭·뒤로 가기 | logout/토큰 폐기/역할 변경 후 재검증, 복원 시 세션 확인 후 비공개 화면 표시 | 인증 전환 시 구현·검증 |
-| 일회성 토큰 | 발급 직후 한 번 표시, 닫기·세션 종료 시 제거 | User/Agent 토큰 UI 구현 시 검증 |
+| 일회성 토큰 | 발급 직후 한 번 표시, 닫기·세션 종료 시 제거 | 일회성 표시·보관 확인·닫기·브라우저 비저장 검증 |
 
 ## 문서 응답 헤더
 
@@ -78,7 +78,7 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 로컬 HTTP 샘플 서버는 인증을 모사한다. 새 User 세션의 브라우저 근거는 HTTPS fixture다.
 새 User/master 세션과 신원/이력 API는 PG+HTTP 라우터로 검증했다.
 신원 변경은 Admin User 세션으로 제한하며 Bearer/master·cross-origin 요청의 거부를 확인한다.
-새 User 쿠키·CSRF·폐기·역할 강등·Agent 로그인 거부는 실제 HTTPS UI에서 검증했다.
+새 User 쿠키·CSRF·폐기·역할 강등·용도별 User 토큰 로그인는 실제 HTTPS UI에서 검증했다.
 
 ## master·개인 토큰 로그인 완료 조건 (설계)
 
@@ -86,11 +86,11 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 |---|---|
 | 최초 설정 | master 설정 세션으로 첫 Admin 생성; 동시 초기화 테스트 |
 | 로그인 | 공통 실패 응답·공유 rate limit; 인증 성공 시 새 세션 발급 |
-| 폼 | master/개인 토큰 입력·붙여넣기, 로그인 완료 시 원문 제거; Agent 토큰 로그인 거부 |
+| 폼 | master/개인 토큰 입력·붙여넣기, 로그인 제출 시 원문 제거; 활성 User 토큰 로그인 |
 | 폐기 | 원본 개인 토큰 폐기 후 연결 세션 거부; 계정 비활성화·역할 변경 즉시 후속 요청에 반영 |
 | 분실 복구 | 별도 master 복구 흐름·명시적 대상/영향 확인; 설정 세대 변경 시 master 세션 무효화 |
 | 세션 관리 | 목록·현재 세션 표시·개별/전체 종료; 세션 원문 조회 대신 공개 ID 사용 |
-| 권한 | User/Agent·role·진입 경계를 서버에서 집행; Admin Bearer의 신원 API 호출도 거부 |
+| 권한 | User·role·진입 경계를 서버에서 집행; Admin Bearer의 신원 API 호출도 거부 |
 | master 제한 | 설정/복구 세션으로 일반 자원·이력 API 호출 거부 |
 
 ## 검증과 남은 범위

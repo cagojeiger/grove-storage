@@ -8,52 +8,30 @@ use support::*;
 use uuid::Uuid;
 
 #[sqlx::test(migrations = "./migrations")]
-async fn every_account_requires_exactly_its_matching_subtype(pool: PgPool) {
+async fn schema_accepts_only_users_and_preserves_user_fk(pool: PgPool) {
     let mut tx = pool.begin().await.unwrap();
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','orphan','viewer')").bind(id).execute(&mut *tx).await.unwrap();
     assert!(tx.commit().await.is_err());
-    let (owner, _) = bootstrap(&pool).await;
-    assert!(
-        sqlx::query("INSERT INTO management.agents(account_id,owner_user_id) VALUES($1,$1)")
-            .bind(owner)
-            .execute(&pool)
+    bootstrap(&pool).await;
+    assert!(sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'agent','rejected','viewer')").bind(Uuid::new_v4()).execute(&pool).await.is_err());
+    let agents: Option<String> =
+        sqlx::query_scalar("SELECT to_regclass('management.agents')::text")
+            .fetch_one(&pool)
             .await
-            .is_err()
-    );
-    let agent = agent(&pool, owner).await;
-    assert!(
-        sqlx::query("INSERT INTO management.users(account_id) VALUES($1)")
-            .bind(agent)
-            .execute(&pool)
-            .await
-            .is_err()
-    );
-    assert!(
-        sqlx::query("UPDATE management.agents SET owner_user_id=$1 WHERE account_id=$1")
-            .bind(agent)
-            .execute(&pool)
-            .await
-            .is_err()
-    );
-    assert!(
-        sqlx::query("UPDATE management.accounts SET role='admin' WHERE id=$1")
-            .bind(agent)
-            .execute(&pool)
-            .await
-            .is_err()
-    );
+            .unwrap();
+    assert!(agents.is_none());
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn session_fk_rejects_cross_user_and_agent_credentials(pool: PgPool) {
+async fn session_fk_rejects_cross_user_credentials(pool: PgPool) {
     let (owner, credential) = bootstrap(&pool).await;
     let other = user(&pool, Role::Viewer).await;
-    let agent = agent(&pool, owner).await;
-    let agent_key = db::issue_credential(&pool, &context(), agent, &key(&hash(2)))
+    let automation_user = owner;
+    let token_key = db::issue_credential(&pool, &context(), automation_user, &key(&hash(2)))
         .await
         .unwrap();
-    for (user_id, credential_id) in [(other, credential.id), (agent, agent_key.id)] {
+    for (user_id, credential_id) in [(other, credential.id), (other, token_key.id)] {
         assert!(sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,credential_id,expires_at) VALUES($1,$2,'token',$3,$4,clock_timestamp()+interval '1 hour')")
             .bind(Uuid::new_v4()).bind(hash(10)).bind(user_id).bind(credential_id).execute(&pool).await.is_err());
     }

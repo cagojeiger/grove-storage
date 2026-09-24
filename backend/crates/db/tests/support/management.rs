@@ -52,23 +52,9 @@ pub async fn user(pool: &PgPool, role: grove_management_policy::Role) -> Uuid {
     db::create_account(
         pool,
         &context(),
-        db::NewAccount::User {
+        db::NewAccount {
             display_name: "User",
             role,
-        },
-    )
-    .await
-    .unwrap()
-}
-
-pub async fn agent(pool: &PgPool, owner: Uuid) -> Uuid {
-    db::create_account(
-        pool,
-        &context(),
-        db::NewAccount::Agent {
-            display_name: "Agent",
-            role: grove_management_policy::AgentRole::Operator,
-            owner_user_id: owner,
         },
     )
     .await

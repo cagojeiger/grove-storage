@@ -6,11 +6,11 @@
 |---|---|
 | CLI 패키지·실행 파일 | `gscli` (Grove Storage CLI) |
 | 서버·이미지·저장소 | `filegate` 유지 |
-| CLI 연결 | `GROVE_ENDPOINT`, `GROVE_TOKEN`, `--token-file`; `GROVE_OPERATOR_TOKEN`은 새 User/Agent 토큰의 변수명 alias |
+| CLI 연결 | `GROVE_ENDPOINT`, `GROVE_TOKEN`, `--token-file`; `GROVE_OPERATOR_TOKEN`은 새 User 토큰의 변수명 alias |
 | 배포 채널 | `cagojeiger/filegate` GitHub Releases의 독립 실행 파일 |
 | 패키지 버전 | 서버·CLI가 workspace의 `MAJOR.MINOR.PATCH`를 공유 |
 | 버전 정합성 | `VERSION` = `Cargo.toml` workspace = 내부 패키지 `Cargo.lock` |
-| API 호환성 | `/api/admin/commands/v1` protocol 1과 User/Agent 인증 지원 필요; 서버·CLI 버전 숫자의 일치와 별개, 이전 서버에는 이전 CLI 사용 |
+| API 호환성 | `/api/admin/commands/v1` protocol 1과 User 인증 지원 필요; 서버·CLI 버전 숫자의 일치와 별개, 이전 서버에는 이전 CLI 사용 |
 | JSON 출력 | CLI envelope의 `schema_version: 1`로 별도 관리 |
 | 업데이트 | `gscli update`로 최신 안정 버전 설치; `update --check`는 확인만 수행 |
 | 버전 고정·이전 버전 | 설치 스크립트의 `--version X.Y.Z`로 명시적 재설치 |

@@ -70,7 +70,7 @@ pub(super) async fn run(
 fn history_scope(scope: Scope, user: Uuid) -> Result<HistoryScope, Error> {
     match scope {
         Scope::Installation => Ok(HistoryScope::Installation),
-        Scope::SelfAndOwnedAgents => Ok(HistoryScope::UserAndAgents(user)),
+        Scope::SelfOnly => Ok(HistoryScope::User(user)),
         _ => Err(Error::InvalidInput),
     }
 }

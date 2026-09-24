@@ -3,7 +3,6 @@ import { randomBytes, randomUUID } from "node:crypto";
 // Loopback sample data only. The real API owns authentication and authorization.
 export function previewIdentity(json) {
   const owner = randomUUID();
-  const agent = randomUUID();
   const accounts = new Map([
     [
       owner,
@@ -14,19 +13,6 @@ export function previewIdentity(json) {
         role: "admin",
         is_active: true,
         deleted_at: null,
-        owner_user_id: null,
-      },
-    ],
-    [
-      agent,
-      {
-        id: agent,
-        kind: "agent",
-        display_name: "Backup agent",
-        role: "operator",
-        is_active: true,
-        deleted_at: null,
-        owner_user_id: owner,
       },
     ],
   ]);
@@ -176,20 +162,10 @@ export function previewIdentity(json) {
       else if (path === "/accounts" && method === "POST") {
         if (
           !body.display_name?.trim() ||
-          !["user", "agent"].includes(body.kind) ||
-          ![
-            "viewer",
-            "operator",
-            ...(body.kind === "user" ? ["admin"] : []),
-          ].includes(body.role)
+          body.kind !== "user" ||
+          !["viewer", "operator", "admin"].includes(body.role)
         )
           fail(400, "invalid_input");
-        else if (
-          body.kind === "agent" &&
-          (!accounts.get(body.owner_user_id)?.is_active ||
-            accounts.get(body.owner_user_id)?.kind !== "user")
-        )
-          fail(409, "conflict");
         else {
           const id = randomUUID();
           accounts.set(id, {
@@ -197,7 +173,6 @@ export function previewIdentity(json) {
             ...body,
             is_active: true,
             deleted_at: null,
-            owner_user_id: body.owner_user_id ?? null,
           });
           json(res, 201, { account_id: id });
         }
@@ -251,10 +226,7 @@ export function previewIdentity(json) {
               account.deleted_at = new Date().toISOString();
               account.is_active = false;
               for (const key of credentials.values())
-                if (
-                  key.account_id === account.id ||
-                  accounts.get(key.account_id)?.owner_user_id === account.id
-                )
+                if (key.account_id === account.id)
                   key.revoked_at = new Date().toISOString();
             } else if (body.operation === "role") account.role = body.role;
             else if (body.operation === "active") {

@@ -12,7 +12,7 @@ use uuid::Uuid;
 fn commands(target: Uuid, key_hash: &str) -> Vec<(Command<'_>, bool)> {
     vec![
         (
-            Command::CreateAccount(NewAccount::User {
+            Command::CreateAccount(NewAccount {
                 display_name: "created",
                 role: Role::Viewer,
             }),
@@ -215,7 +215,7 @@ async fn waiting_mutation_rechecks_role_after_lock_acquisition(pool: PgPool) {
             &task_pool,
             Proof::Session(&login.session),
             Surface::Console,
-            Command::CreateAccount(NewAccount::User {
+            Command::CreateAccount(NewAccount {
                 display_name: "stale-authority",
                 role: Role::Admin,
             }),

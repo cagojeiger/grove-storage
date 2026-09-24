@@ -14,8 +14,7 @@ export async function permissionChecks(browser, admin, origin) {
   }
   const user = await identity("POST", "/accounts", { kind: "user", role: "operator", display_name: "Console operator" });
   const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "browser-test", expires_in_days: 1 });
-  const agent = await identity("POST", "/accounts", { kind: "agent", role: "operator", owner_user_id: user.account_id, display_name: "Automation" });
-  const agentKey = await identity("POST", `/accounts/${agent.account_id}/credentials`, { label: "agent-test", expires_in_days: 1 });
+  const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "automation", expires_in_days: 1 });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const page = await context.newPage();
@@ -40,14 +39,14 @@ export async function permissionChecks(browser, admin, origin) {
     });
     assert.equal(blocked, 403);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await page.getByLabel("Personal token").fill(agentKey.token);
+    await page.getByLabel("Personal token").fill(automationKey.token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByRole("alert")).toBeVisible();
-    assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 0);
+    await expect(page.getByText("Viewer · Read-only")).toBeVisible();
+    assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");
     const events = audit.items.filter((e) => e.action === "storage.create");
     assert(events.length > 0 && events.every((e) => e.context.surface === "console"));
     assert(!JSON.stringify(audit).includes(credential.token));
-    console.log("PASS real role demotion, Viewer read-only UI/server, Agent login rejection, console audit");
+    console.log("PASS real role demotion, Viewer read-only UI/server, named User token login, console audit");
   } finally { await context.close(); }
 }

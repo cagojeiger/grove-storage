@@ -16,7 +16,7 @@ async fn mutations_audit_once_and_reads_only_record_invocations(pool: PgPool) {
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::CreateAccount(NewAccount::User {
+        Command::CreateAccount(NewAccount {
             display_name: "new-user",
             role: Role::Viewer,
         }),
@@ -76,10 +76,10 @@ async fn invalid_proof_logs_anonymous_security_without_payload(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn agent_denial_retains_owner_snapshot_without_creating_audit(pool: PgPool) {
+async fn token_denial_retains_user_and_credential_without_creating_audit(pool: PgPool) {
     let admin = owner(&pool).await;
-    let agent = agent(&pool, admin.account).await;
-    db::issue_credential(&pool, &context(), agent, &key(&hash(2)))
+    let automation_user = admin.account;
+    db::issue_credential(&pool, &context(), automation_user, &key(&hash(2)))
         .await
         .unwrap();
     let before = audit_count(&pool).await;
@@ -91,8 +91,10 @@ async fn agent_denial_retains_owner_snapshot_without_creating_audit(pool: PgPool
     )
     .await;
     assert!(matches!(denied.result, Err(Error::Forbidden)));
-    let row: (String, uuid::Uuid, uuid::Uuid) = sqlx::query_as("SELECT actor_kind,actor_id,owner_user_id FROM management.command_invocations WHERE request_id=$1").bind(denied.request_id).fetch_one(&pool).await.unwrap();
-    assert_eq!(row, ("agent".into(), agent, admin.account));
+    let row: (String, uuid::Uuid, uuid::Uuid) = sqlx::query_as("SELECT actor_kind,actor_id,credential_id FROM management.command_invocations WHERE request_id=$1").bind(denied.request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(row.0, "user");
+    assert_eq!(row.1, admin.account);
+    assert_ne!(row.2, admin.credential);
     assert_eq!(audit_count(&pool).await, before);
 }
 
@@ -104,7 +106,7 @@ async fn audit_failure_rejects_change_but_invocation_failure_does_not(pool: PgPo
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::CreateAccount(NewAccount::User {
+        Command::CreateAccount(NewAccount {
             display_name: "rollback",
             role: Role::Viewer,
         }),
@@ -131,7 +133,7 @@ async fn audit_failure_rejects_change_but_invocation_failure_does_not(pool: PgPo
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::CreateAccount(NewAccount::User {
+        Command::CreateAccount(NewAccount {
             display_name: "kept",
             role: Role::Viewer,
         }),
@@ -168,7 +170,7 @@ async fn commit_failure_is_conservative_unknown_without_retry(pool: PgPool) {
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::CreateAccount(NewAccount::User {
+        Command::CreateAccount(NewAccount {
             display_name: "unknown",
             role: Role::Viewer,
         }),
@@ -199,7 +201,7 @@ async fn slow_history_cannot_hold_successful_response_indefinitely(pool: PgPool)
             &pool,
             Proof::Session(&admin.session),
             Surface::Console,
-            Command::CreateAccount(NewAccount::User {
+            Command::CreateAccount(NewAccount {
                 display_name: "bounded",
                 role: Role::Viewer,
             }),

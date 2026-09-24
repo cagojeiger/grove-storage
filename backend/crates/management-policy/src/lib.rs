@@ -9,7 +9,5 @@
 mod identity;
 mod policy;
 
-pub use identity::{
-    AccountState, Actor, AgentRole, AuthMethod, Caller, CredentialState, Role, Surface,
-};
+pub use identity::{AccountState, Actor, AuthMethod, Caller, CredentialState, Role, Surface};
 pub use policy::{Action, Denial, Scope, authorize};

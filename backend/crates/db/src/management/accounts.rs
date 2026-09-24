@@ -1,19 +1,12 @@
-use grove_management_policy::{AgentRole, Role};
+use grove_management_policy::Role;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{AuditContext, Credential, Error, NewCredential, audit, credentials, lock, role_name};
 
-pub enum NewAccount<'a> {
-    User {
-        display_name: &'a str,
-        role: Role,
-    },
-    Agent {
-        display_name: &'a str,
-        role: AgentRole,
-        owner_user_id: Uuid,
-    },
+pub struct NewAccount<'a> {
+    pub display_name: &'a str,
+    pub role: Role,
 }
 
 pub enum AccountChange {
@@ -83,25 +76,8 @@ pub(super) async fn create_in(
     context: &AuditContext,
     account: NewAccount<'_>,
 ) -> Result<Uuid, Error> {
-    let (kind, name, role, owner) = match account {
-        NewAccount::User { display_name, role } => ("user", display_name, role_name(role), None),
-        NewAccount::Agent {
-            display_name,
-            role,
-            owner_user_id,
-        } => {
-            let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts a JOIN management.users u ON u.account_id=a.id WHERE a.id=$1 AND a.is_active AND a.deleted_at IS NULL)")
-                .bind(owner_user_id).fetch_one(&mut *tx).await?;
-            if !active {
-                return Err(Error::InactiveAccount);
-            }
-            let role = match role {
-                AgentRole::Viewer => "viewer",
-                AgentRole::Operator => "operator",
-            };
-            ("agent", display_name, role, Some(owner_user_id))
-        }
-    };
+    let name = account.display_name;
+    let role = role_name(account.role);
     let initialized: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.users)")
         .fetch_one(&mut *tx)
         .await?;
@@ -111,23 +87,15 @@ pub(super) async fn create_in(
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,$2,$3,$4)")
         .bind(id)
-        .bind(kind)
+        .bind("user")
         .bind(name)
         .bind(role)
         .execute(&mut *tx)
         .await?;
-    if let Some(owner) = owner {
-        sqlx::query("INSERT INTO management.agents(account_id,owner_user_id) VALUES($1,$2)")
-            .bind(id)
-            .bind(owner)
-            .execute(&mut *tx)
-            .await?;
-    } else {
-        sqlx::query("INSERT INTO management.users(account_id) VALUES($1)")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
-    }
+    sqlx::query("INSERT INTO management.users(account_id) VALUES($1)")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     audit::record(&mut tx, context, "account.create", "account", id).await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(id)
@@ -163,9 +131,6 @@ pub(super) async fn change_in(
         AccountChange::Active(active) => (old_role.as_str(), active, false, "account.active"),
         AccountChange::Delete => (old_role.as_str(), false, true, "account.delete"),
     };
-    if kind == "agent" && role == "admin" {
-        return Err(Error::InvalidInput);
-    }
     if role == old_role && active == old_active && !deleted {
         return Ok(false);
     }
@@ -178,12 +143,11 @@ pub(super) async fn change_in(
     sqlx::query("UPDATE management.accounts SET role=$2,is_active=$3,deleted_at=CASE WHEN $4 THEN clock_timestamp() END,updated_at=clock_timestamp() WHERE id=$1")
         .bind(id).bind(role).bind(active).bind(deleted).execute(&mut *tx).await?;
     if !active {
-        // Old sessions stay revoked after reactivation; soft-deleted credentials
-        // and owned agents are also permanently retired when deleting a user.
+        // Old sessions stay revoked after reactivation.
         sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL").bind(id).execute(&mut *tx).await?;
     }
     if deleted {
-        sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE revoked_at IS NULL AND (account_id=$1 OR account_id IN (SELECT account_id FROM management.agents WHERE owner_user_id=$1))")
+        sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE revoked_at IS NULL AND account_id=$1")
             .bind(id).execute(&mut *tx).await?;
     }
     let event = audit::record(&mut tx, context, action, "account", id).await?;

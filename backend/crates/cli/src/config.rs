@@ -81,7 +81,7 @@ pub fn authorization(args: &Args) -> Result<HeaderValue, Error> {
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     }) {
-        return Err(Error::input("Use a gsm_ User or Agent management token"));
+        return Err(Error::input("Use a gsm_ User management token"));
     }
     let mut header = HeaderValue::from_str(&format!("Bearer {token}"))
         .map_err(|_| Error::input("Invalid management token"))?;

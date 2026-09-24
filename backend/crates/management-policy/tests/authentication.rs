@@ -5,11 +5,7 @@ use support::*;
 
 #[test]
 fn invalid_credential_state_blocks_every_action_including_master_recovery() {
-    for mut caller in [
-        user(Role::Admin, AuthMethod::UserSession),
-        agent(AgentRole::Operator, Role::Admin),
-        master(),
-    ] {
+    for mut caller in [user(Role::Admin, AuthMethod::UserSession), master()] {
         for state in [
             CredentialState::Expired,
             CredentialState::Revoked,
@@ -34,18 +30,10 @@ fn invalid_credential_state_blocks_every_action_including_master_recovery() {
 #[test]
 fn disabled_or_deleted_accounts_cannot_use_any_action() {
     for state in [AccountState::Disabled, AccountState::Deleted] {
-        for actor in [
-            Actor::User {
-                role: Role::Admin,
-                state,
-            },
-            Actor::Agent {
-                role: AgentRole::Operator,
-                state,
-                owner_role: Role::Admin,
-                owner_state: AccountState::Active,
-            },
-        ] {
+        for actor in [Actor::User {
+            role: Role::Admin,
+            state,
+        }] {
             for method in METHODS {
                 let caller = Caller {
                     actor,
@@ -67,11 +55,7 @@ fn disabled_or_deleted_accounts_cannot_use_any_action() {
 
 #[test]
 fn authentication_method_and_surface_must_match_the_actor() {
-    for mut caller in [
-        user(Role::Admin, AuthMethod::UserSession),
-        agent(AgentRole::Operator, Role::Admin),
-        master(),
-    ] {
+    for mut caller in [user(Role::Admin, AuthMethod::UserSession), master()] {
         for method in METHODS {
             caller.method = method;
             for surface in SURFACES {
@@ -82,7 +66,7 @@ fn authentication_method_and_surface_must_match_the_actor() {
                         AuthMethod::UserSession,
                         Surface::Console
                     ) | (
-                        Actor::User { .. } | Actor::Agent { .. },
+                        Actor::User { .. },
                         AuthMethod::ManagementToken,
                         Surface::Cli | Surface::Mcp | Surface::ResourceApi
                     ) | (Actor::Master, AuthMethod::MasterSession, Surface::Console)

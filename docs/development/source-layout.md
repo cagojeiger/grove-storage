@@ -17,10 +17,10 @@ backend/crates/
 │   ├── src/model.rs      CLI가 재사용하는 응답 DTO
 │   ├── src/error.rs      안정 오류 코드·변경 적용 여부
 │   └── tests/            catalog·inputs·outputs·errors (DB·서버 독립)
-├── management-policy/    관리 User·Agent·role·진입 경계의 순수 권한 규칙
+├── management-policy/    관리 User·role·진입 경계의 순수 권한 규칙
 │   ├── src/identity.rs   주체·역할·계정/자격증명 상태·인증 방식·Surface
 │   ├── src/policy.rs     Action → 허용 Scope 또는 거부 사유
-│   └── tests/           resources·console·agents·authentication (DB·서버 독립)
+│   └── tests/           resources·console·authentication (DB·서버 독립)
 ├── s3-protocol/           S3 XML·SigV4 순수 프로토콜 계약
 │   ├── src/multipart.rs  Complete XML 구조·엔티티·namespace 검증
 │   ├── src/completion.rs 완료 목록·원장 ETag·비최종 part 최소 크기 검증
@@ -35,7 +35,7 @@ backend/crates/
 │   └── tests/            cleanup·cleanup_failures·multipart_create
 ├── object-policy/         grove-object-policy: 업로드 선언·파트·ETag·완료 복구 판단
 │   └── tests/             geometry·etag·validation·completion·completion_failures
-├── cli/                   gscli: User/Agent 공통 관리 명령 HTTP
+├── cli/                   gscli: User 공통 관리 명령 HTTP
 │   ├── src/               인자·설정·HTTP·입력·확인·비밀 출력·응답 출력
 │   │   ├── commands/      typed 명령·공개 결과·비밀 파일 전달
 │   │   ├── http/wire.rs   protocol·명령·대상 대조·변경 결과 검증
@@ -53,7 +53,7 @@ backend/crates/
 │   │   ├── browser.rs    Origin·CSRF·cookie·Bearer 분리
 │   │   ├── secrets.rs    token/session 형식·해시 domain
 │   │   ├── session.rs    로그인·현재 세션·로그아웃 adapter
-│   │   ├── accounts.rs   User/Agent 생성·role/active·삭제 adapter
+│   │   ├── accounts.rs   User 생성·role/active·삭제 adapter
 │   │   ├── credentials.rs 관리 토큰 목록·일회성 발급·폐기 adapter
 │   │   ├── history.rs    자기 세션·scoped 이력 adapter
 │   │   ├── inputs.rs     요청 형태·역할·페이지 입력 검증
@@ -80,7 +80,7 @@ backend/crates/
 │       └── reclaim.rs      만료 회수의 물리 정리·재시도
 ├── db/
 │   ├── src/management/     관리 신원 저장소 (기존 admin_*와 분리)
-│   │   ├── accounts.rs    최초 Admin·User/Agent 생성·마지막 Admin 보호
+│   │   ├── accounts.rs    최초 Admin·User 생성·마지막 Admin 보호
 │   │   ├── credentials.rs 발급 한도·폐기·대상 Admin 복구
 │   │   ├── sessions.rs    User 세션·원본 만료 상한·폐기·개수 상한
 │   │   ├── master.rs      master 세대 fence·짧은 세션·설정/복구 transaction
@@ -91,7 +91,7 @@ backend/crates/
 │   │   ├── resource_writes.rs Client/서비스 키 SQL 재사용·같은 transaction 감사
 │   │   ├── storage_writes.rs Storage 변경·행 잠금·비밀 없는 전후 감사
 │   │   ├── queries.rs     비밀 없는 신원 목록·페이지 상한
-│   │   ├── history.rs     actor/owner scope·cursor 조회
+│   │   ├── history.rs     User scope·과거 owner snapshot·cursor 조회
 │   │   └── telemetry.rs   호출·보안 기록·공유 로그인 예산
 │   ├── src/files/          파일·lease 상태 전이
 │   │   └── reclaim_cleanup.rs  reclaimed 정리 후보·확정
@@ -108,7 +108,7 @@ backend/crates/
 |---|---|---|
 | `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 adapter/service 책임 |
 | `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; User 로그인 예산·인증 이력 |
-| `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 19개 전체; Storage probe는 잠금 밖, 이후 role/owner·참조 재확인·audit 원자성 |
+| `management-service/resources` | 공통 Command → 권한·DB 조회/변경·typed Output·호출 기록 | 19개 전체; Storage probe는 잠금 밖, 이후 User role·참조 재확인·audit 원자성 |
 | `api/resource_commands` | CLI 등 Bearer·JSON → 공통 자원 실행기 | Cookie 거부·server Surface·명령/envelope 검증; 이전 REST 인증과 분리 |
 | `api/mcp` | MCP Bearer·tool 입력 → 같은 자원 실행기 | 요청별 인증·Origin/Cookie 차단·공통 schema·surface=mcp; 권한 cache 없음 |
 | `api/console_identity` | HTTP token/cookie·입력 → 신원/이력 service; `resources.rs` → 공통 자원 실행기 | Origin/CSRF·별도 쿠키·해시 domain·비밀 없는 목록; 현재 UI는 User 세션 사용 |
@@ -126,7 +126,7 @@ backend/crates/
 | `infra/fs`, `infra/s3` | 물리 주소 → 바이트 I/O | filesystem·vendor 계약 |
 | `api/reconciler` | DB 후보·실물 관찰 → 복구 | 보존된 소유권·재시도 |
 | `api/status` | 로컬 Config → DB·저장소 접근·요약 | HTTP 독립, 부팅과 같은 storage 검사 |
-| `cli` | User/Agent 토큰·인자 → 공통 명령 HTTP → table·JSON | DB 의존성 없음; wire 검증·변경 결과·비밀 파일 관리; 로컬 status와 분리 |
+| `cli` | User 토큰·인자 → 공통 명령 HTTP → table·JSON | DB 의존성 없음; wire 검증·변경 결과·비밀 파일 관리; 로컬 status와 분리 |
 | `cli/update` | 공식 Release → 검증된 실행 파일 | 서버 인증 독립, 설치·업데이트의 동일 잠금·교체 |
 | `object-policy` | 값 → 업로드 검증·파트 계산·ETag·복구 결정 | HTTP·DB·런타임·환경 설정 독립 |
 | `core` | 환경 설정·암호·키 해시 | 기존 multipart import 경로는 policy 재노출 |
@@ -139,7 +139,7 @@ detach는 같은 트랜잭션을 공유한다.
 | Name | Responsibility |
 |---|---|
 | Grove Storage / `gscli` | Product / remote management CLI |
-| User / Agent | Human operator / automation identity owned by a User |
+| User / Token | Management account / named credential for Console, CLI and MCP |
 | Client | Runtime consumer with file API keys or S3 credentials |
 | Storage | External S3 backend; legacy filesystem rows retained during migration |
 | Admin / Operator / Viewer | Management roles, separate from runtime Client credentials |
@@ -175,9 +175,9 @@ Split tests by scenario; keep lock and transaction ownership together.
 
 | 범위 | 테스트 |
 |---|---|
-| 관리 권한·콘솔 전용 경계·Agent 상한·감사 조회 scope | `cargo test -p grove-management-policy --locked`; 실제 API 연결과 구분 |
+| 관리 권한·콘솔 전용 경계·User 역할·감사 조회 scope | `cargo test -p grove-management-policy --locked`; 실제 API 연결과 구분 |
 | 관리 명령·입출력·오류·CLI 대응 | `cargo test -p grove-management-command --locked`; `cli/tests/command_contract.rs` |
-| MCP 실제 전송·CLI 대응 | `api/src/mcp/tests/`, `scripts/e2e-mcp.py`; PG/HTTP·19개 lifecycle·서버 로그·owner/폐기 |
+| MCP 실제 전송·CLI 대응 | `api/src/mcp/tests/`, `scripts/e2e-mcp.py`; PG/HTTP·19개 lifecycle·서버 로그·User role/폐기 |
 | 신원 DB·변경 감사·이관 | `db/tests/management_{accounts,credentials,credential_limits,sessions,schema,upgrade}.rs`; 실제 PostgreSQL 필요 |
 | 관리 서비스 권한·범위·로그 장애 | `cargo test -p grove-management-service --locked`; PostgreSQL의 `DATABASE_URL` 필요 |
 | User/master·신원/이력 HTTP·브라우저 요청 경계 | `cargo test -p filegate-api console_identity --locked`; 실제 PostgreSQL, 브라우저 E2E와 구분 |

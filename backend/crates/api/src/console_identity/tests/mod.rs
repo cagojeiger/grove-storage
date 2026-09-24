@@ -61,7 +61,7 @@ async fn account(pool: &PgPool, role: Role) -> (Uuid, Uuid, String) {
     let user = db::create_account(
         pool,
         &context(),
-        db::NewAccount::User {
+        db::NewAccount {
             display_name: "test-user",
             role,
         },

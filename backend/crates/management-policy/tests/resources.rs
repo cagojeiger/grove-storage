@@ -37,9 +37,6 @@ fn cli_and_mcp_agree_for_every_action_and_credential_context() {
     let mut callers = vec![master()];
     for role in ROLES {
         callers.push(user(role, AuthMethod::ManagementToken));
-        for agent_role in AGENT_ROLES {
-            callers.push(agent(agent_role, role));
-        }
     }
     for mut caller in callers {
         for method in METHODS {

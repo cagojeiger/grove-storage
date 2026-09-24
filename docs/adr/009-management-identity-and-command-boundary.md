@@ -1,6 +1,6 @@
 # ADR 009: 신원 관리는 콘솔로, 자원 관리는 공통 명령으로 제공한다
 
-- 상태: Accepted (제품 방향), 순수 권한·명령·신원 DB·관리 서비스 구현·HTTP 미연결
+- 상태: 관리 경계 유지. User/Agent 분리는 [ADR 010](010-unified-users-and-named-tokens.md)으로 대체; 아래는 당시 결정 기록.
 - 날짜: 2026-09-24
 - 선행: [ADR 007](007-grove-storage-foundation.md)
 - 대체: [ADR 008](008-local-owner-and-agent-credentials.md)

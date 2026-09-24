@@ -36,7 +36,6 @@ pub struct AccountSummary {
     pub role: String,
     pub is_active: bool,
     pub deleted_at: Option<DateTime<Utc>>,
-    pub owner_user_id: Option<Uuid>,
 }
 #[derive(Debug, sqlx::FromRow)]
 pub struct CredentialSummary {
@@ -60,8 +59,8 @@ pub struct SessionSummary {
 impl IdentityTransaction<'_> {
     pub async fn accounts(&mut self, page: Page<Uuid>) -> Result<Vec<AccountSummary>, Error> {
         Ok(sqlx::query_as(
-            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,g.owner_user_id
-            FROM management.accounts a LEFT JOIN management.agents g ON g.account_id=a.id
+            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at
+            FROM management.accounts a
             WHERE ($1::uuid IS NULL OR a.id<$1) ORDER BY a.id DESC LIMIT $2",
         )
         .bind(page.before)

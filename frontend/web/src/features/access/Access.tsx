@@ -7,15 +7,13 @@ import {
   RefreshCw,
   Shield,
   Trash2,
-  UserRound,
-  Bot,
 } from "lucide-react";
 import { identityPage, isAccount } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { AccountAction, AccountDialog } from "./AccountDialog";
 import { Tokens } from "./Tokens";
 
-export function Access({ kind }: { kind: "user" | "agent" }) {
+export function Access() {
   const cache = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [action, setAction] = useState<AccountAction | null>(null);
@@ -38,14 +36,10 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
   const account = accounts.find((row) => row.id === selected);
   const rows = accounts.filter(
     (row) =>
-      row.kind === kind &&
       !row.deleted_at &&
       `${row.display_name} ${row.id}`
         .toLowerCase()
         .includes(search.toLowerCase()),
-  );
-  const owners = accounts.filter(
-    (row) => row.kind === "user" && row.is_active && !row.deleted_at,
   );
   async function refresh() {
     await cache.invalidateQueries({ queryKey: ["access"] });
@@ -68,22 +62,6 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
           <RefreshCw size={18} />
         </button>
       </div>
-      <nav className="access-tabs" aria-label="Access sections">
-        <a
-          href="#access/users"
-          aria-current={kind === "user" ? "page" : undefined}
-        >
-          <UserRound size={16} />
-          Users
-        </a>
-        <a
-          href="#access/agents"
-          aria-current={kind === "agent" ? "page" : undefined}
-        >
-          <Bot size={16} />
-          Agents
-        </a>
-      </nav>
       {query.isPending ? (
         <p role="status">Loading accounts...</p>
       ) : query.isError ? (
@@ -96,7 +74,7 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
           <>
             <button className="back-link" onClick={() => setSelected(null)}>
               <ArrowLeft size={16} />
-              {kind === "user" ? "Users" : "Agents"}
+              Users
             </button>
             <div className="section-heading">
               <h2>{account.display_name}</h2>
@@ -145,15 +123,6 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
                       : "Disabled"}
                 </dd>
               </div>
-              {account.kind === "agent" && (
-                <div>
-                  <dt>Owner</dt>
-                  <dd>
-                    {accounts.find((row) => row.id === account.owner_user_id)
-                      ?.display_name ?? account.owner_user_id}
-                  </dd>
-                </div>
-              )}
             </dl>
             <Tokens key={account.id} account={account} />
           </>
@@ -177,7 +146,7 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
             </label>
             <button className="primary" onClick={() => setAction("create")}>
               <Plus size={16} />
-              Create {kind}
+              Create user
             </button>
           </div>
           <div className="account-list">
@@ -197,11 +166,7 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
               </button>
             ))}
           </div>
-          {!rows.length && (
-            <p className="empty">
-              No {kind === "user" ? "users" : "agents"} on loaded pages.
-            </p>
-          )}
+          {!rows.length && <p className="empty">No users on loaded pages.</p>}
         </>
       )}
       {!query.isError && query.hasNextPage && (
@@ -215,10 +180,8 @@ export function Access({ kind }: { kind: "user" | "agent" }) {
       )}
       {action && !query.isError && (
         <AccountDialog
-          kind={kind}
           account={account}
           action={action}
-          owners={owners}
           onClose={() => setAction(null)}
           onSaved={refresh}
         />

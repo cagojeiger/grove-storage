@@ -5,13 +5,14 @@ use uuid::Uuid;
 #[derive(Clone, Copy)]
 pub enum HistoryScope {
     Installation,
-    UserAndAgents(Uuid),
+    // Includes immutable legacy Agent-owner snapshots for pre-unification events.
+    User(Uuid),
 }
 impl HistoryScope {
     fn user(self) -> Option<Uuid> {
         match self {
             Self::Installation => None,
-            Self::UserAndAgents(id) => Some(id),
+            Self::User(id) => Some(id),
         }
     }
 }

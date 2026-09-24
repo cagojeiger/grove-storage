@@ -9,8 +9,7 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
         serde_json::json!({"kind":"user","display_name":"Viewer","role":"viewer"}),
     )
     .await;
-    let agent = create(&pool,&cookie,serde_json::json!({"kind":"agent","display_name":"Agent","role":"operator","owner_user_id":user})).await;
-    let path = format!("/accounts/{agent}");
+    let path = format!("/accounts/{user}");
     assert_eq!(
         send(
             &pool,
@@ -21,7 +20,7 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
         )
         .await
         .status(),
-        StatusCode::BAD_REQUEST
+        StatusCode::OK
     );
     assert_eq!(
         send(
@@ -73,7 +72,7 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
             .as_array()
             .unwrap()
             .iter()
-            .any(|r| r["id"] == agent.to_string() && !r["deleted_at"].is_null())
+            .any(|r| r["id"] == user.to_string() && !r["deleted_at"].is_null())
     );
     let bootstrap: Uuid =
         sqlx::query_scalar("SELECT id FROM management.accounts WHERE display_name='Owner'")
@@ -175,6 +174,9 @@ async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
     for body in [
         serde_json::json!({"kind":"user","display_name":"","role":"admin"}),
         serde_json::json!({"kind":"agent","display_name":"invalid","role":"admin","owner_user_id":target}),
+        serde_json::json!({"kind":"agent","display_name":"old operator","role":"operator","owner_user_id":target}),
+        serde_json::json!({"kind":"agent","display_name":"old viewer","role":"viewer","owner_user_id":target}),
+        serde_json::json!({"kind":"user","display_name":"invalid owner","role":"viewer","owner_user_id":target}),
         serde_json::json!({"kind":"user","display_name":"secret-invalid","role":"admin","actor_id":target}),
     ] {
         let response = send(&pool, &cookie, "POST", "/accounts", body).await;

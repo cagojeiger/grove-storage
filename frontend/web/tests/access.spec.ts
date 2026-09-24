@@ -1,34 +1,21 @@
 import { expect, test } from "@playwright/test";
-import { accessMock, agent, owner, rawToken, root } from "./access-fixture";
+import { accessMock, otherUser, owner, rawToken, root } from "./access-fixture";
 import { session } from "./command-fixture";
 
-test("create User and owned Agent with limited roles", async ({ page }) => {
+test("create a User without Agent or owner fields", async ({ page }) => {
   const { writes } = await accessMock(page);
   await page.goto(root);
+  await expect(
+    page.getByRole("link", { name: "Agents", exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
+  await expect(page.getByLabel("Owner", { exact: true })).toHaveCount(0);
   await page.getByLabel("Name", { exact: true }).fill("Operator");
   await page.getByLabel("Role", { exact: true }).selectOption("operator");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: /Operator.*Active/ }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Agents", exact: true }).click();
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill("Nightly backup");
-  await expect(
-    page.getByLabel("Role").locator("option[value=admin]"),
-  ).toHaveCount(0);
-  await page.getByLabel("Owner", { exact: true }).selectOption(owner.id);
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(writes.map((w) => w.body)).toEqual([
     { kind: "user", display_name: "Operator", role: "operator" },
-    {
-      kind: "agent",
-      display_name: "Nightly backup",
-      role: "viewer",
-      owner_user_id: owner.id,
-    },
   ]);
 });
 
@@ -148,21 +135,21 @@ test("Viewer cannot discover Access or request accounts", async ({ page }) => {
   expect(writes).toHaveLength(0);
 });
 
-test("account paging preserves earlier rows and loads Agent owners", async ({
-  page,
-}) => {
+test("account paging preserves earlier Users", async ({ page }) => {
   await accessMock(page);
   await page.route("**/v1/accounts?*", (route) =>
     route.fulfill({
       json: new URL(route.request().url()).searchParams.has("before")
         ? { items: [owner], next_before: null }
-        : { items: [agent], next_before: agent.id },
+        : { items: [otherUser], next_before: otherUser.id },
     }),
   );
-  await page.goto(root.replace("users", "agents"));
+  await page.goto(root);
   await page.getByRole("button", { name: "Load more accounts" }).click();
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
   await expect(
-    page.getByLabel("Owner").locator(`option[value="${owner.id}"]`),
-  ).toHaveCount(1);
+    page.getByRole("button", { name: /Home administrator.*Active/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Operator.*Active/ }),
+  ).toBeVisible();
 });

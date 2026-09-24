@@ -1,6 +1,66 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
+async fn named_tokens_share_user_role_but_keep_separate_history_and_revocation(pool: PgPool) {
+    owner(&pool).await;
+    seed(&pool).await;
+    let user = user(&pool, Role::Operator).await;
+    let mut credentials = Vec::new();
+    for (n, surface) in [(800, Surface::Cli), (801, Surface::Mcp)] {
+        let token = hash(n);
+        let credential = db::issue_credential(&pool, &context(), user, &key(&token))
+            .await
+            .unwrap();
+        let result = resources::execute(
+            &pool,
+            &crypto(),
+            unexpected_storage_probe,
+            Proof::Token(&token),
+            surface,
+            keys(),
+        )
+        .await;
+        assert!(result.result.is_ok());
+        let event: (uuid::Uuid, uuid::Uuid, Option<uuid::Uuid>) = sqlx::query_as(
+            "SELECT actor_id,credential_id,owner_user_id FROM management.command_invocations WHERE request_id=$1")
+            .bind(result.request_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(event, (user, credential.id, None));
+        credentials.push(credential.id);
+    }
+    assert_ne!(*credentials.first().unwrap(), *credentials.get(1).unwrap());
+    db::revoke_credential(&pool, &context(), *credentials.first().unwrap())
+        .await
+        .unwrap();
+    assert!(db::authenticate(&pool, &hash(800)).await.unwrap().is_none());
+    assert_eq!(
+        db::authenticate(&pool, &hash(801))
+            .await
+            .unwrap()
+            .unwrap()
+            .account_id,
+        user
+    );
+    db::change_account(
+        &pool,
+        &context(),
+        user,
+        db::AccountChange::Role(Role::Viewer),
+    )
+    .await
+    .unwrap();
+    let denied = resources::execute(
+        &pool,
+        &crypto(),
+        unexpected_storage_probe,
+        Proof::Token(&hash(801)),
+        Surface::Mcp,
+        keys(),
+    )
+    .await;
+    assert_eq!(denied.result.unwrap_err().code, ErrorCode::Forbidden);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
 async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
     owner(&pool).await;
     seed(&pool).await;
@@ -81,12 +141,12 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
+async fn token_reads_obey_live_user_role_and_revocation(pool: PgPool) {
     let owner = owner(&pool).await;
     seed(&pool).await;
-    let agent = agent(&pool, owner.account).await;
+    let automation_user = owner.account;
     let token = hash(500);
-    let credential = db::issue_credential(&pool, &context(), agent, &key(&token))
+    let credential = db::issue_credential(&pool, &context(), automation_user, &key(&token))
         .await
         .unwrap();
     assert!(
@@ -121,14 +181,14 @@ async fn agent_reads_obey_live_owner_role_and_revocation(pool: PgPool) {
     )
     .await;
     assert_eq!(denied.result.unwrap_err().code, ErrorCode::Forbidden);
-    let recorded_owner: uuid::Uuid = sqlx::query_scalar(
-        "SELECT owner_user_id FROM management.command_invocations WHERE request_id=$1",
+    let recorded_user: uuid::Uuid = sqlx::query_scalar(
+        "SELECT actor_id FROM management.command_invocations WHERE request_id=$1",
     )
     .bind(denied.request_id)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(recorded_owner, owner.account);
+    assert_eq!(recorded_user, owner.account);
     assert!(
         resources::execute(
             &pool,

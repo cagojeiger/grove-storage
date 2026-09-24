@@ -156,16 +156,6 @@ fn audit_context(
             credential_id: identity.credential_id,
             session_id: identity.session_id,
         },
-        Actor::Agent { .. } => {
-            let Some(owner_user_id) = identity.owner_user_id else {
-                return Err(Error::Unavailable);
-            };
-            AuditActor::Agent {
-                id: identity.account_id,
-                owner_user_id,
-                credential_id: identity.credential_id,
-            }
-        }
         Actor::Master => return Err(Error::Unauthenticated),
     };
     Ok(AuditContext {

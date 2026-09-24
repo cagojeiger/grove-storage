@@ -126,7 +126,7 @@ async fn live_role_and_token_revocation_affect_following_http_reads(pool: PgPool
     db::create_account(
         &pool,
         &context,
-        db::NewAccount::User {
+        db::NewAccount {
             display_name: "Other",
             role: Role::Admin,
         },

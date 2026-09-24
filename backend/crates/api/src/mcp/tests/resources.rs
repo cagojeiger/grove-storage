@@ -49,7 +49,7 @@ async fn ten_reads_equal_command_http_and_record_one_mcp_invocation(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool: PgPool) {
+async fn user_demotion_limits_writes_and_revocation_stops_discovery(pool: PgPool) {
     let admin_token = owner(&pool).await;
     let admin = db::authenticate(&pool, &secrets::token_hash(&admin_token))
         .await
@@ -59,20 +59,9 @@ async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool:
     let user = db::create_account(
         &pool,
         &ctx,
-        db::NewAccount::User {
+        db::NewAccount {
             display_name: "Operator",
             role: Role::Operator,
-        },
-    )
-    .await
-    .unwrap();
-    let agent = db::create_account(
-        &pool,
-        &ctx,
-        db::NewAccount::Agent {
-            display_name: "Agent",
-            role: grove_management_policy::AgentRole::Operator,
-            owner_user_id: user,
         },
     )
     .await
@@ -81,7 +70,7 @@ async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool:
     db::issue_credential(
         &pool,
         &ctx,
-        agent,
+        user,
         &db::NewCredential {
             label: "test",
             token_prefix: "gsm_test",
@@ -96,7 +85,7 @@ async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool:
         &pool,
         &token,
         "client.create",
-        json!({"id":"agent-app","storage_id":"local"}),
+        json!({"id":"automation-app","storage_id":"local"}),
     )
     .await;
     assert_eq!(success["isError"], false);
@@ -106,13 +95,17 @@ async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool:
         .parse()
         .unwrap();
     let row: (String, Uuid, Uuid) = sqlx::query_as(
-        "SELECT surface,actor_id,owner_user_id FROM management.audit_events WHERE request_id=$1",
+        "SELECT surface,actor_id,credential_id FROM management.audit_events WHERE request_id=$1",
     )
     .bind(id)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(row, ("mcp".into(), agent, user));
+    let identity = db::authenticate(&pool, &secrets::token_hash(&token))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row, ("mcp".into(), user, identity.credential_id));
     db::change_account(&pool, &ctx, user, db::AccountChange::Role(Role::Viewer))
         .await
         .unwrap();
@@ -138,7 +131,7 @@ async fn agent_owner_demotion_limits_writes_and_revocation_stops_discovery(pool:
             .unwrap()
             .is_some()
     );
-    assert_ne!(agent, admin.account_id);
+    assert_ne!(user, admin.account_id);
     db::change_account(&pool, &ctx, user, db::AccountChange::Active(false))
         .await
         .unwrap();

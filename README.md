@@ -63,7 +63,7 @@ gscli --endpoint https://filegate.example.com --token-file /path/to/management-t
 ```
 
 `GROVE_ENDPOINT`·`GROVE_TOKEN`으로 연결 설정을 공급할 수 있다.
-CLI는 User/Agent 토큰으로 공통 관리 명령 API를 호출한다. 이전 서버에는 이전 CLI를 사용한다.
+CLI는 User 토큰으로 공통 관리 명령 API를 호출한다. 이전 서버에는 이전 CLI를 사용한다.
 DB·마스터 키는 CLI에 전달하지 않는다. 기존 `filegate status`는
 서버 로컬 진단으로 유지한다. [명령·출력·후속 계약](docs/spec/04-cli.md).
 

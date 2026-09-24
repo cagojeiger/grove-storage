@@ -24,11 +24,14 @@ pub(super) async fn insert(
     account: Uuid,
     key: &NewCredential<'_>,
 ) -> Result<Credential, Error> {
-    let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts a
-        LEFT JOIN management.agents g ON g.account_id=a.id LEFT JOIN management.accounts owner ON owner.id=g.owner_user_id
+    let active: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM management.accounts a
         WHERE a.id=$1 AND a.is_active AND a.deleted_at IS NULL
-        AND (a.kind='user' OR (owner.is_active AND owner.deleted_at IS NULL)))")
-        .bind(account).fetch_one(&mut **tx).await?;
+        AND a.kind='user')",
+    )
+    .bind(account)
+    .fetch_one(&mut **tx)
+    .await?;
     if !active {
         return Err(Error::InactiveAccount);
     }
@@ -103,7 +106,7 @@ pub(super) async fn revoke_in(
     Ok(changed)
 }
 
-/// Targeted master recovery preserves other users, agents and Client credentials.
+/// Targeted master recovery preserves other Users and Client credentials.
 pub async fn recover_admin(
     pool: &PgPool,
     context: &AuditContext,

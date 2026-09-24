@@ -67,21 +67,6 @@ impl From<Role> for grove_management_policy::Role {
         }
     }
 }
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum AgentRole {
-    Viewer,
-    Operator,
-}
-impl From<AgentRole> for grove_management_policy::AgentRole {
-    fn from(role: AgentRole) -> Self {
-        match role {
-            AgentRole::Viewer => Self::Viewer,
-            AgentRole::Operator => Self::Operator,
-        }
-    }
-}
-
 pub(super) fn valid_label(value: &str) -> bool {
     (1..=80).contains(&value.trim().chars().count())
 }

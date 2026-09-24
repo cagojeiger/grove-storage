@@ -1,7 +1,7 @@
 # 등록부 운영
 
 `gscli`은 `/api/admin/commands/v1`을 호출하고 PostgreSQL 등록부를 변경한다.
-User/Agent 관리 토큰(`gsm_`)을 사용한다. 이전 운영자 토큰 전환은 별도 절차이며,
+User 관리 토큰(`gsm_`)을 사용한다. 이전 운영자 토큰 전환은 별도 절차이며,
 새 관리 명령 API를 지원하지 않는 서버에는 이전 CLI를 사용한다.
 배포 설정과 서비스 비밀 전달은 GitOps·Vault가 계속 소유한다.
 

@@ -3,7 +3,6 @@
 use grove_management_policy::*;
 
 pub const ROLES: [Role; 3] = [Role::Viewer, Role::Operator, Role::Admin];
-pub const AGENT_ROLES: [AgentRole; 2] = [AgentRole::Viewer, AgentRole::Operator];
 pub const METHODS: [AuthMethod; 3] = [
     AuthMethod::UserSession,
     AuthMethod::ManagementToken,
@@ -48,19 +47,6 @@ pub fn user(role: Role, method: AuthMethod) -> Caller {
             state: AccountState::Active,
         },
         method,
-        credential_state: CredentialState::Active,
-    }
-}
-
-pub fn agent(role: AgentRole, owner_role: Role) -> Caller {
-    Caller {
-        actor: Actor::Agent {
-            role,
-            state: AccountState::Active,
-            owner_role,
-            owner_state: AccountState::Active,
-        },
-        method: AuthMethod::ManagementToken,
         credential_state: CredentialState::Active,
     }
 }

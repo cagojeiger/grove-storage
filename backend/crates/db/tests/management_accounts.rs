@@ -75,15 +75,14 @@ async fn last_admin_changes_are_serialized(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn agent_authorization_tracks_current_owner_and_deletion(pool: PgPool) {
+async fn token_authorization_tracks_current_user_and_deletion(pool: PgPool) {
     bootstrap(&pool).await;
     let owner = user(&pool, Role::Operator).await;
-    let agent = agent(&pool, owner).await;
-    db::issue_credential(&pool, &context(), agent, &key(&hash(2)))
+    db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
         .await
         .unwrap();
     let actor = db::authenticate(&pool, &hash(2)).await.unwrap().unwrap();
-    assert_eq!(actor.owner_user_id, Some(owner));
+    assert_eq!(actor.account_id, owner);
     assert!(authorize(actor.caller, Surface::Mcp, Action::WriteResources).is_ok());
     db::change_account(&pool, &context(), owner, AccountChange::Role(Role::Viewer))
         .await
@@ -91,16 +90,12 @@ async fn agent_authorization_tracks_current_owner_and_deletion(pool: PgPool) {
     let actor = db::authenticate(&pool, &hash(2)).await.unwrap().unwrap();
     assert!(authorize(actor.caller, Surface::Mcp, Action::WriteResources).is_err());
     assert!(authorize(actor.caller, Surface::Cli, Action::ReadResources).is_ok());
-    assert!(matches!(
-        db::change_account(&pool, &context(), agent, AccountChange::Role(Role::Admin)).await,
-        Err(Error::InvalidInput)
-    ));
     db::change_account(&pool, &context(), owner, AccountChange::Delete)
         .await
         .unwrap();
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_none());
     assert!(matches!(
-        db::issue_credential(&pool, &context(), agent, &key(&hash(3))).await,
+        db::issue_credential(&pool, &context(), owner, &key(&hash(3))).await,
         Err(Error::InactiveAccount)
     ));
     let retained: i64 =
@@ -144,7 +139,7 @@ async fn no_op_has_no_duplicate_audit_and_failures_roll_back(pool: PgPool) {
         db::create_account(
             &pool,
             &context(),
-            db::NewAccount::User {
+            db::NewAccount {
                 display_name: "lost",
                 role: Role::Viewer
             }
@@ -172,14 +167,13 @@ async fn failed_bootstrap_leaves_no_account_or_credential(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn failed_delete_preserves_user_agent_tokens_and_session(pool: PgPool) {
+async fn failed_delete_preserves_all_user_tokens_and_session(pool: PgPool) {
     bootstrap(&pool).await;
     let owner = user(&pool, Role::Operator).await;
-    let agent = agent(&pool, owner).await;
     db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
         .await
         .unwrap();
-    db::issue_credential(&pool, &context(), agent, &key(&hash(3)))
+    db::issue_credential(&pool, &context(), owner, &key(&hash(3)))
         .await
         .unwrap();
     db::create_session(&pool, uuid::Uuid::new_v4(), &hash(2), &hash(10))

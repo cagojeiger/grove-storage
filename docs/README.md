@@ -9,7 +9,7 @@
 | 현재 S3 API | [S3 계약](spec/03-s3-surface.md) |
 | 등록·인증·키 회전 | [등록부](spec/01-registry.md) |
 | 현행 관리자 인증 | [관리자 인증](spec/05-admin-auth.md) |
-| master·User/Agent·권한·DB·CLI/MCP·관리 감사 설계 | [ADR 009](adr/009-management-identity-and-command-boundary.md) · [spec 08](spec/08-management-plane.md) |
+| master·User·권한·DB·CLI/MCP·관리 감사 설계 | [ADR 010](adr/010-unified-users-and-named-tokens.md) · [spec 08](spec/08-management-plane.md) |
 | 관리 MCP 연결·CLI 대응·비밀 전달 | [spec 10](spec/10-management-mcp.md) |
 | CLI/MCP 공통 명령·입출력·오류·권한 계약 | [명령 계약](spec/09-management-commands.md) |
 | 관리 콘솔의 화면·API 대응·완료 기준 | [콘솔 구현 계획](spec/06-console.md) |
@@ -34,7 +34,7 @@
 | 배치 | client에 storage 하나 고정 | 현행 배치 유지 | 조인·배치·이동 모델 설계 |
 | 복구 | 업로드 완료·삭제·만료 복구 | 현행 복구 유지 | Node 장애·작업 복구 설계 |
 | 관리 | 운영자 API, gscli 조회·변경, Terraform 비교 예제 | 등록부 Terraform 운영 이관 | Storage Server·Agent 조인 |
-| 관리 인증 | master·User/Agent·권한 API, 개인 User 토큰 로그인·자원 UI; 이전 운영자 REST 유지 | master·신원·토큰 관리 UI, 이전 인증 이관 | 노드 조인 자격증명은 별도 계약 |
+| 관리 인증 | master 설정/복구·Users·용도별 토큰 UI, 권한·감사 API; 이전 운영자 REST 유지 | 세션·이력 UI, 이전 인증의 운영 이관 | 노드 조인 자격증명은 별도 계약 |
 | 관리 명령·감사 | CLI/MCP/콘솔 공통 자원 실행기, 변경 audit·호출·보안 로그 및 조회 API | 콘솔 이력·세션 UI, 운영 전환 | 데이터 경로의 로그와 별도 |
 | 실행 이름 | 서버 `filegate`·`FILEGATE_*`, CLI `gscli`·`GROVE_*` | 기존 서버 계약 유지 | 서버 이름 변경은 별도 릴리스 |
 
