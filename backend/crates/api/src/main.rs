@@ -17,6 +17,7 @@ mod s3;
 mod spool;
 mod status;
 mod storage_access;
+mod storage_registration;
 mod v1;
 
 use std::io;
@@ -109,7 +110,7 @@ async fn serve() -> anyhow::Result<()> {
     );
 
     // 등록된 storage 접근 재검증 — 실패하면 부팅 중단 (ADR 001).
-    admin::verify_registered(&pool, &crypto).await?;
+    storage_registration::verify_registered(&pool, &crypto).await?;
 
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
     info!(event = "server.listening", addr = %config.server.bind_addr);

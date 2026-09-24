@@ -1,6 +1,6 @@
 //! 등록부 행 → 저장소 백엔드 (복호 지점).
 //!
-//! 마스터 키로 시크릿을 복호하는 유일한 경로다. 부팅 재검증(admin),
+//! 마스터 키로 시크릿을 복호하는 유일한 경로다. 부팅 재검증(storage_registration),
 //! presign·중계(v1, bytes), reconciler의 물리 정리가 함께 쓴다.
 //! 접근 모드는 여기서 판정된다: fs는 항상 중계, s3는 force_relay 선언을
 //! 따른다 (ADR 001: capability는 선언식).

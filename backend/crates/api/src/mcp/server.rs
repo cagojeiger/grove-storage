@@ -61,7 +61,13 @@ impl ServerHandler for Server {
         let execution = resources::execute(
             &self.state.pool,
             &self.state.crypto,
-            |input| crate::admin::verify_storage_command(&self.state, input),
+            |input| {
+                crate::storage_registration::verify_command(
+                    &self.state.crypto,
+                    self.state.public_url.is_some(),
+                    input,
+                )
+            },
             Proof::Token(&self.token_hash),
             Surface::Mcp,
             command,

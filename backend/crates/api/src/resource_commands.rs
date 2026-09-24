@@ -53,7 +53,13 @@ pub(crate) async fn execute_with(
     let execution = resources::execute(
         &state.pool,
         &state.crypto,
-        |input| crate::admin::verify_storage_command(&state, input),
+        |input| {
+            crate::storage_registration::verify_command(
+                &state.crypto,
+                state.public_url.is_some(),
+                input,
+            )
+        },
         proof,
         surface,
         command,

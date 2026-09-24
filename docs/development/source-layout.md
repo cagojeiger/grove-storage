@@ -61,8 +61,8 @@ backend/crates/
 │   │   ├── master.rs     master 로그인·첫 Admin 발급·대상 복구 adapter
 │   │   ├── master_config.rs  설정 쌍·형식 검증 (비밀 원문 오류 제외)
 │   │   └── tests/        browser·lifecycle·failures·master/·master_recovery·identity/
-│   ├── admin/              등록부·운영자 인증·usage
-│   │   └── storages.rs     기존 REST와 공통 명령의 S3/fs 접근 검사·Provider 암호화 재사용
+│   ├── admin/              기존 등록부 REST·usage
+│   │   └── storages.rs     기존 REST 요청·응답·등록부 DB 연결
 │   ├── s3/                 SigV4·라우팅·객체·multipart
 │   │   ├── object_response.rs Range·응답 헤더 정책
 │   │   ├── integrity.rs    실측값·HTTP 헤더 연결, checksum 오류 응답
@@ -73,6 +73,8 @@ backend/crates/
 │   ├── spool.rs            스트림 계측·임시 파일
 │   ├── spool/tests.rs      청크별 누적 해시·네이티브 계측 유지
 │   ├── storage_access.rs   등록부에서 backend 구성·물리 작업
+│   ├── storage_registration.rs  REST·공통 명령·부팅·status의 검증·접근 확인·암호화
+│   ├── storage_registration/tests.rs  URL·기본값·FS 필드·부팅/status 계약
 │   ├── status.rs           현재 로컬 DB·저장소 진단 CLI
 │   └── reconciler/         완료 복구
 │       └── reclaim.rs      만료 회수의 물리 정리·재시도
@@ -115,6 +117,7 @@ backend/crates/
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
 | `object-service/multipart_create` | 예약된 업로드 → vendor·relay 준비 | 실패 시 알려진 upload ID로 보상, 원래 오류 유지 |
 | `api/routes`, `api/admin` | HTTP → 인증된 요청 | 표면별 인증·예약 경로 |
+| `api/storage_registration` | 제출 필드 → 접근 확인·암호화된 행; 등록부 → 접근 상태 | REST·HTTP 명령·MCP·부팅·status가 공유; DB 변경·감사·권한은 호출부 소유 |
 | `api/s3/auth` | 원본 URI·헤더 → client | SigV4 검증 |
 | `api/s3/object_response` | Range·쿼리 → 응답 정책 | 인코딩·헤더 검증 |
 | `api/s3/handlers`, `multipart` | 인증된 요청 → 저장·확정 | DB 소유권 → 물리 I/O → DB 확정 |
@@ -130,6 +133,43 @@ backend/crates/
 
 `uploads`의 크기보다 상태 전이의 원자성을 우선한다. 논리키 교체와 옛 파일
 detach는 같은 트랜잭션을 공유한다.
+
+## Naming And Priorities
+
+| Name | Responsibility |
+|---|---|
+| Grove Storage / `gscli` | Product / remote management CLI |
+| User / Agent | Human operator / automation identity owned by a User |
+| Client | Runtime consumer with file API keys or S3 credentials |
+| Storage | Registered filesystem or external S3 backend |
+| Admin / Operator / Viewer | Management roles, separate from runtime Client credentials |
+| `management-*` | Operator identities, permissions and resource commands |
+| `object-*` | File lifecycle decisions and execution ordering |
+| `s3-protocol` | S3 wire contracts |
+| `api`, `db`, `infra`, `core` | Transport composition, persistence, provider I/O, configuration/crypto |
+| `api/admin`, `api/admin_auth`, `admin_*` tables | Legacy management compatibility |
+| `filegate-*`, `filegate`, `FILEGATE_*` | Retained package, executable and configuration names |
+
+```text
+Legacy REST ---------+
+Resource HTTP / MCP -+--> storage_registration --> infra / crypto
+Console via HTTP ---+          |
+Startup / status ---+          +--> registry reads for health checks
+
+Resource commands --> management-service --> db + transactional audit
+Runtime file/S3 --> object-policy / object-service --> db / infra
+```
+
+| Order | Change | Acceptance |
+|---|---|---|
+| 1 - implemented | Move shared registration out of legacy REST | Same validation, probes, encryption and response contracts; 11 crates retained |
+| 2 - next | Bind frontend command names to input/output types | Type errors catch mismatched calls; existing runtime response validation remains |
+| 3 - after migration verification | Retire superseded legacy management entry points | Operator migration, rollback and explicit removal scope verified first |
+| 4 - separate compatibility change | Align remaining Filegate package/configuration names | Release, installer, image, deployment and configuration migration checked together |
+
+Use a module for a shared responsibility inside one executable. Keep an existing
+crate when it provides an independently tested contract or cross-surface reuse.
+Split tests by scenario; keep lock and transaction ownership together.
 
 ## 검증 위치
 
@@ -152,6 +192,7 @@ detach는 같은 트랜잭션을 공유한다.
 | 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
 | 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |
 | 조합 라우팅·인증·CORS | `api/src/routes/tests.rs` |
+| 공통 Storage 등록·부팅/status·기존 REST 변경 호환 | `api/src/storage_registration/tests.rs`; `api/src/resource_commands/tests/{storages,storage_s3,storage_failures}.rs` |
 | S3 서명·쿼리 | `s3-protocol/tests/auth.rs`, `api/src/s3/auth/tests.rs`, `s3/mod.rs`; 실제 요청은 `scripts/s3_auth_cases.py` |
 | Range·응답 헤더 | `api/src/s3/object_response/tests.rs` |
 | 파일 상태·동시성·GC | `db/tests/file_*`, `native_multipart_completion.rs` |

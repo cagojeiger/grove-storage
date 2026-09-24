@@ -97,7 +97,12 @@ async fn invalid_storage_fields_and_probe_failure_are_sanitized(pool: PgPool) {
     state.public_url = None;
     let input = serde_json::from_value(root.input("local", 1)).unwrap();
     assert!(matches!(
-        crate::admin::verify_storage_command(&state, input).await,
+        crate::storage_registration::verify_command(
+            &state.crypto,
+            state.public_url.is_some(),
+            input
+        )
+        .await,
         Err(grove_management_service::Error::InvalidInput)
     ));
     assert!(
@@ -105,5 +110,43 @@ async fn invalid_storage_fields_and_probe_failure_are_sanitized(pool: PgPool) {
             .await
             .unwrap()
             .is_empty()
+    );
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn legacy_storage_writes_share_registration_with_commands(pool: PgPool) {
+    let token = owner(&pool).await;
+    let root = Root::new();
+    let mut body = root.input("legacy", 100)["spec"].clone();
+    body["id"] = json!("legacy");
+    let response = request(
+        &pool,
+        "POST",
+        "/api/admin/v1/storages",
+        &[("authorization", "Bearer test-operator-token")],
+        body.clone(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created = json_body(response).await;
+    let read = json_body(call(&pool, &token, "storage.show", json!({"id":"legacy"})).await).await;
+    assert_eq!(read["result"], created);
+
+    body["capacity_bytes"] = json!(200);
+    let response = request(
+        &pool,
+        "PUT",
+        "/api/admin/v1/storages/legacy",
+        &[("authorization", "Bearer test-operator-token")],
+        body,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json_body(response).await["capacity_bytes"], 200);
+    assert_eq!(
+        call(&pool, &token, "storage.delete", json!({"id":"legacy"}))
+            .await
+            .status(),
+        StatusCode::OK
     );
 }
