@@ -8,18 +8,20 @@ ADR은 한 가지 구조적 결정과 이유를 기록한다. 세부 요청·상
 ```mermaid
 flowchart TD
     G["007: 중앙 관리와 단계별 확장"] --> S["001: 저장소 경계"]
+    G --> I["008: 로컬 Owner·User/Agent 토큰"]
     G --> M["004: 중앙 메타데이터"]
     M --> N["003: 논리 이름"]
     N --> A["006: S3 외부 계약"]
     A --> R["002: 접근·완료 소유권"]
 ```
 
-007은 새 제품 방향이다. 000–006은 현재 FileGate의 네이티브·S3 표면과
+007·008은 새 제품 방향이다. 000–006은 현재 FileGate의 네이티브·S3 표면과
 멀티 backend를 설명한다. 구현 전환 상태는 [문서 목차](../README.md#현재와-방향)에 둔다.
 
 | ADR | 결정 |
 |---|---|
 | [007](007-grove-storage-foundation.md) | PostgreSQL 중앙 관리 위에 외부 S3·독자 스토리지를 단계적으로 제공한다 |
+| [008](008-local-owner-and-agent-credentials.md) | 로컬 Owner 로그인 후 User·Agent 토큰을 DB에서 관리한다 (구현 예정) |
 | [000](000-identity.md) | 업무 의미와 파일 물리 관리를 분리한다 |
 | [001](001-multi-storage.md) | 저장소 접근 계약과 파일 위치를 등록부에 기록한다 |
 | [004](004-config-layers.md) | client·storage·자격증명의 정본을 DB에 둔다 |

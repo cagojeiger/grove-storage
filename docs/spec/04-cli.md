@@ -4,6 +4,7 @@
 - 원격 관리 CLI: `gscli`; 서버·기존 로컬 진단: `filegate`
 - 관련 계약: [등록부](01-registry.md), [제품 경계](../adr/007-grove-storage-foundation.md)
 - 첫 목표: 기존 등록·키·데이터를 보존하면서 FileGate 등록부의 Terraform 관리를 대체한다.
+- 인증 전환 (미구현): [ADR 008](../adr/008-local-owner-and-agent-credentials.md). CLI는 User/Agent 토큰을 사용하는 도구이며, 계정·토큰 lifecycle은 관리 API가 소유한다.
 
 ## 현재 구현과 다음 단계
 
@@ -12,7 +13,7 @@
 | 서버 진입점 | `filegate`·`filegate serve` 유지 | 서버 이름 전환은 별도 릴리스 |
 | 원격 진단 | `gscli status`: HTTP 상태·등록부 요약 | 지원 서버 계약 확장 |
 | 로컬 진단 | `filegate status`: DB·복호 키·저장소 접근 | doctor 명칭·probe 개선은 서버 측 별도 변경 |
-| 관리 명령 | list·show·usage·create·replace·delete·register | Node·Agent 명령은 2차 |
+| 관리 명령 | list·show·usage·create·replace·delete·register | User/자동화 Agent 토큰 관리는 인증 전환, Storage Node·Agent 조인은 2차 |
 | 인자·출력 | 변경 확인, table·버전 있는 JSON, 일회성 비밀 파일 | 연결 profile은 후속 |
 | 테스트 | 설정·입력·HTTP·비밀·변경 결과·status 분리 | 실제 전송·운영 이관 |
 
