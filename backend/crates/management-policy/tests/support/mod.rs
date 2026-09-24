@@ -2,7 +2,7 @@
 
 use grove_management_policy::*;
 
-pub const ROLES: [Role; 3] = [Role::Viewer, Role::Operator, Role::Admin];
+pub const ROLES: [Role; 3] = [Role::Reader, Role::Writer, Role::Admin];
 pub const METHODS: [AuthMethod; 3] = [
     AuthMethod::UserSession,
     AuthMethod::ManagementToken,

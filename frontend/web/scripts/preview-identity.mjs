@@ -163,7 +163,7 @@ export function previewIdentity(json) {
         if (
           !body.display_name?.trim() ||
           body.kind !== "user" ||
-          !["viewer", "operator", "admin"].includes(body.role)
+          !["reader", "writer", "admin"].includes(body.role)
         )
           fail(400, "invalid_input");
         else {

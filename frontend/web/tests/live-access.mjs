@@ -78,7 +78,7 @@ export async function accessChecks(
   await page.getByRole("button", { name: "Users", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("CLI backup");
-  await page.getByLabel("Role", { exact: true }).selectOption("operator");
+  await page.getByLabel("Role", { exact: true }).selectOption("writer");
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await page.getByRole("button", { name: /CLI backup.*Active/ }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();

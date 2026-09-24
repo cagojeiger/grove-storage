@@ -11,10 +11,10 @@ use uuid::Uuid;
 async fn schema_accepts_only_users_and_preserves_user_fk(pool: PgPool) {
     let mut tx = pool.begin().await.unwrap();
     let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','orphan','viewer')").bind(id).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','orphan','reader')").bind(id).execute(&mut *tx).await.unwrap();
     assert!(tx.commit().await.is_err());
     bootstrap(&pool).await;
-    assert!(sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'agent','rejected','viewer')").bind(Uuid::new_v4()).execute(&pool).await.is_err());
+    assert!(sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'agent','rejected','reader')").bind(Uuid::new_v4()).execute(&pool).await.is_err());
     let agents: Option<String> =
         sqlx::query_scalar("SELECT to_regclass('management.agents')::text")
             .fetch_one(&pool)
@@ -26,7 +26,7 @@ async fn schema_accepts_only_users_and_preserves_user_fk(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn session_fk_rejects_cross_user_credentials(pool: PgPool) {
     let (owner, credential) = bootstrap(&pool).await;
-    let other = user(&pool, Role::Viewer).await;
+    let other = user(&pool, Role::Reader).await;
     let automation_user = owner;
     let token_key = db::issue_credential(&pool, &context(), automation_user, &key(&hash(2)))
         .await
@@ -44,7 +44,7 @@ async fn session_fk_rejects_cross_user_credentials(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn schema_rejects_plaintext_hashes_and_audit_survives_physical_removal(pool: PgPool) {
     bootstrap(&pool).await;
-    let target = user(&pool, Role::Viewer).await;
+    let target = user(&pool, Role::Reader).await;
     assert!(
         db::issue_credential(&pool, &context(), target, &key("raw-token"))
             .await

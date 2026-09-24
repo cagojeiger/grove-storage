@@ -14,8 +14,8 @@ export const otherUser: Account = {
   ...owner,
   id: "22222222-2222-2222-2222-222222222222",
   kind: "user",
-  display_name: "Operator",
-  role: "operator",
+  display_name: "Writer",
+  role: "writer",
 };
 export const rawToken = "gsm_" + "a".repeat(64);
 export const root = "/api/admin/console/#access/users";

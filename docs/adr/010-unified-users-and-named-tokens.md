@@ -7,7 +7,7 @@
 ## 경계
 
 ```text
-User (viewer / operator / admin)
+User (reader / writer / admin)
 ├── Token: personal   ── Console session
 ├── Token: laptop     ── CLI
 └── Token: nightly    ── MCP / API
@@ -41,6 +41,9 @@ User (viewer / operator / admin)
 | 소유 관계 | agents 테이블 제거; accounts의 kind는 user로 고정 |
 | 과거 이력 | actor_kind·owner_user_id·credential_id snapshot 보존; 과거 owner 이력 조회 유지 |
 | Storage·Client·파일 | 변경 없음 |
+
+역할 명칭은 migration `0013_management_roles.sql`에서 `viewer → reader`,
+`operator → writer`로 전환한다. 권한 범위·User ID·토큰·세션은 유지하고 과거 감사의 역할 snapshot은 보존한다.
 
 이전 서버의 쓰기를 중지한 뒤 migration과 새 바이너리를 적용한다. 이전 서버와의 혼합 배포는
 지원하지 않는다. 전환 전 DB 백업을 확보하며 롤백은 백업·이전 바이너리를 함께 복원한다.

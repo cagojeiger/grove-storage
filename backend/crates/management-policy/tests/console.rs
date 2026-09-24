@@ -6,7 +6,7 @@ use support::*;
 #[test]
 fn console_matrix_preserves_role_and_query_scope() {
     for role in ROLES {
-        for (action, viewer_operator, admin) in [
+        for (action, reader_writer, admin) in [
             (
                 Action::ReadOwnSessions,
                 Ok(Scope::SelfOnly),
@@ -52,7 +52,7 @@ fn console_matrix_preserves_role_and_query_scope() {
                 if role == Role::Admin {
                     admin
                 } else {
-                    viewer_operator
+                    reader_writer
                 },
                 "{role:?} {action:?}"
             );

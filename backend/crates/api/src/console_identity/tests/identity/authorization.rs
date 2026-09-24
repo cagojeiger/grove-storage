@@ -1,15 +1,15 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn viewer_and_operator_cannot_manage_identities_or_view_security(pool: PgPool) {
+async fn reader_and_writer_cannot_manage_identities_or_view_security(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
     let target = create(
         &pool,
         &admin_cookie,
-        serde_json::json!({"kind":"user","display_name":"target","role":"viewer"}),
+        serde_json::json!({"kind":"user","display_name":"target","role":"reader"}),
     )
     .await;
-    for role in [Role::Viewer, Role::Operator] {
+    for role in [Role::Reader, Role::Writer] {
         let (_, cookie) = actor(&pool, role).await;
         for (method, path, body) in [
             ("GET", "/accounts".into(), serde_json::Value::Null),

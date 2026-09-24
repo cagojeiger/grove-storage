@@ -1,16 +1,16 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn viewer_tokens_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) {
+async fn reader_tokens_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) {
     owner(&pool).await;
-    let viewer = operator(&pool, Role::Viewer, 2).await;
+    let reader = user_login(&pool, Role::Reader, 2).await;
     seed(&pool).await;
-    let automation_user = viewer.account;
+    let automation_user = reader.account;
     db::issue_credential(&pool, &context(), automation_user, &key(&hash(500)))
         .await
         .unwrap();
     let before = audit_count(&pool).await;
-    for token in [&viewer.token, &hash(500)] {
+    for token in [&reader.token, &hash(500)] {
         for surface in [
             Surface::Cli,
             Surface::Mcp,
@@ -41,7 +41,7 @@ async fn viewer_tokens_and_wrong_surfaces_cannot_apply_mutations(pool: PgPool) {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn queued_mutation_rechecks_revocation_and_user_demotion(pool: PgPool) {
     owner(&pool).await;
-    let login = operator(&pool, Role::Operator, 2).await;
+    let login = user_login(&pool, Role::Writer, 2).await;
     seed(&pool).await;
     let automation_user = login.account;
     let token = hash(500);
@@ -74,7 +74,7 @@ async fn queued_mutation_rechecks_revocation_and_user_demotion(pool: PgPool) {
             .await
             .unwrap();
         } else {
-            sqlx::query("UPDATE management.accounts SET role='viewer' WHERE id=$1")
+            sqlx::query("UPDATE management.accounts SET role='reader' WHERE id=$1")
                 .bind(login.account)
                 .execute(&mut *fence)
                 .await

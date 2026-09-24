@@ -92,10 +92,10 @@ export function AccountDialog({
               <select
                 name="role"
                 aria-label="Role"
-                defaultValue={account?.role ?? "viewer"}
+                defaultValue={account?.role ?? "reader"}
               >
-                <option value="viewer">Viewer</option>
-                <option value="operator">Operator</option>
+                <option value="reader">Reader</option>
+                <option value="writer">Writer</option>
                 <option value="admin">Admin</option>
               </select>
             </label>

@@ -64,8 +64,8 @@ pub(super) async fn current(State(state): State<AppState>, headers: HeaderMap) -
                 return failure(Error::Unavailable, execution.request_id);
             };
             let role = match role {
-                Role::Viewer => "viewer",
-                Role::Operator => "operator",
+                Role::Reader => "reader",
+                Role::Writer => "writer",
                 Role::Admin => "admin",
             };
             identified(Json(serde_json::json!({"principal":"user", "user_id": identity.account_id,

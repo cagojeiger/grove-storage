@@ -4,7 +4,7 @@ use filegate_core::{EncryptedSecret, ExposeSecret};
 #[sqlx::test(migrations = "../db/migrations")]
 async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) {
     owner(&pool).await;
-    let operator = operator(&pool, Role::Operator, 2).await;
+    let writer = user_login(&pool, Role::Writer, 2).await;
     seed(&pool).await;
     for (surface, id) in [(Surface::Cli, "cli-client"), (Surface::Mcp, "mcp-client")] {
         let before = audit_count(&pool).await;
@@ -12,7 +12,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
             &pool,
             &crypto(),
             unexpected_storage_probe,
-            Proof::Token(&operator.token),
+            Proof::Token(&writer.token),
             surface,
             Command::ClientCreate(input::ClientCreateInput {
                 id: id.into(),
@@ -29,7 +29,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
                 &pool,
                 &crypto(),
                 unexpected_storage_probe,
-                Proof::Token(&operator.token),
+                Proof::Token(&writer.token),
                 surface,
                 Command::ClientKeyRegister(input::ClientKeyInput {
                     client_id: id.into(),
@@ -44,7 +44,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
             &pool,
             &crypto(),
             unexpected_storage_probe,
-            Proof::Token(&operator.token),
+            Proof::Token(&writer.token),
             surface,
             Command::CredentialCreate(input::ClientInput {
                 client_id: id.into(),
@@ -78,14 +78,14 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
                 .unwrap();
                 assert!(rows.iter().all(|r| !r.contains(&key.secret_key)
                     && !r.contains(&hash)
-                    && !r.contains(&operator.token)));
+                    && !r.contains(&writer.token)));
             }
             assert!(
                 resources::execute(
                     &pool,
                     &crypto(),
                     unexpected_storage_probe,
-                    Proof::Token(&operator.token),
+                    Proof::Token(&writer.token),
                     surface,
                     Command::CredentialDelete(input::CredentialDeleteInput {
                         client_id: id.into(),
@@ -102,7 +102,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
                 &pool,
                 &crypto(),
                 unexpected_storage_probe,
-                Proof::Token(&operator.token),
+                Proof::Token(&writer.token),
                 surface,
                 Command::ClientKeyDelete(input::ClientKeyInput {
                     client_id: id.into(),
@@ -118,7 +118,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
                 &pool,
                 &crypto(),
                 unexpected_storage_probe,
-                Proof::Token(&operator.token),
+                Proof::Token(&writer.token),
                 surface,
                 Command::ClientDelete(input::ResourceInput { id: id.into() })
             )

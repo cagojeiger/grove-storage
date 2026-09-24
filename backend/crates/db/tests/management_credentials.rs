@@ -12,7 +12,7 @@ use support::*;
 #[sqlx::test(migrations = "./migrations")]
 async fn issuance_racing_deletion_never_leaves_a_valid_key(pool: PgPool) {
     bootstrap(&pool).await;
-    let account = user(&pool, Role::Operator).await;
+    let account = user(&pool, Role::Writer).await;
     let ctx = context();
     let hash = hash(2);
     let key = key(&hash);

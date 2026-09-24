@@ -3,7 +3,7 @@ use super::*;
 #[sqlx::test(migrations = "../db/migrations")]
 async fn three_mutations_share_outputs_and_secret_free_audits_across_surfaces(pool: PgPool) {
     owner(&pool).await;
-    let operator = operator(&pool, Role::Operator, 2).await;
+    let writer = user_login(&pool, Role::Writer, 2).await;
     for surface in [Surface::Cli, Surface::Mcp, Surface::ResourceApi] {
         let before = audit_count(&pool).await;
         for command in [
@@ -16,7 +16,7 @@ async fn three_mutations_share_outputs_and_secret_free_audits_across_surfaces(po
                 &pool,
                 &crypto(),
                 verified,
-                Proof::Token(&operator.token),
+                Proof::Token(&writer.token),
                 surface,
                 command,
             )
@@ -28,7 +28,7 @@ async fn three_mutations_share_outputs_and_secret_free_audits_across_surfaces(po
         }
         execute(
             &pool,
-            &operator.token,
+            &writer.token,
             Command::StorageDelete(input::ResourceInput { id: "local".into() }),
         )
         .await
@@ -44,7 +44,7 @@ async fn three_mutations_share_outputs_and_secret_free_audits_across_surfaces(po
     .unwrap();
     assert!(
         rows.iter()
-            .all(|r| !r.contains("private-address") && !r.contains(&operator.token))
+            .all(|r| !r.contains("private-address") && !r.contains(&writer.token))
     );
     let snapshots: (i64,i64,bool) = sqlx::query_as("SELECT (metadata->'before'->>'capacity_bytes')::bigint, (metadata->'after'->>'capacity_bytes')::bigint, (metadata->>'address_changed')::bool FROM management.audit_events WHERE action='storage.replace' LIMIT 1")
         .fetch_one(&pool).await.unwrap();

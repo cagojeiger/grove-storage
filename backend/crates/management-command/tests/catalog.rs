@@ -80,7 +80,7 @@ fn permissions_and_mutation_effects_are_explicit_for_all_names() {
         };
         assert_eq!(name.effect(), expected_effect);
     }
-    // Listing service keys is not a write, but still needs operator privilege.
+    // Listing service keys is not a write, but still needs writer privilege.
     assert_eq!(CommandName::CredentialList.effect(), Effect::Read);
     assert_eq!(
         CommandName::CredentialList.required_action(),
@@ -90,7 +90,7 @@ fn permissions_and_mutation_effects_are_explicit_for_all_names() {
 
 #[test]
 fn every_resource_command_has_identical_cli_and_mcp_authorization() {
-    for role in [Role::Viewer, Role::Operator, Role::Admin] {
+    for role in [Role::Reader, Role::Writer, Role::Admin] {
         let caller = Caller {
             actor: Actor::User {
                 role,
@@ -102,7 +102,7 @@ fn every_resource_command_has_identical_cli_and_mcp_authorization() {
         for &name in CommandName::ALL {
             let cli = authorize(caller, Surface::Cli, name.required_action());
             assert_eq!(cli, authorize(caller, Surface::Mcp, name.required_action()));
-            let allowed = role != Role::Viewer || name.required_action() == Action::ReadResources;
+            let allowed = role != Role::Reader || name.required_action() == Action::ReadResources;
             assert_eq!(cli.is_ok(), allowed, "{role:?} {name:?}");
         }
     }

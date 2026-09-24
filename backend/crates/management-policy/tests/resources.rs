@@ -17,7 +17,7 @@ fn resource_roles_match_on_console_cli_mcp_and_direct_api() {
                 (Action::WriteResources, true),
                 (Action::ManageServiceCredentials, true),
             ] {
-                let expected = if writable && role == Role::Viewer {
+                let expected = if writable && role == Role::Reader {
                     Err(Denial::InsufficientRole)
                 } else {
                     Ok(Scope::Installation)

@@ -54,7 +54,7 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(row, ("user".into(), false, "operator".into()));
+    assert_eq!(row, ("user".into(), false, "writer".into()));
     let after: String = sqlx::query_scalar(
         "SELECT row_to_json(t)::text FROM management.audit_events t WHERE actor_id=$1",
     )

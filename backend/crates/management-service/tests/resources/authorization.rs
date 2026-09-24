@@ -4,7 +4,7 @@ use super::*;
 async fn named_tokens_share_user_role_but_keep_separate_history_and_revocation(pool: PgPool) {
     owner(&pool).await;
     seed(&pool).await;
-    let user = user(&pool, Role::Operator).await;
+    let user = user(&pool, Role::Writer).await;
     let mut credentials = Vec::new();
     for (n, surface) in [(800, Surface::Cli), (801, Surface::Mcp)] {
         let token = hash(n);
@@ -44,7 +44,7 @@ async fn named_tokens_share_user_role_but_keep_separate_history_and_revocation(p
         &pool,
         &context(),
         user,
-        db::AccountChange::Role(Role::Viewer),
+        db::AccountChange::Role(Role::Reader),
     )
     .await
     .unwrap();
@@ -64,11 +64,11 @@ async fn named_tokens_share_user_role_but_keep_separate_history_and_revocation(p
 async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
     owner(&pool).await;
     seed(&pool).await;
-    for (n, role) in [Role::Viewer, Role::Operator, Role::Admin]
+    for (n, role) in [Role::Reader, Role::Writer, Role::Admin]
         .into_iter()
         .enumerate()
     {
-        let login = operator(&pool, role, n as u64 + 2).await;
+        let login = user_login(&pool, role, n as u64 + 2).await;
         for surface in [Surface::Cli, Surface::Mcp, Surface::ResourceApi] {
             let result = resources::execute(
                 &pool,
@@ -92,7 +92,7 @@ async fn cli_mcp_and_resource_api_share_role_results(pool: PgPool) {
             )
             .await
             .result;
-            if role == Role::Viewer {
+            if role == Role::Reader {
                 assert_eq!(result.unwrap_err().code, ErrorCode::Forbidden);
             } else {
                 assert!(result.is_ok());
@@ -162,12 +162,12 @@ async fn token_reads_obey_live_user_role_and_revocation(pool: PgPool) {
         .result
         .is_ok()
     );
-    operator(&pool, Role::Admin, 2).await;
+    user_login(&pool, Role::Admin, 2).await;
     db::change_account(
         &pool,
         &context(),
         owner.account,
-        db::AccountChange::Role(Role::Viewer),
+        db::AccountChange::Role(Role::Reader),
     )
     .await
     .unwrap();
@@ -226,7 +226,7 @@ async fn token_reads_obey_live_user_role_and_revocation(pool: PgPool) {
 async fn queued_resource_read_rechecks_role_after_identity_lock(pool: PgPool) {
     owner(&pool).await;
     seed(&pool).await;
-    let login = operator(&pool, Role::Operator, 2).await;
+    let login = user_login(&pool, Role::Writer, 2).await;
     let mut fence = pool.begin().await.unwrap();
     sqlx::query("SELECT pg_advisory_xact_lock(5139268467995599950)")
         .execute(&mut *fence)
@@ -245,7 +245,7 @@ async fn queued_resource_read_rechecks_role_after_identity_lock(pool: PgPool) {
         .await
     });
     wait_for_identity_lock(&pool).await;
-    sqlx::query("UPDATE management.accounts SET role='viewer' WHERE id=$1")
+    sqlx::query("UPDATE management.accounts SET role='reader' WHERE id=$1")
         .bind(login.account)
         .execute(&mut *fence)
         .await

@@ -10,12 +10,15 @@ test("create a User without Agent or owner fields", async ({ page }) => {
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await expect(page.getByLabel("Owner", { exact: true })).toHaveCount(0);
-  await page.getByLabel("Name", { exact: true }).fill("Operator");
-  await page.getByLabel("Role", { exact: true }).selectOption("operator");
+  await expect(page.getByLabel("Role", { exact: true }).locator("option")).toHaveText([
+    "Reader", "Writer", "Admin",
+  ]);
+  await page.getByLabel("Name", { exact: true }).fill("Writer");
+  await page.getByLabel("Role", { exact: true }).selectOption("writer");
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(writes.map((w) => w.body)).toEqual([
-    { kind: "user", display_name: "Operator", role: "operator" },
+    { kind: "user", display_name: "Writer", role: "writer" },
   ]);
 });
 
@@ -116,10 +119,10 @@ for (const failure of ["lost", "unknown", "malformed"])
     expect(attempts).toBe(1);
   });
 
-test("Viewer cannot discover Access or request accounts", async ({ page }) => {
+test("Reader cannot discover Access or request accounts", async ({ page }) => {
   const { writes } = await accessMock(page);
   await page.route("**/v1/session", (route) =>
-    route.fulfill({ json: { ...session, role: "viewer" } }),
+    route.fulfill({ json: { ...session, role: "reader" } }),
   );
   let reads = 0;
   await page.route("**/v1/accounts?*", (route) => {
@@ -150,6 +153,6 @@ test("account paging preserves earlier Users", async ({ page }) => {
     page.getByRole("button", { name: /Home administrator.*Active/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Operator.*Active/ }),
+    page.getByRole("button", { name: /Writer.*Active/ }),
   ).toBeVisible();
 });

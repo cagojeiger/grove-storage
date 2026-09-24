@@ -6,7 +6,7 @@ async fn tokens_are_one_time_responses_and_revocation_invalidates_sessions(pool:
     let user = create(
         &pool,
         &admin_cookie,
-        serde_json::json!({"kind":"user","display_name":"target","role":"viewer"}),
+        serde_json::json!({"kind":"user","display_name":"target","role":"reader"}),
     )
     .await;
     let key = issue(&pool, &admin_cookie, user).await;
@@ -69,7 +69,7 @@ async fn tokens_are_one_time_responses_and_revocation_invalidates_sessions(pool:
 #[sqlx::test(migrations = "../db/migrations")]
 async fn user_deletion_retires_all_credentials_and_session_scope_is_self_only(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
-    let (user, user_cookie) = actor(&pool, Role::Viewer).await;
+    let (user, user_cookie) = actor(&pool, Role::Reader).await;
     let key = issue(&pool, &admin_cookie, user).await;
     let raw = key["token"].as_str().unwrap();
     let second_login = login(app(&pool), raw).await;

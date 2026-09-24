@@ -2,7 +2,7 @@ use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn ambiguous_login_commit_never_returns_a_cookie_or_retries(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Viewer).await;
+    let (_, _, token) = account(&pool, Role::Reader).await;
     sqlx::raw_sql("CREATE SEQUENCE management.login_commit_attempts;
         CREATE FUNCTION management.reject_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         PERFORM nextval('management.login_commit_attempts'); RAISE EXCEPTION 'private-detail'; END $$;
@@ -24,7 +24,7 @@ async fn ambiguous_login_commit_never_returns_a_cookie_or_retries(pool: PgPool) 
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn budget_counts_invalid_tokens_and_fails_closed(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Viewer).await;
+    let (_, _, token) = account(&pool, Role::Reader).await;
     assert_eq!(
         login(app(&pool), "malformed-secret").await.status(),
         StatusCode::UNAUTHORIZED
@@ -61,7 +61,7 @@ async fn budget_counts_invalid_tokens_and_fails_closed(pool: PgPool) {
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn disabled_console_and_invalid_envelopes_do_not_issue_sessions(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Viewer).await;
+    let (_, _, token) = account(&pool, Role::Reader).await;
     let mut state = crate::routes::tests::test_state();
     state.pool = pool.clone();
     assert_eq!(
@@ -100,7 +100,7 @@ async fn disabled_console_and_invalid_envelopes_do_not_issue_sessions(pool: PgPo
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn mandatory_audit_failure_rolls_back_login_but_telemetry_failure_does_not(pool: PgPool) {
-    let (_, id, token) = account(&pool, Role::Viewer).await;
+    let (_, id, token) = account(&pool, Role::Reader).await;
     sqlx::raw_sql("CREATE FUNCTION management.reject_login() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private-db-error'; END $$;
         CREATE TRIGGER reject_login BEFORE INSERT ON management.audit_events FOR EACH ROW EXECUTE FUNCTION management.reject_login();").execute(&pool).await.unwrap();
     let response = login(app(&pool), &token).await;

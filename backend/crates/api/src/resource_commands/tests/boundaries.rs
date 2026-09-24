@@ -137,7 +137,7 @@ async fn live_role_and_token_revocation_affect_following_http_reads(pool: PgPool
         &pool,
         &context,
         identity.account_id,
-        db::AccountChange::Role(Role::Viewer),
+        db::AccountChange::Role(Role::Reader),
     )
     .await
     .unwrap();

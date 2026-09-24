@@ -22,7 +22,7 @@ User-Agent 헤더·Origin 문자열·도구 이름은 콘솔 권한의 증거가
 
 ## 권한
 
-| 작업 | Viewer | Operator | Admin | 허용 진입점 |
+| 작업 | Reader | Writer | Admin | 허용 진입점 |
 |---|---|---|---|---|
 | Storage·Client·usage/status 조회 | 허용 | 허용 | 허용 | 콘솔·CLI·MCP |
 | Storage·Client 등록·변경·삭제 | 거부 | 허용 | 허용 | 콘솔·CLI·MCP |
@@ -33,7 +33,7 @@ User-Agent 헤더·Origin 문자열·도구 이름은 콘솔 권한의 증거가
 | 전체 보안 이벤트 조회 | 거부 | 거부 | 허용 | 콘솔 세션 |
 
 자기 범위는 본인 User와 그 토큰들의 관리 이력이다. 이전 Agent의 owner snapshot은 과거 이력 조회에만 보존한다.
-Operator는 Client 서비스 키를 다루는 강한 운영 권한이다. 발급 화면에서 이를 명시한다.
+Writer는 Client 서비스 키를 다루는 강한 운영 권한이다. 발급 화면에서 이를 명시한다.
 기존 삭제·참조·주소 변경 제약은 Admin과 master를 포함한 모든 경로에서 유지한다.
 역할은 User에 귀속된다. 다른 권한이 필요한 자동화에는 별도 User를 만든다.
 역할 변경·비활성화는 이후 요청에 반영하며 이미 허용된 작업은 완료될 수 있다.
@@ -181,7 +181,7 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 
 | 계약 | 값·처리 |
 |---|---|
-| 입력 | 이름·label은 trim 후 1–80자; 선언한 필드만 수용; User role은 viewer/operator/admin |
+| 입력 | 이름·label은 trim 후 1–80자; 선언한 필드만 수용; User role은 reader/writer/admin |
 | 계정 변경 | role·active·삭제만 제공; 삭제 계정은 복원 대상에서 제외 |
 | 토큰 수명 | 기본 90일, 1–90일 선택; 유효 토큰은 계정당 32개, 초과 시 409/conflict |
 | 동시 발급 | identity lock 아래 한도 검사·발급; 만료/폐기 토큰은 한도에서 제외; 복구는 기존 키 폐기 후 발급 |

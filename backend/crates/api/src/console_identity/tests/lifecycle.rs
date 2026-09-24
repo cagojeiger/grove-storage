@@ -2,7 +2,7 @@ use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn login_current_logout_and_secret_free_correlated_history(pool: PgPool) {
-    let (user, credential, token) = account(&pool, Role::Viewer).await;
+    let (user, credential, token) = account(&pool, Role::Reader).await;
     let response = login(app(&pool), &token).await;
     assert_eq!(response.status(), StatusCode::OK);
     let request_id: Uuid = response.headers()["x-request-id"]
@@ -63,18 +63,18 @@ async fn login_current_logout_and_secret_free_correlated_history(pool: PgPool) {
     }
     let response = current(app(&pool), &cookie).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(json(response).await["role"], "viewer");
+    assert_eq!(json(response).await["role"], "reader");
     db::change_account(
         &pool,
         &context(),
         user,
-        db::AccountChange::Role(Role::Operator),
+        db::AccountChange::Role(Role::Writer),
     )
     .await
     .unwrap();
     assert_eq!(
         json(current(app(&pool), &cookie).await).await["role"],
-        "operator"
+        "writer"
     );
     let other = login(app(&pool), &token).await;
     let other_cookie = super::cookie(&other);
@@ -106,7 +106,7 @@ async fn login_current_logout_and_secret_free_correlated_history(pool: PgPool) {
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn invalid_credentials_and_expiry_never_become_console_users(pool: PgPool) {
-    let (user, _, _) = account(&pool, Role::Operator).await;
+    let (user, _, _) = account(&pool, Role::Writer).await;
     for token in [
         format!("gsm_{}", filegate_core::generate_url_secret()),
         format!("fgop_{}", filegate_core::generate_url_secret()),
@@ -144,7 +144,7 @@ async fn invalid_credentials_and_expiry_never_become_console_users(pool: PgPool)
 #[sqlx::test(migrations = "../db/migrations")]
 async fn source_revocation_account_disabling_and_session_expiry_take_effect(pool: PgPool) {
     for change in ["revoke", "disable", "expire-session"] {
-        let (user, id, token) = account(&pool, Role::Viewer).await;
+        let (user, id, token) = account(&pool, Role::Reader).await;
         let response = login(app(&pool), &token).await;
         let cookie = cookie(&response);
         match change {

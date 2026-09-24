@@ -139,7 +139,7 @@ def check_s3(endpoint, directory, backend):
     assert len(events) == 9
     assert all(item["context"]["surface"] == "mcp" for item in events)
     assert all(secret not in json.dumps(audit) for secret in SECRETS)
-    management.request("PATCH", f"/accounts/{management.user_id}", {"operation": "role", "role": "viewer"})
+    management.request("PATCH", f"/accounts/{management.user_id}", {"operation": "role", "role": "reader"})
     call("client.create", {"id": "blocked", "storage_id": "missing"}, error="forbidden")
     call("client.list", {})
     assert not rpc("tools/call", {"name": "status", "arguments": {}}, management.user_token)["isError"]

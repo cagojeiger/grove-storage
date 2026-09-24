@@ -6,7 +6,7 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
     let user = create(
         &pool,
         &cookie,
-        serde_json::json!({"kind":"user","display_name":"Viewer","role":"viewer"}),
+        serde_json::json!({"kind":"user","display_name":"Reader","role":"reader"}),
     )
     .await;
     let path = format!("/accounts/{user}");
@@ -91,7 +91,7 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
         ("DELETE", serde_json::Value::Null),
         (
             "PATCH",
-            serde_json::json!({"operation":"role","role":"viewer"}),
+            serde_json::json!({"operation":"role","role":"reader"}),
         ),
         (
             "PATCH",
@@ -113,7 +113,7 @@ async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
     let target = create(
         &pool,
         &cookie,
-        serde_json::json!({"kind":"user","display_name":"target","role":"viewer"}),
+        serde_json::json!({"kind":"user","display_name":"target","role":"reader"}),
     )
     .await;
     let response = send(
@@ -121,7 +121,7 @@ async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
         &cookie,
         "PATCH",
         &format!("/accounts/{target}"),
-        serde_json::json!({"operation":"role","role":"operator"}),
+        serde_json::json!({"operation":"role","role":"writer"}),
     )
     .await;
     let request_id: Uuid = response.headers()["x-request-id"]
@@ -145,7 +145,7 @@ async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
         &cookie,
         "PATCH",
         &format!("/accounts/{target}"),
-        serde_json::json!({"operation":"role","role":"operator"}),
+        serde_json::json!({"operation":"role","role":"writer"}),
     )
     .await;
     assert_eq!(json(response).await["changed"], false);
@@ -174,9 +174,9 @@ async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
     for body in [
         serde_json::json!({"kind":"user","display_name":"","role":"admin"}),
         serde_json::json!({"kind":"agent","display_name":"invalid","role":"admin","owner_user_id":target}),
-        serde_json::json!({"kind":"agent","display_name":"old operator","role":"operator","owner_user_id":target}),
-        serde_json::json!({"kind":"agent","display_name":"old viewer","role":"viewer","owner_user_id":target}),
-        serde_json::json!({"kind":"user","display_name":"invalid owner","role":"viewer","owner_user_id":target}),
+        serde_json::json!({"kind":"agent","display_name":"old writer","role":"writer","owner_user_id":target}),
+        serde_json::json!({"kind":"agent","display_name":"old reader","role":"reader","owner_user_id":target}),
+        serde_json::json!({"kind":"user","display_name":"invalid owner","role":"reader","owner_user_id":target}),
         serde_json::json!({"kind":"user","display_name":"secret-invalid","role":"admin","actor_id":target}),
     ] {
         let response = send(&pool, &cookie, "POST", "/accounts", body).await;

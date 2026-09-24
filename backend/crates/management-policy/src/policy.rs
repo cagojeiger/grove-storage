@@ -73,8 +73,8 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
     match action {
         Action::ReadResources => Ok(Scope::Installation),
         Action::WriteResources | Action::ManageServiceCredentials => match role {
-            Role::Viewer => Err(Denial::InsufficientRole),
-            Role::Operator | Role::Admin => Ok(Scope::Installation),
+            Role::Reader => Err(Denial::InsufficientRole),
+            Role::Writer | Role::Admin => Ok(Scope::Installation),
         },
         Action::ReadOwnSessions | Action::RevokeOwnSessions => {
             require_console_session(caller)?;
@@ -84,14 +84,14 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
             require_console_session(caller)?;
             match role {
                 Role::Admin => Ok(Scope::Installation),
-                Role::Viewer | Role::Operator => Err(Denial::InsufficientRole),
+                Role::Reader | Role::Writer => Err(Denial::InsufficientRole),
             }
         }
         Action::ReadAuditHistory | Action::ReadInvocationHistory => {
             require_console_session(caller)?;
             Ok(match role {
                 Role::Admin => Scope::Installation,
-                Role::Viewer | Role::Operator => Scope::SelfOnly,
+                Role::Reader | Role::Writer => Scope::SelfOnly,
             })
         }
         Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {

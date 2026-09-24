@@ -60,8 +60,8 @@ async fn user_demotion_limits_writes_and_revocation_stops_discovery(pool: PgPool
         &pool,
         &ctx,
         db::NewAccount {
-            display_name: "Operator",
-            role: Role::Operator,
+            display_name: "Writer",
+            role: Role::Writer,
         },
     )
     .await
@@ -106,7 +106,7 @@ async fn user_demotion_limits_writes_and_revocation_stops_discovery(pool: PgPool
         .unwrap()
         .unwrap();
     assert_eq!(row, ("mcp".into(), user, identity.credential_id));
-    db::change_account(&pool, &ctx, user, db::AccountChange::Role(Role::Viewer))
+    db::change_account(&pool, &ctx, user, db::AccountChange::Role(Role::Reader))
         .await
         .unwrap();
     assert_eq!(

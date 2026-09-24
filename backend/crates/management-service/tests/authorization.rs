@@ -14,14 +14,14 @@ fn commands(target: Uuid, key_hash: &str) -> Vec<(Command<'_>, bool)> {
         (
             Command::CreateAccount(NewAccount {
                 display_name: "created",
-                role: Role::Viewer,
+                role: Role::Reader,
             }),
             true,
         ),
         (
             Command::ChangeAccount {
                 id: target,
-                change: AccountChange::Role(Role::Viewer),
+                change: AccountChange::Role(Role::Reader),
             },
             true,
         ),
@@ -84,13 +84,13 @@ fn identity_and_history_names_never_overlap_resource_commands() {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn every_console_operation_enforces_its_role(pool: PgPool) {
     owner(&pool).await;
-    let target = user(&pool, Role::Viewer).await;
+    let target = user(&pool, Role::Reader).await;
     let key_hash = hash(99);
-    for (n, role) in [Role::Viewer, Role::Operator, Role::Admin]
+    for (n, role) in [Role::Reader, Role::Writer, Role::Admin]
         .into_iter()
         .enumerate()
     {
-        let login = operator(&pool, role, n as u64 + 2).await;
+        let login = user_login(&pool, role, n as u64 + 2).await;
         for (command, admin_only) in commands(target, &key_hash) {
             let name = command.name();
             let result = service::execute(
@@ -148,10 +148,10 @@ async fn admin_bearer_cannot_use_any_console_command_or_fake_its_surface(pool: P
 #[sqlx::test(migrations = "../db/migrations")]
 async fn own_session_scope_and_current_revocation_are_enforced(pool: PgPool) {
     let admin = owner(&pool).await;
-    let viewer = operator(&pool, Role::Viewer, 2).await;
+    let reader = user_login(&pool, Role::Reader, 2).await;
     let result = service::execute(
         &pool,
-        Proof::Session(&viewer.session),
+        Proof::Session(&reader.session),
         Surface::Console,
         Command::OwnSessions(Page::default()),
     )
@@ -159,11 +159,11 @@ async fn own_session_scope_and_current_revocation_are_enforced(pool: PgPool) {
     .result
     .unwrap();
     assert!(
-        matches!(result, Output::Sessions(ref rows) if rows.len()==1 && rows.first().unwrap().id==viewer.session_id)
+        matches!(result, Output::Sessions(ref rows) if rows.len()==1 && rows.first().unwrap().id==reader.session_id)
     );
     let result = service::execute(
         &pool,
-        Proof::Session(&viewer.session),
+        Proof::Session(&reader.session),
         Surface::Console,
         Command::RevokeOwnSession(admin.session_id),
     )
@@ -181,7 +181,7 @@ async fn own_session_scope_and_current_revocation_are_enforced(pool: PgPool) {
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::RevokeCredential(viewer.credential),
+        Command::RevokeCredential(reader.credential),
     )
     .await
     .result
@@ -190,7 +190,7 @@ async fn own_session_scope_and_current_revocation_are_enforced(pool: PgPool) {
     assert!(matches!(
         service::execute(
             &pool,
-            Proof::Session(&viewer.session),
+            Proof::Session(&reader.session),
             Surface::Console,
             Command::OwnSessions(Page::default())
         )
@@ -203,7 +203,7 @@ async fn own_session_scope_and_current_revocation_are_enforced(pool: PgPool) {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn waiting_mutation_rechecks_role_after_lock_acquisition(pool: PgPool) {
     owner(&pool).await;
-    let login = operator(&pool, Role::Admin, 2).await;
+    let login = user_login(&pool, Role::Admin, 2).await;
     let mut fence = pool.begin().await.unwrap();
     sqlx::query("SELECT pg_advisory_xact_lock(5139268467995599950)")
         .execute(&mut *fence)
@@ -223,7 +223,7 @@ async fn waiting_mutation_rechecks_role_after_lock_acquisition(pool: PgPool) {
         .await
     });
     wait_for_identity_lock(&pool).await;
-    sqlx::query("UPDATE management.accounts SET role='viewer' WHERE id=$1")
+    sqlx::query("UPDATE management.accounts SET role='reader' WHERE id=$1")
         .bind(login.account)
         .execute(&mut *fence)
         .await

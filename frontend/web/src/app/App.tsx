@@ -113,7 +113,7 @@ export function App() {
                 </a>
               )}
             </nav>
-            <span className="admin-label">{{ viewer: "Viewer · Read-only", operator: "Operator · Operations", admin: "Admin · Management" }[session.data.role]}</span>
+            <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
           </aside>
           <div className="content">
             {logoutError && (
@@ -128,7 +128,7 @@ export function App() {
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )
             ) : storagePage ? (
-              <Storages key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "viewer"} />
+              <Storages key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
             ) : (
               <Overview />
             )}

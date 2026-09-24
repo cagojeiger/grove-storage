@@ -23,8 +23,8 @@ struct Row {
 
 fn role(value: &str) -> Result<Role, Error> {
     match value {
-        "viewer" => Ok(Role::Viewer),
-        "operator" => Ok(Role::Operator),
+        "reader" => Ok(Role::Reader),
+        "writer" => Ok(Role::Writer),
         "admin" => Ok(Role::Admin),
         _ => Err(Error::InvalidInput),
     }

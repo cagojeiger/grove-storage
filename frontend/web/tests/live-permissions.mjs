@@ -12,7 +12,7 @@ export async function permissionChecks(browser, admin, origin) {
       return response.json();
     }, { method, path, body });
   }
-  const user = await identity("POST", "/accounts", { kind: "user", role: "operator", display_name: "Console operator" });
+  const user = await identity("POST", "/accounts", { kind: "user", role: "writer", display_name: "Console writer" });
   const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "browser-test", expires_in_days: 1 });
   const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "automation", expires_in_days: 1 });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -23,9 +23,9 @@ export async function permissionChecks(browser, admin, origin) {
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
-    await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "viewer" });
+    await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "reader" });
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText("Viewer · Read-only")).toBeVisible();
+    await expect(page.getByText("Reader · Read-only")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await page.reload();
@@ -41,12 +41,12 @@ export async function permissionChecks(browser, admin, origin) {
     await page.getByRole("button", { name: "Sign out" }).click();
     await page.getByLabel("Personal token").fill(automationKey.token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByText("Viewer · Read-only")).toBeVisible();
+    await expect(page.getByText("Reader · Read-only")).toBeVisible();
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");
     const events = audit.items.filter((e) => e.action === "storage.create");
     assert(events.length > 0 && events.every((e) => e.context.surface === "console"));
     assert(!JSON.stringify(audit).includes(credential.token));
-    console.log("PASS real role demotion, Viewer read-only UI/server, named User token login, console audit");
+    console.log("PASS real role demotion, Reader read-only UI/server, named User token login, console audit");
   } finally { await context.close(); }
 }

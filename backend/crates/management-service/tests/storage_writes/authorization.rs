@@ -4,14 +4,14 @@ use std::time::Duration;
 #[sqlx::test(migrations = "../db/migrations")]
 async fn denied_callers_never_probe_or_modify_storage(pool: PgPool) {
     owner(&pool).await;
-    let viewer = operator(&pool, Role::Viewer, 2).await;
-    let automation_user = viewer.account;
+    let reader = user_login(&pool, Role::Reader, 2).await;
+    let automation_user = reader.account;
     db::issue_credential(&pool, &context(), automation_user, &key(&hash(500)))
         .await
         .unwrap();
     seed(&pool).await;
     let before = audit_count(&pool).await;
-    for token in [&viewer.token, &hash(500)] {
+    for token in [&reader.token, &hash(500)] {
         for command in mutations() {
             let result = resources::execute(
                 &pool,
@@ -32,7 +32,7 @@ async fn denied_callers_never_probe_or_modify_storage(pool: PgPool) {
 async fn probe_releases_identity_fence_and_rechecks_user_role_and_revocation(pool: PgPool) {
     owner(&pool).await;
     for revoke in [false, true] {
-        let user = operator(&pool, Role::Operator, if revoke { 3 } else { 2 }).await;
+        let user = user_login(&pool, Role::Writer, if revoke { 3 } else { 2 }).await;
         let automation_user = user.account;
         let token = hash(if revoke { 501 } else { 500 });
         let key = db::issue_credential(&pool, &context(), automation_user, &key(&token))
@@ -50,7 +50,7 @@ async fn probe_releases_identity_fence_and_rechecks_user_role_and_revocation(poo
                         &pool,
                         &context(),
                         user.account,
-                        db::AccountChange::Role(Role::Viewer),
+                        db::AccountChange::Role(Role::Reader),
                     )
                     .await
                     .unwrap();

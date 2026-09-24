@@ -114,7 +114,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 |---|---|
 | `tests/api.spec.ts` | Transport options, cancellation signal, error sanitization, formatting |
 | `tests/commands.spec.ts` | Shared command envelope, outcome certainty, no automatic mutation retries |
-| `tests/permissions.spec.ts` | Viewer controls, live demotion and form removal |
+| `tests/permissions.spec.ts` | Reader controls, live demotion and form removal |
 | `tests/console.spec.ts` | Mock API state/error handling, 320/390/768/1024/1440px, themes, screenshots |
 | `tests/browser-security.spec.ts` | Built assets under CSP, blocked inline scripts/external connections/iframe embedding |
 | `tests/storage-model.spec.ts` | Exact capacity conversion, S3 payloads and FS rejection, sanitized errors |
@@ -127,7 +127,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/master-setup.spec.ts` | Separate master/User sessions, initial setup, targeted recovery and unknown outcomes |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
-| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Viewer enforcement, named User token login and Console audit |
+| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named User token login and Console audit |
 | `tests/live-access.mjs` via Python fixture | Real first-Admin bootstrap, User lifecycle, token use/revocation, last-Admin protection and targeted master recovery |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.

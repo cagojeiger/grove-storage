@@ -57,13 +57,13 @@ export type Session = {
   user_id: string;
   credential_id: string;
   session_id: string;
-  role: "viewer" | "operator" | "admin";
+  role: "reader" | "writer" | "admin";
 };
 
 export async function currentSession(signal?: AbortSignal): Promise<Session> {
   const value = await request<Session>(`${identity}/session`, { signal });
   if (!value || value.principal !== "user" ||
-      !["viewer", "operator", "admin"].includes(value.role))
+      !["reader", "writer", "admin"].includes(value.role))
     throw new ApiError(502);
   return value;
 }

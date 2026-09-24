@@ -142,7 +142,7 @@ detach는 같은 트랜잭션을 공유한다.
 | User / Token | Management account / named credential for Console, CLI and MCP |
 | Client | Runtime consumer with file API keys or S3 credentials |
 | Storage | External S3 backend; legacy filesystem rows retained during migration |
-| Admin / Operator / Viewer | Management roles, separate from runtime Client credentials |
+| Admin / Writer / Reader | Management roles, separate from runtime Client credentials |
 | `management-*` | Operator identities, permissions and resource commands |
 | `object-*` | File lifecycle decisions and execution ordering |
 | `s3-protocol` | S3 wire contracts |

@@ -24,7 +24,7 @@ pub async fn owner(pool: &PgPool) -> Login {
     let (id, credential) = bootstrap(pool).await;
     login(pool, id, credential.id, 1).await
 }
-pub async fn operator(pool: &PgPool, role: Role, seed: u64) -> Login {
+pub async fn user_login(pool: &PgPool, role: Role, seed: u64) -> Login {
     let id = user(pool, role).await;
     let credential = db::issue_credential(pool, &context(), id, &key(&hash(seed)))
         .await

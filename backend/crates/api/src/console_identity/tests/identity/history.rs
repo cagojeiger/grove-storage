@@ -3,11 +3,11 @@ use super::*;
 #[sqlx::test(migrations = "../db/migrations")]
 async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
-    let (user, user_cookie) = actor(&pool, Role::Viewer).await;
+    let (user, user_cookie) = actor(&pool, Role::Reader).await;
     let agent = create(
         &pool,
         &admin_cookie,
-        serde_json::json!({"kind":"user","display_name":"historical actor","role":"viewer"}),
+        serde_json::json!({"kind":"user","display_name":"historical actor","role":"reader"}),
     )
     .await;
     let key = issue(&pool, &admin_cookie, agent).await;
@@ -31,7 +31,7 @@ async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool:
         &ctx,
         db::NewAccount {
             display_name: "historic operation",
-            role: Role::Viewer,
+            role: Role::Reader,
         },
     )
     .await

@@ -8,7 +8,7 @@ test("role demotion during an Access mutation removes private controls", async (
   await accessMock(page);
   let demoted = false;
   await page.route("**/v1/session", (route) =>
-    route.fulfill({ json: { ...session, role: demoted ? "viewer" : "admin" } }),
+    route.fulfill({ json: { ...session, role: demoted ? "reader" : "admin" } }),
   );
   await page.route("**/v1/accounts", (route) => {
     if (route.request().method() !== "POST") return route.fallback();

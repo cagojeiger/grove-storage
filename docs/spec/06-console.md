@@ -80,7 +80,7 @@ This section specifies the next contract; no test command/button is implemented 
 |---|---|
 | Entry points | **Test connection** in Storage detail and registration/replacement form |
 | Shared command | `storage.test` through the same Console, CLI and MCP executor; input selects registered ID or draft fields |
-| Permissions | Operator/Admin resource permission, rechecked on each call; User role limits remain effective |
+| Permissions | Writer/Admin resource permission, rechecked on each call; User role limits remain effective |
 | Saved storage | Resolve provider credentials on the server; return checks without secret values |
 | Draft fields | Probe without saving registry metadata; clear submitted secrets; allow registering only through the existing mutation |
 | S3 baseline | Internal endpoint `HeadBucket` and `ListMultipartUploads`, matching current registration checks |
@@ -112,7 +112,7 @@ are not required for these screens.
 | 데이터 | 같은 origin의 `/api/admin/console-commands/v1`; CLI/MCP와 공통 실행기·명령 계약 공유 |
 | 인증 | 개인 `gsm_` 토큰 → `/api/admin/identity/v1/session` → HttpOnly User 쿠키; 원문 즉시 제거 |
 | 변경 요청 | `X-Grove-CSRF: 1`, 서버의 Origin 검사 적용; POST 기반 조회 명령에도 적용 |
-| 역할 | Viewer는 조회, Operator/Admin은 자원 변경; 서버가 매 요청에 현재 권한 확인 |
+| 역할 | Reader는 조회, Writer/Admin은 자원 변경; 서버가 매 요청에 현재 권한 확인 |
 | 브라우저 저장 | 테마 설정만 영속화, 토큰·세션·provider secret은 영속화 대상에서 제외 |
 | 배포 경로 | 전용 관리 호스트의 `/api/admin/console/`에 정적 파일, `/api/admin/identity/v1`·`/api/admin/console-commands/v1`·`/readyz`만 서버로 전달 |
 | HTTPS | 앞단 TLS 종료, `FILEGATE_CONSOLE_ORIGIN`과 실제 origin 일치 |
@@ -168,7 +168,7 @@ are not required for these screens.
 표시하고 닫을 때 제거한다. User 토큰은 콘솔 로그인과 CLI/MCP에 사용한다. 용도별 label과 credential_id로 기록·폐기를 구분한다.
 `gscli`·MCP는 같은 User 토큰을 전달하며 자원 작업만 제공한다. 신원·관리 토큰·감사 조회 API는
 사람의 콘솔 세션과 역할로 보호한다. Admin Bearer도 이 경계를 대신하지 않는다.
-Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한다. 전체 보안 이력은 Admin 전용이다.
+Reader/Writer의 이력은 자기 범위, Admin은 전체 범위를 조회한다. 전체 보안 이력은 Admin 전용이다.
 클라이언트 화면에서 제공할 Native/S3 키는 파일 서비스 자격증명으로 구분한다.
 
 ## 입력과 안전장치
@@ -195,7 +195,7 @@ Viewer/Operator의 이력은 자기 범위, Admin은 전체 범위를 조회한�
 |---|---|---|
 | A (구현) | 앱 골격·로그인·로그아웃·개요 조회 | 실제 HTTPS 쿠키 로그인, 새로고침 유지, 만료/폐기 401, 로그아웃, readyz·점유 표시 |
 | B (구현) | 저장소 조회·등록·교체·삭제 | 실제 MinIO UI CRUD, 조회 후 참조 추가 409, 주소 교체 409, secret 미보관 |
-| 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Viewer·역할 강등·토큰별 로그인·console 감사 |
+| 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Reader·역할 강등·토큰별 로그인·console 감사 |
 | 5b (구현) | master 설정·복구·User·관리 토큰 UI | 실제 HTTPS 최초 설정·대상 복구·User 토큰 사용/폐기·마지막 Admin; 응답 불명·중복 제출·권한 변경·반응형 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
 | 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 S3 probe, 권한·timeout·비밀 보호 |

@@ -18,7 +18,7 @@ async fn mutations_audit_once_and_reads_only_record_invocations(pool: PgPool) {
         Surface::Console,
         Command::CreateAccount(NewAccount {
             display_name: "new-user",
-            role: Role::Viewer,
+            role: Role::Reader,
         }),
     )
     .await;
@@ -108,7 +108,7 @@ async fn audit_failure_rejects_change_but_invocation_failure_does_not(pool: PgPo
         Surface::Console,
         Command::CreateAccount(NewAccount {
             display_name: "rollback",
-            role: Role::Viewer,
+            role: Role::Reader,
         }),
     )
     .await;
@@ -135,7 +135,7 @@ async fn audit_failure_rejects_change_but_invocation_failure_does_not(pool: PgPo
         Surface::Console,
         Command::CreateAccount(NewAccount {
             display_name: "kept",
-            role: Role::Viewer,
+            role: Role::Reader,
         }),
     )
     .await;
@@ -172,7 +172,7 @@ async fn commit_failure_is_conservative_unknown_without_retry(pool: PgPool) {
         Surface::Console,
         Command::CreateAccount(NewAccount {
             display_name: "unknown",
-            role: Role::Viewer,
+            role: Role::Reader,
         }),
     )
     .await;
@@ -203,7 +203,7 @@ async fn slow_history_cannot_hold_successful_response_indefinitely(pool: PgPool)
             Surface::Console,
             Command::CreateAccount(NewAccount {
                 display_name: "bounded",
-                role: Role::Viewer,
+                role: Role::Reader,
             }),
         ),
     )

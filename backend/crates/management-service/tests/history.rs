@@ -12,8 +12,8 @@ use uuid::Uuid;
 #[sqlx::test(migrations = "../db/migrations")]
 async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: PgPool) {
     let admin = owner(&pool).await;
-    let viewer = operator(&pool, Role::Viewer, 2).await;
-    let own_agent = user(&pool, Role::Viewer).await;
+    let reader = user_login(&pool, Role::Reader, 2).await;
+    let own_agent = user(&pool, Role::Reader).await;
     let agent_key = db::issue_credential(&pool, &context(), own_agent, &key(&hash(3)))
         .await
         .unwrap();
@@ -32,7 +32,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         &ctx,
         NewAccount {
             display_name: "historic-target",
-            role: Role::Viewer,
+            role: Role::Reader,
         },
     )
     .await
@@ -52,7 +52,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         sqlx::query(&format!(
             "UPDATE management.{table} SET actor_kind='agent',owner_user_id=$1 WHERE request_id=$2"
         ))
-        .bind(viewer.account)
+        .bind(reader.account)
         .bind(ctx.request_id)
         .execute(&pool)
         .await
@@ -64,7 +64,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         &foreign,
         NewAccount {
             display_name: "foreign-target",
-            role: Role::Viewer,
+            role: Role::Reader,
         },
     )
     .await
@@ -88,7 +88,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     tx.commit().await.unwrap();
     let result = service::execute(
         &pool,
-        Proof::Session(&viewer.session),
+        Proof::Session(&reader.session),
         Surface::Console,
         Command::Audit(Page::new(None, 1).unwrap()),
     )
@@ -104,7 +104,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     let cursor = first.first().unwrap().context.id;
     let result = service::execute(
         &pool,
-        Proof::Session(&viewer.session),
+        Proof::Session(&reader.session),
         Surface::Console,
         Command::Audit(Page::new(Some(cursor), 100).unwrap()),
     )
@@ -117,11 +117,11 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     };
     assert!(!rest.is_empty());
     assert!(rest.iter().all(|row| row.context.id < cursor
-        && (row.context.actor_id == Some(viewer.account)
-            || row.context.owner_user_id == Some(viewer.account))));
+        && (row.context.actor_id == Some(reader.account)
+            || row.context.owner_user_id == Some(reader.account))));
     let result = service::execute(
         &pool,
-        Proof::Session(&viewer.session),
+        Proof::Session(&reader.session),
         Surface::Console,
         Command::Invocations(Page::default()),
     )
@@ -138,8 +138,8 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     );
     assert!(
         rows.iter()
-            .all(|row| row.context.actor_id == Some(viewer.account)
-                || row.context.owner_user_id == Some(viewer.account))
+            .all(|row| row.context.actor_id == Some(reader.account)
+                || row.context.owner_user_id == Some(reader.account))
     );
     let result = service::execute(
         &pool,
@@ -158,10 +158,10 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn security_is_admin_only_and_denials_share_request_id(pool: PgPool) {
     let admin = owner(&pool).await;
-    let viewer = operator(&pool, Role::Viewer, 2).await;
+    let reader = user_login(&pool, Role::Reader, 2).await;
     let denied = service::execute(
         &pool,
-        Proof::Session(&viewer.session),
+        Proof::Session(&reader.session),
         Surface::Console,
         Command::Security(Page::default()),
     )
@@ -177,7 +177,7 @@ async fn security_is_admin_only_and_denials_share_request_id(pool: PgPool) {
     .result
     .unwrap();
     assert!(
-        matches!(result, Output::Security(ref rows) if rows.iter().any(|row| row.context.request_id==denied.request_id && row.context.actor_id==Some(viewer.account)))
+        matches!(result, Output::Security(ref rows) if rows.iter().any(|row| row.context.request_id==denied.request_id && row.context.actor_id==Some(reader.account)))
     );
     let invocation: (String, String) = sqlx::query_as(
         "SELECT outcome,error_code FROM management.command_invocations WHERE request_id=$1",

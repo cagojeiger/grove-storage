@@ -16,7 +16,7 @@ class Management:
         owner = self.request("POST", "/master/bootstrap", {"display_name": "CLI test owner"}, expected=201)
         self.request("POST", "/session", {"token": owner["token"]})
         self.user_id = self.request("POST", "/accounts", {
-            "kind": "user", "role": "operator", "display_name": "CLI operator",
+            "kind": "user", "role": "writer", "display_name": "CLI writer",
         }, expected=201)["account_id"]
         personal = self.request("POST", f"/accounts/{self.user_id}/credentials", {
             "label": "cli-user", "expires_in_days": 1,
@@ -63,7 +63,7 @@ class Management:
         assert {self.personal_credential_id, self.credential_id} <= token_ids
         text = json.dumps(audit)
         assert self.token not in text and self.user_token not in text
-        self.request("PATCH", f"/accounts/{self.user_id}", {"operation": "role", "role": "viewer"})
+        self.request("PATCH", f"/accounts/{self.user_id}", {"operation": "role", "role": "reader"})
         run(["client", "list"], self.token, 0)
         run(["client", "create", "blocked", "--storage", "cli-test-fs"], self.token, 3)
         self.request("DELETE", f"/credentials/{self.credential_id}")

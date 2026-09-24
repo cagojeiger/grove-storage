@@ -54,15 +54,15 @@ impl Pagination {
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum Role {
-    Viewer,
-    Operator,
+    Reader,
+    Writer,
     Admin,
 }
 impl From<Role> for grove_management_policy::Role {
     fn from(role: Role) -> Self {
         match role {
-            Role::Viewer => Self::Viewer,
-            Role::Operator => Self::Operator,
+            Role::Reader => Self::Reader,
+            Role::Writer => Self::Writer,
             Role::Admin => Self::Admin,
         }
     }

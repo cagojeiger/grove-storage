@@ -1,6 +1,6 @@
 import { ApiError, identity, send } from "./http";
 
-export type Role = "viewer" | "operator" | "admin";
+export type Role = "reader" | "writer" | "admin";
 export type Account = {
   id: string;
   kind: "user";
@@ -38,7 +38,7 @@ export const isAccount = (v: unknown): v is Account =>
   isObject(v) &&
   ["id", "display_name"].every((k) => typeof v[k] === "string") &&
   v.kind === "user" &&
-  ["viewer", "operator", "admin"].includes(String(v.role)) &&
+  ["reader", "writer", "admin"].includes(String(v.role)) &&
   typeof v.is_active === "boolean" &&
   nullable(v.deleted_at);
 export const isCredential = (v: unknown): v is Credential =>

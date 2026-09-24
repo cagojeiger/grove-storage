@@ -44,7 +44,7 @@ async fn last_admin_changes_are_serialized(pool: PgPool) {
         .unwrap();
     let a_pool = pool.clone();
     let a = tokio::spawn(async move {
-        db::change_account(&a_pool, &ctx, first, AccountChange::Role(Role::Viewer)).await
+        db::change_account(&a_pool, &ctx, first, AccountChange::Role(Role::Reader)).await
     });
     let b_pool = pool.clone();
     let b = tokio::spawn(async move {
@@ -77,14 +77,14 @@ async fn last_admin_changes_are_serialized(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn token_authorization_tracks_current_user_and_deletion(pool: PgPool) {
     bootstrap(&pool).await;
-    let owner = user(&pool, Role::Operator).await;
+    let owner = user(&pool, Role::Writer).await;
     db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
         .await
         .unwrap();
     let actor = db::authenticate(&pool, &hash(2)).await.unwrap().unwrap();
     assert_eq!(actor.account_id, owner);
     assert!(authorize(actor.caller, Surface::Mcp, Action::WriteResources).is_ok());
-    db::change_account(&pool, &context(), owner, AccountChange::Role(Role::Viewer))
+    db::change_account(&pool, &context(), owner, AccountChange::Role(Role::Reader))
         .await
         .unwrap();
     let actor = db::authenticate(&pool, &hash(2)).await.unwrap().unwrap();
@@ -110,14 +110,14 @@ async fn token_authorization_tracks_current_user_and_deletion(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn no_op_has_no_duplicate_audit_and_failures_roll_back(pool: PgPool) {
     bootstrap(&pool).await;
-    let account = user(&pool, Role::Viewer).await;
+    let account = user(&pool, Role::Reader).await;
     let before = audit_count(&pool).await;
     assert!(
         !db::change_account(
             &pool,
             &context(),
             account,
-            AccountChange::Role(Role::Viewer)
+            AccountChange::Role(Role::Reader)
         )
         .await
         .unwrap()
@@ -134,14 +134,14 @@ async fn no_op_has_no_duplicate_audit_and_failures_roll_back(pool: PgPool) {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(role, "viewer");
+    assert_eq!(role, "reader");
     assert!(
         db::create_account(
             &pool,
             &context(),
             db::NewAccount {
                 display_name: "lost",
-                role: Role::Viewer
+                role: Role::Reader
             }
         )
         .await
@@ -169,7 +169,7 @@ async fn failed_bootstrap_leaves_no_account_or_credential(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn failed_delete_preserves_all_user_tokens_and_session(pool: PgPool) {
     bootstrap(&pool).await;
-    let owner = user(&pool, Role::Operator).await;
+    let owner = user(&pool, Role::Writer).await;
     db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
         .await
         .unwrap();

@@ -21,7 +21,7 @@ fn token_syntax_and_hash_domains_are_distinct() {
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn browser_admission_rejects_ambiguous_and_cross_site_requests(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Viewer).await;
+    let (_, _, token) = account(&pool, Role::Reader).await;
     let cookie = cookie(&login(app(&pool), &token).await);
     for extra in [
         vec![],

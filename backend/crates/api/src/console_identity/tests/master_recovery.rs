@@ -26,7 +26,7 @@ async fn data_snapshot(pool: &PgPool) -> Vec<Vec<String>> {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn targeted_recovery_replaces_only_selected_admin_credentials(pool: PgPool) {
     let (user, _, old_token) = account(&pool, Role::Admin).await;
-    let (viewer, _, viewer_token) = account(&pool, Role::Viewer).await;
+    let (reader, _, reader_token) = account(&pool, Role::Reader).await;
     let (_, _, other_token) = account(&pool, Role::Admin).await;
     let (router, master_token) = setup(&pool).await;
     let old_cookie = cookie(&login(router.clone(), &old_token).await);
@@ -51,7 +51,7 @@ async fn targeted_recovery_replaces_only_selected_admin_credentials(pool: PgPool
         .status(),
         StatusCode::BAD_REQUEST
     );
-    for target in [viewer, Uuid::new_v4()] {
+    for target in [reader, Uuid::new_v4()] {
         assert_eq!(
             change(
                 router.clone(),
@@ -91,7 +91,7 @@ async fn targeted_recovery_replaces_only_selected_admin_credentials(pool: PgPool
         login(router.clone(), &old_token).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    for token in [body["token"].as_str().unwrap(), &viewer_token, &other_token] {
+    for token in [body["token"].as_str().unwrap(), &reader_token, &other_token] {
         assert_eq!(login(router.clone(), token).await.status(), StatusCode::OK);
     }
     assert_eq!(

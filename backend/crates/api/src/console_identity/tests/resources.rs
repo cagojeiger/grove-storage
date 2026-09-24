@@ -21,7 +21,7 @@ async fn call(pool: &PgPool, cookie: &str, command: &str, input: serde_json::Val
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn resource_session_rechecks_role_and_revocation_with_console_audit(pool: PgPool) {
-    let (user, credential, token) = account(&pool, Role::Operator).await;
+    let (user, credential, token) = account(&pool, Role::Writer).await;
     crate::resource_commands::tests::seed(&pool).await;
     let cookie = cookie(&login(app(&pool), &token).await);
     let response = call(
@@ -48,7 +48,7 @@ async fn resource_session_rechecks_role_and_revocation_with_console_audit(pool: 
         &pool,
         &context(),
         user,
-        db::AccountChange::Role(Role::Viewer),
+        db::AccountChange::Role(Role::Reader),
     )
     .await
     .unwrap();

@@ -34,7 +34,7 @@ async fn revocation_and_login_are_serialized(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn tokens_can_login_and_disabled_users_cannot_resume_old_sessions(pool: PgPool) {
     bootstrap(&pool).await;
-    let owner = user(&pool, Role::Operator).await;
+    let owner = user(&pool, Role::Writer).await;
     db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
         .await
         .unwrap();
@@ -140,7 +140,7 @@ async fn long_lived_tokens_still_get_fixed_eight_hour_sessions(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn sessions_are_owner_scoped_and_audit_failure_rolls_back(pool: PgPool) {
     let (owner, _) = bootstrap(&pool).await;
-    let other = user(&pool, Role::Viewer).await;
+    let other = user(&pool, Role::Reader).await;
     let session = db::create_session(&pool, Uuid::new_v4(), &hash(1), &hash(10))
         .await
         .unwrap()

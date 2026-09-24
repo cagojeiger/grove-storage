@@ -65,8 +65,8 @@ async fn lock(pool: &PgPool) -> Result<Transaction<'_, Postgres>, Error> {
 fn role_name(role: grove_management_policy::Role) -> &'static str {
     use grove_management_policy::Role;
     match role {
-        Role::Viewer => "viewer",
-        Role::Operator => "operator",
+        Role::Reader => "reader",
+        Role::Writer => "writer",
         Role::Admin => "admin",
     }
 }
