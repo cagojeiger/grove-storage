@@ -1,0 +1,10 @@
+{
+  "name": "filegate-console-preview-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-concurrency=1 *.test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

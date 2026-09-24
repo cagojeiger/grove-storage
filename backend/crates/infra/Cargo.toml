@@ -1,0 +1,14 @@
+[package]
+name = "filegate-infra"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-smithy-http-client = { workspace = true }
+secrecy = { workspace = true }
+
+[lints]
+workspace = true

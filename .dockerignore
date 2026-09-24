@@ -1,0 +1,10 @@
+target
+.git
+.github
+.claude
+.omc
+.omx
+.env
+docs
+*.md
+configs

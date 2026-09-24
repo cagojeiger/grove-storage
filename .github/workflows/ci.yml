@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend/web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/web/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  object-policy:
+    name: Object contracts (no services)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p grove-object-policy --locked
+      - run: cargo test -p grove-object-service --locked
+      - run: cargo test -p grove-s3-protocol --locked
+
+  hygiene:
+    name: Hygiene
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Release version and installer contracts
+        run: |
+          python3 deploy/ci/check-version.py
+          python3 -B -m unittest discover -s deploy/tests -v
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: filegate
+          POSTGRES_PASSWORD: filegate
+          POSTGRES_DB: filegate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U filegate -d filegate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      FILEGATE_DATABASE_URL: postgres://filegate:filegate@localhost:5432/filegate
+      # sqlx 표준 변수 — 마이그레이션 실행 테스트(db/tests/migrations.rs)가 읽는다
+      DATABASE_URL: postgres://filegate:filegate@localhost:5432/filegate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: CLI API contract
+        run: |
+          cargo build --bin filegate --bin gscli --locked
+          python3 scripts/e2e-cli.py
+          python3 -B -u scripts/e2e-relay-upload.py
+
+      - name: S3 SDK contract
+        run: |
+          python3 -m venv /tmp/grove-s3-sdk
+          /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-s3-sdk/bin/python -B -m unittest discover -s scripts/tests -v
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-relay-upload.py --backend minio
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/web/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+
+      - name: Console real HTTPS API contract
+        working-directory: frontend/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          python3 -B -u ../../scripts/e2e-console.py
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # RUSTSEC-2023-0071 (rsa/Marvin): rsa는 sqlx-mysql 전용 전이 의존성이라
+      # postgres-only인 이 워크스페이스 빌드엔 컴파일되지 않는다(cargo tree -i로 확인,
+      # Cargo.lock에만 잔존). 상위 픽스 릴리스도 아직 없다 — 근거 있는 무시.
+      - name: Audit
+        run: cargo audit --ignore RUSTSEC-2023-0071
