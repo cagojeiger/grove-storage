@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod browser;
 mod failures;
+mod identity;
 mod lifecycle;
 mod master;
 mod master_recovery;

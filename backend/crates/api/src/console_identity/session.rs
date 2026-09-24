@@ -90,7 +90,7 @@ pub(super) async fn logout(State(state): State<AppState>, headers: HeaderMap) ->
     response
 }
 
-async fn execute(
+pub(super) async fn execute(
     state: &AppState,
     headers: &HeaderMap,
     command: Command<'_>,

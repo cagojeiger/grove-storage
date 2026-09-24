@@ -60,9 +60,10 @@ impl From<db::Error> for Error {
     fn from(error: db::Error) -> Self {
         match error {
             db::Error::NotFound => Self::NotFound,
-            db::Error::AlreadyInitialized | db::Error::LastAdmin | db::Error::InactiveAccount => {
-                Self::Conflict
-            }
+            db::Error::AlreadyInitialized
+            | db::Error::LastAdmin
+            | db::Error::InactiveAccount
+            | db::Error::CredentialLimit => Self::Conflict,
             db::Error::InvalidInput => Self::InvalidInput,
             db::Error::CommitUnknown => Self::OutcomeUnknown,
             db::Error::MasterConfigurationMismatch => Self::Unavailable,

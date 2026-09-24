@@ -7,7 +7,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use filegate_core::{ExposeSecret, SecretString};
-use filegate_db::management::NewCredential;
 use grove_management_service::{
     Error,
     master::{self as service, Command, Output},
@@ -139,19 +138,8 @@ enum Change<'a> {
     Recover(Uuid),
 }
 async fn issue(state: &AppState, headers: &HeaderMap, change: Change<'_>) -> Response {
-    let raw = SecretString::from(format!(
-        "{}{}",
-        secrets::TOKEN_PREFIX,
-        filegate_core::generate_url_secret()
-    ));
-    let hash = secrets::token_hash(raw.expose_secret());
-    let prefix: String = raw.expose_secret().chars().take(12).collect();
-    let key = NewCredential {
-        label: "master-issued",
-        token_prefix: &prefix,
-        token_hash: &hash,
-        expires_at: chrono::Utc::now() + chrono::Duration::days(90),
-    };
+    let token = secrets::IssuedToken::new();
+    let key = token.credential("master-issued", 90);
     let command = match change {
         Change::Bootstrap(name) => Command::Bootstrap { name, key },
         Change::Recover(account) => Command::Recover { account, key },
@@ -163,7 +151,7 @@ async fn issue(state: &AppState, headers: &HeaderMap, change: Change<'_>) -> Res
                 StatusCode::CREATED,
                 Json(
                     serde_json::json!({"user_id":key.account_id,"credential_id":key.id,
-                "expires_at":key.expires_at,"token":raw.expose_secret()}),
+                "expires_at":key.expires_at,"token":token.expose()}),
                 ),
             )
                 .into_response();

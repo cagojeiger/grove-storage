@@ -32,6 +32,11 @@ pub(super) async fn insert(
     if !active {
         return Err(Error::InactiveAccount);
     }
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.credentials WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()")
+        .bind(account).fetch_one(&mut **tx).await?;
+    if count >= 32 {
+        return Err(Error::CredentialLimit);
+    }
     Ok(sqlx::query_as(
         "INSERT INTO management.credentials(id,account_id,label,token_prefix,token_hash,expires_at)
         VALUES($1,$2,$3,$4,$5,$6) RETURNING id,account_id,expires_at",

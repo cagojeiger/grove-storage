@@ -1,8 +1,13 @@
 //! New console identity surface. Legacy operator authentication stays separate
 //! until the explicit migration; neither cookie grants the other's authority.
+mod accounts;
 mod browser;
+mod credentials;
+mod history;
+mod inputs;
 mod master;
 pub(crate) mod master_config;
+mod output;
 mod secrets;
 mod session;
 
@@ -11,7 +16,7 @@ use axum::{
     http::{StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{delete, get, post},
 };
 use grove_management_service::Error;
 use uuid::Uuid;
@@ -34,6 +39,21 @@ pub fn routes(state: AppState) -> Router<AppState> {
         )
         .route("/master/bootstrap", post(master::bootstrap))
         .route("/master/recover", post(master::recover))
+        .route("/accounts", get(accounts::list).post(accounts::create))
+        .route(
+            "/accounts/{id}",
+            axum::routing::patch(accounts::change).delete(accounts::remove),
+        )
+        .route(
+            "/accounts/{id}/credentials",
+            get(credentials::list).post(credentials::issue),
+        )
+        .route("/credentials/{id}", delete(credentials::revoke))
+        .route("/sessions", get(history::sessions))
+        .route("/sessions/{id}", delete(history::revoke_session))
+        .route("/history/audit", get(history::audit))
+        .route("/history/invocations", get(history::invocations))
+        .route("/history/security", get(history::security))
         .layer(middleware::from_fn_with_state(state, browser::guard))
 }
 

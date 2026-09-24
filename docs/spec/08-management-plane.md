@@ -1,6 +1,6 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 순수 권한·명령 계약, 신원 DB·관리 서비스·관리 로그·User/master 세션·설정/복구 HTTP 구현·테스트. 신원 CRUD HTTP·MCP·새 UI는 후속.
+- 상태: 순수 권한·명령 계약, 신원 DB·관리 서비스·관리 로그·User/master 세션·설정/복구·신원/이력 HTTP 구현·테스트. 공통 자원 실행기·MCP·새 UI는 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
 - `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`과 UI·CLI는 `admin_*`를 계속 사용한다.
@@ -146,7 +146,7 @@ DELETE는 해당 세션 종료만 제공한다. 일반 User·자원·이력 조�
 | 원문 전달 | 성공 응답 201에서 `user_id`, `credential_id`, `expires_at`, `token` 한 번 전달; no-store, 원문 재조회 없음 |
 | 재전송 | 성공한 master 세션은 폐기되므로 반복 변경은 401; 재복구는 새 master 로그인으로 명시적으로 시작 |
 | 실패 | 감사 실패 시 설정/복구/세션 소비 모두 rollback; commit 응답 불명은 outcome_unknown, 자동 재시도 없음 |
-| 복구 정보 | 첫 발급 시 공개 `user_id`와 개인 토큰을 보관; 계정 검색 UI와 신원 목록 API는 후속 |
+| 복구 정보 | 첫 발급 시 공개 `user_id`와 개인 토큰을 보관; 계정 목록은 Admin User 세션으로 조회, master의 계정 검색은 후속 |
 | 실행 검증 | 임시 PG + 실제 서버 프로세스에서 운영자 토큰 없이 부팅·설정·User 로그인·복구·이전 접근 차단 확인; TLS/브라우저/proxy E2E는 후속 |
 
 master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는다. 새 설치는 master 설정으로
@@ -155,6 +155,44 @@ master API는 DB 초기화 여부에 따라 기존 인증을 종료하지 않는
 재사용할 수 있으므로, 세션까지 영구 무효화하려면 세대를 올려 교체한다. 교체 시에는 두 값을 함께
 배포하고 `/master/session` 응답으로 경로를 검증한다. 낮은 세대로의 rollback 대신 더 큰
 세대를 사용하며, DB backup 복원은 별도의 운영 복구 절차로 취급한다.
+
+### 신원·이력 HTTP (3c)
+
+기준 경로는 `/api/admin/identity/v1`이며 User 세션을 사용한다.
+변경 요청은 정확한 Origin과 `X-Grove-CSRF: 1`을 함께 보내고, Bearer/master 세션은 거부한다.
+
+| Method·경로 | 입력·결과 | 권한 |
+|---|---|---|
+| GET `/accounts` | User·Agent 목록, 삭제 상태 포함 | Admin |
+| POST `/accounts` | `{kind, display_name, role}`; Agent는 `owner_user_id` 추가 → 201 `{account_id}` | Admin |
+| PATCH `/accounts/{id}` | `{operation:"role", role}` 또는 `{operation:"active", is_active}` → `{changed}` | Admin |
+| DELETE `/accounts/{id}` | soft delete → `{changed}` | Admin |
+| GET `/accounts/{id}/credentials` | 공개 ID·label·prefix·생성/만료/폐기 시각 | Admin |
+| POST `/accounts/{id}/credentials` | `{label, expires_in_days?}` → 201 `{account_id, credential_id, expires_at, token}` | Admin |
+| DELETE `/credentials/{id}` | 토큰·연결 세션 폐기 → `{changed}` | Admin |
+| GET `/sessions` | 자기 세션 목록, 만료/폐기 상태 포함 | 모든 User |
+| DELETE `/sessions/{id}` | 자기 세션만 폐기 → `{changed}` | 모든 User |
+| GET `/history/audit` | 확정된 관리 변경 | Admin 전체, 나머지 본인·소유 Agent |
+| GET `/history/invocations` | 관리 명령 시도·결과 | Admin 전체, 나머지 본인·소유 Agent |
+| GET `/history/security` | 인증·권한 보안 이벤트 | Admin |
+
+| 계약 | 값·처리 |
+|---|---|
+| 입력 | 이름·label은 trim 후 1–80자; 선언한 필드만 수용; Agent role은 viewer/operator |
+| 계정 변경 | role·active·삭제만 제공; Agent 소유자 변경·삭제 계정 복원은 후속 범위 |
+| 토큰 수명 | 기본 90일, 1–90일 선택; 유효 토큰은 계정당 32개, 초과 시 409/conflict |
+| 동시 발급 | identity lock 아래 한도 검사·발급; 만료/폐기 토큰은 한도에서 제외; 복구는 기존 키 폐기 후 발급 |
+| 원문 전달 | commit 성공 응답에서 한 번 전달; 목록·감사·호출·보안 응답에는 원문/해시 제외 |
+| 발급 실패 | 감사 실패는 rollback; commit 응답 불명은 503/outcome_unknown, 원문 반환·자동 재시도 생략 |
+| 목록 | `{items, next_before}`; `limit=1..100` 기본 50, ID 내림차순·exclusive `before` |
+| cursor | 신원은 UUID 문자열, 이력의 `context.id`와 cursor는 bigint 정밀도 보존용 10진 문자열 |
+| 끝 페이지 | 반환 개수가 limit이면 마지막 ID를 cursor로 반환; 다음 페이지가 빈 목록일 수 있음 |
+| 조회 범위 | 인증 주체로 scope를 적용한 뒤 LIMIT; 요청의 actor/owner/scope 지정은 지원하지 않음 |
+| 이력 형태 | `context` 안에 공개 ID·actor/owner snapshot·request_id·surface·시각, 바깥에 stream별 필드 |
+| 반복 변경 | 같은 값·이미 폐기된 대상은 `changed:false`; 마지막 활성 Admin 변경은 409/conflict |
+| 실행 검증 | 임시 PG + 실제 서버에서 초기 설정·계정/토큰 변경·역할/이력 범위·폐기 후 차단 확인; 수동 쿠키의 HTTP 검증이며 TLS/브라우저/proxy E2E와 구분 |
+
+현재 화면·CLI는 기존 인증을 유지한다. 이 HTTP 연결은 자원 API의 인증 전환과 별도다.
 
 ## DB 구현과 후속 설계
 
@@ -210,7 +248,7 @@ audit / invocation / security ── actor snapshot + request_id
 | 최초 설정 | 계정·첫 credential·감사 함께 commit; 기존 management 계정이 있으면 초기화 거부 |
 | 변경 직렬화 | bootstrap·계정 변경·발급·복구·폐기·로그인이 같은 transaction advisory lock 사용 |
 | 마지막 Admin | 활성 Admin의 강등·비활성화·삭제를 현재 DB 상태로 검사; 데이터 경로는 잠금 공유 없이 유지 |
-| credential | 해시 v1은 소문자 hex 64자·UNIQUE; master 설정/복구는 90일 토큰 발급, 일반 User/Agent 발급 HTTP는 후속 |
+| credential | 해시 v1은 소문자 hex 64자·UNIQUE; master 설정/복구 90일, 일반 HTTP 1–90일; 계정당 유효 토큰 32개 |
 | 현재 신원 | 매 인증 조회에서 만료/폐기·계정·Agent 소유자 상태를 읽어 정책용 Caller 생성 |
 | User 세션 | User와 credential 소유자 일치 FK; Agent 로그인 거부; TTL=min(원본 만료, 8시간), 활성 세션은 credential당 64개 |
 | 비활성화·삭제 | 비활성화 시 세션 폐기; 삭제 시 자기/소유 Agent 키도 폐기; 삭제 계정 재활성화는 제공하지 않음 |
@@ -223,8 +261,8 @@ audit / invocation / security ── actor snapshot + request_id
 `db::management`는 내부 저장소 연산이다. `AuditContext`는 권한 증명이 아니며
 HTTP에서 역직렬화하지 않는다. `grove-management-service`가 현재 신원을 읽고 정책을
 적용하며 actor/request ID를 구성한다. HTTP adapter는 Origin·CSRF 검증과 Surface 선택을
-책임진다. User/master 세션과 master 설정/복구 HTTP를 연결했다.
-일반 신원/이력 HTTP, 로그인 외 last_used_at, 자원 변경의 새 audit 결합은 후속이다.
+책임진다. User/master 세션·설정/복구·일반 신원/이력 HTTP를 연결했다.
+로그인 외 last_used_at, 자원 변경의 새 audit 결합은 후속이다.
 
 ### 관리 서비스
 
@@ -324,8 +362,8 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 2b (로컬 구현·검증) | `management-service` + `0009`: 권한 연결·신원/이력 scope 조회·호출/보안 로그·로그인 예산 | 15개 PG 테스트 + 명령 이름공간 테스트; 역할·진입 경계·잠금 대기·scope·비밀 제외·로그 장애 |
 | 3a (로컬 구현·검증) | User 로그인·현재 세션 조회·로그아웃 HTTP; `0010` 보안 이벤트 | 9개 PG HTTP 테스트 + 형식 테스트; CSRF·Agent·legacy 격리·폐기·예산·감사 rollback·commit 불명 |
 | 3b (로컬 구현·검증) | master 설정/복구 HTTP·`0011` 세대 fence | 7개 PG 서비스 + 4개 PG HTTP + 설정 단위 테스트; 최초 발급·동시 초기화·세대 변경·단일 사용·복구 원자성·기존 데이터 보존 |
-| 3c (다음) | identity/history API | 신원 CRUD·토큰 발급/폐기·scope 조회의 세션/role/CSRF |
-| 4 | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |
+| 3c (로컬 구현·검증) | identity/history API | 10개 PG HTTP + 발급 한도 경합 DB 테스트; 세션/role/CSRF·마지막 Admin·원문 제외·scope/cursor·실패 rollback |
+| 4 (다음) | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |
 | 5 | 콘솔 User/Agent/role/token/history | 역할별 표시·API 거부, 원문 한 번 표시, 응답 불명, light/dark·phone/tablet/desktop |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
 
@@ -334,5 +372,5 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 이전 audit는 이전 방식의 기록으로 보존하며, 새 확정 변경 이벤트와 구분한다.
 각 단계는 코드·테스트·대응 spec을 함께 커밋하고 공개·운영 전환은 별도로 수행한다.
 
-후속 구현 전에 고정할 값: 일반 관리 token의 TTL 선택·개수 상한,
-로그 보존 기간·최대 payload·접근 예산, endpoint/tool명·전송 envelope, 이전 인증의 전환/복구 절차.
+후속 구현 전에 고정할 값: 로그 보존 기간·최대 payload·접근 예산,
+자원 endpoint/tool명·전송 envelope, 이전 인증의 전환/복구 절차.

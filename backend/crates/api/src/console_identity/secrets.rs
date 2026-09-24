@@ -1,3 +1,4 @@
+use filegate_core::{ExposeSecret, SecretString};
 use sha2::{Digest, Sha256};
 
 pub(super) const TOKEN_PREFIX: &str = "gsm_";
@@ -34,4 +35,39 @@ pub(super) fn master_hash(raw: &str) -> String {
 }
 pub(super) fn master_session_hash(raw: &str) -> String {
     hash("grove-master-session-v1", raw)
+}
+
+// The same one-time issuance material serves master recovery and Admin issuance.
+pub(super) struct IssuedToken {
+    raw: SecretString,
+    hash: String,
+    prefix: String,
+}
+impl IssuedToken {
+    pub fn new() -> Self {
+        let raw = SecretString::from(format!(
+            "{TOKEN_PREFIX}{}",
+            filegate_core::generate_url_secret()
+        ));
+        Self {
+            hash: token_hash(raw.expose_secret()),
+            prefix: raw.expose_secret().chars().take(12).collect(),
+            raw,
+        }
+    }
+    pub fn expose(&self) -> &str {
+        self.raw.expose_secret()
+    }
+    pub fn credential<'a>(
+        &'a self,
+        label: &'a str,
+        days: u16,
+    ) -> filegate_db::management::NewCredential<'a> {
+        filegate_db::management::NewCredential {
+            label,
+            token_prefix: &self.prefix,
+            token_hash: &self.hash,
+            expires_at: chrono::Utc::now() + chrono::Duration::days(i64::from(days)),
+        }
+    }
 }

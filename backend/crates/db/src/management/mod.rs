@@ -36,6 +36,7 @@ pub enum Error {
     InvalidInput,
     CommitUnknown,
     MasterConfigurationMismatch,
+    CredentialLimit,
 }
 
 impl From<sqlx::Error> for Error {
