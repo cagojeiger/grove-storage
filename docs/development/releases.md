@@ -1,5 +1,18 @@
 # 버전과 CLI 배포
 
+## Grove 이미지 검증
+
+| 항목 | 현재 상태 |
+|---|---|
+| 저장소 | `cagojeiger/grove-storage` |
+| 검증 CI | `Image`: Linux AMD64/ARM64 네이티브 빌드, 로컬 load, registry push 없음 |
+| 실행 검증 | 비루트 UID 10001·읽기 전용 root·임시 PostgreSQL migration·health/readiness·파일 업로드/읽기/삭제 |
+| 이미지 범위 | API 서버; 콘솔 정적 파일은 후속 통합 |
+| 릴리스 | 첫 Grove 버전 미확정; Release 워크플로는 FileGate 저장소에서만 발행 |
+
+아래 배포 채널과 `0.4.1`은 이관한 FileGate 기준이다. Grove 발행 전에
+버전과 CLI installer/updater/manifest의 저장소 경로를 함께 전환한다.
+
 ## 이름과 버전
 
 | 대상 | 계약 |
