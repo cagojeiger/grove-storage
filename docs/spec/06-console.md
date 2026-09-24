@@ -3,6 +3,7 @@
 - 상태: A·B단계 로컬 구현·검증, 미릴리스·미배포. `output/`은 기존 샘플 데이터 미리보기다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
+- 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
 
 ## 구성
 
@@ -21,12 +22,13 @@ Grove Storage
 | 인증 | 토큰으로 세션 발급 후 입력값 제거, 이후 HttpOnly 쿠키 사용 |
 | 변경 요청 | `X-FileGate-CSRF: 1`, 서버의 Origin 검사 적용 |
 | 브라우저 저장 | 테마 설정만 영속화, 토큰·세션·provider secret은 영속화 대상에서 제외 |
-| 배포 경로 | `/api/admin/console/`에 정적 파일, `/api/admin/v1`은 기존 서버로 전달 |
+| 배포 경로 | 전용 관리 호스트의 `/api/admin/console/`에 정적 파일, `/api/admin/v1`·`/readyz`만 서버로 전달 |
 | HTTPS | 앞단 TLS 종료, `FILEGATE_CONSOLE_ORIGIN`과 실제 origin 일치 |
 | 개발 | 동일 origin HTTPS 프록시 아래 UI·API 연결; Secure 쿠키 계약 유지 |
 
-루트 `/{bucket}/{key}`는 S3 API가 사용한다. 콘솔은 이미 예약된 `api` 경로 아래에
-배치해 기존 버킷 이름과 충돌을 피한다. 정적 파일 배포·프록시 배선은 구현 시 검증한다.
+루트 `/{bucket}/{key}`는 별도 데이터 호스트의 S3 API가 사용한다. 콘솔은 이미 예약된
+`api` 경로 아래에 배치한다. 관리 호스트는 파일·S3·relay 경로에 404를 반환한다.
+정적 파일 배포·프록시 배선은 구현 시 검증한다.
 
 ## CLI 대응
 
@@ -57,7 +59,7 @@ Grove Storage
 ├── 내 토큰             User 토큰 목록 · 발급 · 폐기
 ├── 자동화 Agent        생성 · 권한 · 비활성화
 │   └── 토큰            Agent별 목록 · 발급 · 폐기
-└── 계정                비밀번호 변경
+└── 계정                비밀번호 변경 · 로그인 세션 조회/종료
 ```
 
 토큰 목록은 이름·소유자·만료·최근 사용·상태를 표시한다. 발급 결과에서 원문을 한 번

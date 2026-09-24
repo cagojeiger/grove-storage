@@ -32,6 +32,8 @@ export async function request<T>(
     signal,
     credentials: "same-origin",
     cache: "no-store",
+    // A 307/308 must not replay passwords or provider secrets at another URL.
+    redirect: "error",
   });
   if (!response.ok) {
     const seconds = Number(response.headers.get("Retry-After"));

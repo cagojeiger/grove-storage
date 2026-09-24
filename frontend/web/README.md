@@ -70,8 +70,18 @@ silently changing the allowed origin. Override with `-- --port PORT` and update 
 The [Vite HTTPS/proxy configuration](https://vite.dev/config/server-options) retains
 the browser Origin. API routes and `/readyz` are proxied; browser requests use
 same-origin cookies. Token/provider secrets never belong in `VITE_*` variables.
-For release hosting, mount `dist` at `/api/admin/console/` and forward existing API
-routes unchanged. This commit does not alter the backend image or production ingress.
+For release hosting, use a dedicated HTTPS console host. Mount `dist` at
+`/api/admin/console/` and proxy only `/api/admin/v1` (including its subpaths) and
+`/readyz`. Return 404 for all other paths. Serve S3, relay and uploaded files on a
+different host: uploaded HTML running on the console origin could act with the
+administrator's cookies. This does not require a separate backend process.
+
+Apply the production defaults in `security-headers.mjs` to the HTML response at the
+static host. The built sample preview uses these headers. Vite development adds
+inline scripts/styles and websockets for React refresh and HMR; use the default
+policy for release hosting. Configure HSTS at the production TLS terminator.
+The backend image and production ingress are not configured by this frontend.
+See [browser security](../../docs/spec/07-browser-security.md) for deployment checks.
 
 ## Verification
 
@@ -86,6 +96,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 |---|---|
 | `tests/api.spec.ts` | Transport options, cancellation signal, error sanitization, formatting |
 | `tests/console.spec.ts` | Mock API state/error handling, 320/390/768/1024/1440px, themes, screenshots |
+| `tests/browser-security.spec.ts` | Built assets under CSP, blocked inline scripts/external connections/iframe embedding |
 | `tests/storage-model.spec.ts` | Exact capacity conversion, backend-specific payloads, sanitized errors |
 | `tests/storage-crud.spec.ts` | All S3 options, complete replacement, fs, ID confirmation, navigation |
 | `tests/storage-safety.spec.ts` | 409, 401, lost response, secret clearing, duplicate submit guard |
@@ -94,6 +105,9 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/live-storages.mjs` via Python fixture | UI fs/MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
+Run `npm run build` before `npm test`: the browser security suite serves `dist` on
+loopback port 5180, alongside the existing Vite test server on 5179. Login regression
+tests verify that 307/308 redirects do not forward token bodies.
 Real storage registration uses temporary filesystem roots and, with `--with-minio`,
 a disposable S3 backend. Mutation requests are not retried automatically; unknown
 outcomes require a fresh read. S3 secrets are cleared at submission and never stored

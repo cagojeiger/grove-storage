@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
+import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
 const base = "/api/admin/console/";
@@ -160,6 +161,7 @@ async function response(req, res) {
 }
 
 const server = createServer((req, res) => {
+  for (const [name, value] of Object.entries(consoleHeaders())) res.setHeader(name, value);
   void response(req, res).catch(() => json(res, 500, {}));
 });
 server.listen(Number(process.env.GROVE_PREVIEW_PORT ?? 0), "127.0.0.1", () => {

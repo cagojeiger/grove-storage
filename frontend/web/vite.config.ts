@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { consoleHeaders } from "./security-headers.mjs";
 
 export default defineConfig(() => {
   const target = process.env.GROVE_DEV_API ?? "http://127.0.0.1:8080";
@@ -15,6 +16,9 @@ export default defineConfig(() => {
       host: "127.0.0.1",
       port: 5173,
       strictPort: true,
+      cors: false,
+      // Vite injects React refresh scripts/styles and opens an HMR websocket.
+      headers: consoleHeaders(true),
       https:
         key && cert
           ? { key: readFileSync(key), cert: readFileSync(cert) }

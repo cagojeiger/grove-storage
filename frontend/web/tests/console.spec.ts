@@ -57,6 +57,33 @@ test("login clears token; logout removes overview", async ({ page }) => {
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 
+for (const status of [307, 308]) {
+  test(`login rejects ${status} without forwarding its token`, async ({ page }) => {
+    await mock(page, false);
+    const forwarded: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/redirect-target")
+        forwarded.push(request.postData() ?? "");
+    });
+    await page.route("**/api/admin/v1/session", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({ status, headers: { Location: "/redirect-target" } });
+      } else {
+        await route.fallback();
+      }
+    });
+    await page.goto(root);
+    await page.getByLabel("관리자 토큰").fill("fixture-secret-not-for-redirect");
+    await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await expect(
+      page.getByRole("alert").or(page.getByRole("heading", { name: "개요", exact: true })),
+    ).toBeVisible();
+    expect(forwarded).toEqual([]);
+    await expect(page.getByRole("alert")).toContainText("서버에 연결하지 못했습니다");
+    await expect(page.getByLabel("관리자 토큰")).toHaveValue("");
+  });
+}
+
 test("429 clears input and honors Retry-After", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
