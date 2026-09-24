@@ -52,7 +52,15 @@ pub async fn issue_credential(
     account: Uuid,
     key: &NewCredential<'_>,
 ) -> Result<Credential, Error> {
-    let mut tx = lock(pool).await?;
+    issue_in(lock(pool).await?, context, account, key).await
+}
+
+pub(super) async fn issue_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    account: Uuid,
+    key: &NewCredential<'_>,
+) -> Result<Credential, Error> {
     let credential = insert(&mut tx, account, key).await?;
     audit::record(
         &mut tx,
@@ -62,7 +70,7 @@ pub async fn issue_credential(
         credential.id,
     )
     .await?;
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(credential)
 }
 
@@ -71,7 +79,14 @@ pub async fn revoke_credential(
     context: &AuditContext,
     id: Uuid,
 ) -> Result<bool, Error> {
-    let mut tx = lock(pool).await?;
+    revoke_in(lock(pool).await?, context, id).await
+}
+
+pub(super) async fn revoke_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    id: Uuid,
+) -> Result<bool, Error> {
     let changed = sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE id=$1 AND revoked_at IS NULL")
         .bind(id).execute(&mut *tx).await?.rows_affected() > 0;
     if changed {
@@ -79,7 +94,7 @@ pub async fn revoke_credential(
             .bind(id).execute(&mut *tx).await?;
         audit::record(&mut tx, context, "credential.revoke", "credential", id).await?;
     }
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(changed)
 }
 

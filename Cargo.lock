@@ -1059,6 +1059,7 @@ version = "0.4.1"
 dependencies = [
  "chrono",
  "grove-management-policy",
+ "serde_json",
  "sqlx",
  "tokio",
  "uuid",
@@ -1250,6 +1251,20 @@ dependencies = [
 [[package]]
 name = "grove-management-policy"
 version = "0.4.1"
+
+[[package]]
+name = "grove-management-service"
+version = "0.4.1"
+dependencies = [
+ "chrono",
+ "filegate-db",
+ "grove-management-command",
+ "grove-management-policy",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "grove-object-policy"

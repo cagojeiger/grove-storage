@@ -1,5 +1,5 @@
 use grove_management_policy::{AgentRole, Role};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{AuditContext, Credential, Error, NewCredential, audit, credentials, lock, role_name};
@@ -67,7 +67,14 @@ pub async fn create_account(
     context: &AuditContext,
     account: NewAccount<'_>,
 ) -> Result<Uuid, Error> {
-    let mut tx = lock(pool).await?;
+    create_in(lock(pool).await?, context, account).await
+}
+
+pub(super) async fn create_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    account: NewAccount<'_>,
+) -> Result<Uuid, Error> {
     let (kind, name, role, owner) = match account {
         NewAccount::User { display_name, role } => ("user", display_name, role_name(role), None),
         NewAccount::Agent {
@@ -114,7 +121,7 @@ pub async fn create_account(
             .await?;
     }
     audit::record(&mut tx, context, "account.create", "account", id).await?;
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(id)
 }
 
@@ -125,7 +132,15 @@ pub async fn change_account(
     id: Uuid,
     change: AccountChange,
 ) -> Result<bool, Error> {
-    let mut tx = lock(pool).await?;
+    change_in(lock(pool).await?, context, id, change).await
+}
+
+pub(super) async fn change_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    id: Uuid,
+    change: AccountChange,
+) -> Result<bool, Error> {
     let row: Option<(String, String, bool)> = sqlx::query_as(
         "SELECT kind,role,is_active FROM management.accounts WHERE id=$1 AND deleted_at IS NULL",
     )
@@ -166,6 +181,6 @@ pub async fn change_account(
     let event = audit::record(&mut tx, context, action, "account", id).await?;
     sqlx::query("UPDATE management.audit_events SET metadata=jsonb_build_object('before_role',$2::text,'after_role',$3::text,'before_active',$4::boolean,'after_active',$5::boolean,'deleted',$6::boolean) WHERE id=$1")
         .bind(event).bind(&old_role).bind(role).bind(old_active).bind(active).bind(deleted).execute(&mut *tx).await?;
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(true)
 }

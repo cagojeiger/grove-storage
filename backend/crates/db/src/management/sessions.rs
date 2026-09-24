@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use grove_management_policy::{Actor, Surface};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{AuditActor, AuditContext, Error, audit, identity, lock};
@@ -61,12 +61,20 @@ pub async fn revoke_session(
     user_id: Uuid,
     session_id: Uuid,
 ) -> Result<bool, Error> {
-    let mut tx = lock(pool).await?;
+    revoke_in(lock(pool).await?, context, user_id, session_id).await
+}
+
+pub(super) async fn revoke_in(
+    mut tx: Transaction<'_, Postgres>,
+    context: &AuditContext,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<bool, Error> {
     let changed = sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL")
         .bind(session_id).bind(user_id).execute(&mut *tx).await?.rows_affected() > 0;
     if changed {
         audit::record(&mut tx, context, "session.revoke", "session", session_id).await?;
     }
-    tx.commit().await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(changed)
 }

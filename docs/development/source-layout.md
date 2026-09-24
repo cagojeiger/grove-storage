@@ -2,6 +2,12 @@
 
 ```text
 backend/crates/
+├── management-service/   신원·이력 정책 실행 (HTTP 미연결)
+│   ├── src/command.rs    콘솔 내부 명령 → Action·이름공간
+│   ├── src/lib.rs        잠금·현재 신원·권한·server request ID
+│   ├── src/dispatch.rs   허용 scope → 저장소 연산
+│   ├── src/logging.rs    bounded best-effort 호출·보안 기록
+│   └── tests/           authorization·history·logging (실제 PostgreSQL)
 ├── management-command/   자원 명령 19개·schema·권한 매핑 (서버 실행기 미연결)
 │   ├── src/catalog.rs    명령명·입출력·권한·변경 여부의 정본
 │   ├── src/input.rs      공통 입력·순수 값 검증
@@ -52,7 +58,11 @@ backend/crates/
 │   │   ├── credentials.rs 발급·폐기·대상 Admin 복구
 │   │   ├── sessions.rs    User 세션·원본 만료 상한·폐기·개수 상한
 │   │   ├── identity.rs    현재 DB 상태 → 정책용 Caller
-│   │   └── audit.rs       변경 transaction 내부 감사 기록
+│   │   ├── audit.rs       변경 transaction 내부 감사 기록
+│   │   ├── transaction.rs 권한 검사와 변경이 공유하는 transaction
+│   │   ├── queries.rs     비밀 없는 신원 목록·페이지 상한
+│   │   ├── history.rs     actor/owner scope·cursor 조회
+│   │   └── telemetry.rs   호출·보안 기록·공유 로그인 예산
 │   ├── src/files/          파일·lease 상태 전이
 │   │   └── reclaim_cleanup.rs  reclaimed 정리 후보·확정
 │   ├── src/s3_registry/    자격증명·논리키·업로드 세션
@@ -66,7 +76,8 @@ backend/crates/
 
 | 모듈 | 입력 → 결과 | 정합성 경계 |
 |---|---|---|
-| `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 후속 adapter/service 책임 |
+| `management-policy` | 검증된 Caller snapshot·Surface·Action → Scope/거부 | 순수 권한만 판정; 인증·scoped DB query·감사 transaction은 adapter/service 책임 |
+| `management-service` | transport proof·Surface·내부 Command → 권한 검사·결과·호출 기록 | identity lock 이후 현재 신원 확인; console scope; Origin/CSRF·master·원문 token은 HTTP 연결 단계 |
 | `management-command` | protocol·명령명·JSON → typed 명령/오류; JSON → typed 출력 | 입력 형태·값·schema·권한 매핑; 서비스 검증·실행·감사·전송은 별도 책임 |
 | `db/management` | 인증/권한 검증 후 내부 요청 → 신원 변경 + 감사 commit | 단일 identity lock·FK·감사 rollback; HTTP 인증/CSRF·정책 허용과 구분 |
 | `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
@@ -95,6 +106,7 @@ detach는 같은 트랜잭션을 공유한다.
 | 관리 권한·콘솔 전용 경계·Agent 상한·감사 조회 scope | `cargo test -p grove-management-policy --locked`; 실제 API 연결과 구분 |
 | 관리 명령·입출력·오류·CLI 대응 | `cargo test -p grove-management-command --locked`; `cli/tests/command_contract.rs` |
 | 신원 DB·변경 감사·이관 | `db/tests/management_{accounts,credentials,sessions,schema,upgrade}.rs`; 실제 PostgreSQL 필요 |
+| 관리 서비스 권한·범위·로그 장애 | `cargo test -p grove-management-service --locked`; PostgreSQL의 `DATABASE_URL` 필요 |
 | S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
 | S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
 | S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |

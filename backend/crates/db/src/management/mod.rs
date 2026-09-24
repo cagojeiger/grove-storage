@@ -7,8 +7,12 @@
 mod accounts;
 mod audit;
 mod credentials;
+pub mod history;
 mod identity;
+pub mod queries;
 mod sessions;
+pub mod telemetry;
+mod transaction;
 
 pub use accounts::{AccountChange, NewAccount, bootstrap, change_account, create_account};
 pub use audit::{AuditActor, AuditContext};
@@ -17,6 +21,7 @@ pub use credentials::{
 };
 pub use identity::{Identity, authenticate, session_actor};
 pub use sessions::{Session, create_session, revoke_session};
+pub use transaction::{IdentityTransaction, Proof};
 
 use sqlx::{PgPool, Postgres, Transaction};
 
@@ -28,6 +33,7 @@ pub enum Error {
     InactiveAccount,
     LastAdmin,
     InvalidInput,
+    CommitUnknown,
 }
 
 impl From<sqlx::Error> for Error {

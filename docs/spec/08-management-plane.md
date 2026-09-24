@@ -1,9 +1,9 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 순수 권한·명령 계약, 신원 DB·원자적 변경 감사 구현·테스트. 새 인증 API·MCP·UI 미연결.
+- 상태: 순수 권한·명령 계약, 신원 DB·관리 서비스·범위 조회·관리 로그 구현·테스트. 새 인증 API·MCP·UI 미연결.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
-- `0008`은 `management` 스키마를 추가한다. 현재 API는 기존 `admin_*`를 계속 사용한다.
+- `0008/0009`는 `management` 신원·이력 스키마를 추가한다. 현재 API는 기존 `admin_*`를 계속 사용한다.
 
 ## 책임과 접근
 
@@ -87,7 +87,7 @@ User/Agent 토큰                → CLI/MCP 자원 명령
 신원 PK/FK는 UUID, 시각은 timestamptz, 로그 ID는 bigint identity를 사용한다.
 감사의 resource_id는 신원 UUID와 기존 Storage/Client slug를 담는 text다.
 accounts/users/agents/credentials/sessions/audit_events는 `0008`에 구현했다.
-command_invocations/security_events와 공통 로그인 예산은 후속 단계다.
+command_invocations/security_events와 공통 로그인 예산은 `0009`에 구현했다.
 
 | 테이블 (`management.*`) | 주요 컬럼 |
 |---|---|
@@ -97,8 +97,9 @@ command_invocations/security_events와 공통 로그인 예산은 후속 단계�
 | `credentials` | id, account_id FK, label, token_prefix, token_hash UNIQUE, hash_version, created_at, expires_at, revoked_at, last_used_at |
 | `sessions` | id, session_hash UNIQUE, auth_method, user_id FK, credential_id FK, master_generation, created_at, expires_at, revoked_at |
 | `audit_events` | id, created_at, actor context, request_id, surface, action, resource_type, resource_id, metadata |
-| `command_invocations` (후속) | id, created_at, actor context, request_id, surface, operation, outcome, error_code, duration_ms, redacted_metadata |
-| `security_events` (후속) | id, created_at, nullable actor context, request_id, surface, event_type, outcome, reason_code |
+| `command_invocations` | id, created_at, actor context, request_id, surface, operation, outcome, error_code, duration_ms |
+| `security_events` | id, created_at, nullable actor context, request_id, surface, event_type, reason_code |
+| `login_budget` | 단일 행 id=1, window_start, attempts; 설치 전체 분당 60회 |
 
 ```text
 accounts
@@ -140,14 +141,41 @@ audit / invocation / security ── actor snapshot + request_id
 | 복구 | 지정한 활성 Admin의 기존 키·세션을 폐기하고 새 키 발급; 다른 User·Client 키는 보존 |
 | 변경 감사 | 신원 변경·세션 생성/폐기/상한 회수와 같은 transaction; 감사 실패 시 전체 rollback; 재폐기·같은 값 변경은 중복 이벤트 생략 |
 | 감사 내용 | actor/request/target snapshot; 계정 변경의 role·active 전후 값; 자유 형식 payload 대신 내부 필드만 기록, metadata 8 KiB 상한 |
-| 보존 | 계정은 soft delete; audit ID에는 FK를 두지 않아 물리 제거와 독립; 로그 보존/purge와 조회 scope는 후속 |
-| 기존 DB | 기존 데이터가 있는 0007 → 0008 upgrade와 재실행 검증; 기존 계정의 자동 권한 매핑은 수행하지 않음 |
+| 보존 | 계정은 soft delete; 이력의 actor/owner ID에는 FK를 두지 않아 물리 제거와 독립; 로그 보존/purge는 후속 |
+| 기존 DB | 기존 데이터가 있는 0007 → 현재 migration upgrade와 재실행 검증; 기존 계정의 자동 권한 매핑은 수행하지 않음 |
 
 `db::management`는 내부 저장소 연산이다. `AuditContext`는 권한 증명이 아니며
-HTTP에서 역직렬화하지 않는다. 후속 서비스는 인증·권한·CSRF 검증과 신뢰할 수 있는
-actor/request ID 구성을 수행한 뒤 호출한다. 현재 API에는 이 연산이 연결되지 않았다.
-master 세션은 DDL 형태만 정의했고 발급·세대 검증은 후속이다. last_used_at 갱신,
-신원 목록·관리 이력의 범위 조회, 자원 변경과 새 audit의 결합도 후속이다.
+HTTP에서 역직렬화하지 않는다. `grove-management-service`가 현재 신원을 읽고 정책을
+적용하며 actor/request ID를 구성한다. HTTP adapter는 Origin·CSRF 검증과 Surface 선택을
+책임진다. 현재 API에는 이 서비스가 연결되지 않았다. master 세션은 DDL 형태만 정의했고
+발급·세대 검증, token 원문 생성·해시 계산, last_used_at, 자원 변경의 새 audit 결합은 후속이다.
+
+### 관리 서비스
+
+```text
+검증된 transport → identity lock → 현재 신원 조회 → 정책 → DB 변경 + audit commit
+                                                └→ scope 적용 조회
+완료 / 거부 → invocation · security (각 저장 시도 최대 250ms)
+```
+
+| 경계 | 현재 구현 |
+|---|---|
+| TOCTOU | 잠금 대기 후 신원·만료·폐기·role 재조회; 권한 검사부터 변경 commit까지 같은 transaction |
+| 내부 명령 | `identity.account.*`, `identity.credential.*`, `identity.session.*`, `history.*`; CLI/MCP 자원 catalog와 분리 |
+| 콘솔 경계 | Admin Bearer도 신원/이력 거부; User 세션 + Console + 작업별 role 검사 |
+| User 범위 | 자기 세션의 조회·폐기; 감사/호출은 actor_id=본인 또는 owner_user_id=본인인 과거 snapshot |
+| Admin 범위 | 신원·관리 토큰 목록/변경, 전체 감사·호출·보안 조회 |
+| 페이지 | 1–100개 (기본 50), ID 내림차순·exclusive before cursor; scope 필터 후 LIMIT |
+| 조회 일관성 | 페이지별 현재 결과; 여러 페이지에 걸친 고정 snapshot 보장은 별도 요구 |
+| 비밀 | 목록 DTO에 검증용 해시 제외; 호출/보안에는 payload 컬럼 없이 안정 코드·ID만 기록 |
+| 추적 | service 생성 request_id로 audit·호출·보안 연결; 계정 삭제/키 폐기 후에도 actor snapshot 보존 |
+| 실패 | 감사 실패는 변경 rollback; 호출/보안 저장 실패·timeout은 경고만 기록하고 결과 유지 |
+| commit 응답 불명 | 변경은 outcome_unknown, 자동 재시도 없이 대조; 읽기 commit 실패는 unavailable |
+| 로그인 예산 | DB의 원자적 60회/분 budget 제공; 공개 로그인 연결과 master 처리는 다음 단계 |
+
+현재 security event는 인증 실패·권한 거부·인증 저장소 장애를 기록한다. 로그인 성공·master
+사용 이벤트는 로그인 adapter 구현 시 추가한다. 기존 Storage/Client·파일 로그는 유지한다.
+신원 관리 서비스 호출을 transport에서 다시 invocation으로 기록하지 않는다.
 
 ## CLI·MCP의 공통 계약
 
@@ -170,7 +198,7 @@ Console identity/history API ── User session + role → identity/history ser
 | transport | CLI는 JSON HTTP, MCP는 tool 호출; 각각 서버의 공통 명령 실행기를 호출 |
 | protocol | package version과 별도의 호환성 식별자; 비호환은 실행 전에 거부 |
 | 인증 | 같은 User/Agent 토큰에 같은 허용 결과; 기계용 경로는 master·Cookie 거부 |
-| 부수 효과 | transport는 호출 기록, service는 변경 감사를 한 번만 기록 |
+| 부수 효과 | transport는 진입 정보를 전달; service는 호출 기록과 변경 감사를 각 경계에서 한 번 기록 |
 | 로컬 처리 | CLI의 update·설정·확인·비밀 파일 입출력은 adapter의 책임 |
 | Native key | CLI의 raw key 파일→hash 변환 유지; 공통 명령은 현재의 hash 등록 계약 |
 | 비밀 응답 | 의도한 서비스 키 발급 응답과 원문을 제외한 저장용 로그를 분리 |
@@ -217,8 +245,8 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 1a (로컬 구현·검증) | `management-policy`: 순수 신원·권한 규칙 | 역할/표면/인증 상태, Agent 상한, 감사 조회 scope, master 제한; 14개 테스트 |
 | 1b (로컬 구현·검증) | `management-command`: 입력·출력·오류·schema·권한 매핑; CLI DTO 재사용 | 원격 19개 명령과 대응; identity/history 제외; 기존 CLI 회귀 테스트 |
 | 2a (로컬 구현·검증) | `0008` + `db::management`: 신원·credential·세션·변경 감사의 저장소 기반 | 첫/마지막 Admin 경합, 발급/폐기 경합, 감사 실패 rollback, subtype/세션 FK, 기존 DB upgrade; 19개 PG 테스트 |
-| 2b (다음) | 관리 서비스의 권한 연결·신원/이력 scope 조회·호출/보안 로그·로그인 예산 | 저장소를 호출하는 모든 서비스 경계의 정책, 자기/소유 Agent 범위, 비밀 제외, 로그 실패 구분 |
-| 3 | master/User 로그인·identity API | CSRF, Agent 로그인 거부, token/session 폐기, 복구, master 세대 불일치 |
+| 2b (로컬 구현·검증) | `management-service` + `0009`: 권한 연결·신원/이력 scope 조회·호출/보안 로그·로그인 예산 | 15개 PG 테스트 + 명령 이름공간 테스트; 역할·진입 경계·잠금 대기·scope·비밀 제외·로그 장애 |
+| 3 (다음) | master/User 로그인·identity API | CSRF, Agent 로그인 거부, token/session 폐기, 복구, master 세대 불일치 |
 | 4 | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |
 | 5 | 콘솔 User/Agent/role/token/history | 역할별 표시·API 거부, 원문 한 번 표시, 응답 불명, light/dark·phone/tablet/desktop |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |

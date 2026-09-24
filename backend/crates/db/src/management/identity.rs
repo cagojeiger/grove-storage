@@ -88,13 +88,20 @@ pub async fn authenticate(pool: &PgPool, hash: &str) -> Result<Option<Identity>,
 }
 
 pub async fn session_actor(pool: &PgPool, hash: &str) -> Result<Option<Identity>, Error> {
+    session(&mut *pool.acquire().await?, hash).await
+}
+
+pub(super) async fn session(
+    connection: &mut PgConnection,
+    hash: &str,
+) -> Result<Option<Identity>, Error> {
     let row: Option<Row> = sqlx::query_as("SELECT a.id AS account_id,a.kind,a.role,NULL::uuid AS owner_user_id,NULL::text AS owner_role,c.id AS credential_id,s.id AS session_id
         FROM management.sessions s JOIN management.credentials c ON c.id=s.credential_id AND c.account_id=s.user_id
         JOIN management.accounts a ON a.id=s.user_id
         WHERE s.session_hash=$1 AND s.auth_method='token' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
         AND c.hash_version=1 AND c.revoked_at IS NULL AND c.expires_at>clock_timestamp()
         AND a.kind='user' AND a.is_active AND a.deleted_at IS NULL")
-        .bind(hash).fetch_optional(pool).await?;
+        .bind(hash).fetch_optional(connection).await?;
     row.map(|row| row.identity(AuthMethod::UserSession))
         .transpose()
 }
