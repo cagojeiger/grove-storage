@@ -8,7 +8,7 @@ mod inputs;
 mod master;
 pub(crate) mod master_config;
 mod output;
-mod secrets;
+pub(crate) mod secrets;
 mod session;
 
 use axum::{
@@ -63,7 +63,7 @@ fn failure(error: Error, request_id: Uuid) -> Response {
         Error::Forbidden => StatusCode::FORBIDDEN,
         Error::NotFound => StatusCode::NOT_FOUND,
         Error::Conflict => StatusCode::CONFLICT,
-        Error::InvalidInput => StatusCode::BAD_REQUEST,
+        Error::InvalidInput | Error::RequestRejected => StatusCode::BAD_REQUEST,
         Error::Unavailable | Error::OutcomeUnknown => StatusCode::SERVICE_UNAVAILABLE,
         Error::RateLimited => StatusCode::TOO_MANY_REQUESTS,
     };

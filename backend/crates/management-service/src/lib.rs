@@ -1,11 +1,12 @@
-//! Policy-enforced identity/history service. HTTP validates Origin/CSRF and
-//! selects Surface before calling this boundary. No HTTP or MCP routes here.
+//! Policy-enforced identity/history and resource services. Transports validate
+//! their authentication envelope and select Surface. No HTTP or MCP routes here.
 #![forbid(unsafe_code)]
 
 mod command;
 mod dispatch;
 mod logging;
 pub mod master;
+pub mod resources;
 pub mod sessions;
 pub use command::Command;
 pub use filegate_db::management::{Proof, queries::Page};
@@ -38,6 +39,7 @@ pub enum Error {
     NotFound,
     Conflict,
     InvalidInput,
+    RequestRejected,
     Unavailable,
     OutcomeUnknown,
     RateLimited,
@@ -50,6 +52,7 @@ impl Error {
             Self::NotFound => "not_found",
             Self::Conflict => "conflict",
             Self::InvalidInput => "invalid_input",
+            Self::RequestRejected => "request_rejected",
             Self::Unavailable => "unavailable",
             Self::OutcomeUnknown => "outcome_unknown",
             Self::RateLimited => "rate_limited",
@@ -128,28 +131,9 @@ async fn run(
         Ok(None) => return (None, Err(Error::Unauthenticated)),
         Err(error) => return (None, Err(error.into())),
     };
-    let actor = match identity.caller.actor {
-        Actor::User { .. } => AuditActor::User {
-            id: identity.account_id,
-            credential_id: identity.credential_id,
-            session_id: identity.session_id,
-        },
-        Actor::Agent { .. } => {
-            let Some(owner_user_id) = identity.owner_user_id else {
-                return (None, Err(Error::Unavailable));
-            };
-            AuditActor::Agent {
-                id: identity.account_id,
-                owner_user_id,
-                credential_id: identity.credential_id,
-            }
-        }
-        Actor::Master => return (None, Err(Error::Unauthenticated)),
-    };
-    let context = AuditContext {
-        actor,
-        request_id,
-        surface,
+    let context = match audit_context(&identity, request_id, surface) {
+        Ok(context) => context,
+        Err(error) => return (None, Err(error)),
     };
     let scope = match authorize(identity.caller, surface, command.action()) {
         Ok(scope) => scope,
@@ -159,4 +143,34 @@ async fn run(
         .await
         .map_err(Error::from);
     (Some(context), result)
+}
+
+fn audit_context(
+    identity: &db::Identity,
+    request_id: Uuid,
+    surface: Surface,
+) -> Result<AuditContext, Error> {
+    let actor = match identity.caller.actor {
+        Actor::User { .. } => AuditActor::User {
+            id: identity.account_id,
+            credential_id: identity.credential_id,
+            session_id: identity.session_id,
+        },
+        Actor::Agent { .. } => {
+            let Some(owner_user_id) = identity.owner_user_id else {
+                return Err(Error::Unavailable);
+            };
+            AuditActor::Agent {
+                id: identity.account_id,
+                owner_user_id,
+                credential_id: identity.credential_id,
+            }
+        }
+        Actor::Master => return Err(Error::Unauthenticated),
+    };
+    Ok(AuditContext {
+        actor,
+        request_id,
+        surface,
+    })
 }

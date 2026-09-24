@@ -1,7 +1,7 @@
 # spec 09: 공통 자원 명령 계약
 
-- 상태: `grove-management-command` 구현. CLI가 명령명·입력/응답 DTO를 재사용한다.
-- 서버 공통 실행기·새 HTTP 진입점·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
+- 상태: `grove-management-command` + 공통 조회 실행기 + Bearer HTTP 구현. CLI는 명령명·입력/응답 DTO를 재사용한다.
+- 변경 실행기·CLI 전송 전환·MCP adapter는 후속 단계다. 기존 CLI REST·인증·출력은 유지한다.
 - 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
 
 ## 구성
@@ -13,7 +13,8 @@ management-command      명령명 + 입력/출력 + schema + 권한 + 변경 여
         ↑
 gscli                   인자·파일·확인 → 기존 REST → 표 / JSON
 
-후속: 서버 실행기 ← CLI HTTP adapter / MCP tool adapter
+commands HTTP → resources 실행기 → 신원 잠금·현재 권한 → 기존 DB 조회
+후속: 변경 + 감사 transaction, CLI HTTP adapter / MCP tool adapter
 ```
 
 | 항목 | 현재 계약 |
@@ -27,7 +28,37 @@ gscli                   인자·파일·확인 → 기존 REST → 표 / JSON
 | 로컬 처리 | `--from`, `--key-file`, `--secret-out`, `--yes`, update는 CLI 소유 |
 
 현재 CLI는 새 `decode`·권한 정책·오류 타입을 실행하지 않는다. 공통 실행기 연결 시
-검증과 권한 적용을 함께 전환한다. MCP tool명·HTTP path·전송 envelope는 그 단계에서 확정한다.
+검증과 권한 적용을 함께 전환한다. 공통 HTTP 경로·envelope는 아래 계약을 사용하며 MCP tool명은 adapter 단계에서 확정한다.
+
+## 공통 조회 HTTP (4a)
+
+```http
+POST /api/admin/commands/v1
+Authorization: Bearer gsm_...
+Content-Type: application/json
+
+{"protocol":1,"command":"storage.list","input":{}}
+```
+
+| 항목 | 현재 계약 |
+|---|---|
+| 지원 범위 | 아래 조회 10개; 변경 9개는 권한 검사 후 `request_rejected/not_applied` |
+| 성공 | 200 `{protocol:1, request_id, command, result}`; result는 공통 typed Output |
+| 실패 | `{protocol:1, request_id, error:{code,outcome}}`; 모든 현재 실행 실패는 `not_applied` |
+| HTTP 코드 | unauthorized 401, forbidden 403, not_found 404, conflict 409, unavailable 503; 입력/protocol/명령/미연결 변경은 400 |
+| 인증 | 활성 User/Agent 관리 토큰; Cookie가 있거나 Authorization이 중복이면 401; master·기존 운영자 토큰은 별도 namespace |
+| 표면 | 서버가 `resource_api`로 기록; 요청 body·User-Agent·proxy 사용자 헤더로 actor/surface 지정 생략 |
+| 응답 보안 | no-store·nosniff·서버 request_id; 관리 쿠키 발급·OAuth redirect·CORS 허용 생략 |
+| 조회 경계 | identity lock → 현재 신원·role·owner 확인 → 조회 → commit; 저장소 I/O probe 생략 |
+| DB 재사용 | 기존 registry/usage/S3 키 SQL이 pool 또는 현재 transaction에서 실행; SQL 조건·정렬 유지 |
+| 상태 | status는 서버의 신원/DB/등록부 관찰, 물리 storage는 `not_checked`; 실패 시 명령 오류, CLI의 네트워크 진단과 구분 |
+| 일관성 | READ COMMITTED; 여러 SELECT의 등록부 상태를 고정 snapshot으로 보장하지 않음 |
+| 호출 기록 | service 실행 시 검증된 actor + 명령명 + 결과를 한 번 기록; 조회는 변경 감사 생성 없이 완료 |
+| 거부 기록 | 인증 실패는 보안 이벤트, 신원 확인 후 권한 거부는 호출·보안 이벤트; envelope/decode 거부는 HTTP 진단 범위 |
+| 비밀 | 응답은 명시적 DTO; storage 암호문/nonce/enc_key_id 제외; 로그는 요청/결과 payload 대신 ID·안정 코드 사용 |
+
+기존 CLI는 `/api/admin/v1`을 계속 호출한다. CLI/MCP Surface 동등성은 같은 실행기에
+검증된 토큰을 전달한 PG 테스트이며 실제 CLI/MCP 전송 연결은 후속이다.
 
 ## 명령 목록
 
@@ -69,8 +100,8 @@ gscli                   인자·파일·확인 → 기존 REST → 표 / JSON
 | 감사 | Serialize는 전달용; 저장 로그는 별도 allowlist와 크기 제한 적용 |
 
 JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하지 않는다.
-`status`는 현재 CLI의 HTTP 관찰 결과다. 물리 저장소 접근은 `not_checked`로 유지하며
-서버 관찰과 CLI 네트워크 관찰의 차이는 adapter 연결 단계에서 검증한다.
+기존 CLI `status`는 클라이언트의 HTTP 관찰 결과다. 새 공통 실행기의 `status`는 서버
+관찰이며 같은 DTO를 사용한다. 물리 저장소 접근은 둘 다 `not_checked`다.
 
 ## 오류와 결과
 
@@ -102,5 +133,9 @@ JSON Schema는 입력 형태를 설명하며 값·서비스 검사를 대체하�
 | `management-command/tests/errors.rs` | protocol 거부 순서·안정 코드·적용 결과 분리 |
 | `cli/tests/command_contract.rs` | 실제 clap 원격 명령과 catalog의 일대일 대응 |
 | 기존 CLI 테스트 | REST path·JSON·비밀 파일·변경 결과·status 동작 유지 |
+| `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·Agent owner 상한·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
+| `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
+| 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 10개·Agent owner 상한·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
 
-순수 계약 검증과 실제 MCP 전송·DB transaction·새 인증 검증은 별도 단계다.
+현재 검증은 순수 계약·PG 서비스·HTTP 라우터를 포함한다. 실제 MCP 전송과 변경/audit
+transaction 검증은 후속 단계다.

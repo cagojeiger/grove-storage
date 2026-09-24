@@ -9,6 +9,7 @@ mod cors;
 mod error;
 mod lease;
 mod reconciler;
+mod resource_commands;
 mod routes;
 mod s3;
 mod spool;

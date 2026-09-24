@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 grove-management-service.workspace = true
+grove-management-command.workspace = true
 grove-management-policy.workspace = true
 crc32fast = "1.5"
 grove-s3-protocol = { workspace = true }

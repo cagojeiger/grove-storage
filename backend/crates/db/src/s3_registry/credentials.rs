@@ -58,7 +58,10 @@ pub async fn get_credential(
     ))
 }
 
-pub async fn list_credentials(pool: &PgPool, client_id: &str) -> Result<Vec<String>, sqlx::Error> {
+pub async fn list_credentials<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    client_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
     sqlx::query_scalar(
         "SELECT access_key_id FROM s3_credentials WHERE client_id = $1 ORDER BY created_at",
     )

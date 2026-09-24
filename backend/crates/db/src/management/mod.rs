@@ -11,6 +11,7 @@ pub mod history;
 mod identity;
 pub mod master;
 pub mod queries;
+mod resources;
 mod sessions;
 pub mod telemetry;
 mod transaction;

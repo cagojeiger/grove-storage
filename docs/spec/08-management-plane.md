@@ -1,6 +1,6 @@
 # spec 08: 관리 신원·명령·감사
 
-- 상태: 순수 권한·명령 계약, 신원 DB·관리 서비스·관리 로그·User/master 세션·설정/복구·신원/이력 HTTP 구현·테스트. 공통 자원 실행기·MCP·새 UI는 후속.
+- 상태: 신원·이력·세션 HTTP와 공통 자원 조회 실행기/Bearer HTTP 구현·테스트. 자원 변경 실행기·CLI 전환·MCP·새 UI는 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
 - `0008–0011`은 `management` 신원·이력·master 세대 스키마를 추가한다. 기존 `/api/admin/v1`과 UI·CLI는 `admin_*`를 계속 사용한다.
@@ -294,8 +294,8 @@ master 로그인은 master 주체로 보안/호출을 기록하고 설정/복구
 ## CLI·MCP의 공통 계약
 
 명령명 19개·protocol 1·입출력·오류·권한 매핑은 [spec 09](09-management-commands.md)에
-구현했다. CLI는 공통 DTO와 명령명을 재사용하며 기존 REST를 호출한다.
-아래 공통 서버 실행기와 MCP adapter 연결은 후속 단계다.
+구현했다. 조회 10개는 공통 서버 실행기와 Bearer HTTP에 연결했다. CLI는 공통 DTO와
+명령명을 재사용하며 기존 REST를 호출한다. 변경 실행기·CLI 전송·MCP adapter 연결은 후속이다.
 
 ```text
 CLI adapter ──┐
@@ -363,7 +363,9 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 | 3a (로컬 구현·검증) | User 로그인·현재 세션 조회·로그아웃 HTTP; `0010` 보안 이벤트 | 9개 PG HTTP 테스트 + 형식 테스트; CSRF·Agent·legacy 격리·폐기·예산·감사 rollback·commit 불명 |
 | 3b (로컬 구현·검증) | master 설정/복구 HTTP·`0011` 세대 fence | 7개 PG 서비스 + 4개 PG HTTP + 설정 단위 테스트; 최초 발급·동시 초기화·세대 변경·단일 사용·복구 원자성·기존 데이터 보존 |
 | 3c (로컬 구현·검증) | identity/history API | 10개 PG HTTP + 발급 한도 경합 DB 테스트; 세션/role/CSRF·마지막 Admin·원문 제외·scope/cursor·실패 rollback |
-| 4 (다음) | 공통 resource command + CLI/MCP adapter | 동일 입력·결과·거부·409·unknown; audit 한 번, secret 로그 제외 |
+| 4a (로컬 구현·검증) | 공통 resource 조회 10개 + Bearer HTTP | 6개 PG 서비스 + 5개 PG HTTP; 기존 REST 결과·권한·owner·현재 role·비밀·미연결 변경 거부 |
+| 4b (다음) | 변경 9개 + 감사 transaction | 참조/삭제/주소 변경 제약 유지; 변경/audit 원자성·409·unknown |
+| 4c | CLI/MCP adapter | 같은 실행기·입력·결과·거부; 실제 전송·secret 로그 제외 |
 | 5 | 콘솔 User/Agent/role/token/history | 역할별 표시·API 거부, 원문 한 번 표시, 응답 불명, light/dark·phone/tablet/desktop |
 | 6 | 이관·proxy·기존 소비자 | DB backup, 이전 인증 종료, 복구 절차, Bearer/SigV4 보존, Native/S3 실제 전송 |
 
