@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, HardDrive } from "lucide-react";
+import { RefreshCw, HardDrive, History } from "lucide-react";
 import { message, request, Usage } from "../../api/http";
 import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
@@ -79,7 +79,7 @@ export function Overview() {
             <section>
               <div className="section-heading">
                 <h2>Storage usage</h2>
-                <span className="muted">{data.usage.length.toLocaleString("en-US")}</span>
+                <a className="back-link" href="#usage"><History size={16} />Usage history</a>
               </div>
               {data.usage.length === 0 ? (
                 <div className="empty">

@@ -13,6 +13,7 @@ import { MasterSetup } from "../auth/MasterSetup";
 import { Clients } from "../features/clients/Clients";
 import { Activity } from "../features/activity/Activity";
 import { Sessions } from "../features/settings/Sessions";
+import { UsageHistory } from "../features/overview/UsageHistory";
 
 export function App() {
   const cache = useQueryClient();
@@ -146,6 +147,8 @@ export function App() {
               <Clients key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
             ) : storagePage ? (
               <Storages key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
+            ) : route === "usage" ? (
+              <UsageHistory />
             ) : (
               <Overview />
             )}

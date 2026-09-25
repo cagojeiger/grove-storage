@@ -6,6 +6,7 @@ import { bootstrapChecks, accessChecks } from "./live-access.mjs";
 import { permissionChecks } from "./live-permissions.mjs";
 import { clientChecks } from "./live-clients.mjs";
 import { maintenanceChecks } from "./live-maintenance.mjs";
+import { usageChecks } from "./live-usage.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -22,6 +23,7 @@ try {
   await page.getByText("No storage registered.").waitFor();
   await storageChecks(page, fixture);
   await clientChecks(page, fixture);
+  await usageChecks(page, fixture);
   await maintenanceChecks(browser, page, origin, token);
   await permissionChecks(browser, page, origin);
   await accessChecks(browser, page, origin, endpoint, masterToken);

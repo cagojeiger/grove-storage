@@ -96,7 +96,8 @@ async function response(req, res) {
     const envelope = { protocol: 1, request_id: randomUUID() };
     const success = (result) => json(res, 200, { ...envelope, command, result });
     const failure = (status, code) => json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
-    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "storage.test", "usage.clients", "usage.storages"].includes(command)) return failure(403, "forbidden");
+    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "storage.test", "usage.clients", "usage.storages", "usage.history"].includes(command)) return failure(403, "forbidden");
+    if (command === "usage.history") return success([]);
     if (clients.handle(command, input, success, failure)) return;
     if (command === "usage.storages") return success([...storages.values()].map(usage));
     if (command === "storage.list") return success([...storages.values()]);

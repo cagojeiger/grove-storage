@@ -435,6 +435,7 @@ progress::-webkit-progress-value {
   width: min(300px, 80%);
 }
 .storages input,
+.usage-range input,
 dialog input:not([type="checkbox"]),
 dialog select {
   width: 100%;
@@ -596,6 +597,16 @@ dialog::backdrop {
 .storage-section .section-heading { flex-wrap: wrap; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .storage-section .section-heading h2 { padding: 0; border: 0; }
 .view-tabs { display: flex; flex-wrap: wrap; gap: 20px; margin: 24px 0; border-bottom: 1px solid var(--line); }
+.usage-range { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+.usage-range label { display: grid; gap: 8px; width: 140px; max-width: 100%; }
+.usage-range input { width: 100%; min-width: 0; }
+.usage-table { max-width: 100%; overflow: auto; }
+.usage-table table { width: 100%; min-width: 620px; border-collapse: collapse; }
+.usage-table caption { text-align: left; padding: 12px 0; font-weight: 600; }
+.usage-table th, .usage-table td { text-align: left; padding: 14px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; max-width: 240px; }
+.usage-table th { color: var(--muted); font-size: 12px; }
+.usage-table td:nth-last-child(-n+2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-count { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .view-tabs a { color: var(--muted); padding: 12px 0; text-decoration: none; border-bottom: 2px solid transparent; }
 .view-tabs a[aria-current="page"] { color: var(--text); border-color: var(--accent); }
 .event-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1.5fr) 16px; gap: 16px; text-align: left; padding: 18px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }

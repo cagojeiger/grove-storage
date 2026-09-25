@@ -23,6 +23,7 @@ Saved S3 storage supports an explicit on-demand connection test.
 | Accounts, management tokens | Implemented; Root/Admin only | Console-only identity API implemented |
 | Clients, S3 credentials | Implemented; Reader views Clients, Writer/Admin/Root manage S3 credentials | Shared commands; Native key compatibility retained outside console UI |
 | Sessions, management audit/call/security history | Implemented with cursor paging and event details | Console-only scoped APIs implemented |
+| Daily usage snapshots | Implemented under Overview; 1-3650 days, default 90 | Shared `usage.history` |
 | On-demand storage connection test | Implemented for saved S3 settings | Shared `storage.test`; `gscli status` still reads metadata only |
 
 ### Clients Contract
@@ -51,6 +52,7 @@ The signed-out entry links to Initial setup / recovery.
 ```text
 Grove Storage
 ├── Overview
+│   └── Usage history  daily snapshots by Storage and Client
 ├── Storage       list / detail / register / replace / delete / test connection
 ├── Clients       list / create / delete
 │   └── Client detail
@@ -88,6 +90,19 @@ token valid; revoking a token is an Accounts action. Activity shows installation
 history to Admin/Root and own history to Reader/Writer; security events require
 Admin/Root. Event details include actor, token/session IDs, surface and request ID.
 Neither screen writes deployment environment variables.
+
+## Usage History
+
+| Item | Contract |
+|---|---|
+| Entry | Overview → Usage history (`#usage`); Reader/Writer/Admin/Root resource-read permission |
+| Query | Shared `usage.history` with `days` 1-3650, default 90; no extra DB table or API |
+| Rows | UTC snapshot date, Storage ID, Client ID, active files and active bytes; newest date first |
+| Historical identity | Deleted Storage/Client IDs remain plain text in snapshots |
+| Missing data | Empty period remains empty; missing dates are not fabricated as zero usage |
+| Rendering | First 100 rows, then Show more; the API returns the entire requested window, not server-paged results |
+| Meaning | Recorded stock snapshots, not file-request logs, transfer completion or exact historical accounting |
+| Limits | Values outside JavaScript's safe integer range are rejected; unbounded row growth needs a future server paging contract |
 
 ## Connection Test
 
@@ -150,7 +165,7 @@ are not required for these screens.
 | `client list/show/create/delete` | 클라이언트 목록·상세·생성·삭제 | `client.*` |
 | `client-key list/register/delete` | 콘솔 범위 밖 | 기존 Native API·CLI·MCP 호환 유지 |
 | `credential list/create/delete` | S3 키 | `credential.*`; secret은 발급 응답에서 한 번 제공 |
-| `usage storages/clients/history` | 개요·상세 | `usage.storages/clients` 사용; 일별 사용량 이력 UI는 후속 |
+| `usage storages/clients/history` | 개요·상세·Usage history | `usage.storages/clients/history` 사용 |
 | `update` | 콘솔 범위 밖 | 사용자 PC의 바이너리 교체는 CLI의 로컬 기능 |
 
 동등성 대상은 위 등록부 원격 작업이다. 현재 `filegate admin init/recover`는 운영자 로컬
@@ -230,7 +245,7 @@ frontend/web/src/     현재 구현
     ├── access/       User·역할·관리 토큰·일회성 비밀 표시
     ├── activity/     관리 변경·호출·보안 이력·상세
     ├── clients/      클라이언트·S3 자격증명
-    ├── overview/     개요·저장소 점유
+    ├── overview/     개요·저장소 점유·일별 사용량 이력
     ├── settings/     본인 로그인 세션·종료
     └── storages/     목록·상세·폼·삭제·입력 변환
 ```
@@ -241,5 +256,5 @@ Access 계정 선택은 컴포넌트 상태이며 새로고침하면 해당 탭�
 응답 유실·계약 불일치·`unknown/applied` 오류는 재제출을 잠근 뒤 조회로 대조한다.
 검증된 `not_applied` 오류는 변경 전 거부로 표시한다. 자동 변경 재전송은 없다.
 실행·검증은 [콘솔 README](../../frontend/web/README.md)를 따른다.
-개요는 저장소·클라이언트 수와 저장소별 점유를 제공한다. 일별 사용량 이력,
+개요는 저장소·클라이언트 수와 저장소별 점유, 일별 사용량 이력을 제공한다.
 Client 파일 로그, 관리 이력 서버 필터, 운영 배포와 전체 UX 재설계는 후속이다.

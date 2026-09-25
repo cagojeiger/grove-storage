@@ -110,6 +110,12 @@ function output(name: string, value: unknown, input: object): boolean {
         value.client_id === input.client_id &&
         value.id === input.access_key_id
       );
+    case "usage.history":
+      return Array.isArray(value) && value.every((row) =>
+        object(row) && typeof row.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.day)
+        && Number.isFinite(Date.parse(row.day)) && new Date(row.day).toISOString().slice(0, 10) === row.day
+        && typeof row.storage_id === "string" && typeof row.client_id === "string"
+        && ["active_files", "active_bytes"].every((key) => typeof row[key] === "number" && Number.isSafeInteger(row[key]) && row[key] >= 0));
     case "usage.clients":
       return (
         Array.isArray(value) &&

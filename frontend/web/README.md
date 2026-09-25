@@ -26,7 +26,7 @@ The real fixture below verifies first-Admin bootstrap against an empty database.
 | Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Account rename requires a separate backend contract |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
-| API readiness, client count, per-storage and client usage | Daily usage history |
+| API readiness, client count, per-storage/client usage and daily snapshot history | Server-paged large usage histories |
 | Activity: audit, command history, security events; scoped cursor paging and event details | Server-side actor/resource/date filters |
 | Settings: current account/role, own sessions, confirmed session revocation | Overall navigation and UX review |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
@@ -141,12 +141,14 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/master-setup.spec.ts` | Separate master/User sessions, initial setup, targeted recovery and unknown outcomes |
 | `tests/clients.spec.ts`, `client-safety.spec.ts`, `client-layout.spec.ts` | S3-only key controls, client lifecycle, conflicts, secret handling and responsive layouts |
 | `tests/maintenance.spec.ts`, `maintenance-layout.spec.ts` | Scoped history, bigint cursors, demotion, session revocation, unknown outcomes and responsive layouts |
+| `tests/usage-history.spec.ts` | Snapshot dates/counts, range validation, empty/error/401, progressive rendering and responsive tables |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 | `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named User token login and Console audit |
 | `tests/live-access.mjs` via Python fixture | Real first-Admin bootstrap, User lifecycle, token use/revocation, last-Admin protection and targeted master recovery |
 | `tests/live-clients.mjs` via Python fixture | Real client/S3 credential lifecycle and pending-file deletion guard |
 | `tests/live-maintenance.mjs` via Python fixture | Real history views and revocation of another/current browser session with independent cookies |
+| `tests/live-usage.mjs` via Python fixture | Real usage API and date range against seeded disposable DB snapshots; deleted resource history retained |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
 Run `npm run build` before `npm test`: the browser security suite serves `dist` on
