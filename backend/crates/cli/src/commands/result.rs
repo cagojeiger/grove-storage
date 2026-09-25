@@ -31,6 +31,7 @@ pub(super) async fn execute(api: &Api, command: Command) -> CommandResult {
             rows.sort_by(|a, b| a.id.cmp(&b.id));
             Data::Storages(rows)
         }
+        Output::StorageTest(row) => Data::StorageConnection(row),
         Output::StorageShow(row) | Output::StorageCreate(row) | Output::StorageReplace(row) => {
             Data::Storage(row)
         }

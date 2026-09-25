@@ -34,7 +34,7 @@ fn every_remote_cli_leaf_exists_in_the_shared_catalog_and_nothing_else() {
         .map(|name| name.as_str().to_owned())
         .collect();
     assert_eq!(actual, expected);
-    assert_eq!(actual.len(), 19);
+    assert_eq!(actual.len(), 20);
 }
 
 #[test]
@@ -43,6 +43,7 @@ fn parsed_cli_names_match_the_catalog_including_hyphenated_commands() {
         &["status"],
         &["storage", "list"],
         &["storage", "show", "s"],
+        &["storage", "test", "s"],
         &["storage", "create", "s", "--from", "input.json"],
         &["storage", "replace", "s", "--from", "input.json"],
         &["storage", "delete", "s"],

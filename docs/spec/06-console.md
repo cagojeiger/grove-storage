@@ -11,7 +11,7 @@ External S3-compatible storage is the supported backend. Console, CLI, MCP and
 legacy REST accept only S3 registration/replacement. Native/S3 client keys remain
 supported. Legacy FS rows remain visible with editing disabled; runtime I/O and
 reference-protected deletion are retained pending inventory and migration.
-The separate on-demand connection test is still pending.
+Saved S3 storage supports an explicit on-demand connection test.
 
 ## Current Coverage
 
@@ -22,7 +22,7 @@ The separate on-demand connection test is still pending.
 | Accounts, management tokens | Implemented; Root/Admin only | Console-only identity API implemented |
 | Clients, Native keys, S3 credentials | Implemented; Reader views Clients, Writer/Admin/Root manage service keys | Shared resource commands implemented in API, CLI and MCP |
 | Sessions, management audit/call/security history | Pending | Console-only scoped APIs implemented |
-| On-demand storage connection test | Pending | New shared command required; `gscli status` reads metadata |
+| On-demand storage connection test | Implemented for saved S3 settings | Shared `storage.test`; `gscli status` still reads metadata only |
 
 ### Clients Contract
 
@@ -84,23 +84,22 @@ its query API, observation coverage and retention contract remain pending, with 
 limits described in [management logs](08-management-plane.md#client-history-coverage).
 Settings does not duplicate Access or write deployment environment variables.
 
-## Connection Test Proposal
+## Connection Test
 
-This section specifies the next contract; no test command/button is implemented yet.
-
-| Item | Proposed behavior |
+| Item | Current behavior |
 |---|---|
-| Entry points | **Test connection** in Storage detail and registration/replacement form |
-| Shared command | `storage.test` through the same Console, CLI and MCP executor; input selects registered ID or draft fields |
-| Permissions | Writer/Admin resource permission, rechecked on each call; User role limits remain effective |
+| Entry points | **Test connection** in Storage detail; `gscli storage test ID`; MCP `storage.test` |
+| Shared command | `storage.test` with `{id}` through the same Console, CLI and MCP executor |
+| Permissions | ReadResources: Reader/Writer/Admin and console Root; identity rechecked after the probe |
 | Saved storage | Resolve provider credentials on the server; return checks without secret values |
-| Draft fields | Probe without saving registry metadata; clear submitted secrets; allow registering only through the existing mutation |
+| Draft fields | Registration/replacement retain their existing pre-save probe; a standalone draft test is deferred |
 | S3 baseline | Internal endpoint `HeadBucket` and `ListMultipartUploads`, matching current registration checks |
-| Result | Per-check success/failure, server timestamp, duration, sanitized error; label the completed checks rather than general storage health |
+| Result | `{id,state:"ok"}` after both checks; 503 on provider/decryption/timeout failure; provider diagnostics stay private. UI shows local observation time |
 | Scope | S3 baseline does not prove object PUT/GET/DELETE permission, public endpoint reachability or browser CORS |
-| Execution | Bounded timeout/concurrency; an explicit click per run; clear stale results when target fields change |
+| Execution | 10-second probe timeout outside the identity transaction; explicit click, one pending UI request, no automatic UI retry. No global concurrency quota yet |
+| Freshness | Re-read saved settings after probe; changes return 409 and deleted targets return 404. UI clears results on detail refresh or navigation |
 | Records | Management invocation result; registry metadata remains unchanged, so no storage-change audit event |
-| Preview | Mark results as simulated or leave the test unavailable; never report sample success as a live probe |
+| Preview | Sample server returns unavailable; real provider checks are exercised with disposable MinIO |
 
 ## Next UI Priorities
 
@@ -108,8 +107,8 @@ This section specifies the next contract; no test command/button is implemented 
 |---|---|---|
 | 0 (Implemented) | S3-only admission | Console/API/CLI/MCP reject FS create/replace; legacy FS runtime retained. Inventory and migration/rollback remain before runtime removal |
 | 1 (Implemented) | Master setup/recovery and Access | A new installation can issue its first User token; Admin can create User tokens; last-Admin and one-time-secret safeguards |
-| 2 | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
-| 3 | Shared connection test | Saved/draft S3 probes via API, Console, CLI and MCP; real MinIO failures plus permission/timeout/concurrency tests |
+| 2 (Implemented) | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
+| 3 (Implemented, saved settings) | Shared connection test | Saved S3 probe via API, Console, CLI and MCP; failure, permission, timeout and concurrent setting/revocation tests |
 | 4 | Activity and Settings | Scoped queries, server-side Client filter, cursor paging, own-session revocation and separation from Client file logs |
 | 5 | Client Logs | Defined observation/retention contract, scoped server queries and paging; URL issuance distinguished from transfer completion |
 
@@ -210,7 +209,7 @@ Reader/Writer의 이력은 자기 범위, Admin은 전체 범위를 조회한다
 | 5a (구현) | 개인 토큰 로그인·역할 표시·기존 자원 화면 전환 | 실제 HTTPS User 쿠키·폐기·Reader·역할 강등·토큰별 로그인·console 감사 |
 | 5b (구현) | master 설정·복구·User·관리 토큰 UI | 실제 HTTPS 최초 설정·대상 복구·User 토큰 사용/폐기·마지막 Admin; 응답 불명·중복 제출·권한 변경·반응형 |
 | C | 클라이언트·Native/S3 키 | CLI 원격 기능 대응, 한 번 표시·폐기, 응답 유실 시 중복 발급 방지 |
-| 연결 검사 (제안) | 공통 `storage.test`와 버튼 | 저장 없이 실제 S3 probe, 권한·timeout·비밀 보호 |
+| 연결 검사 | 공통 `storage.test`와 상세 버튼 | 등록된 S3의 읽기 전용 probe, 권한·timeout·비밀 보호 |
 | 관리 이력 (후속) | 관리 변경·호출·보안 조회 | 주체/대상/기간 필터, 조회 권한, secret 제외, Client 파일 로그와 분리 |
 | D | 반응형·접근성·배포 | 320/390/768/1024/1440px, light/dark/system, 키보드·초점, 같은 origin 배포 |
 

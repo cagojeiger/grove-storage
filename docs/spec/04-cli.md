@@ -1,6 +1,6 @@
 # spec 04: 원격 관리 CLI
 
-- 구현: `gscli` 원격 19개 명령 → [공통 명령 API](09-management-commands.md), User 관리 토큰.
+- 구현: `gscli` 원격 20개 명령 → [공통 명령 API](09-management-commands.md), User 관리 토큰.
 - 유지: 명령 이름·table/JSON·변경 확인·비밀 파일·수동 update.
 - 후속: 연결 profile·운영 인증 이관. 권한·콘솔 전용 경계는 [spec 08](08-management-plane.md).
 
@@ -30,7 +30,7 @@ filegate status → 로컬 DB·복호 키·저장소 probe
 
 | CLI | MCP |
 |---|---|
-| 19개 → 공통 schema·명령명·권한·결과 | 같은 19개 tool·실행기, 실제 HTTP/CLI 결과 대조 |
+| 20개 → 공통 schema·명령명·권한·결과 | 같은 20개 tool·실행기, 실제 HTTP/CLI 결과 대조 |
 | User 토큰 → 서버가 현재 권한 판정 | 같은 토큰·현재 권한; [전송·비밀 전달 차이](10-management-mcp.md) |
 | HTTP 호출의 서버 surface는 `resource_api` | MCP 진입점은 서버가 `mcp`로 기록 |
 
@@ -45,6 +45,7 @@ gscli
 ├── status
 ├── storage
 │   ├── list / show ID
+│   ├── test ID
 │   ├── create ID --from PATH
 │   ├── replace ID --from PATH [--yes]
 │   └── delete ID [--yes]
@@ -165,8 +166,8 @@ help·결과는 stdout, 프롬프트·진단은 stderr다. 파서 오류는 stde
 
 | 단계 | 상태·검증 |
 |---|---|
-| CLI adapter (4c-1) | 19개 typed 명령·User 토큰·wire/outcome 검증·비밀/확인/출력 회귀 |
-| 실제 CLI E2E | 임시 PG·서버·CLI에서 master 설정·User 발급·19개 명령·기존 REST 조회 비교·User 역할·폐기·관리 audit |
+| CLI adapter (4c-1) | 20개 typed 명령·User 토큰·wire/outcome 검증·비밀/확인/출력 회귀 |
+| 실제 CLI E2E | 임시 PG·서버·CLI에서 master 설정·User 발급·20개 명령·기존 REST 조회 비교·User 역할·폐기·관리 audit |
 | MCP adapter (4c-2) | 같은 명령 schema·결과·거부·실제 HTTP 전송 검증 |
 | 운영 이관 | 후속: DB backup·기존 인증 매핑·proxy·소비자 호환·롤백 |
 

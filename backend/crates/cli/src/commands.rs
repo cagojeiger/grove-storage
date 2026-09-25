@@ -19,6 +19,7 @@ pub async fn run(api: &Api, command: &Command) -> CommandResult {
         Command::Status => Remote::Status(EmptyInput {}),
         Command::Storage(StorageCommand::List) => Remote::StorageList(EmptyInput {}),
         Command::Storage(StorageCommand::Show { id }) => Remote::StorageShow(resource(id)),
+        Command::Storage(StorageCommand::Test { id }) => Remote::StorageTest(resource(id)),
         Command::Storage(StorageCommand::Create { id, from }) => {
             return write::storage(api, id, from, false, false).await;
         }

@@ -21,6 +21,7 @@ pub enum Data {
     Strings(Vec<String>),
     Storages(Vec<Storage>),
     Storage(Storage),
+    StorageConnection(grove_management_command::model::StorageConnection),
     Client(Client),
     ClientKey(ClientKey),
     CredentialDelivery(CredentialDelivery),

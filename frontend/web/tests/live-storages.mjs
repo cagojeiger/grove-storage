@@ -55,6 +55,10 @@ export async function storageChecks(
   }
   await list();
   await createS3("console-live");
+  await page.getByRole("button", { name: "Test connection", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Bucket access verified");
+  assert.deepEqual((await command("storage.test", { id: "console-live" })).body, { id: "console-live", state: "ok" });
+  console.log("PASS real MinIO Test connection UI and shared command");
   await page.getByRole("button", { name: "Edit storage" }).click();
   await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
   await page.getByLabel("Registered capacity", { exact: true }).fill("2147483648");

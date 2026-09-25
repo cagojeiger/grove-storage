@@ -92,6 +92,7 @@ commands! {
     Status => ("status", input::EmptyInput, model::Status, ReadResources, Read),
     StorageList => ("storage.list", input::EmptyInput, Vec<model::Storage>, ReadResources, Read),
     StorageShow => ("storage.show", input::ResourceInput, model::Storage, ReadResources, Read),
+    StorageTest => ("storage.test", input::ResourceInput, model::StorageConnection, ReadResources, Read),
     StorageCreate => ("storage.create", input::StorageInput, model::Storage, WriteResources, Mutation),
     StorageReplace => ("storage.replace", input::StorageInput, model::Storage, WriteResources, Mutation),
     StorageDelete => ("storage.delete", input::ResourceInput, model::Deleted, WriteResources, Mutation),

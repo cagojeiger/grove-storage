@@ -51,7 +51,7 @@ Compose는 PostgreSQL(`55432`), MinIO(`9000/9001`), 개발 버킷을 준비한�
 
 ## 관리 CLI
 
-MCP도 같은 19개 자원 명령을 `/api/admin/mcp`에서 제공한다.
+MCP도 같은 20개 자원 명령을 `/api/admin/mcp`에서 제공한다.
 [연결·인증·비밀 전달 계약](docs/spec/10-management-mcp.md). 운영 배포는 별도다.
 
 ```sh

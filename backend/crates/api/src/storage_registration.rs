@@ -39,8 +39,25 @@ fn default_kind() -> String {
 pub(crate) async fn verify_command(
     crypto: &Crypto,
     relay_base_ready: bool,
-    input: grove_management_command::input::StorageInput,
+    operation: grove_management_service::resources::StorageOperation,
 ) -> Result<StorageRow, grove_management_service::Error> {
+    use grove_management_service::{Error, resources::StorageOperation};
+    let input = match operation {
+        StorageOperation::Register(input) => input,
+        StorageOperation::Test(row) => {
+            if row.kind != "s3" {
+                return Err(Error::InvalidInput);
+            }
+            let StorageBackend::S3 { spec, .. } =
+                backend_from_row(crypto, &row).map_err(|_| Error::Unavailable)?
+            else {
+                return Err(Error::InvalidInput);
+            };
+            // Neither provider diagnostics nor credentials cross this boundary.
+            s3_connect(&spec).await.map_err(|_| Error::Unavailable)?;
+            return Ok(row);
+        }
+    };
     let spec = input.spec;
     let body = Submission {
         kind: match spec.kind {

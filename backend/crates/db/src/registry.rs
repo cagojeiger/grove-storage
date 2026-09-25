@@ -12,7 +12,7 @@ pub const RESERVED_CLIENT_IDS: &[&str] = &["api", "blobs", "healthz", "readyz"];
 /// 집행한다 (0002). s3 시크릿은 암호문 컬럼 셋으로만 존재 — 복호는
 /// core::Crypto가 행의 enc_key_id 라벨로 한다 (spec 01). fs는 시크릿이
 /// 없는 storage다 — root_path가 접근 계약의 전부.
-#[derive(Clone, sqlx::FromRow)]
+#[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct StorageRow {
     pub id: String,
     pub kind: String,

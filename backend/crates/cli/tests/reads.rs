@@ -8,6 +8,12 @@ use support::*;
 fn every_read_command_uses_common_contract_and_no_db_configuration() {
     let cases = [
         (
+            vec!["storage", "test", "r2"],
+            "storage.test",
+            json!({"id":"r2", "state":"ok"}),
+            "storage.test",
+        ),
+        (
             vec!["storage", "list"],
             "storage.list",
             json!([storage()]),
@@ -134,6 +140,19 @@ fn show_rejects_a_mismatched_identity() {
     )]);
     let result = envelope(&server.run(&["client", "show", "app"]), 5);
     assert_eq!(result["error"]["code"], "invalid_response");
+}
+
+#[test]
+fn storage_test_rejects_wrong_target_and_non_success_without_retry() {
+    for result in [
+        json!({"id":"other","state":"ok"}),
+        json!({"id":"r2","state":"failed"}),
+    ] {
+        let server = Server::new(vec![("storage.test", Reply::json(result))]);
+        let result = envelope(&server.run(&["storage", "test", "r2"]), 5);
+        assert_eq!(result["error"]["code"], "invalid_response");
+        assert_eq!(server.seen().len(), 1);
+    }
 }
 
 #[test]

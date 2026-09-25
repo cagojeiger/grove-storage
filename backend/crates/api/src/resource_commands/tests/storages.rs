@@ -107,10 +107,12 @@ async fn invalid_storage_fields_and_probe_failure_are_sanitized(pool: PgPool) {
     }
     let mut state = crate::routes::tests::test_state();
     state.public_url = None;
-    let input = serde_json::from_value(
-        json!({"id":"relay","spec":{"kind":"s3","force_relay":true,"capacity_bytes":1}}),
-    )
-    .unwrap();
+    let input = grove_management_service::resources::StorageOperation::Register(
+        serde_json::from_value(
+            json!({"id":"relay","spec":{"kind":"s3","force_relay":true,"capacity_bytes":1}}),
+        )
+        .unwrap(),
+    );
     assert!(matches!(
         crate::storage_registration::verify_command(
             &state.crypto,

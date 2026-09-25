@@ -21,7 +21,7 @@ fn catalog_names_are_unique_and_every_command_has_typed_input_and_output() {
         let output = name.decode_output(support::output(name)).unwrap();
         assert_eq!(output.name(), name);
     }
-    assert_eq!(names.len(), 19);
+    assert_eq!(names.len(), 20);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 # spec 09: 공통 자원 명령 계약
 
-- 상태: `grove-management-command` + 조회 10개·변경 9개 실행기 + Bearer HTTP 구현.
-- CLI의 원격 19개 명령과 MCP 19개 tool을 같은 실행기에 연결했다. [MCP 전송 계약](10-management-mcp.md).
+- 상태: `grove-management-command` + 조회 11개·변경 9개 실행기 + Bearer HTTP 구현.
+- CLI의 원격 20개 명령과 MCP 20개 tool을 같은 실행기에 연결했다. [MCP 전송 계약](10-management-mcp.md).
 - 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
 
 ## 구성
@@ -43,14 +43,14 @@ Content-Type: application/json
 
 | 항목 | 현재 계약 |
 |---|---|
-| 지원 범위 | 조회 10개·변경 9개, catalog의 19개 전체 |
+| 지원 범위 | 조회 11개·변경 9개, catalog의 20개 전체 |
 | 성공 | 200 `{protocol:1, request_id, command, result}`; result는 공통 typed Output |
 | 실패 | `{protocol:1, request_id, error:{code,outcome}}`; commit 전 거부는 `not_applied`, 변경 commit 실패는 `unavailable/unknown` |
 | HTTP 코드 | unauthorized 401, forbidden 403, not_found 404, conflict 409, unavailable 503; 입력/protocol/명령/접근 검사 거부는 400 |
 | 인증 | 활성 User 관리 토큰; Cookie가 있거나 Authorization이 중복이면 401; master·기존 운영자 토큰은 별도 namespace |
 | 표면 | 서버가 `resource_api`로 기록; 요청 body·User-Agent·proxy 사용자 헤더로 actor/surface 지정 생략 |
 | 응답 보안 | no-store·nosniff·서버 request_id; 관리 쿠키 발급·OAuth redirect·CORS 허용 생략 |
-| 조회 경계 | identity lock → 현재 신원·role·owner 확인 → 조회 → commit; 저장소 I/O probe 생략 |
+| 조회 경계 | identity lock → 현재 신원·role·owner 확인 → 조회 → commit; `storage.test`만 별도 외부 probe 후 신원·설정 재확인 |
 | DB 재사용 | 기존 registry/usage/S3 키 SQL이 pool 또는 현재 transaction에서 실행; SQL 조건·정렬 유지 |
 | 변경 경계 | 현재 권한 → 자원 변경 + audit → commit; 감사 실패는 rollback, commit 불명은 자동 재시도 없이 대조 |
 | 상태 | CLI도 단일 status 명령 사용; 서버의 신원/DB/등록부 관찰, 물리 storage는 `not_checked`; 실패 시 명령 오류 |
@@ -65,11 +65,11 @@ CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 
 
 ### 브라우저 전송
 
-`POST /api/admin/console-commands/v1`은 같은 19개 명령과 응답 계약을 사용한다.
+`POST /api/admin/console-commands/v1`은 같은 20개 명령과 응답 계약을 사용한다.
 User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 실행기에 연결하며
 표면은 서버가 `console`로 지정한다. Bearer·master 설정 세션·기존 운영자 쿠키는 거부한다.
 진입 guard의 401/403은 신원 API 오류 형식이고 실행기 진입 후 오류는 공통 envelope다.
-현재 UI는 개요·저장소 명령만 연결했다. 신원/이력은 별도 세션 API에 유지한다.
+현재 UI는 개요·저장소·Clients·서비스 키 명령을 연결한다. 신원/이력은 별도 세션 API에 유지한다.
 
 ## 명령 목록
 
@@ -78,6 +78,7 @@ User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 
 | `status` | `{}` | Status | ReadResources | 조회 |
 | `storage.list` | `{}` | Storage[] | ReadResources | 조회 |
 | `storage.show` | id | Storage | ReadResources | 조회 |
+| `storage.test` | id | StorageConnection `{id,state:"ok"}` | ReadResources | 조회·외부 probe |
 | `storage.create`, `storage.replace` | id, spec | Storage | WriteResources | 변경 |
 | `storage.delete` | id | Deleted | WriteResources | 변경 |
 | `client.list` | `{}` | string[] | ReadResources | 조회 |
@@ -94,7 +95,7 @@ User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 
 | `usage.clients` | `{}` | ClientUsage[] | ReadResources | 조회 |
 | `usage.history` | days (기본 90) | Snapshot[] | ReadResources | 조회 |
 
-19개 명령은 조회 10개·변경 9개다. User·role·관리 토큰·관리 이력은
+20개 명령은 조회 11개·변경 9개다. User·role·관리 토큰·관리 이력은
 콘솔 세션 API의 별도 계약이다. `credential`은 Client의 S3 서비스 키를 뜻한다.
 
 ### Client·서비스 키 변경 (4b-1)
@@ -180,21 +181,21 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 
 | 위치 | 검증 대상 |
 |---|---|
-| `management-command/tests/catalog.rs` | 19개 명령·권한·효과·CLI/MCP 정책 동등성·schema 구조 |
+| `management-command/tests/catalog.rs` | 20개 명령·권한·효과·CLI/MCP 정책 동등성·schema 구조 |
 | `management-command/tests/inputs.rs` | 필수/미지원 필드·경계값·기본값·hash 입력 |
 | `management-command/tests/outputs.rs` | wire fixture 왕복·비밀 필드 제거·진단 redaction |
 | `management-command/tests/errors.rs` | protocol 거부 순서·안정 코드·적용 결과 분리 |
 | `cli/tests/command_contract.rs` | 실제 clap 원격 명령과 catalog의 일대일 대응 |
 | `cli/tests/` | command HTTP·protocol/명령/대상 ID 검증·JSON·설정 우선순위·비밀 파일·변경 결과·단일 status |
-| `scripts/e2e-cli.py` | 실제 CLI/서버/PG의 19개 명령·기존 REST 결과 비교·User·User 강등·폐기·감사·비밀 제외 |
-| `api/src/mcp/tests/`, `scripts/e2e-mcp.py` | 19개 tool schema·실제 HTTP/CLI 결과·MCP 감사·owner·폐기·rollback·unknown·서버 비밀 로그 제외 |
+| `scripts/e2e-cli.py` | 실제 CLI/서버/PG의 20개 명령·기존 REST 결과 비교·User·User 강등·폐기·감사·비밀 제외 |
+| `api/src/mcp/tests/`, `scripts/e2e-mcp.py` | 20개 tool schema·실제 HTTP/CLI 결과·MCP 감사·owner·폐기·rollback·unknown·서버 비밀 로그 제외 |
 | `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·User 현재 역할·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
 | `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
-| `api/src/resource_commands/tests/` | 조회 10개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
+| `api/src/resource_commands/tests/` | 조회 11개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
 | 같은 경로의 `writes.rs`, `write_failures.rs` | 4개 PG HTTP 테스트: 변경 왕복·기존 키 조회/인증·409/400·감사 rollback·원문 없는 unknown |
 | `management-service/tests/storage_writes.rs` + `storage_writes/` | 8개 PG 테스트: 변경 3개·참조·probe 중 폐기/User 강등·참조 경합·감사 rollback·unknown |
 | `api/src/resource_commands/tests/storage*.rs` | PG HTTP 테스트: FS 등록/교체 거부·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
-| 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 10개·User 현재 역할·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
+| 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 11개·User 현재 역할·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
 | 변경 서버 smoke | 변경 6개·기존 S3 키 목록·Native PUT/commit/GET 바이트 일치·파일 참조 삭제 409·키 폐기 후 401·비밀 없는 감사 확인; S3 실제 전송은 이번 검증에서 제외 |
 | Storage 서버 smoke | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |
 

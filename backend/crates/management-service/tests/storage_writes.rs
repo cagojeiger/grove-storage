@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 #[path = "storage_writes/authorization.rs"]
 mod authorization;
+#[path = "storage_writes/checks.rs"]
+mod checks;
 #[path = "storage_writes/failures.rs"]
 mod failures;
 #[path = "storage_writes/lifecycle.rs"]
@@ -35,7 +37,10 @@ fn submission(id: &str, root: &str, capacity: i64) -> input::StorageInput {
     }
 }
 // The service contract is tested independently of filesystem/network availability.
-async fn verified(input: input::StorageInput) -> Result<StorageRow, Error> {
+async fn verified(operation: resources::StorageOperation) -> Result<StorageRow, Error> {
+    let resources::StorageOperation::Register(input) = operation else {
+        return Err(Error::InvalidInput);
+    };
     Ok(StorageRow {
         id: input.id,
         kind: "s3".into(),
@@ -67,9 +72,11 @@ async fn execute(pool: &PgPool, token: &str, command: Command) -> resources::Exe
 async fn seed(pool: &PgPool) {
     registry::insert_storage(
         pool,
-        &verified(submission("local", "/fixture", 100))
-            .await
-            .unwrap(),
+        &verified(resources::StorageOperation::Register(submission(
+            "local", "/fixture", 100,
+        )))
+        .await
+        .unwrap(),
     )
     .await
     .unwrap();

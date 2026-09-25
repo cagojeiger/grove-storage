@@ -24,7 +24,7 @@ The real fixture below verifies first-Admin bootstrap against an empty database.
 | Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Account rename requires a separate backend contract |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Client detail and key lifecycle |
 | API readiness, client count, per-storage usage | Usage history and client detail |
-| Backend access checks during real storage registration/replacement | On-demand **Test connection** command and UI; sample preview performs no probes |
+| Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 
 ## Isolated Local Console

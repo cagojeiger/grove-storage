@@ -80,7 +80,7 @@ def check_s3(endpoint, directory, backend):
     assert VERSION in discovery["supportedVersions"]
     tools = rpc("tools/list", {})["tools"]
     names = {tool["name"] for tool in tools}
-    assert len(names) == 19 and not any(name.startswith(("identity", "history")) for name in names)
+    assert len(names) == 20 and not any(name.startswith(("identity", "history")) for name in names)
     provider_secret = "provider-input-e2e-canary"
     SECRETS.append(provider_secret)
     call("storage.create", {"id": "incomplete-provider", "spec": {
@@ -114,6 +114,7 @@ def check_s3(endpoint, directory, backend):
         ("status", {}, ["status"]),
         ("storage.list", {}, ["storage", "list"]),
         ("storage.show", {"id": "mcp-storage"}, ["storage", "show", "mcp-storage"]),
+        ("storage.test", {"id": "mcp-storage"}, ["storage", "test", "mcp-storage"]),
         ("client.list", {}, ["client", "list"]),
         ("client.show", {"id": "mcp-client"}, ["client", "show", "mcp-client"]),
         ("client-key.list", {"client_id": "mcp-client"}, ["client-key", "list", "--client", "mcp-client"]),
@@ -128,6 +129,16 @@ def check_s3(endpoint, directory, backend):
         assert cli.returncode == 0, name
         assert json.loads(cli.stdout)["data"] == result, name
         assert issued["secret_key"] not in cli.stdout + cli.stderr
+    before = call("storage.show", {"id": "mcp-storage"})
+    # Remove only the empty bucket owned by this disposable fixture.
+    backend.vendor.delete_bucket(Bucket=spec["bucket"])
+    try:
+        call("storage.test", {"id": "mcp-storage"}, error="unavailable")
+        assert call("storage.show", {"id": "mcp-storage"}) == before
+    finally:
+        backend.vendor.create_bucket(Bucket=spec["bucket"])
+    assert call("storage.test", {"id": "mcp-storage"}) == {"id": "mcp-storage", "state": "ok"}
+    print("PASS real MinIO missing bucket fails storage.test without registry changes; recovery succeeds")
     call("storage.delete", {"id": "mcp-storage"}, error="conflict")
     call("credential.delete", {"client_id": "mcp-client", "access_key_id": issued["access_key_id"]})
     call("client-key.delete", {"client_id": "mcp-client", "key_hash": key})
@@ -150,7 +161,7 @@ def check_s3(endpoint, directory, backend):
         assert error.code == 401
     else:
         raise AssertionError("Revoked token could discover tools")
-    print("PASS MCP 19 commands, CLI parity, token audit, User role, revocation, and one-time secret")
+    print("PASS MCP 20 commands, CLI parity, token audit, User role, revocation, and one-time secret")
 
 
 def verify_log(data):

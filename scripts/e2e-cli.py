@@ -84,6 +84,8 @@ def check_s3_lifecycle(endpoint, directory, backend):
         **backend.spec, "capacity_bytes": 1073741824,
     }))
     run_cli("storage", "create", "cli-test-s3", "--from", str(storage_spec))
+    checked, _ = run_cli("storage", "test", "cli-test-s3")
+    assert checked["data"] == {"id": "cli-test-s3", "state": "ok"}
     run_cli("client", "create", "cli-test", "--storage", "cli-test-s3")
 
     raw_key = "cli-test-native-key"

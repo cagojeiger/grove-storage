@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 #[allow(clippy::panic)]
 pub async fn unexpected_storage_probe(
-    _: grove_management_command::input::StorageInput,
+    _: grove_management_service::resources::StorageOperation,
 ) -> Result<filegate_db::registry::StorageRow, grove_management_service::Error> {
     panic!("this command must not probe a storage")
 }

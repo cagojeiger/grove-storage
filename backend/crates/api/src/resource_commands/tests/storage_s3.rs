@@ -22,6 +22,7 @@ impl Provider {
                 count.fetch_add(1, Ordering::SeqCst);
                 assert!(request.headers().contains_key(header::AUTHORIZATION));
                 if request.method() == "HEAD" { return StatusCode::OK.into_response(); }
+                assert_eq!(request.method(), "GET");
                 assert!(request.uri().query().unwrap().contains("uploads"));
                 if deny_list { return (StatusCode::FORBIDDEN,"private-provider-detail").into_response(); }
                 (StatusCode::OK,[(header::CONTENT_TYPE,"application/xml")],
@@ -53,6 +54,58 @@ impl Drop for Provider {
     fn drop(&mut self) {
         self.task.abort();
     }
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn saved_connection_tests_are_read_only_and_redact_provider_failures(pool: PgPool) {
+    let token = owner(&pool).await;
+    let provider = Provider::start(false).await;
+    assert_eq!(
+        call(
+            &pool,
+            &token,
+            "storage.create",
+            provider.input("private-provider-secret")
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let before = filegate_db::registry::get_storage(&pool, "vendor")
+        .await
+        .unwrap()
+        .unwrap();
+    let response = call(&pool, &token, "storage.test", json!({"id":"vendor"})).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await["result"],
+        json!({"id":"vendor", "state":"ok"})
+    );
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 4);
+    assert_eq!(
+        filegate_db::registry::get_storage(&pool, "vendor")
+            .await
+            .unwrap()
+            .unwrap(),
+        before
+    );
+
+    let denied = Provider::start(true).await;
+    sqlx::query("UPDATE storages SET endpoint=$1 WHERE id='vendor'")
+        .bind(&denied.endpoint)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let response = call(&pool, &token, "storage.test", json!({"id":"vendor"})).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body = json_body(response).await;
+    assert_eq!(
+        body["error"],
+        json!({"code":"unavailable", "outcome":"not_applied"})
+    );
+    assert!(!body.to_string().contains("private-"));
+    assert!(!body.to_string().contains(&denied.endpoint));
+    assert_eq!(denied.calls.load(Ordering::SeqCst), 2);
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

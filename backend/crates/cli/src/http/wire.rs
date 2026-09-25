@@ -54,6 +54,9 @@ pub(super) fn decode(command: &Command, status: u16, bytes: &[u8]) -> Result<Out
 fn corresponds(command: &Command, output: &Output) -> bool {
     match (command, output) {
         (Command::StorageShow(i), Output::StorageShow(o)) => i.id == o.id,
+        (Command::StorageTest(i), Output::StorageTest(o)) => {
+            i.id == o.id && o.state == grove_management_command::model::State::Ok
+        }
         (Command::StorageCreate(i), Output::StorageCreate(o))
         | (Command::StorageReplace(i), Output::StorageReplace(o)) => i.id == o.id,
         (Command::ClientShow(i), Output::ClientShow(o)) => i.id == o.id,

@@ -593,6 +593,8 @@ dialog::backdrop {
 .issued-token { display: grid; gap: 16px; min-width: 0; }
 .service-keys { margin-top: 28px; }
 .clients .section-heading, .clients .page-actions { flex-wrap: wrap; }
+.storage-section .section-heading { flex-wrap: wrap; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.storage-section .section-heading h2 { padding: 0; border: 0; }
 .clients h1, .clients h2 { overflow-wrap: anywhere; }
 .service-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .service-key-row code, .key-value, .clients .account-row strong { overflow-wrap: anywhere; min-width: 0; }

@@ -25,8 +25,13 @@ pub struct Execution {
     pub result: Result<Output, CommandError>,
 }
 
-/// The trusted verifier validates backend fields, probes access, and encrypts
-/// provider secrets for the submitted ID. It runs outside the DB transaction.
+pub enum StorageOperation {
+    Register(StorageInput),
+    Test(StorageRow),
+}
+
+/// The trusted verifier registers submitted settings or probes a saved row.
+/// Tests return the unchanged row. All network work runs outside the transaction.
 pub async fn execute<V, F>(
     pool: &PgPool,
     crypto: &Crypto,
@@ -36,7 +41,7 @@ pub async fn execute<V, F>(
     command: Command,
 ) -> Execution
 where
-    V: FnOnce(StorageInput) -> F,
+    V: FnOnce(StorageOperation) -> F,
     F: Future<Output = Result<StorageRow, Error>>,
 {
     let request_id = Uuid::new_v4();
@@ -78,7 +83,7 @@ async fn run<V, F>(
     request_id: Uuid,
 ) -> (Option<AuditContext>, Result<Output, Error>)
 where
-    V: FnOnce(StorageInput) -> F,
+    V: FnOnce(StorageOperation) -> F,
     F: Future<Output = Result<StorageRow, Error>>,
 {
     let mut context = None;
@@ -95,10 +100,32 @@ where
                 }
                 // No resource change yet. Release both the DB connection and identity lock.
                 tx.finish().await.map_err(|_| Error::Unavailable)?;
-                let row = verify_storage(input).await?;
+                let row = verify_storage(StorageOperation::Register(input)).await?;
                 tx = IdentityTransaction::begin(pool).await?;
                 ctx = current(&mut tx, proof, surface, name, request_id, &mut context).await?;
                 storage::write(&mut tx, &ctx, name, row).await?
+            }
+            Command::StorageTest(input) => {
+                let row = tx.storage(&input.id).await?;
+                if row.kind != "s3" {
+                    return Err(Error::InvalidInput);
+                }
+                tx.finish().await.map_err(|_| Error::Unavailable)?;
+                let probe = tokio::time::timeout(
+                    std::time::Duration::from_secs(10),
+                    verify_storage(StorageOperation::Test(row.clone())),
+                )
+                .await;
+                tx = IdentityTransaction::begin(pool).await?;
+                current(&mut tx, proof, surface, name, request_id, &mut context).await?;
+                if tx.storage(&input.id).await? != row {
+                    return Err(Error::Conflict);
+                }
+                probe.map_err(|_| Error::Unavailable)??;
+                Output::StorageTest(grove_management_command::model::StorageConnection {
+                    id: input.id,
+                    state: grove_management_command::model::State::Ok,
+                })
             }
             command if mutation => writes::run(&mut tx, crypto, &ctx, command).await?,
             command => reads::run(&mut tx, command).await?,

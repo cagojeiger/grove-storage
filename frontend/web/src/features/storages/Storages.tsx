@@ -17,6 +17,7 @@ import { Storage, refreshStorages } from "./model";
 import { StorageEditor } from "./StorageEditor";
 import { DeleteStorage } from "./DeleteStorage";
 import { StorageDetail } from "./StorageDetail";
+import { TestConnection } from "./TestConnection";
 
 export function Storages({ route, canWrite }: { route: string; canWrite: boolean }) {
   const cache = useQueryClient();
@@ -134,6 +135,9 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
                 : usage.data?.find((row) => row.storage_id === id)
             }
           />
+          {detail.data.kind === "s3" && (
+            <TestConnection key={`${id}:${detail.dataUpdatedAt}`} id={id} revision={detail.dataUpdatedAt} />
+          )}
         </>
       ) : (
         <>

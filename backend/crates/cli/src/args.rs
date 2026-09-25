@@ -62,6 +62,11 @@ pub enum Command {
 #[derive(Subcommand)]
 pub enum StorageCommand {
     List,
+    /// Test saved S3 bucket access without writing objects or registry settings.
+    Test {
+        #[arg(value_parser = resource_id)]
+        id: String,
+    },
     Show {
         #[arg(value_parser = resource_id)]
         id: String,
@@ -188,6 +193,7 @@ impl Command {
             Self::Status => CommandName::Status.as_str(),
             Self::Storage(StorageCommand::List) => CommandName::StorageList.as_str(),
             Self::Storage(StorageCommand::Show { .. }) => CommandName::StorageShow.as_str(),
+            Self::Storage(StorageCommand::Test { .. }) => CommandName::StorageTest.as_str(),
             Self::Storage(StorageCommand::Create { .. }) => CommandName::StorageCreate.as_str(),
             Self::Storage(StorageCommand::Replace { .. }) => CommandName::StorageReplace.as_str(),
             Self::Storage(StorageCommand::Delete { .. }) => CommandName::StorageDelete.as_str(),

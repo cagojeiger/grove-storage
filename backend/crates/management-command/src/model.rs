@@ -30,6 +30,13 @@ pub struct Client {
     pub storage_id: String,
 }
 
+/// Point-in-time internal bucket access, not object transfer or public URL health.
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct StorageConnection {
+    pub id: String,
+    pub state: State,
+}
+
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct ClientKey {
     pub client_id: String,

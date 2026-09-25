@@ -96,11 +96,14 @@ async function response(req, res) {
     const envelope = { protocol: 1, request_id: randomUUID() };
     const success = (result) => json(res, 200, { ...envelope, command, result });
     const failure = (status, code) => json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
-    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "usage.clients", "usage.storages"].includes(command)) return failure(403, "forbidden");
+    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "storage.test", "usage.clients", "usage.storages"].includes(command)) return failure(403, "forbidden");
     if (clients.handle(command, input, success, failure)) return;
     if (command === "usage.storages") return success([...storages.values()].map(usage));
     if (command === "storage.list") return success([...storages.values()]);
     const storageId = input.id;
+    // Sample storage has no provider credentials. Never fabricate connectivity.
+    if (command === "storage.test")
+      return storages.has(storageId) ? failure(503, "unavailable") : failure(404, "not_found");
     if (command === "storage.show")
       return storages.has(storageId) ? success(storages.get(storageId)) : failure(404, "not_found");
     if (command === "storage.delete") {

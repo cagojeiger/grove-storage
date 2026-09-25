@@ -30,7 +30,9 @@ pub(super) fn tool(name: CommandName) -> Tool {
                 .idempotent(read)
                 .open_world(matches!(
                     name,
-                    CommandName::StorageCreate | CommandName::StorageReplace
+                    CommandName::StorageCreate
+                        | CommandName::StorageReplace
+                        | CommandName::StorageTest
                 )),
         )
 }
@@ -42,6 +44,9 @@ fn description(name: CommandName) -> &'static str {
         }
         CommandName::StorageList => "List registered storages without provider secrets.",
         CommandName::StorageShow => "Show one registered storage without provider secrets.",
+        CommandName::StorageTest => {
+            "Test saved S3 settings from the server using HeadBucket and ListMultipartUploads, with a 10-second probe timeout. Does not write objects or test upload/download or public URLs."
+        }
         CommandName::StorageCreate => {
             "Register a storage after an access probe. Provider credentials are sensitive inputs."
         }

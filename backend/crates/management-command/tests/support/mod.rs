@@ -17,6 +17,7 @@ pub fn input(name: CommandName) -> Value {
         | CommandName::UsageStorages
         | CommandName::UsageClients => json!({}),
         CommandName::StorageShow
+        | CommandName::StorageTest
         | CommandName::StorageDelete
         | CommandName::ClientShow
         | CommandName::ClientDelete => json!({"id":"app"}),
@@ -50,6 +51,7 @@ pub fn output(name: CommandName) -> Value {
             "readiness":"ok", "registry":{"state":"ok", "usage":"ok", "clients":"ok",
                 "storage_count":1, "client_count":1}, "storage_access":"not_checked"}),
         CommandName::StorageList => json!([storage()]),
+        CommandName::StorageTest => json!({"id":"primary", "state":"ok"}),
         CommandName::StorageShow | CommandName::StorageCreate | CommandName::StorageReplace => {
             storage()
         }

@@ -59,6 +59,8 @@ function output(name: string, value: unknown, input: object): boolean {
         "id" in input &&
         value.id === input.id
       );
+    case "storage.test":
+      return object(value) && "id" in input && value.id === input.id && value.state === "ok";
     case "storage.delete":
       return (
         object(value) &&
