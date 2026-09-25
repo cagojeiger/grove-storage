@@ -147,10 +147,14 @@ export function Access() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <button className="primary" onClick={() => setAction("create")}>
-              <Plus size={16} />
-              Create user
-            </button>
+            {!accounts.length && !query.hasNextPage ? (
+              <a className="back-link" href="#setup">Set up first Admin</a>
+            ) : (
+              <button className="primary" onClick={() => setAction("create")}>
+                <Plus size={16} />
+                Create user
+              </button>
+            )}
           </div>
           <div className="account-list">
             {(!search || "root config protected".includes(search.toLowerCase())) && <RootAccount selected={false} onSelect={() => setSelected("root")} />}

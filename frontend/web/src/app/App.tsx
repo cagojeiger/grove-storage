@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, LayoutDashboard, HardDrive, Shield } from "lucide-react";
+import { LogOut, LayoutDashboard, HardDrive, Shield, AppWindow } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
 import { Login } from "../auth/Login";
 import { ThemePicker } from "../design/Theme";
@@ -10,12 +10,14 @@ import { clearSession } from "../auth/session";
 import { useRoute } from "./navigation";
 import { Access } from "../features/access/Access";
 import { MasterSetup } from "../auth/MasterSetup";
+import { Clients } from "../features/clients/Clients";
 
 export function App() {
   const cache = useQueryClient();
   const route = useRoute();
   const storagePage = route === "storages" || route.startsWith("storages/");
   const accessPage = route === "accounts" || route === "access" || route.startsWith("access/");
+  const clientPage = route === "clients" || route.startsWith("clients/");
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const session = useQuery({
@@ -93,7 +95,7 @@ export function App() {
             <nav aria-label="Main navigation">
               <a
                 href="#"
-                aria-current={!storagePage && !accessPage ? "page" : undefined}
+                aria-current={!storagePage && !accessPage && !clientPage ? "page" : undefined}
               >
                 <LayoutDashboard size={18} />
                 <span>Overview</span>
@@ -105,6 +107,7 @@ export function App() {
                 <HardDrive size={18} />
                 <span>Storage</span>
               </a>
+              <a href="#clients" aria-current={clientPage ? "page" : undefined}><AppWindow size={18} /><span>Clients</span></a>
               {["admin", "root"].includes(session.data.role) && (
                 <a
                   href="#accounts"
@@ -129,6 +132,8 @@ export function App() {
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )
+            ) : clientPage ? (
+              <Clients key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
             ) : storagePage ? (
               <Storages key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
             ) : (
@@ -136,8 +141,6 @@ export function App() {
             )}
           </div>
         </div>
-      ) : route === "setup" ? (
-        <MasterSetup />
       ) : (
         <Login
           onLogin={(value) => {

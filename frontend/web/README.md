@@ -75,11 +75,18 @@ GROVE_DEV_TLS_CERT=/absolute/path/cert.pem npm run dev
 ```
 
 Set the API's `FILEGATE_CONSOLE_ORIGIN` to the exact HTTPS Vite origin. Open
-**Initial setup / recovery** on the sign-in screen and enter the configured master
-token to issue the first Admin's personal token. Save it, then sign in separately.
+**Setup & recovery** on the sign-in screen and enter the configured Root
+token to issue the first Admin's User token. Save it, then sign in separately.
 Recovery requires an existing active Admin UUID and explicit confirmation; it replaces
 that Admin's tokens and revokes its sessions. The browser fixture verifies both flows
 against a disposable DB; `--serve` pre-creates a User token for manual checks.
+Root also signs in through the normal **Account token** form. Its separate,
+30-minute console session supports Accounts and resource management. Accounts
+shows Root as config-owned and protected. See [ADR 011](../../docs/adr/011-root-and-accounts.md)
+for `GROVE_ROOT_*` configuration, legacy compatibility and rotation.
+Clients supports registration, guarded deletion and Native/S3 service keys through
+the same command API as CLI/MCP. Native raw keys are hashed in the browser;
+generated Native keys and S3 secrets are shown once without browser persistence.
 Legacy operator tokens do not log
 into the console. The default UI port is 5173; an occupied port fails instead of
 silently changing the allowed origin. Override with `-- --port PORT` and update the origin.

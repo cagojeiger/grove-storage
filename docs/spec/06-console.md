@@ -1,6 +1,6 @@
 # spec 06: 관리 콘솔
 
-- 상태: A·B + 인증 전환 5a·5b 로컬 구현·검증, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
+- 상태: Storage·Clients·Accounts·Root 로컬 구현·검증, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 - 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
@@ -17,12 +17,24 @@ The separate on-demand connection test is still pending.
 
 | Capability | Console UI | API / CLI / MCP |
 |---|---|---|
-| Personal token login, Overview, Storage CRUD | Implemented | Implemented; browser sessions and Bearer remain separate |
-| Master setup/recovery | Implemented | Console-only identity API implemented |
-| User, management tokens | Implemented; Admin only | Console-only identity API implemented |
-| Client, Native keys, S3 credentials | Pending | Shared resource commands implemented in API, CLI and MCP |
+| Account token login, Overview, Storage CRUD | Implemented | Implemented; browser sessions and Bearer remain separate |
+| Root and setup/recovery | Implemented; protected config account | Separate Root and setup sessions; [ADR 011](../adr/011-root-and-accounts.md) |
+| Accounts, management tokens | Implemented; Root/Admin only | Console-only identity API implemented |
+| Clients, Native keys, S3 credentials | Implemented; Reader views Clients, Writer/Admin/Root manage service keys | Shared resource commands implemented in API, CLI and MCP |
 | Sessions, management audit/call/security history | Pending | Console-only scoped APIs implemented |
 | On-demand storage connection test | Pending | New shared command required; `gscli status` reads metadata |
+
+### Clients Contract
+
+| View | Contract |
+|---|---|
+| List/detail | Client ID, assigned storage on detail, active-file usage; a successful empty usage result means zero active files |
+| Create | Client ID and registered S3 storage; existing registry slug and uniqueness rules |
+| Delete | Typed Client ID confirmation; server reference checks include files/uploads/cleanup, independently of active usage |
+| Native keys | Register an existing raw key or generate a random key in the browser; send only its SHA-256 hash to `client-key.register` |
+| S3 keys | `credential.create` returns a one-time access ID/secret; subsequent lists contain access IDs only |
+| Revocation | Target key plus typed Client ID; existing shared command and audit transaction |
+| Uncertain write | Stop resubmission, clear entered secrets, and require list review; no automatic mutation retries |
 
 The sample preview returns in-memory data. Its successful storage forms are not
 evidence of real provider connectivity. Real registration/replacement runs provider

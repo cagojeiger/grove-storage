@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { previewIdentity } from "./preview-identity.mjs";
+import { previewClients } from "./preview-clients.mjs";
 import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
@@ -42,6 +43,7 @@ const storages = new Map([
   ],
 ]);
 const identities = previewIdentity(json);
+const clients = previewClients(storages);
 
 function json(res, status, body) {
   res.writeHead(status, {
@@ -94,7 +96,8 @@ async function response(req, res) {
     const envelope = { protocol: 1, request_id: randomUUID() };
     const success = (result) => json(res, 200, { ...envelope, command, result });
     const failure = (status, code) => json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
-    if (command === "client.list") return success(["notegate"]);
+    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "usage.clients", "usage.storages"].includes(command)) return failure(403, "forbidden");
+    if (clients.handle(command, input, success, failure)) return;
     if (command === "usage.storages") return success([...storages.values()].map(usage));
     if (command === "storage.list") return success([...storages.values()]);
     const storageId = input.id;
@@ -102,7 +105,7 @@ async function response(req, res) {
       return storages.has(storageId) ? success(storages.get(storageId)) : failure(404, "not_found");
     if (command === "storage.delete") {
       if (!storages.has(storageId)) return failure(404, "not_found");
-      if (storageId === "home-archive") return failure(409, "conflict");
+      if (storageId === "home-archive" || clients.references(storageId)) return failure(409, "conflict");
       storages.delete(storageId);
       return success({ resource: "storage", id: storageId });
     }

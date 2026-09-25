@@ -1,0 +1,125 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { expect } from "@playwright/test";
+
+export async function clientChecks(page, { endpoint, database }) {
+  const id = "console-ui-client";
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Clients", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Create client", exact: true })
+    .click();
+  await page.getByLabel("Client ID", { exact: true }).fill(id);
+  await page
+    .getByLabel("Storage", { exact: true })
+    .selectOption("console-live");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: id, exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Generate key", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(
+    page.getByLabel("Native API key", { exact: true }),
+  ).toBeVisible();
+  const native = await page
+    .getByLabel("Native API key", { exact: true })
+    .inputValue();
+  const hash = "sha256:" + createHash("sha256").update(native).digest("hex");
+  async function saved() {
+    await page
+      .getByLabel("I have saved these keys. Secrets are shown only once.")
+      .check();
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+  }
+  await saved();
+  const fileId = randomUUID();
+  const accepted = await page.request.get(
+    `${endpoint}/api/v1/files/${fileId}`,
+    { headers: { Authorization: `Bearer ${native}` } },
+  );
+  assert.equal(accepted.status(), 404);
+
+  await page.getByRole("button", { name: "Issue key", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(page.getByLabel("Secret key", { exact: true })).toBeVisible();
+  const s3 = await page
+    .getByLabel("Access key ID", { exact: true })
+    .inputValue();
+  const secret = await page
+    .getByLabel("Secret key", { exact: true })
+    .inputValue();
+  assert(secret.length > 0);
+  await saved();
+  assert(!(await page.content()).includes(secret));
+  assert(
+    !(
+      await page.evaluate(() =>
+        JSON.stringify({ ...localStorage, ...sessionStorage }),
+      )
+    ).includes(secret),
+  );
+  for (const key of [hash, s3]) {
+    await page
+      .getByRole("button", { name: `Revoke ${key}`, exact: true })
+      .click();
+    await page.getByLabel("Client ID to confirm").fill(id);
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: `Revoke ${key}`, exact: true }),
+    ).toHaveCount(0);
+  }
+  const denied = await page.request.get(`${endpoint}/api/v1/files/${fileId}`, {
+    headers: { Authorization: `Bearer ${native}` },
+  });
+  assert.equal(denied.status(), 401);
+
+  const sql = (statement) =>
+    execFileSync(
+      "docker",
+      [
+        "exec",
+        database,
+        "psql",
+        "-U",
+        "filegate",
+        "-d",
+        "filegate",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        statement,
+      ],
+      { timeout: 10000, stdio: "pipe" },
+    );
+  sql(
+    `INSERT INTO files(id,client_id,declared_size) VALUES('${fileId}','${id}',1)`,
+  );
+  async function remove() {
+    await page
+      .getByRole("button", { name: "Delete client", exact: true })
+      .click();
+    await page.getByLabel("Client ID to delete").fill(id);
+    await page.getByRole("button", { name: "Confirm delete" }).click();
+  }
+  await remove();
+  await expect(page.getByRole("alert")).toContainText("pending cleanup");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  sql(`DELETE FROM files WHERE id='${fileId}'`);
+  await remove();
+  await expect(
+    page.getByRole("heading", { name: "Clients", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(id) })).toHaveCount(0);
+  console.log(
+    "PASS real Clients UI create/delete, Native runtime auth/revocation, S3 issuance/revocation and pending-file delete guard",
+  );
+  await page.goto(
+    new URL("/api/admin/console/#storages/console-live", page.url()).href,
+  );
+}

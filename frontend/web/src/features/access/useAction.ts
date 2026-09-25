@@ -4,7 +4,7 @@ import { ApiError } from "../../api/http";
 import { identityMessage } from "../../api/identity";
 import { clearSession } from "../../auth/session";
 
-export function useAction() {
+export function useAction(errorMessage = identityMessage) {
   const cache = useQueryClient();
   const lock = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,7 @@ export function useAction() {
     try {
       await work();
     } catch (e) {
-      setError(identityMessage(e));
+      setError(errorMessage(e));
       setUnknown(!(e instanceof ApiError) || e.outcome !== "not_applied");
       if (e instanceof ApiError && e.status === 401) clearSession(cache);
       if (e instanceof ApiError && e.status === 403) {

@@ -591,6 +591,12 @@ dialog::backdrop {
 .token-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
 .token-row p { margin-top: 6px; }
 .issued-token { display: grid; gap: 16px; min-width: 0; }
+.service-keys { margin-top: 28px; }
+.clients .section-heading, .clients .page-actions { flex-wrap: wrap; }
+.clients h1, .clients h2 { overflow-wrap: anywhere; }
+.service-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.service-key-row code, .key-value, .clients .account-row strong { overflow-wrap: anywhere; min-width: 0; }
+.clients .account-row { color: var(--text); text-decoration: none; }
 .issued-token label { display: grid; gap: 8px; font-size: 13px; }
 .issued-token dd { font-size: 13px; overflow-wrap: anywhere; margin: 6px 0 14px; }
 .issued-token .check-field, .master-setup .check-field { display: flex; gap: 10px; align-items: flex-start; }

@@ -1,6 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { accessMock } from "./access-fixture";
 
+test("an empty installation directs Root to first Admin setup", async ({ page }) => {
+  await accessMock(page, []);
+  await page.route("**/v1/session", route => route.fulfill({ json: { principal: "root", role: "root", session_id: "root-session", expires_at: "2099-01-01T00:00:00Z" } }));
+  await page.goto("/api/admin/console/#accounts");
+  await expect(page.getByRole("link", { name: "Set up first Admin" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create user" })).toHaveCount(0);
+});
+
 for (const principal of ["user", "root"] as const) {
   test(`${principal} can inspect the protected Root without editing it`, async ({ page }) => {
     const { writes } = await accessMock(page);
