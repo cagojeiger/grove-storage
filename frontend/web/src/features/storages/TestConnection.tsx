@@ -3,7 +3,7 @@ import { PlugZap } from "lucide-react";
 import { command } from "../../api/commands";
 import { ApiError, message } from "../../api/http";
 
-export function TestConnection({ id, revision }: { id: string; revision: number }) {
+export function TestConnection({ id, revision, refreshing }: { id: string; revision: number; refreshing: boolean }) {
   const check = useQuery({
     queryKey: ["storages", "connection", id, revision],
     queryFn: ({ signal }) => command<{ id: string; state: "ok" }>("storage.test", { id }, signal),
@@ -20,7 +20,7 @@ export function TestConnection({ id, revision }: { id: string; revision: number 
     <section className="storage-section" aria-label="Storage connection">
       <div className="section-heading">
         <h2>Connection</h2>
-        <button disabled={check.isFetching} onClick={() => void check.refetch()}>
+        <button disabled={check.isFetching || refreshing} onClick={() => void check.refetch()}>
           <PlugZap size={17} />
           {check.isFetching ? "Testing..." : "Test connection"}
         </button>

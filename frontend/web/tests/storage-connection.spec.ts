@@ -1,6 +1,22 @@
 import { expect, test } from "@playwright/test";
 import { storageMock, root } from "./storage-fixture";
-import { commandUrl, envelope, failure, session } from "./command-fixture";
+import { commandUrl, envelope, failure, intercept, session } from "./command-fixture";
+
+test("cached detail cannot start a probe while its saved settings are refreshing", async ({ page }) => {
+  await storageMock(page);
+  await intercept(page, "storage.test", (route) => route.fulfill({ json: envelope("storage.test", { id: "home-archive", state: "ok" }) }));
+  await page.goto(`${root}/home-archive`);
+  await expect(page.getByRole("button", { name: "Test connection", exact: true })).toBeEnabled();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Storage", exact: true }).click();
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await intercept(page, "storage.show", async (route) => { await held; await route.fallback(); });
+  await page.getByRole("link", { name: /home-archive/ }).click();
+  await expect(page.getByRole("button", { name: "Test connection", exact: true })).toBeDisabled();
+  release();
+  await page.getByRole("button", { name: "Test connection", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Bucket access verified");
+});
 
 test("Reader explicitly tests saved storage, with no retries or persistence", async ({ page }) => {
   const { writes } = await storageMock(page);

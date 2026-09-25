@@ -136,7 +136,7 @@ export function Storages({ route, canWrite }: { route: string; canWrite: boolean
             }
           />
           {detail.data.kind === "s3" && (
-            <TestConnection key={`${id}:${detail.dataUpdatedAt}`} id={id} revision={detail.dataUpdatedAt} />
+            <TestConnection key={`${id}:${detail.dataUpdatedAt}`} id={id} revision={detail.dataUpdatedAt} refreshing={detail.isFetching} />
           )}
         </>
       ) : (
