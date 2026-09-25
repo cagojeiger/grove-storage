@@ -127,7 +127,7 @@ async fn current(
     let identity = tx.resolve(proof).await?.ok_or(Error::Unauthenticated)?;
     let ctx = audit_context(&identity, request_id, surface)?;
     *context = Some(ctx);
-    if authorize(identity.caller, surface, name.required_action()) != Ok(Scope::Installation) {
+    if authorize(identity.caller(), surface, name.required_action()) != Ok(Scope::Installation) {
         return Err(Error::Forbidden);
     }
     Ok(ctx)

@@ -15,7 +15,7 @@ export function App() {
   const cache = useQueryClient();
   const route = useRoute();
   const storagePage = route === "storages" || route.startsWith("storages/");
-  const accessPage = route === "access" || route.startsWith("access/");
+  const accessPage = route === "accounts" || route === "access" || route.startsWith("access/");
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const session = useQuery({
@@ -85,6 +85,8 @@ export function App() {
           <p role="alert">{message(session.error)}</p>
           <button onClick={() => void session.refetch()}>Reconnect</button>
         </main>
+      ) : route === "setup" ? (
+        <MasterSetup />
       ) : session.data ? (
         <div className="workspace">
           <aside>
@@ -103,17 +105,17 @@ export function App() {
                 <HardDrive size={18} />
                 <span>Storage</span>
               </a>
-              {session.data.role === "admin" && (
+              {["admin", "root"].includes(session.data.role) && (
                 <a
-                  href="#access/users"
+                  href="#accounts"
                   aria-current={accessPage ? "page" : undefined}
                 >
                   <Shield size={18} />
-                  <span>Access</span>
+                  <span>Accounts</span>
                 </a>
               )}
             </nav>
-            <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
+            <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management", root: "Root · Protected" }[session.data.role]}</span>
           </aside>
           <div className="content">
             {logoutError && (
@@ -122,7 +124,7 @@ export function App() {
               </p>
             )}
             {accessPage ? (
-              session.data.role === "admin" ? (
+              ["admin", "root"].includes(session.data.role) ? (
                 <Access />
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>

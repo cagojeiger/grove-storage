@@ -9,7 +9,7 @@ test.describe("English default", () => {
     await mock(page, false);
     await page.goto(root);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await page.getByLabel("Personal token").fill("fixture-token");
+    await page.getByLabel("Account token").fill("fixture-token");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByText("Active files: 1,240", { exact: false })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
@@ -64,7 +64,7 @@ async function mock(page: Page, signedIn = true) {
 test("login clears token; logout removes overview", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
-  await page.getByLabel("Personal token").fill("test-token");
+  await page.getByLabel("Account token").fill("test-token");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
@@ -75,7 +75,7 @@ test("login clears token; logout removes overview", async ({ page }) => {
     ),
   ).not.toContain("test-token");
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByLabel("Personal token")).toHaveValue("");
+  await expect(page.getByLabel("Account token")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 
@@ -95,21 +95,21 @@ for (const status of [307, 308]) {
       }
     });
     await page.goto(root);
-    await page.getByLabel("Personal token").fill("fixture-secret-not-for-redirect");
+    await page.getByLabel("Account token").fill("fixture-secret-not-for-redirect");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(
       page.getByRole("alert").or(page.getByRole("heading", { name: "Overview", exact: true })),
     ).toBeVisible();
     expect(forwarded).toEqual([]);
     await expect(page.getByRole("alert")).toContainText("Unable to connect to the server");
-    await expect(page.getByLabel("Personal token")).toHaveValue("");
+    await expect(page.getByLabel("Account token")).toHaveValue("");
   });
 }
 
 test("429 clears input and honors Retry-After", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
-  await expect(page.getByLabel("Personal token")).toBeVisible();
+  await expect(page.getByLabel("Account token")).toBeVisible();
   await page.route("**/session", (route) =>
     route.request().method() === "POST"
       ? route.fulfill({
@@ -119,10 +119,10 @@ test("429 clears input and honors Retry-After", async ({ page }) => {
         })
       : route.fallback(),
   );
-  await page.getByLabel("Personal token").fill("do-not-persist");
+  await page.getByLabel("Account token").fill("do-not-persist");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Too many sign-in attempts");
-  await expect(page.getByLabel("Personal token")).toHaveValue("");
+  await expect(page.getByLabel("Account token")).toHaveValue("");
   await expect(
     page.getByRole("button", { name: /Retry in/ }),
   ).toBeDisabled();
@@ -136,7 +136,7 @@ test("overview 401 removes cached private data", async ({ page }) => {
     route.fulfill({ status: 401, json: failure(401) }),
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByLabel("Personal token")).toBeVisible();
+  await expect(page.getByLabel("Account token")).toBeVisible();
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 

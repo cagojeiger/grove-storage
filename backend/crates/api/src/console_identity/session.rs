@@ -6,7 +6,7 @@ use axum::{
 };
 use filegate_core::{ExposeSecret, SecretString};
 use grove_management_policy::{Actor, Role, Surface};
-use grove_management_service::{self as service, Command, Error, Output, Proof};
+use grove_management_service::{self as service, Command, Error, Output};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -26,6 +26,11 @@ pub(super) async fn login(
     let Ok(Json(body)) = body else {
         return failure(Error::InvalidInput, Uuid::new_v4());
     };
+    if secrets::valid(body.token.expose_secret(), secrets::ROOT_PREFIX)
+        || secrets::valid(body.token.expose_secret(), secrets::MASTER_PREFIX)
+    {
+        return root_login(&state, &body.token).await;
+    }
     let hash = secrets::valid(body.token.expose_secret(), secrets::TOKEN_PREFIX)
         .then(|| secrets::token_hash(body.token.expose_secret()));
     let raw = SecretString::from(format!(
@@ -59,6 +64,7 @@ pub(super) async fn login(
 pub(super) async fn current(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let execution = execute(&state, &headers, Command::CurrentSession).await;
     match execution.result {
+        Ok(Output::RootSession(session)) => identified(Json(serde_json::json!({"principal":"root", "role":"root", "session_id":session.id, "expires_at":session.expires_at})).into_response(), execution.request_id),
         Ok(Output::Identity(identity)) => {
             let Actor::User { role, .. } = identity.caller.actor else {
                 return failure(Error::Unavailable, execution.request_id);
@@ -95,14 +101,58 @@ pub(super) async fn execute(
     headers: &HeaderMap,
     command: Command<'_>,
 ) -> service::Execution {
-    let hash = browser::cookie(headers)
-        .map(secrets::session_hash)
-        .unwrap_or_default();
+    let (hash, root) = browser::session_hash(headers);
     service::execute(
         &state.pool,
-        Proof::Session(&hash),
+        browser::proof(state.master.as_deref(), &hash, root),
         Surface::Console,
         command,
     )
     .await
+}
+
+async fn root_login(state: &AppState, token: &SecretString) -> Response {
+    let Some(config) = state.master.as_deref() else {
+        return failure(Error::Unauthenticated, Uuid::new_v4());
+    };
+    let raw = SecretString::from(format!(
+        "{}{}",
+        secrets::ROOT_SESSION_PREFIX,
+        filegate_core::generate_url_secret()
+    ));
+    let execution = service::root::login(
+        &state.pool,
+        config,
+        Some(&secrets::master_hash(token.expose_secret())),
+        &secrets::root_session_hash(raw.expose_secret()),
+    )
+    .await;
+    match execution.result {
+        Ok(session) => {
+            let mut response = Json(serde_json::json!({"principal":"root", "role":"root", "session_id":session.id, "expires_at":session.expires_at})).into_response();
+            browser::set_cookie(
+                &mut response,
+                raw.expose_secret(),
+                (session.expires_at - chrono::Utc::now())
+                    .num_seconds()
+                    .max(0),
+            );
+            identified(response, execution.request_id)
+        }
+        Err(error) => failure(error, execution.request_id),
+    }
+}
+
+pub(super) async fn root_account(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let execution = execute(
+        &state,
+        &headers,
+        Command::Accounts(service::Page::default()),
+    )
+    .await;
+    match execution.result {
+        Ok(Output::Accounts(_)) => identified(Json(serde_json::json!({"id":"root", "display_name":"Root", "role":"root", "source":"config", "protected":true, "configured":state.master.is_some()})).into_response(), execution.request_id),
+        Err(error) => failure(error, execution.request_id),
+        _ => failure(Error::Unavailable, execution.request_id),
+    }
 }

@@ -41,6 +41,7 @@ pub fn routes(state: AppState) -> Router<AppState> {
         .route("/master/bootstrap", post(master::bootstrap))
         .route("/master/recover", post(master::recover))
         .route("/accounts", get(accounts::list).post(accounts::create))
+        .route("/root", get(session::root_account))
         .route(
             "/accounts/{id}",
             axum::routing::patch(accounts::change).delete(accounts::remove),

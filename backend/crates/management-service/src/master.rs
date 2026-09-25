@@ -27,11 +27,14 @@ impl Config {
         }
         Ok(Self { generation, hash })
     }
-    fn binding(&self) -> store::Binding<'_> {
+    pub fn binding(&self) -> store::Binding<'_> {
         store::Binding {
             generation: self.generation,
             token_hash: &self.hash,
         }
+    }
+    pub(crate) fn matches(&self, hash: Option<&str>) -> bool {
+        hash.is_some_and(|value| bool::from(self.hash.as_bytes().ct_eq(value.as_bytes())))
     }
     /// Called at process startup with trusted configuration, not from HTTP.
     pub async fn install(&self, pool: &PgPool) -> Result<bool, Error> {

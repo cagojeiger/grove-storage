@@ -57,8 +57,18 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
             AuthMethod::ManagementToken,
             Surface::Cli | Surface::Mcp | Surface::ResourceApi
         ) | (Actor::Master, AuthMethod::MasterSession, Surface::Console)
+            | (Actor::Root, AuthMethod::RootSession, Surface::Console)
     ) {
         return Err(Denial::InvalidAuthenticationContext);
+    }
+
+    if caller.actor == Actor::Root {
+        return match action {
+            Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
+                Err(Denial::MasterSessionRequired)
+            }
+            _ => Ok(Scope::Installation),
+        };
     }
 
     let Some(role) = role else {
@@ -109,7 +119,7 @@ fn require_console_session(caller: Caller) -> Result<(), Denial> {
 
 fn effective_role(actor: Actor) -> Result<Option<Role>, Denial> {
     match actor {
-        Actor::Master => Ok(None),
+        Actor::Master | Actor::Root => Ok(None),
         Actor::User { role, state } => {
             require_active(state)?;
             Ok(Some(role))

@@ -40,6 +40,7 @@ export async function accessMock(
     const method = req.method();
     if (path === "/session")
       return route.fulfill({ json: { ...session, user_id: owner.id } });
+    if (path === "/root" && method === "GET") return route.fulfill({ json: { id: "root", configured: true, protected: true, source: "config" } });
     if (method !== "GET") writes.push({ path, method, body });
     if (path === "/accounts" && method === "GET")
       return route.fulfill({ json: { items: accounts, next_before: null } });

@@ -131,7 +131,7 @@ test("Reader cannot discover Access or request accounts", async ({ page }) => {
   });
   await page.goto(root);
   await expect(
-    page.getByRole("link", { name: "Access", exact: true }),
+    page.getByRole("link", { name: "Accounts", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveText("Admin access required.");
   expect(reads).toBe(0);

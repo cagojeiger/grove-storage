@@ -19,7 +19,7 @@ export async function permissionChecks(browser, admin, origin) {
   try {
     const page = await context.newPage();
     await page.goto(`${origin}/api/admin/console/#storages/console-live`);
-    await page.getByLabel("Personal token").fill(credential.token);
+    await page.getByLabel("Account token").fill(credential.token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
@@ -39,7 +39,7 @@ export async function permissionChecks(browser, admin, origin) {
     });
     assert.equal(blocked, 403);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await page.getByLabel("Personal token").fill(automationKey.token);
+    await page.getByLabel("Account token").fill(automationKey.token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByText("Reader · Read-only")).toBeVisible();
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);

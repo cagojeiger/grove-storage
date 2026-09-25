@@ -33,10 +33,9 @@ async fn bootstrap_delivers_a_user_token_once_and_master_cannot_become_a_user(po
         current(router.clone(), &forged).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        login(router.clone(), &master_token).await.status(),
-        StatusCode::UNAUTHORIZED
-    );
+    let root_login = login(router.clone(), &master_token).await;
+    assert_eq!(root_login.status(), StatusCode::OK);
+    assert_eq!(json(root_login).await["principal"], "root");
     for path in ["/api/admin/v1/clients", "/api/v1/files"] {
         assert_eq!(
             request(

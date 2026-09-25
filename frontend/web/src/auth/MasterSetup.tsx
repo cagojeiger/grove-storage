@@ -70,7 +70,7 @@ export function MasterSetup() {
           ? "Admin access ready"
           : session?.initialized
             ? "Recover Admin access"
-            : "Initial setup / recovery"}
+            : "Setup & recovery"}
       </h2>
       {checking ? (
         <p role="status">Checking setup session...</p>
@@ -152,7 +152,7 @@ export function MasterSetup() {
         >
           {!session ? (
             <label>
-              Master token
+              Root token
               <input
                 name="token"
                 type="password"
@@ -208,7 +208,7 @@ export function MasterSetup() {
               : wait
                 ? `Retry in ${wait}s`
                 : !session
-                  ? "Verify master token"
+                  ? "Verify Root token"
                   : session.initialized
                     ? "Recover access"
                     : "Create Admin"}

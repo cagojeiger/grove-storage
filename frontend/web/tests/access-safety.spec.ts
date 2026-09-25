@@ -22,7 +22,7 @@ test("role demotion during an Access mutation removes private controls", async (
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveText("Admin access required.");
   await expect(
-    page.getByRole("link", { name: "Access", exact: true }),
+    page.getByRole("link", { name: "Accounts", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -35,8 +35,8 @@ test("expired Access session removes account data", async ({ page }) => {
   await page.route("**/v1/accounts?*", (route) =>
     route.fulfill({ status: 401, json: { error: "unauthenticated" } }),
   );
-  await page.getByRole("button", { name: "Refresh access" }).click();
-  await expect(page.getByLabel("Personal token")).toBeVisible();
+  await page.getByRole("button", { name: "Refresh accounts" }).click();
+  await expect(page.getByLabel("Account token")).toBeVisible();
   await expect(page.getByText(owner.display_name, { exact: true })).toHaveCount(
     0,
   );

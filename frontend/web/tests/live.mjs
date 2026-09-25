@@ -41,19 +41,19 @@ try {
   );
   assert.equal(csrf, 403);
   await page.getByRole("button", { name: "Sign out" }).click();
-  await page.getByLabel("Personal token").waitFor();
+  await page.getByLabel("Account token").waitFor();
   assert(
     !(await context.cookies()).some(
       (cookie) => cookie.name === "__Host-grove_session",
     ),
   );
   await page.reload();
-  await page.getByLabel("Personal token").waitFor();
+  await page.getByLabel("Account token").waitFor();
   console.log(
     "PASS real HTTPS login, Secure/HttpOnly cookie, reload, CSRF rejection, logout",
   );
   async function login() {
-    await page.getByLabel("Personal token").fill(token);
+    await page.getByLabel("Account token").fill(token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("heading", { name: "console-live" }).waitFor();
   }
@@ -76,7 +76,7 @@ try {
     { timeout: 10000, stdio: "pipe" },
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Personal token").waitFor();
+  await page.getByLabel("Account token").waitFor();
   assert.equal(
     await page.getByRole("heading", { name: "console-live" }).count(),
     0,
@@ -90,11 +90,11 @@ try {
   }, credentialId);
   assert.equal(revoked, 200);
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Personal token").waitFor();
-  await page.getByLabel("Personal token").fill(token);
+  await page.getByLabel("Account token").waitFor();
+  await page.getByLabel("Account token").fill(token);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("alert").waitFor();
-  assert.equal(await page.getByLabel("Personal token").inputValue(), "");
+  assert.equal(await page.getByLabel("Account token").inputValue(), "");
   console.log(
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );

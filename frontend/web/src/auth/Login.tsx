@@ -42,9 +42,9 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
         alt=""
       />
       <h1>Grove Storage</h1>
-      <h2>User sign-in</h2>
+      <h2>Sign in</h2>
       <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="token">Personal token</label>
+        <label htmlFor="token">Account token</label>
         <input
           id="token"
           type="password"
@@ -65,7 +65,7 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           <ArrowRight size={16} aria-hidden="true" />
         </button>
       </form>
-      <a className="back-link" href="#setup">Initial setup / recovery</a>
+      <a className="back-link" href="#setup">Setup &amp; recovery</a>
     </main>
   );
 }

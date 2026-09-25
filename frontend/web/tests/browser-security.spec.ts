@@ -12,11 +12,11 @@ test("built console loads with restrictive browser headers", async ({ page }) =>
   expect(headers?.["x-content-type-options"]).toBe("nosniff");
   expect(headers?.["referrer-policy"]).toBe("no-referrer");
   expect(headers?.["cache-control"]).toBe("no-store");
-  await page.getByLabel("Personal token").fill("invalid-preview-token");
+  await page.getByLabel("Account token").fill("invalid-preview-token");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toHaveCount(0);
-  await page.getByLabel("Personal token").fill("qwer1234");
+  await page.getByLabel("Account token").fill("qwer1234");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Storage", exact: true }).click();

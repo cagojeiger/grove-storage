@@ -41,8 +41,9 @@ pub(super) async fn login(
     let Ok(Json(body)) = body else {
         return failure(Error::InvalidInput, Uuid::new_v4());
     };
-    let hash = secrets::valid(body.token.expose_secret(), secrets::MASTER_PREFIX)
-        .then(|| secrets::master_hash(body.token.expose_secret()));
+    let hash = (secrets::valid(body.token.expose_secret(), secrets::MASTER_PREFIX)
+        || secrets::valid(body.token.expose_secret(), secrets::ROOT_PREFIX))
+    .then(|| secrets::master_hash(body.token.expose_secret()));
     let raw = SecretString::from(format!(
         "{}{}",
         secrets::MASTER_SESSION_PREFIX,

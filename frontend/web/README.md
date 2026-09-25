@@ -11,7 +11,7 @@ sample registry data in memory; edits reset when the preview server stops. It do
 not connect to PostgreSQL or validate S3 credentials. Use the isolated HTTPS fixture
 below to test authentication and the real API.
 
-The sample preview starts signed out. Use `qwer1234` in **Personal token**.
+The sample preview starts signed out. Use `qwer1234` in **Account token** for the local Root preview.
 This fixed demo token and process-wide sample session are only for the loopback
 preview; production uses DB-backed User credentials and browser sessions.
 The preview includes Admin-only Access with sample Users and token lifecycle.

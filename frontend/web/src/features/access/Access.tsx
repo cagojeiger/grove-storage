@@ -12,6 +12,7 @@ import { identityPage, isAccount } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { AccountAction, AccountDialog } from "./AccountDialog";
 import { Tokens } from "./Tokens";
+import { RootAccount } from "./RootAccount";
 
 export function Access() {
   const cache = useQueryClient();
@@ -50,12 +51,12 @@ export function Access() {
       <div className="page-heading">
         <div>
           <p className="eyebrow">ADMINISTRATION</p>
-          <h1>Access</h1>
+          <h1>Accounts</h1>
         </div>
         <button
           className="icon-button"
-          title="Refresh access"
-          aria-label="Refresh access"
+          title="Refresh accounts"
+          aria-label="Refresh accounts"
           disabled={query.isFetching}
           onClick={() => void refresh()}
         >
@@ -69,12 +70,14 @@ export function Access() {
           {message(query.error)}{" "}
           <button onClick={() => void query.refetch()}>Retry</button>
         </p>
+      ) : selected === "root" ? (
+        <><button className="back-link" onClick={() => setSelected(null)}><ArrowLeft size={16} />Accounts</button><RootAccount selected onSelect={() => {}} /></>
       ) : selected ? (
         account ? (
           <>
             <button className="back-link" onClick={() => setSelected(null)}>
               <ArrowLeft size={16} />
-              Users
+              Accounts
             </button>
             <div className="section-heading">
               <h2>{account.display_name}</h2>
@@ -150,6 +153,7 @@ export function Access() {
             </button>
           </div>
           <div className="account-list">
+            {(!search || "root config protected".includes(search.toLowerCase())) && <RootAccount selected={false} onSelect={() => setSelected("root")} />}
             {rows.map((row) => (
               <button
                 className="account-row"

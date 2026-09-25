@@ -50,7 +50,7 @@ pub struct CredentialSummary {
 #[derive(Debug, sqlx::FromRow)]
 pub struct SessionSummary {
     pub id: Uuid,
-    pub credential_id: Uuid,
+    pub credential_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,

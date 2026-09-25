@@ -1,6 +1,6 @@
 use crate::{Command, Output};
 use filegate_db::management::{
-    AuditContext, Error, Identity, IdentityTransaction, history::HistoryScope,
+    AuditContext, Error, IdentityTransaction, ResolvedIdentity, history::HistoryScope,
 };
 use grove_management_policy::Scope;
 use uuid::Uuid;
@@ -8,17 +8,32 @@ use uuid::Uuid;
 pub(super) async fn run(
     mut tx: IdentityTransaction<'_>,
     context: &AuditContext,
-    identity: Identity,
+    identity: ResolvedIdentity,
     scope: Scope,
     command: Command<'_>,
 ) -> Result<Output, Error> {
-    let user = identity.account_id;
+    let user = match &identity {
+        ResolvedIdentity::User(identity) => Some(identity.account_id),
+        ResolvedIdentity::Root(_) => None,
+    };
     let output = match command {
-        Command::CurrentSession => Output::Identity(identity),
+        Command::CurrentSession => match identity {
+            ResolvedIdentity::User(identity) => Output::Identity(identity),
+            ResolvedIdentity::Root(session) => Output::RootSession(session),
+        },
         Command::Logout => {
+            let ResolvedIdentity::User(identity) = identity else {
+                let ResolvedIdentity::Root(session) = identity else {
+                    return Err(Error::InvalidInput);
+                };
+                return tx
+                    .revoke_root_session(context, session.id)
+                    .await
+                    .map(Output::Changed);
+            };
             let id = identity.session_id.ok_or(Error::InvalidInput)?;
             return tx
-                .revoke_session(context, user, id)
+                .revoke_session(context, identity.account_id, id)
                 .await
                 .map(Output::Changed);
         }
@@ -44,6 +59,12 @@ pub(super) async fn run(
             return tx.revoke_credential(context, id).await.map(Output::Changed);
         }
         Command::RevokeOwnSession(id) => {
+            let Some(user) = user else {
+                return tx
+                    .revoke_root_session(context, id)
+                    .await
+                    .map(Output::Changed);
+            };
             return tx
                 .revoke_session(context, user, id)
                 .await
@@ -53,7 +74,10 @@ pub(super) async fn run(
         Command::Credentials { account, page } => {
             Output::Credentials(tx.credentials(account, page).await?)
         }
-        Command::OwnSessions(page) => Output::Sessions(tx.sessions(user, page).await?),
+        Command::OwnSessions(page) => Output::Sessions(match user {
+            Some(user) => tx.sessions(user, page).await?,
+            None => tx.root_sessions(page).await?,
+        }),
         Command::Audit(page) => {
             Output::Audit(tx.audit_history(history_scope(scope, user)?, page).await?)
         }
@@ -67,10 +91,10 @@ pub(super) async fn run(
     Ok(output)
 }
 
-fn history_scope(scope: Scope, user: Uuid) -> Result<HistoryScope, Error> {
+fn history_scope(scope: Scope, user: Option<Uuid>) -> Result<HistoryScope, Error> {
     match scope {
         Scope::Installation => Ok(HistoryScope::Installation),
-        Scope::SelfOnly => Ok(HistoryScope::User(user)),
+        Scope::SelfOnly => Ok(HistoryScope::User(user.ok_or(Error::InvalidInput)?)),
         _ => Err(Error::InvalidInput),
     }
 }

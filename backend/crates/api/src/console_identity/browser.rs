@@ -69,14 +69,22 @@ pub(super) async fn guard(State(state): State<AppState>, request: Request, next:
 }
 
 pub(super) fn cookie(headers: &HeaderMap) -> Option<&str> {
-    named_cookie(headers, COOKIE, secrets::SESSION_PREFIX)
+    named_cookie(
+        headers,
+        COOKIE,
+        &[secrets::SESSION_PREFIX, secrets::ROOT_SESSION_PREFIX],
+    )
 }
 
 pub(super) fn master_cookie(headers: &HeaderMap) -> Option<&str> {
-    named_cookie(headers, MASTER_COOKIE, secrets::MASTER_SESSION_PREFIX)
+    named_cookie(headers, MASTER_COOKIE, &[secrets::MASTER_SESSION_PREFIX])
 }
 
-fn named_cookie<'a>(headers: &'a HeaderMap, cookie_name: &str, prefix: &str) -> Option<&'a str> {
+fn named_cookie<'a>(
+    headers: &'a HeaderMap,
+    cookie_name: &str,
+    prefixes: &[&str],
+) -> Option<&'a str> {
     let mut found = None;
     for value in headers.get_all(header::COOKIE) {
         for pair in value.to_str().ok()?.split(';') {
@@ -84,7 +92,7 @@ fn named_cookie<'a>(headers: &'a HeaderMap, cookie_name: &str, prefix: &str) -> 
                 continue;
             };
             if name == cookie_name {
-                if found.is_some() || !secrets::valid(value, prefix) {
+                if found.is_some() || !prefixes.iter().any(|prefix| secrets::valid(value, prefix)) {
                     return None;
                 }
                 found = Some(value);
@@ -92,6 +100,33 @@ fn named_cookie<'a>(headers: &'a HeaderMap, cookie_name: &str, prefix: &str) -> 
         }
     }
     found
+}
+
+pub(super) fn session_hash(headers: &HeaderMap) -> (String, bool) {
+    let raw = cookie(headers).unwrap_or_default();
+    if raw.starts_with(secrets::ROOT_SESSION_PREFIX) {
+        (secrets::root_session_hash(raw), true)
+    } else {
+        (secrets::session_hash(raw), false)
+    }
+}
+
+pub(super) fn proof<'a>(
+    config: Option<&'a grove_management_service::master::Config>,
+    hash: &'a str,
+    root: bool,
+) -> grove_management_service::Proof<'a> {
+    if root {
+        match config {
+            Some(config) => grove_management_service::Proof::RootSession {
+                hash,
+                binding: config.binding(),
+            },
+            None => grove_management_service::Proof::Session(""),
+        }
+    } else {
+        grove_management_service::Proof::Session(hash)
+    }
 }
 
 pub(super) fn set_cookie(response: &mut Response, raw: &str, seconds: i64) {

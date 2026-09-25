@@ -22,6 +22,10 @@ User-Agent 헤더·Origin 문자열·도구 이름은 콘솔 권한의 증거가
 
 ## 권한
 
+Root/Accounts 확장은 [ADR 011](../adr/011-root-and-accounts.md)을 따른다.
+설정 기반 Root는 보호된 Accounts 항목으로 표시하고, 별도 Root 콘솔 세션으로 관리 명령을 실행한다.
+기존 설정·복구 세션의 제한과 User 권한은 유지한다.
+
 | 작업 | Reader | Writer | Admin | 허용 진입점 |
 |---|---|---|---|---|
 | Storage·Client·usage/status 조회 | 허용 | 허용 | 허용 | 콘솔·CLI·MCP |

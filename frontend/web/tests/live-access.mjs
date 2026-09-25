@@ -27,14 +27,14 @@ async function takeToken(page) {
 export async function bootstrapChecks(page, origin, masterToken) {
   await page.goto(origin + "/api/admin/console/");
   await page
-    .getByRole("link", { name: "Initial setup / recovery", exact: true })
+    .getByRole("link", { name: "Setup & recovery", exact: true })
     .click();
-  await page.getByLabel("Master token").fill(masterToken);
-  await page.getByRole("button", { name: "Verify master token" }).click();
+  await page.getByLabel("Root token").fill(masterToken);
+  await page.getByRole("button", { name: "Verify Root token" }).click();
   await page.getByLabel("Admin name").fill("Console test owner");
   await page.getByRole("button", { name: "Create Admin", exact: true }).click();
   const token = await takeToken(page);
-  await page.getByLabel("Personal token").fill(token);
+  await page.getByLabel("Account token").fill(token);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
@@ -55,7 +55,21 @@ export async function accessChecks(
   endpoint,
   masterToken,
 ) {
-  await page.getByRole("link", { name: "Access", exact: true }).click();
+  const rootContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const rootPage = await rootContext.newPage();
+    await rootPage.goto(origin + "/api/admin/console/#accounts");
+    await rootPage.getByLabel("Account token").fill(masterToken);
+    await rootPage.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(rootPage.getByText("Root · Protected")).toBeVisible();
+    await rootPage.getByRole("button", { name: "Root Config Protected Configured" }).click();
+    await expect(rootPage.getByRole("region", { name: "Root account" })).toBeVisible();
+    await expect(rootPage.getByRole("button", { name: "Delete account" })).toHaveCount(0);
+    await rootPage.getByRole("button", { name: "Sign out" }).click();
+    await expect(rootPage.getByLabel("Account token")).toBeVisible();
+    console.log("PASS real Root console login, protected Accounts entry and logout");
+  } finally { await rootContext.close(); }
+  await page.getByRole("link", { name: "Accounts", exact: true }).click();
   await page
     .getByRole("button", { name: /Console test owner.*Active/ })
     .click();
@@ -64,7 +78,7 @@ export async function accessChecks(
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("button", { name: "Users", exact: true }).click();
+  await page.getByRole("button", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Recovery admin");
   await page.getByLabel("Role", { exact: true }).selectOption("admin");
@@ -75,7 +89,7 @@ export async function accessChecks(
   await page.getByLabel("Label", { exact: true }).fill("Recovery fixture");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   const oldToken = await takeToken(page);
-  await page.getByRole("button", { name: "Users", exact: true }).click();
+  await page.getByRole("button", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("CLI backup");
   await page.getByLabel("Role", { exact: true }).selectOption("writer");
@@ -106,8 +120,8 @@ export async function accessChecks(
   try {
     const other = await recovery.newPage();
     await other.goto(origin + "/api/admin/console/#setup");
-    await other.getByLabel("Master token").fill(masterToken);
-    await other.getByRole("button", { name: "Verify master token" }).click();
+    await other.getByLabel("Root token").fill(masterToken);
+    await other.getByRole("button", { name: "Verify Root token" }).click();
     await other.getByLabel("Admin user ID").fill(userId);
     await other
       .getByLabel("Replace this Admin's tokens and revoke its sessions")

@@ -85,7 +85,7 @@ test("storage read 401 returns to login without cached detail", async ({
     route.fulfill({ status: 401, json: failure(401) }),
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByLabel("Personal token")).toBeVisible();
+  await expect(page.getByLabel("Account token")).toBeVisible();
   await expect(page.getByRole("heading", { name: example.id })).toHaveCount(0);
 });
 
@@ -115,7 +115,7 @@ for (const method of ["POST", "PUT", "DELETE"]) {
         exact: true,
       })
       .click();
-    await expect(page.getByLabel("Personal token")).toBeVisible();
+    await expect(page.getByLabel("Account token")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: example.id })).toHaveCount(
       0,

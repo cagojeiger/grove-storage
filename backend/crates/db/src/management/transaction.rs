@@ -11,6 +11,28 @@ use super::{
 pub enum Proof<'a> {
     Session(&'a str),
     Token(&'a str),
+    RootSession {
+        hash: &'a str,
+        binding: super::master::Binding<'a>,
+    },
+}
+
+pub enum ResolvedIdentity {
+    User(Identity),
+    Root(super::master::Session),
+}
+impl ResolvedIdentity {
+    pub fn caller(&self) -> grove_management_policy::Caller {
+        use grove_management_policy::{Actor, AuthMethod, Caller, CredentialState};
+        match self {
+            Self::User(identity) => identity.caller,
+            Self::Root(_) => Caller {
+                actor: Actor::Root,
+                method: AuthMethod::RootSession,
+                credential_state: CredentialState::Active,
+            },
+        }
+    }
 }
 
 /// Keeps identity changes fenced from authentication through the final commit.
@@ -26,10 +48,18 @@ impl<'a> IdentityTransaction<'a> {
         })
     }
 
-    pub async fn resolve(&mut self, proof: Proof<'_>) -> Result<Option<Identity>, Error> {
+    pub async fn resolve(&mut self, proof: Proof<'_>) -> Result<Option<ResolvedIdentity>, Error> {
         match proof {
-            Proof::Session(hash) => identity::session(&mut self.inner, hash).await,
-            Proof::Token(hash) => identity::token(&mut self.inner, hash).await,
+            Proof::Session(hash) => Ok(identity::session(&mut self.inner, hash)
+                .await?
+                .map(ResolvedIdentity::User)),
+            Proof::Token(hash) => Ok(identity::token(&mut self.inner, hash)
+                .await?
+                .map(ResolvedIdentity::User)),
+            Proof::RootSession { hash, binding } => Ok(self
+                .root_session(binding, hash)
+                .await?
+                .map(ResolvedIdentity::Root)),
         }
     }
 

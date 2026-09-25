@@ -7,6 +7,7 @@ mod dispatch;
 mod logging;
 pub mod master;
 pub mod resources;
+pub mod root;
 pub mod sessions;
 pub use command::Command;
 pub use filegate_db::management::{Proof, queries::Page};
@@ -15,12 +16,13 @@ use filegate_db::{
     PgPool,
     management::{self as db, AuditActor, AuditContext, IdentityTransaction},
 };
-use grove_management_policy::{Actor, Surface, authorize};
+use grove_management_policy::{Surface, authorize};
 use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Output {
     Identity(db::Identity),
+    RootSession(db::master::Session),
     Account(Uuid),
     Changed(bool),
     Credential(db::Credential),
@@ -135,7 +137,7 @@ async fn run(
         Ok(context) => context,
         Err(error) => return (None, Err(error)),
     };
-    let scope = match authorize(identity.caller, surface, command.action()) {
+    let scope = match authorize(identity.caller(), surface, command.action()) {
         Ok(scope) => scope,
         Err(_) => return (Some(context), Err(Error::Forbidden)),
     };
@@ -146,17 +148,19 @@ async fn run(
 }
 
 fn audit_context(
-    identity: &db::Identity,
+    identity: &db::ResolvedIdentity,
     request_id: Uuid,
     surface: Surface,
 ) -> Result<AuditContext, Error> {
-    let actor = match identity.caller.actor {
-        Actor::User { .. } => AuditActor::User {
+    let actor = match identity {
+        db::ResolvedIdentity::User(identity) => AuditActor::User {
             id: identity.account_id,
             credential_id: identity.credential_id,
             session_id: identity.session_id,
         },
-        Actor::Master => return Err(Error::Unauthenticated),
+        db::ResolvedIdentity::Root(session) => AuditActor::Master {
+            session_id: Some(session.id),
+        },
     };
     Ok(AuditContext {
         actor,

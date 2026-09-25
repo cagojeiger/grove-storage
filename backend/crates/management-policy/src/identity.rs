@@ -26,6 +26,7 @@ pub enum CredentialState {
 pub enum Actor {
     User { role: Role, state: AccountState },
     Master,
+    Root,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +34,7 @@ pub enum AuthMethod {
     UserSession,
     ManagementToken,
     MasterSession,
+    RootSession,
 }
 
 /// Selected by server routing, never from a client-provided channel header.

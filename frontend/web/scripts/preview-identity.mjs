@@ -41,6 +41,7 @@ export function previewIdentity(json) {
   }
   issue(owner, "Preview sign-in", 90, "qwer1234");
   function session() {
+    if (current === "root") return { principal: "root", role: "root", session_id: "preview-root", expires_at: new Date(Date.now()+1800000).toISOString() };
     const key = credentials.get(current);
     const user = accounts.get(key?.account_id);
     if (
@@ -92,6 +93,7 @@ export function previewIdentity(json) {
       };
       if (path === "/session") {
         if (method === "POST") {
+          if (body.token === "qwer1234") { current = "root"; json(res, 200, session()); return true; }
           const key = [...credentials.values()].find(
             (key) => key.token === body.token,
           );
@@ -153,11 +155,12 @@ export function previewIdentity(json) {
         fail(401, "unauthenticated");
         return true;
       }
-      if (session().role !== "admin") {
+      if (!["admin", "root"].includes(session().role)) {
         fail(403, "forbidden");
         return true;
       }
-      if (path === "/accounts" && method === "GET")
+      if (path === "/root" && method === "GET") json(res, 200, { id: "root", configured: true, protected: true, source: "config" });
+      else if (path === "/accounts" && method === "GET")
         json(res, 200, page([...accounts.values()]));
       else if (path === "/accounts" && method === "POST") {
         if (

@@ -43,6 +43,11 @@ pub async fn configure(
         .bind(binding.generation).bind(binding.token_hash).execute(&mut *tx).await?;
     sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE auth_method='master' AND revoked_at IS NULL")
         .execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE management.root_sessions SET revoked_at=clock_timestamp() WHERE revoked_at IS NULL",
+    )
+    .execute(&mut *tx)
+    .await?;
     sqlx::query("INSERT INTO management.audit_events(actor_kind,request_id,surface,action,resource_type,resource_id,metadata)
         VALUES('system',$1,'console','master.configuration.activate','master_configuration','1',jsonb_build_object('generation',$2::bigint))")
         .bind(request_id).bind(binding.generation).execute(&mut *tx).await?;
@@ -114,7 +119,7 @@ pub fn context(request_id: Uuid, session_id: Uuid) -> AuditContext {
 }
 
 impl IdentityTransaction<'_> {
-    async fn master_binding(&mut self, binding: Binding<'_>) -> Result<(), Error> {
+    pub(super) async fn master_binding(&mut self, binding: Binding<'_>) -> Result<(), Error> {
         let matches: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.master_configuration WHERE id=1 AND generation=$1 AND token_hash=$2)")
             .bind(binding.generation).bind(binding.token_hash).fetch_one(&mut *self.inner).await?;
         if !matches {
