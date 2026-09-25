@@ -14,16 +14,21 @@ below to test authentication and the real API.
 The sample preview starts signed out. Use `qwer1234` in **Account token** for the local Root preview.
 This fixed demo token and process-wide sample session are only for the loopback
 preview; production uses DB-backed User credentials and browser sessions.
-The preview includes Admin-only Access with sample Users and token lifecycle.
+The preview includes Admin/Root-only Accounts with sample Users and token lifecycle.
+Activity returns an empty sample history; Settings lists the current sample session.
+Use the real fixture below to verify persisted history and independent sessions.
 Its setup/recovery entry accepts the same demo master token and starts initialized.
 The real fixture below verifies first-Admin bootstrap against an empty database.
 
 | Implemented | Follow-up |
 |---|---|
-| Personal User token login/logout, current role, session restore and 401 handling | Own-session and management history screens |
+| Personal User token login/logout, current role, session restore and 401 handling | Production authentication/ingress verification |
 | Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Account rename requires a separate backend contract |
-| Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Client detail and key lifecycle |
-| API readiness, client count, per-storage usage | Usage history and client detail |
+| Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
+| Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
+| API readiness, client count, per-storage and client usage | Daily usage history |
+| Activity: audit, command history, security events; scoped cursor paging and event details | Server-side actor/resource/date filters |
+| Settings: current account/role, own sessions, confirmed session revocation | Overall navigation and UX review |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 
@@ -84,9 +89,11 @@ Root also signs in through the normal **Account token** form. Its separate,
 30-minute console session supports Accounts and resource management. Accounts
 shows Root as config-owned and protected. See [ADR 011](../../docs/adr/011-root-and-accounts.md)
 for `GROVE_ROOT_*` configuration, legacy compatibility and rotation.
-Clients supports registration, guarded deletion and Native/S3 service keys through
-the same command API as CLI/MCP. Native raw keys are hashed in the browser;
-generated Native keys and S3 secrets are shown once without browser persistence.
+Clients supports registration, guarded deletion and S3 credentials through
+the same command API as CLI/MCP. S3 secrets are shown once without browser persistence.
+Native API, CLI, MCP and DB compatibility remains unchanged; the console offers
+S3 credentials only. Activity uses the existing scoped management history APIs.
+Settings revokes browser sessions without revoking their source account token.
 Legacy operator tokens do not log
 into the console. The default UI port is 5173; an occupied port fails instead of
 silently changing the allowed origin. Override with `-- --port PORT` and update the origin.
@@ -132,10 +139,14 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/access-safety.spec.ts` | Role loss, expired sessions, duplicate submission and issued-token account correlation |
 | `tests/access-layout.spec.ts` | Account detail and token dialog across five widths and both themes |
 | `tests/master-setup.spec.ts` | Separate master/User sessions, initial setup, targeted recovery and unknown outcomes |
+| `tests/clients.spec.ts`, `client-safety.spec.ts`, `client-layout.spec.ts` | S3-only key controls, client lifecycle, conflicts, secret handling and responsive layouts |
+| `tests/maintenance.spec.ts`, `maintenance-layout.spec.ts` | Scoped history, bigint cursors, demotion, session revocation, unknown outcomes and responsive layouts |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 | `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named User token login and Console audit |
 | `tests/live-access.mjs` via Python fixture | Real first-Admin bootstrap, User lifecycle, token use/revocation, last-Admin protection and targeted master recovery |
+| `tests/live-clients.mjs` via Python fixture | Real client/S3 credential lifecycle and pending-file deletion guard |
+| `tests/live-maintenance.mjs` via Python fixture | Real history views and revocation of another/current browser session with independent cookies |
 
 Expiry is injected into the isolated database; the test does not wait eight hours.
 Run `npm run build` before `npm test`: the browser security suite serves `dist` on

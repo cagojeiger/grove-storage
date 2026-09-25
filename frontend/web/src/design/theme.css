@@ -595,6 +595,24 @@ dialog::backdrop {
 .clients .section-heading, .clients .page-actions { flex-wrap: wrap; }
 .storage-section .section-heading { flex-wrap: wrap; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .storage-section .section-heading h2 { padding: 0; border: 0; }
+.view-tabs { display: flex; flex-wrap: wrap; gap: 20px; margin: 24px 0; border-bottom: 1px solid var(--line); }
+.view-tabs a { color: var(--muted); padding: 12px 0; text-decoration: none; border-bottom: 2px solid transparent; }
+.view-tabs a[aria-current="page"] { color: var(--text); border-color: var(--accent); }
+.event-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1.5fr) 16px; gap: 16px; text-align: left; padding: 18px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.event-row span, .session-row span, .session-row code { display: block; }
+.event-row > *, .session-row > * { min-width: 0; overflow-wrap: anywhere; }
+.event-row .muted, .session-row .muted { font-size: 12px; margin-top: 6px; }
+.event-details dd, .settings dd { overflow-wrap: anywhere; }
+.event-metadata { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: var(--surface); max-height: 320px; overflow: auto; }
+.session-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 40px; gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--line); align-items: center; }
+@media (max-width: 600px) {
+  .event-row { grid-template-columns: minmax(0, 1fr) 16px; gap: 10px; }
+  .event-row > time, .event-row > span { grid-column: 1; }
+  .event-row > svg { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  .session-row { grid-template-columns: minmax(0, 1fr) 40px; gap: 12px; }
+  .session-row > div { grid-column: 1; }
+  .session-row > button { grid-column: 2; grid-row: 1 / span 2; }
+}
 .clients h1, .clients h2 { overflow-wrap: anywhere; }
 .service-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .service-key-row code, .key-value, .clients .account-row strong { overflow-wrap: anywhere; min-width: 0; }

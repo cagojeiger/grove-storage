@@ -88,34 +88,10 @@ function output(name: string, value: unknown, input: object): boolean {
         "id" in input &&
         value.id === input.id
       );
-    case "client-key.list":
-      return (
-        Array.isArray(value) &&
-        value.every(
-          (v) => typeof v === "string" && /^sha256:[a-f0-9]{64}$/.test(v),
-        )
-      );
     case "credential.list":
       return (
         Array.isArray(value) &&
         value.every((v) => typeof v === "string" && /^[a-z0-9]{8,64}$/.test(v))
-      );
-    case "client-key.register":
-      return (
-        object(value) &&
-        "client_id" in input &&
-        "key_hash" in input &&
-        value.client_id === input.client_id &&
-        value.key_hash === input.key_hash
-      );
-    case "client-key.delete":
-      return (
-        object(value) &&
-        value.resource === "client-key" &&
-        "client_id" in input &&
-        "key_hash" in input &&
-        value.client_id === input.client_id &&
-        value.id === input.key_hash
       );
     case "credential.create":
       return (

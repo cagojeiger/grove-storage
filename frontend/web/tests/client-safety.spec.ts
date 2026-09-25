@@ -9,7 +9,7 @@ test("Reader sees clients but never requests service keys or write controls", as
   await page.goto(root + "/notegate");
   await expect(page.getByRole("heading", { name: "notegate" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Delete client|Generate key|Issue key/ }),
+    page.getByRole("button", { name: /Delete client|Create credential/ }),
   ).toHaveCount(0);
   expect(calls.some((c) => /^(credential|client-key)\./.test(c.command))).toBe(
     false,
@@ -47,7 +47,7 @@ for (const mode of ["lost", "malformed", "unavailable"] as const)
       else await route.fulfill({ status: 503, json: failure(503) });
     });
     await page.goto(root + "/notegate");
-    await page.getByRole("button", { name: "Issue key", exact: true }).click();
+    await page.getByRole("button", { name: "Create credential", exact: true }).click();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("outcome is unknown");
     await expect(
@@ -60,13 +60,12 @@ for (const code of [401, 403])
   test(`key write ${code} removes sensitive controls`, async ({ page }) => {
     await clientMock(page);
     await page.goto(root + "/notegate");
-    await page.getByRole("button", { name: "Register key" }).click();
-    await page.getByLabel("Existing Native key").fill("private-key");
+    await page.getByRole("button", { name: "Create credential" }).click();
     if (code === 403)
       await page.route("**/identity/v1/session", (route) =>
         route.fulfill({ json: { ...session, role: "reader" } }),
       );
-    await intercept(page, "client-key.register", (route) =>
+    await intercept(page, "credential.create", (route) =>
       route.fulfill({ status: code, json: failure(code) }),
     );
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
@@ -74,5 +73,5 @@ for (const code of [401, 403])
     if (code === 401)
       await expect(page.getByLabel("Account token")).toBeVisible();
     else await expect(page.getByText("Reader · Read-only")).toBeVisible();
-    expect(await page.content()).not.toContain("private-key");
+    await expect(page.getByRole("button", { name: "Create credential" })).toHaveCount(0);
   });

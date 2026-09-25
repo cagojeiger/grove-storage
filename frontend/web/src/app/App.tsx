@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, LayoutDashboard, HardDrive, Shield, AppWindow } from "lucide-react";
+import { LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
 import { Login } from "../auth/Login";
 import { ThemePicker } from "../design/Theme";
@@ -11,6 +11,8 @@ import { useRoute } from "./navigation";
 import { Access } from "../features/access/Access";
 import { MasterSetup } from "../auth/MasterSetup";
 import { Clients } from "../features/clients/Clients";
+import { Activity } from "../features/activity/Activity";
+import { Sessions } from "../features/settings/Sessions";
 
 export function App() {
   const cache = useQueryClient();
@@ -18,6 +20,8 @@ export function App() {
   const storagePage = route === "storages" || route.startsWith("storages/");
   const accessPage = route === "accounts" || route === "access" || route.startsWith("access/");
   const clientPage = route === "clients" || route.startsWith("clients/");
+  const activityPage = route === "activity" || route.startsWith("activity/");
+  const settingsPage = route === "settings";
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const session = useQuery({
@@ -95,7 +99,7 @@ export function App() {
             <nav aria-label="Main navigation">
               <a
                 href="#"
-                aria-current={!storagePage && !accessPage && !clientPage ? "page" : undefined}
+                aria-current={!storagePage && !accessPage && !clientPage && !activityPage && !settingsPage ? "page" : undefined}
               >
                 <LayoutDashboard size={18} />
                 <span>Overview</span>
@@ -117,6 +121,8 @@ export function App() {
                   <span>Accounts</span>
                 </a>
               )}
+              <a href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></a>
+              <a href="#settings" aria-current={settingsPage ? "page" : undefined}><Settings size={18} /><span>Settings</span></a>
             </nav>
             <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management", root: "Root · Protected" }[session.data.role]}</span>
           </aside>
@@ -132,6 +138,10 @@ export function App() {
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )
+            ) : activityPage ? (
+              <Activity key={`${route}:${session.data.role}:${session.data.session_id}`} route={route} admin={["admin", "root"].includes(session.data.role)} />
+            ) : settingsPage ? (
+              <Sessions key={session.data.session_id} session={session.data} />
             ) : clientPage ? (
               <Clients key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
             ) : storagePage ? (

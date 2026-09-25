@@ -1,3 +1,5 @@
+export const time = (value: string) => new Date(value).toLocaleString("en-US");
+
 export function bytes(value: number) {
   const absolute = Math.abs(value);
   const unit =

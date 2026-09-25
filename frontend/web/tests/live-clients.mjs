@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { expect } from "@playwright/test";
 
-export async function clientChecks(page, { endpoint, database }) {
+export async function clientChecks(page, { database }) {
   const id = "console-ui-client";
   await page
     .getByRole("navigation")
@@ -21,30 +21,16 @@ export async function clientChecks(page, { endpoint, database }) {
     page.getByRole("heading", { name: id, exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Generate key", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(
-    page.getByLabel("Native API key", { exact: true }),
-  ).toBeVisible();
-  const native = await page
-    .getByLabel("Native API key", { exact: true })
-    .inputValue();
-  const hash = "sha256:" + createHash("sha256").update(native).digest("hex");
+  await expect(page.getByRole("button", { name: /Generate key|Register key/ })).toHaveCount(0);
   async function saved() {
     await page
       .getByLabel("I have saved these keys. Secrets are shown only once.")
       .check();
     await page.getByRole("button", { name: "Done", exact: true }).click();
   }
-  await saved();
   const fileId = randomUUID();
-  const accepted = await page.request.get(
-    `${endpoint}/api/v1/files/${fileId}`,
-    { headers: { Authorization: `Bearer ${native}` } },
-  );
-  assert.equal(accepted.status(), 404);
 
-  await page.getByRole("button", { name: "Issue key", exact: true }).click();
+  await page.getByRole("button", { name: "Create credential", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByLabel("Secret key", { exact: true })).toBeVisible();
   const s3 = await page
@@ -63,7 +49,7 @@ export async function clientChecks(page, { endpoint, database }) {
       )
     ).includes(secret),
   );
-  for (const key of [hash, s3]) {
+  for (const key of [s3]) {
     await page
       .getByRole("button", { name: `Revoke ${key}`, exact: true })
       .click();
@@ -74,10 +60,6 @@ export async function clientChecks(page, { endpoint, database }) {
       page.getByRole("button", { name: `Revoke ${key}`, exact: true }),
     ).toHaveCount(0);
   }
-  const denied = await page.request.get(`${endpoint}/api/v1/files/${fileId}`, {
-    headers: { Authorization: `Bearer ${native}` },
-  });
-  assert.equal(denied.status(), 401);
 
   const sql = (statement) =>
     execFileSync(
@@ -117,7 +99,7 @@ export async function clientChecks(page, { endpoint, database }) {
   ).toBeVisible();
   await expect(page.getByRole("link", { name: new RegExp(id) })).toHaveCount(0);
   console.log(
-    "PASS real Clients UI create/delete, Native runtime auth/revocation, S3 issuance/revocation and pending-file delete guard",
+    "PASS real S3-only Clients UI create/delete, credential issuance/revocation and pending-file delete guard",
   );
   await page.goto(
     new URL("/api/admin/console/#storages/console-live", page.url()).href,

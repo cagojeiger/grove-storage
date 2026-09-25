@@ -2,14 +2,13 @@ import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 import { command } from "../../api/commands";
-import { field } from "../../api/identity";
 import { Dialog } from "../../design/Dialog";
 import { useAction } from "../access/useAction";
 import { clientMessage } from "./model";
 
 export type KeyAction =
-  | { kind: "native-generate" | "native-register" | "s3-create" }
-  | { kind: "native-delete" | "s3-delete"; key: string };
+  | { kind: "s3-create" }
+  | { kind: "s3-delete"; key: string };
 type IssuedKey = { name: string; value: string }[];
 export function KeyDialog({
   clientId,
@@ -28,18 +27,12 @@ export function KeyDialog({
   const [copyError, setCopyError] = useState("");
   const deleting = "key" in action;
   const title = {
-    "native-generate": "Generate Native key",
-    "native-register": "Register Native key",
-    "s3-create": "Issue S3 key",
-    "native-delete": "Revoke Native key",
-    "s3-delete": "Revoke S3 key",
+    "s3-create": "Create S3 credential",
+    "s3-delete": "Revoke S3 credential",
   }[action.kind];
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (deleting && confirmation !== clientId) return;
-    const data = new FormData(e.currentTarget);
-    const input = e.currentTarget.elements.namedItem("key");
-    if (input instanceof HTMLInputElement) input.value = "";
     await state.run(async () => {
       if (action.kind === "s3-create") {
         const result = await command<{
@@ -50,42 +43,8 @@ export function KeyDialog({
           { name: "Access key ID", value: result.access_key_id },
           { name: "Secret key", value: result.secret_key },
         ]);
-      } else if (
-        action.kind === "native-generate" ||
-        action.kind === "native-register"
-      ) {
-        const raw =
-          action.kind === "native-register"
-            ? field(data, "key").trim()
-            : "gsk_" +
-              Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
-                b.toString(16).padStart(2, "0"),
-              ).join("");
-        const digest = await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(raw),
-        );
-        const key_hash =
-          "sha256:" +
-          Array.from(new Uint8Array(digest), (b) =>
-            b.toString(16).padStart(2, "0"),
-          ).join("");
-        await command("client-key.register", { client_id: clientId, key_hash });
-        if (action.kind === "native-generate")
-          setIssued([{ name: "Native API key", value: raw }]);
-        else onClose();
       } else if ("key" in action) {
-        await command(
-          action.kind === "s3-delete"
-            ? "credential.delete"
-            : "client-key.delete",
-          {
-            client_id: clientId,
-            ...(action.kind === "s3-delete"
-              ? { access_key_id: action.key }
-              : { key_hash: action.key }),
-          },
-        );
+        await command("credential.delete", { client_id: clientId, access_key_id: action.key });
         onClose();
       }
       await cache.invalidateQueries({
@@ -151,18 +110,6 @@ export function KeyDialog({
             <p className="full-field">
               Client: <strong>{clientId}</strong>
             </p>
-            {action.kind === "native-register" && (
-              <label className="full-field">
-                Existing Native key
-                <input
-                  name="key"
-                  type="password"
-                  autoComplete="off"
-                  required
-                  pattern=".*\S.*"
-                />
-              </label>
-            )}
             {deleting && (
               <>
                 <p className="full-field key-value">{action.key}</p>

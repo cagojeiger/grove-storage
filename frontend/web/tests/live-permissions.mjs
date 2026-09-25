@@ -47,6 +47,17 @@ export async function permissionChecks(browser, admin, origin) {
     const events = audit.items.filter((e) => e.action === "storage.create");
     assert(events.length > 0 && events.every((e) => e.context.surface === "console"));
     assert(!JSON.stringify(audit).includes(credential.token));
+    await page.goto(`${origin}/api/admin/console/#activity`);
+    await expect(page.getByText("MY ACTIVITY", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Security events", exact: true })).toHaveCount(0);
+    const scoped = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/audit?limit=100")).json()));
+    assert(scoped.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
+    const calls = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/invocations?limit=100")).json()));
+    assert(calls.items.length > 0);
+    assert(calls.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
+    assert.equal(await page.evaluate(async () => (await fetch("/api/admin/identity/v1/history/security")).status), 403);
+    await page.goto(`${origin}/api/admin/console/#settings`);
+    await expect(page.getByRole("button", { name: "Revoke current session", exact: true })).toBeVisible();
     console.log("PASS real role demotion, Reader read-only UI/server, named User token login, console audit");
   } finally { await context.close(); }
 }

@@ -19,6 +19,7 @@ export function previewIdentity(json) {
   const credentials = new Map();
   let current = null;
   let master = false;
+  let signedInAt = new Date().toISOString();
   function issue(
     account,
     label,
@@ -93,6 +94,7 @@ export function previewIdentity(json) {
       };
       if (path === "/session") {
         if (method === "POST") {
+          signedInAt = new Date().toISOString();
           if (body.token === "qwer1234") { current = "root"; json(res, 200, session()); return true; }
           const key = [...credentials.values()].find(
             (key) => key.token === body.token,
@@ -153,6 +155,22 @@ export function previewIdentity(json) {
       }
       if (!session()) {
         fail(401, "unauthenticated");
+        return true;
+      }
+      if (path === "/sessions" && method === "GET") {
+        const value = session();
+        json(res, 200, { items: [{ id: value.session_id, credential_id: value.credential_id ?? null, created_at: signedInAt, expires_at: new Date(Date.parse(signedInAt)+1800000).toISOString(), revoked_at: null }], next_before: null });
+        return true;
+      }
+      if (path.startsWith("/sessions/") && method === "DELETE") {
+        const id = decodeURIComponent(path.slice("/sessions/".length));
+        if (id !== session().session_id) fail(403, "forbidden");
+        else { current = null; json(res, 200, { changed: true }); }
+        return true;
+      }
+      if (path.startsWith("/history/") && method === "GET") {
+        if (path === "/history/security" && !["admin", "root"].includes(session().role)) fail(403, "forbidden");
+        else json(res, 200, { items: [], next_before: null });
         return true;
       }
       if (!["admin", "root"].includes(session().role)) {

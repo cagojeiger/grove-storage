@@ -9,10 +9,7 @@ for (const width of [320, 390, 768, 1024, 1440])
       await page.goto(root);
       await page.getByLabel("Theme").selectOption(theme);
       await page.getByRole("link", { name: /notegate/ }).click();
-      await expect(
-        page.getByRole("region", { name: "Native keys" }),
-      ).toBeVisible();
-      await expect(page.getByRole("region", { name: "S3 keys" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "S3 credentials" })).toBeVisible();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -22,10 +19,10 @@ for (const width of [320, 390, 768, 1024, 1440])
         path: `test-results/clients-${width}-${theme}.png`,
         fullPage: true,
       });
-      await page.getByRole("button", { name: "Generate key" }).click();
+      await page.getByRole("button", { name: "Create credential" }).click();
       await page.getByRole("button", { name: "Confirm", exact: true }).click();
       await expect(
-        page.getByLabel("Native API key", { exact: true }),
+        page.getByLabel("Secret key", { exact: true }),
       ).toBeVisible();
       expect(
         await page
