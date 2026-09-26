@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 
 export async function resourceChecks(page, { origin }) {
   await page.goto(`${origin}/api/admin/console/#`);
+  await expect(page.locator(".connection-paths path").first()).toBeAttached();
   await page
     .getByRole("button", { name: "Select client console-client", exact: true })
     .click();

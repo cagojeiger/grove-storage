@@ -1,4 +1,4 @@
-import { RefObject, useLayoutEffect, useState } from "react";
+import { RefObject, useEffect, useState } from "react";
 
 type Path = { key: string; d: string; selected: boolean };
 
@@ -10,7 +10,8 @@ export function ConnectionPaths({
   revision: string;
 }) {
   const [paths, setPaths] = useState<Path[]>([]);
-  useLayoutEffect(() => {
+  // The parent host ref is attached after child layout effects on first mount.
+  useEffect(() => {
     const root = container.current;
     const hub = root?.querySelector<HTMLElement>(".hub-label");
     if (!root || !hub) return;
