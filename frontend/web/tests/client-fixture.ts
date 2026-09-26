@@ -23,6 +23,9 @@ export async function clientMock(page: Page, role = "admin") {
     calls.push({ command, input });
     let result: unknown;
     switch (command) {
+      case "client.metadata.show":
+        result = { id: input.id, metadata: {} };
+        break;
       case "client.list":
         result = [...clients.keys()];
         break;

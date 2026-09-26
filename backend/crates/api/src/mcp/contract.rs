@@ -39,6 +39,12 @@ pub(super) fn tool(name: CommandName) -> Tool {
 
 fn description(name: CommandName) -> &'static str {
     match name {
+        CommandName::StorageMetadataShow | CommandName::ClientMetadataShow => {
+            "Read resource metadata: a string-valued JSON label object, separate from S3 object metadata."
+        }
+        CommandName::StorageMetadataReplace | CommandName::ClientMetadataReplace => {
+            "Replace all resource metadata; {} clears it. String values only, at most 8 KiB normalized JSON. Visible to resource readers; do not store secrets. Does not change routing, credentials, or provider objects."
+        }
         CommandName::Status => {
             "Inspect server identity, database, and registry status; physical storage is not probed."
         }

@@ -84,7 +84,7 @@ test("storage read 401 returns to login without cached detail", async ({
   await intercept(page, "storage.show", (route) =>
     route.fulfill({ status: 401, json: failure(401) }),
   );
-  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByLabel("Account token")).toBeVisible();
   await expect(page.getByRole("heading", { name: example.id })).toHaveCount(0);
 });

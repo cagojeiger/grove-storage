@@ -53,6 +53,14 @@ pub(super) fn decode(command: &Command, status: u16, bytes: &[u8]) -> Result<Out
 
 fn corresponds(command: &Command, output: &Output) -> bool {
     match (command, output) {
+        (Command::StorageMetadataShow(i), Output::StorageMetadataShow(o))
+        | (Command::ClientMetadataShow(i), Output::ClientMetadataShow(o)) => {
+            i.id == o.id && grove_management_command::metadata::valid_metadata(&o.metadata)
+        }
+        (Command::StorageMetadataReplace(i), Output::StorageMetadataReplace(o))
+        | (Command::ClientMetadataReplace(i), Output::ClientMetadataReplace(o)) => {
+            i.id == o.id && i.metadata == o.metadata
+        }
         (Command::StorageShow(i), Output::StorageShow(o)) => i.id == o.id,
         (Command::StorageTest(i), Output::StorageTest(o)) => {
             i.id == o.id && o.state == grove_management_command::model::State::Ok

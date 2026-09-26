@@ -49,7 +49,7 @@ fn tools_match_all_command_inputs_and_preserve_schema_references() {
         }
         references(&schema, &schema);
     }
-    assert_eq!(names.len(), 20);
+    assert_eq!(names.len(), 24);
     assert!(
         !names
             .iter()
@@ -64,7 +64,7 @@ async fn stateless_discovery_lists_only_resource_tools(pool: PgPool) {
     let status = response.status();
     let body = json_body(response).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["result"]["tools"].as_array().unwrap().len(), 20);
+    assert_eq!(body["result"]["tools"].as_array().unwrap().len(), 24);
     assert!(!body.to_string().contains(&token));
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations")
         .fetch_one(&pool)

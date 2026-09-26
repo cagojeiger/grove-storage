@@ -80,7 +80,7 @@ def check_s3(endpoint, directory, backend):
     assert VERSION in discovery["supportedVersions"]
     tools = rpc("tools/list", {})["tools"]
     names = {tool["name"] for tool in tools}
-    assert len(names) == 20 and not any(name.startswith(("identity", "history")) for name in names)
+    assert len(names) == 24 and not any(name.startswith(("identity", "history")) for name in names)
     provider_secret = "provider-input-e2e-canary"
     SECRETS.append(provider_secret)
     call("storage.create", {"id": "incomplete-provider", "spec": {
@@ -110,6 +110,12 @@ def check_s3(endpoint, directory, backend):
     call("storage.replace", {"id": "mcp-storage", "spec": spec})
     env = {k: v for k, v in os.environ.items() if not k.startswith(("GROVE_", "FILEGATE_"))}
     env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
+    SECRETS.append("Resource metadata e2e")
+    for resource, resource_id in [("storage", "mcp-storage"), ("client", "mcp-client")]:
+        labels = {"description": "Resource metadata e2e", "environment": "test"}
+        assert call(f"{resource}.metadata.replace", {"id": resource_id, "metadata": labels}) == {
+            "id": resource_id, "metadata": labels,
+        }
     for name, arguments, args in [
         ("status", {}, ["status"]),
         ("storage.list", {}, ["storage", "list"]),
@@ -117,6 +123,8 @@ def check_s3(endpoint, directory, backend):
         ("storage.test", {"id": "mcp-storage"}, ["storage", "test", "mcp-storage"]),
         ("client.list", {}, ["client", "list"]),
         ("client.show", {"id": "mcp-client"}, ["client", "show", "mcp-client"]),
+        ("storage.metadata.show", {"id": "mcp-storage"}, ["storage", "metadata", "show", "mcp-storage"]),
+        ("client.metadata.show", {"id": "mcp-client"}, ["client", "metadata", "show", "mcp-client"]),
         ("client-key.list", {"client_id": "mcp-client"}, ["client-key", "list", "--client", "mcp-client"]),
         ("credential.list", {"client_id": "mcp-client"}, ["credential", "list", "--client", "mcp-client"]),
         ("usage.storages", {}, ["usage", "storages"]),
@@ -147,7 +155,7 @@ def check_s3(endpoint, directory, backend):
     assert calls == names
     audit = management.request("GET", "/history/audit?limit=100")
     events = [item for item in audit["items"] if item["context"].get("credential_id") == management.credential_id]
-    assert len(events) == 9
+    assert len(events) == 11
     assert all(item["context"]["surface"] == "mcp" for item in events)
     assert all(secret not in json.dumps(audit) for secret in SECRETS)
     management.request("PATCH", f"/accounts/{management.user_id}", {"operation": "role", "role": "reader"})
@@ -161,7 +169,7 @@ def check_s3(endpoint, directory, backend):
         assert error.code == 401
     else:
         raise AssertionError("Revoked token could discover tools")
-    print("PASS MCP 20 commands, CLI parity, token audit, User role, revocation, and one-time secret")
+    print("PASS MCP 24 commands, CLI parity, token audit, User role, revocation, and one-time secret")
 
 
 def verify_log(data):

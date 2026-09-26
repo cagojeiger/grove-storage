@@ -8,6 +8,7 @@ import { clientChecks } from "./live-clients.mjs";
 import { maintenanceChecks } from "./live-maintenance.mjs";
 import { usageChecks } from "./live-usage.mjs";
 import { resourceChecks } from "./live-resources.mjs";
+import { metadataChecks } from "./live-metadata.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -25,6 +26,7 @@ try {
   await storageChecks(page, fixture);
   await clientChecks(page, fixture);
   await resourceChecks(page, fixture);
+  await metadataChecks(page, fixture);
   await usageChecks(page, fixture);
   await maintenanceChecks(browser, page, origin, token);
   await permissionChecks(browser, page, origin);

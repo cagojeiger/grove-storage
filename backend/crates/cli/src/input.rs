@@ -12,6 +12,18 @@ const MAX_KEY_BYTES: u64 = 8192;
 
 pub use grove_management_command::input::StorageSpec;
 
+pub fn metadata(path: &Path) -> Result<Value, Error> {
+    let bytes = read(path, MAX_STORAGE_INPUT_BYTES, true)?;
+    let value: Value = serde_json::from_slice(&bytes)
+        .map_err(|_| Error::input("Metadata must be one valid JSON object"))?;
+    if !grove_management_command::metadata::valid_metadata(&value) {
+        return Err(Error::input(
+            "Metadata must contain string values and fit within 8 KiB of normalized JSON",
+        ));
+    }
+    Ok(value)
+}
+
 pub fn storage_spec(path: &Path) -> Result<StorageSpec, Error> {
     let bytes = read(path, MAX_STORAGE_INPUT_BYTES, true)?;
     let value: Value = serde_json::from_slice(&bytes)

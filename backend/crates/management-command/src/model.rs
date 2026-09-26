@@ -30,6 +30,13 @@ pub struct Client {
     pub storage_id: String,
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct ResourceMetadata {
+    pub id: String,
+    #[schemars(with = "std::collections::BTreeMap<String, String>")]
+    pub metadata: serde_json::Value,
+}
+
 /// Point-in-time internal bucket access, not object transfer or public URL health.
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct StorageConnection {

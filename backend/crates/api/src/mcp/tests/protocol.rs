@@ -40,7 +40,7 @@ async fn discovery_and_legacy_initialize_remain_stateless(pool: PgPool) {
             .as_array()
             .unwrap()
             .len(),
-        20
+        24
     );
 }
 

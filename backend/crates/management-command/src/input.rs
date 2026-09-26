@@ -15,6 +15,20 @@ pub struct ResourceInput {
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct MetadataInput {
+    pub id: String,
+    #[schemars(with = "std::collections::BTreeMap<String, String>")]
+    pub metadata: serde_json::Value,
+}
+
+impl Validate for MetadataInput {
+    fn validate(&self) -> Result<(), CommandError> {
+        require(resource_id(&self.id) && crate::metadata::valid_metadata(&self.metadata))
+    }
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct StorageInput {
     pub id: String,
     #[serde(deserialize_with = "storage_spec_object")]

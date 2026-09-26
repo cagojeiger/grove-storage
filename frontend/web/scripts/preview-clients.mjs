@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { previewMetadata } from "./preview-metadata.mjs";
 
 // Disposable in-memory preview only; production uses the shared command service.
 export function previewClients(storages) {
@@ -32,6 +33,7 @@ export function previewClients(storages) {
       )
         return false;
       const id = input.id ?? input.client_id;
+      if (previewMetadata(command, input, clients.get(id), success, failure)) return true;
       if (command === "client.create") {
         if (!storages.has(input.storage_id)) failure(404, "not_found");
         else if (clients.has(id)) failure(409, "conflict");

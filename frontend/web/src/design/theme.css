@@ -690,6 +690,9 @@ dialog::backdrop {
 .clients .section-heading, .clients .page-actions { flex-wrap: wrap; }
 .storage-section .section-heading { flex-wrap: wrap; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .storage-section .section-heading h2 { padding: 0; border: 0; }
+.metadata-json { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.metadata-field { display: grid; gap: 8px; min-width: 0; }
+.metadata-field textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; min-height: 200px; max-height: 55dvh; padding: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text); font-family: monospace; font-size: 14px; }
 .view-tabs { display: flex; flex-wrap: wrap; gap: 20px; margin: 24px 0; border-bottom: 1px solid var(--line); }
 .usage-range { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
 .usage-range label { display: grid; gap: 8px; width: 140px; max-width: 100%; }

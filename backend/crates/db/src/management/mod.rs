@@ -11,6 +11,7 @@ pub mod history;
 mod identity;
 pub mod master;
 pub mod queries;
+mod resource_metadata;
 mod resource_writes;
 mod resources;
 mod root;
@@ -25,6 +26,7 @@ pub use credentials::{
     Credential, NewCredential, issue_credential, recover_admin, revoke_credential,
 };
 pub use identity::{Identity, authenticate, session_actor};
+pub use resource_metadata::MetadataResource;
 pub use resource_writes::EncryptedServiceCredential;
 pub use sessions::{Session, create_session, revoke_session};
 pub use transaction::{IdentityTransaction, Proof, ResolvedIdentity};

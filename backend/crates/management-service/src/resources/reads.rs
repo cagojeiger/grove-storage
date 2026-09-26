@@ -10,6 +10,23 @@ pub(super) async fn run(
     command: Command,
 ) -> Result<Output, Error> {
     Ok(match command {
+        Command::StorageMetadataShow(input) => {
+            Output::StorageMetadataShow(model::ResourceMetadata {
+                metadata: tx
+                    .resource_metadata(
+                        filegate_db::management::MetadataResource::Storage,
+                        &input.id,
+                    )
+                    .await?,
+                id: input.id,
+            })
+        }
+        Command::ClientMetadataShow(input) => Output::ClientMetadataShow(model::ResourceMetadata {
+            metadata: tx
+                .resource_metadata(filegate_db::management::MetadataResource::Client, &input.id)
+                .await?,
+            id: input.id,
+        }),
         Command::StorageList(_) => Output::StorageList(
             tx.storages()
                 .await?

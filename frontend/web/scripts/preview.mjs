@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { previewIdentity } from "./preview-identity.mjs";
 import { previewClients } from "./preview-clients.mjs";
+import { previewMetadata } from "./preview-metadata.mjs";
 import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
@@ -96,12 +97,13 @@ async function response(req, res) {
     const envelope = { protocol: 1, request_id: randomUUID() };
     const success = (result) => json(res, 200, { ...envelope, command, result });
     const failure = (status, code) => json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
-    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "storage.test", "usage.clients", "usage.storages", "usage.history"].includes(command)) return failure(403, "forbidden");
+    if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "storage.test", "usage.clients", "usage.storages", "usage.history", "storage.metadata.show", "client.metadata.show"].includes(command)) return failure(403, "forbidden");
     if (command === "usage.history") return success([]);
     if (clients.handle(command, input, success, failure)) return;
     if (command === "usage.storages") return success([...storages.values()].map(usage));
     if (command === "storage.list") return success([...storages.values()]);
     const storageId = input.id;
+    if (previewMetadata(command, input, storages.get(storageId), success, failure)) return;
     // Sample storage has no provider credentials. Never fabricate connectivity.
     if (command === "storage.test")
       return storages.has(storageId) ? failure(503, "unavailable") : failure(404, "not_found");

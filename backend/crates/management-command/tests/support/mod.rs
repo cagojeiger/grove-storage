@@ -17,6 +17,8 @@ pub fn input(name: CommandName) -> Value {
         | CommandName::UsageStorages
         | CommandName::UsageClients => json!({}),
         CommandName::StorageShow
+        | CommandName::StorageMetadataShow
+        | CommandName::ClientMetadataShow
         | CommandName::StorageTest
         | CommandName::StorageDelete
         | CommandName::ClientShow
@@ -27,6 +29,9 @@ pub fn input(name: CommandName) -> Value {
                 "capacity_bytes":42}
         }),
         CommandName::ClientCreate => json!({"id":"app", "storage_id":"primary"}),
+        CommandName::StorageMetadataReplace | CommandName::ClientMetadataReplace => {
+            json!({"id":"app", "metadata":{"description":SECRET}})
+        }
         CommandName::CredentialList
         | CommandName::CredentialCreate
         | CommandName::ClientKeyList => json!({"client_id":"app"}),
@@ -47,6 +52,10 @@ pub fn storage() -> Value {
 
 pub fn output(name: CommandName) -> Value {
     match name {
+        CommandName::StorageMetadataShow
+        | CommandName::ClientMetadataShow
+        | CommandName::StorageMetadataReplace
+        | CommandName::ClientMetadataReplace => json!({"id":"app", "metadata":{}}),
         CommandName::Status => json!({"server_version":"0.4.1", "identity":"ok", "health":"ok",
             "readiness":"ok", "registry":{"state":"ok", "usage":"ok", "clients":"ok",
                 "storage_count":1, "client_count":1}, "storage_access":"not_checked"}),

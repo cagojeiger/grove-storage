@@ -32,6 +32,10 @@ pub(super) async fn execute(api: &Api, command: Command) -> CommandResult {
             Data::Storages(rows)
         }
         Output::StorageTest(row) => Data::StorageConnection(row),
+        Output::StorageMetadataShow(row)
+        | Output::StorageMetadataReplace(row)
+        | Output::ClientMetadataShow(row)
+        | Output::ClientMetadataReplace(row) => Data::Metadata(row),
         Output::StorageShow(row) | Output::StorageCreate(row) | Output::StorageReplace(row) => {
             Data::Storage(row)
         }

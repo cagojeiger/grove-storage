@@ -23,6 +23,7 @@ pub enum Data {
     Storage(Storage),
     StorageConnection(grove_management_command::model::StorageConnection),
     Client(Client),
+    Metadata(grove_management_command::model::ResourceMetadata),
     ClientKey(ClientKey),
     CredentialDelivery(CredentialDelivery),
     Deleted(Deleted),

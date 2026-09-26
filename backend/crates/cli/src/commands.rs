@@ -2,7 +2,8 @@ mod result;
 mod write;
 
 use crate::args::{
-    ClientCommand, ClientKeyCommand, Command, CredentialCommand, StorageCommand, Usage,
+    ClientCommand, ClientKeyCommand, Command, CredentialCommand, MetadataCommand, StorageCommand,
+    Usage,
 };
 use crate::{error::Error, http::Api, model::Data};
 use grove_management_command::{Command as Remote, input::*};
@@ -18,6 +19,8 @@ pub async fn run(api: &Api, command: &Command) -> CommandResult {
         }
         Command::Status => Remote::Status(EmptyInput {}),
         Command::Storage(StorageCommand::List) => Remote::StorageList(EmptyInput {}),
+        Command::Storage(StorageCommand::Metadata(input)) => metadata(api, input, true)?,
+        Command::Client(ClientCommand::Metadata(input)) => metadata(api, input, false)?,
         Command::Storage(StorageCommand::Show { id }) => Remote::StorageShow(resource(id)),
         Command::Storage(StorageCommand::Test { id }) => Remote::StorageTest(resource(id)),
         Command::Storage(StorageCommand::Create { id, from }) => {
@@ -100,6 +103,36 @@ pub async fn run(api: &Api, command: &Command) -> CommandResult {
 
 fn resource(id: &str) -> ResourceInput {
     ResourceInput { id: id.into() }
+}
+
+fn metadata(api: &Api, input: &MetadataCommand, storage: bool) -> Result<Remote, Error> {
+    Ok(match input {
+        MetadataCommand::Show { id } => {
+            if storage {
+                Remote::StorageMetadataShow(resource(id))
+            } else {
+                Remote::ClientMetadataShow(resource(id))
+            }
+        }
+        MetadataCommand::Replace { id, from, yes } => {
+            let metadata = crate::input::metadata(from)?;
+            write::confirm(
+                api,
+                *yes,
+                "Replace metadata for",
+                &format!("{} {id}", if storage { "storage" } else { "client" }),
+            )?;
+            let input = MetadataInput {
+                id: id.clone(),
+                metadata,
+            };
+            if storage {
+                Remote::StorageMetadataReplace(input)
+            } else {
+                Remote::ClientMetadataReplace(input)
+            }
+        }
+    })
 }
 fn client_input(id: &str) -> ClientInput {
     ClientInput {

@@ -10,6 +10,8 @@ async fn ten_reads_equal_command_http_and_record_one_mcp_invocation(pool: PgPool
         ("storage.show", json!({"id":"local"})),
         ("client.list", json!({})),
         ("client.show", json!({"id":"app"})),
+        ("storage.metadata.show", json!({"id":"local"})),
+        ("client.metadata.show", json!({"id":"app"})),
         ("client-key.list", json!({"client_id":"app"})),
         ("credential.list", json!({"client_id":"app"})),
         ("usage.storages", json!({})),
@@ -45,6 +47,40 @@ async fn ten_reads_equal_command_http_and_record_one_mcp_invocation(pool: PgPool
             .await
             .unwrap();
         assert_eq!(output["result"], json_body(rest).await["result"]);
+    }
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn metadata_mcp_and_http_share_writes_and_validation(pool: PgPool) {
+    let token = owner(&pool).await;
+    seed(&pool).await;
+    for (resource, id) in [("storage", "local"), ("client", "app")] {
+        let name = format!("{resource}.metadata.replace");
+        let labels = json!({"description":"mcp resource", "environment":"home"});
+        let reply = call(&pool, &token, &name, json!({"id":id,"metadata":labels})).await;
+        assert_eq!(reply["isError"], false, "{reply}");
+        assert_eq!(
+            reply["structuredContent"]["result"],
+            json!({"id":id,"metadata":labels})
+        );
+        let mut state = crate::routes::tests::test_state();
+        state.pool = pool.clone();
+        let response = crate::routes::app(state, &[]).oneshot(
+            HttpRequest::builder().method("POST").uri("/api/admin/commands/v1")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"protocol":1,"command":format!("{resource}.metadata.show"),"input":{"id":id}}).to_string())).unwrap()
+        ).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(json_body(response).await["result"]["metadata"], labels);
+        let bad = rpc(
+            &pool,
+            &token,
+            "tools/call",
+            json!({"name":name,"arguments":{"id":id,"metadata":{"nested":{}}}}),
+        )
+        .await;
+        assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
     }
 }
 

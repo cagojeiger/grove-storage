@@ -1310,6 +1310,7 @@ dependencies = [
  "filegate-db",
  "grove-management-command",
  "grove-management-policy",
+ "serde_json",
  "sqlx",
  "subtle",
  "tokio",

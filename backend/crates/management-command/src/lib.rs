@@ -9,6 +9,7 @@
 mod catalog;
 mod error;
 pub mod input;
+pub mod metadata;
 pub mod model;
 
 pub use catalog::{Command, CommandName, Effect, Output};

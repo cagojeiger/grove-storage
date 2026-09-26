@@ -50,6 +50,10 @@ export async function storageMock(page: Page, initial = [example]) {
       return;
     }
     const id = input.id ?? "";
+    if (command === "storage.metadata.show") {
+      await route.fulfill({ json: envelope(command, { id, metadata: {} }) });
+      return;
+    }
     if (["storage.list", "storage.show"].includes(command)) {
       if (!id) reads.list++;
       await route.fulfill({

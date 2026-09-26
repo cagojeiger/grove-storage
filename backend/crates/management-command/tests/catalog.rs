@@ -21,7 +21,7 @@ fn catalog_names_are_unique_and_every_command_has_typed_input_and_output() {
         let output = name.decode_output(support::output(name)).unwrap();
         assert_eq!(output.name(), name);
     }
-    assert_eq!(names.len(), 20);
+    assert_eq!(names.len(), 24);
 }
 
 #[test]
@@ -59,6 +59,8 @@ fn permissions_and_mutation_effects_are_explicit_for_all_names() {
             | CommandName::ClientKeyRegister
             | CommandName::ClientKeyDelete => Action::ManageServiceCredentials,
             CommandName::StorageCreate
+            | CommandName::StorageMetadataReplace
+            | CommandName::ClientMetadataReplace
             | CommandName::StorageReplace
             | CommandName::StorageDelete
             | CommandName::ClientCreate
@@ -68,6 +70,8 @@ fn permissions_and_mutation_effects_are_explicit_for_all_names() {
         assert_eq!(name.required_action(), expected_action);
         let expected_effect = match name {
             CommandName::StorageCreate
+            | CommandName::StorageMetadataReplace
+            | CommandName::ClientMetadataReplace
             | CommandName::StorageReplace
             | CommandName::StorageDelete
             | CommandName::ClientCreate

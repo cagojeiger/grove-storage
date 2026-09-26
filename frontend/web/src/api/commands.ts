@@ -1,4 +1,5 @@
 import { ApiError, send } from "./http";
+import { validMetadata } from "../features/metadata/model";
 
 export const commandPath = "/api/admin/console-commands/v1";
 const statuses: Record<string, number> = {
@@ -48,6 +49,16 @@ function client(value: unknown): boolean {
 // Validate the outputs this UI consumes, including the target of each mutation.
 function output(name: string, value: unknown, input: object): boolean {
   switch (name) {
+    case "storage.metadata.show":
+    case "client.metadata.show":
+    case "storage.metadata.replace":
+    case "client.metadata.replace": {
+      if (!object(value) || !("id" in input) || value.id !== input.id || !validMetadata(value.metadata)) return false;
+      const metadata = value.metadata;
+      return !("metadata" in input) || (validMetadata(input.metadata)
+        && Object.keys(input.metadata).length === Object.keys(metadata).length
+        && Object.entries(input.metadata).every(([key, item]) => Object.hasOwn(metadata, key) && metadata[key] === item));
+    }
     case "storage.list":
       return Array.isArray(value) && value.every(storage);
     case "storage.show":

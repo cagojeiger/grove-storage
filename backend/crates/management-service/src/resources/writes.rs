@@ -10,6 +10,32 @@ pub(super) async fn run(
     command: Command,
 ) -> Result<Output, Error> {
     Ok(match command {
+        Command::StorageMetadataReplace(input) => {
+            Output::StorageMetadataReplace(model::ResourceMetadata {
+                metadata: tx
+                    .replace_resource_metadata(
+                        ctx,
+                        filegate_db::management::MetadataResource::Storage,
+                        &input.id,
+                        &input.metadata,
+                    )
+                    .await?,
+                id: input.id,
+            })
+        }
+        Command::ClientMetadataReplace(input) => {
+            Output::ClientMetadataReplace(model::ResourceMetadata {
+                metadata: tx
+                    .replace_resource_metadata(
+                        ctx,
+                        filegate_db::management::MetadataResource::Client,
+                        &input.id,
+                        &input.metadata,
+                    )
+                    .await?,
+                id: input.id,
+            })
+        }
         Command::StorageDelete(input) => {
             tx.delete_resource_storage(ctx, &input.id).await?;
             Output::StorageDelete(deleted("storage", input.id, None))

@@ -15,6 +15,7 @@ import {
 import { ClientDialog } from "./ClientDialog";
 import { ClientKeys } from "./ClientKeys";
 import { ClientRows } from "./ClientRows";
+import { ResourceMetadata } from "../metadata/ResourceMetadata";
 import { paginate, useResourceList } from "../../app/resourceList";
 import { ListToolbar, Pagination } from "../../design/ResourceList";
 
@@ -133,6 +134,7 @@ export function Clients({
             </div>
           </dl>
           {canWrite && <ClientKeys key={id} clientId={id} />}
+          <ResourceMetadata key={`metadata:${id}`} resource="client" id={id} canWrite={canWrite} />
         </>
       ) : (
         <>

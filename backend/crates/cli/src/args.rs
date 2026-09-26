@@ -61,6 +61,9 @@ pub enum Command {
 
 #[derive(Subcommand)]
 pub enum StorageCommand {
+    /// Read or replace resource labels without changing connection settings.
+    #[command(subcommand)]
+    Metadata(MetadataCommand),
     List,
     /// Test saved S3 bucket access without writing objects or registry settings.
     Test {
@@ -99,6 +102,9 @@ pub enum StorageCommand {
 
 #[derive(Subcommand)]
 pub enum ClientCommand {
+    /// Read or replace resource labels without changing the storage assignment.
+    #[command(subcommand)]
+    Metadata(MetadataCommand),
     List,
     Show {
         #[arg(value_parser = resource_id)]
@@ -114,6 +120,23 @@ pub enum ClientCommand {
         #[arg(value_parser = resource_id)]
         id: String,
         /// Skip the interactive deletion confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum MetadataCommand {
+    Show {
+        #[arg(value_parser = resource_id)]
+        id: String,
+    },
+    /// Replace the entire string-valued JSON object; {} clears all labels.
+    Replace {
+        #[arg(value_parser = resource_id)]
+        id: String,
+        #[arg(long = "from", value_name = "PATH")]
+        from: PathBuf,
         #[arg(long)]
         yes: bool,
     },
@@ -192,12 +215,24 @@ impl Command {
             Self::Install { .. } => "install",
             Self::Status => CommandName::Status.as_str(),
             Self::Storage(StorageCommand::List) => CommandName::StorageList.as_str(),
+            Self::Storage(StorageCommand::Metadata(MetadataCommand::Show { .. })) => {
+                CommandName::StorageMetadataShow.as_str()
+            }
+            Self::Storage(StorageCommand::Metadata(MetadataCommand::Replace { .. })) => {
+                CommandName::StorageMetadataReplace.as_str()
+            }
             Self::Storage(StorageCommand::Show { .. }) => CommandName::StorageShow.as_str(),
             Self::Storage(StorageCommand::Test { .. }) => CommandName::StorageTest.as_str(),
             Self::Storage(StorageCommand::Create { .. }) => CommandName::StorageCreate.as_str(),
             Self::Storage(StorageCommand::Replace { .. }) => CommandName::StorageReplace.as_str(),
             Self::Storage(StorageCommand::Delete { .. }) => CommandName::StorageDelete.as_str(),
             Self::Client(ClientCommand::List) => CommandName::ClientList.as_str(),
+            Self::Client(ClientCommand::Metadata(MetadataCommand::Show { .. })) => {
+                CommandName::ClientMetadataShow.as_str()
+            }
+            Self::Client(ClientCommand::Metadata(MetadataCommand::Replace { .. })) => {
+                CommandName::ClientMetadataReplace.as_str()
+            }
             Self::Client(ClientCommand::Show { .. }) => CommandName::ClientShow.as_str(),
             Self::Client(ClientCommand::Create { .. }) => CommandName::ClientCreate.as_str(),
             Self::Client(ClientCommand::Delete { .. }) => CommandName::ClientDelete.as_str(),
