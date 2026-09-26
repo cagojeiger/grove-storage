@@ -24,7 +24,13 @@ export function Overview() {
   });
   const data = query.data;
   const sum = (
-    key: "active_bytes" | "reserved_bytes" | "purge_pending_bytes",
+    key:
+      | "active_bytes"
+      | "active_files"
+      | "capacity_bytes"
+      | "remaining_bytes"
+      | "reserved_bytes"
+      | "purge_pending_bytes",
   ) => data?.usage.reduce((total, row) => total + row[key], 0) ?? 0;
   return (
     <main className="overview topology-overview">
@@ -65,21 +71,23 @@ export function Overview() {
                 <dd>{data.clients.length}</dd>
               </div>
               <div>
-                <dt>Storage</dt>
-                <dd>{data.usage.length}</dd>
+                <dt>Total files</dt>
+                <dd>{sum("active_files").toLocaleString("en-US")}</dd>
               </div>
               <div>
-                <dt>Active data</dt>
+                <dt>Total stored</dt>
                 <dd>{bytes(sum("active_bytes"))}</dd>
               </div>
               <div>
-                <dt>Reserved / Pending deletion</dt>
-                <dd className="compact-value">
-                  {bytes(sum("reserved_bytes"))} /{" "}
-                  {bytes(sum("purge_pending_bytes"))}
-                </dd>
+                <dt>Registered capacity</dt>
+                <dd>{bytes(sum("capacity_bytes"))}</dd>
               </div>
             </dl>
+            <div className="overview-accounting muted">
+              <span>Reserved {bytes(sum("reserved_bytes"))}</span>
+              <span>Pending deletion {bytes(sum("purge_pending_bytes"))}</span>
+              <span>Remaining {bytes(sum("remaining_bytes"))}</span>
+            </div>
             <Connections
               clients={data.clients}
               storages={data.usage}

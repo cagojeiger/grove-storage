@@ -144,6 +144,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/usage-history.spec.ts` | Snapshot dates/counts, range validation, empty/error/401, progressive rendering and responsive tables |
 | `tests/resource-navigation.spec.ts` | Bounded paging, list state across detail/reload/deletion, authoritative Client assignment and overview highlighting |
 | `tests/resource-layout.spec.ts` | Multi-resource topology and paged lists at phone/tablet/desktop widths in both themes |
+| `tests/overview-connections.spec.ts` | Six/seven folding boundary, aggregate totals, curved paths, selection pinning, bounded grouped browser and failure states |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 | `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named User token login and Console audit |

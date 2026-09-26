@@ -211,38 +211,59 @@ nav a[aria-current="page"] {
 .mobile-label { display: none; }
 .topology-overview { max-width: 1600px; }
 .topology-overview .page-actions { flex-wrap: wrap; }
-.connections { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, .8fr) minmax(0, 1.25fr); gap: 24px; padding-top: 28px; }
-.connection-column { min-width: 0; }
+.overview-accounting { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 14px; font-size: 12px; }
+.connections-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 28px 0 20px; }
+.connections-heading h2 { margin: 0; font-size: 17px; }
+.connections-heading > span { font-size: 12px; }
+.connections { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .9fr) minmax(0, 1.15fr); gap: 16px; }
+.connection-column { min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; }
 .connections .section-heading { margin: 0 0 16px; padding: 0; }
+.connections .section-heading h2 { font-size: 14px; }
 .connection-search { display: block; margin-bottom: 16px; }
 .connection-search input { width: 100%; min-width: 0; }
-.connection-items { display: grid; gap: 12px; max-height: 540px; overflow-y: auto; padding: 1px 3px 1px 1px; }
-.connection-item { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.connection-items { display: flex; flex-direction: column; justify-content: space-around; gap: 12px; flex: 1; }
+.connection-item { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .connection-item.selected { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
-.connection-item p { margin: 10px 0; }
-.connection-item strong, .connection-item h3, .assignment { overflow-wrap: anywhere; }
+.connection-item p { margin: 6px 0; font-size: 12px; }
+.connection-item strong, .connection-item h3, .connection-selection { overflow-wrap: anywhere; }
 .connection-select { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; border-radius: 0; background: transparent; width: 100%; text-align: left; }
+.connection-select strong { min-width: 0; font-size: 13px; }
 .connection-select svg, .connection-title svg { flex-shrink: 0; }
-.connection-title { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); }
-.connection-title h3 { margin: 0; flex: 1; }
+.connection-title { color: var(--text); }
+.connection-storage-heading { display: flex; gap: 8px; align-items: center; }
+.connection-storage-heading > .connection-open { flex: 0 0 24px; min-height: 24px; justify-content: center; }
+.connection-usage { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.connection-usage > span { color: var(--muted); }
 .connection-open, .connection-all { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 12px; text-decoration: none; }
 .connection-all { margin-top: 18px; }
-.connection-item > .muted { display: block; margin-top: 12px; }
-.grove-hub { position: relative; display: flex; align-items: center; justify-content: center; align-self: center; gap: 12px; min-width: 0; padding: 30px 0; }
-.grove-hub::before { content: ""; position: absolute; height: 1px; left: -24px; right: -24px; top: 50%; background: var(--line); }
-.hub-label { position: relative; background: var(--bg); text-align: center; min-width: 0; }
+.connection-item > .muted { display: block; margin-top: 6px; font-size: 11px; }
+.connection-item progress { margin: 8px 0; }
+.connection-more { text-align: left; border-style: dashed; color: var(--accent); width: 100%; }
+.connection-more > strong { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.connection-more > span { display: block; margin-top: 7px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.grove-hub { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; align-self: center; min-width: 0; padding: 30px 0; }
+.hub-label { position: relative; background: var(--bg); text-align: center; width: 136px; padding: 12px 4px; }
 .hub-label img { height: 56px; width: 56px; object-fit: contain; }
 .hub-label h2 { margin: 12px 0 6px; font-size: 17px; }
 .hub-label p { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; margin-top: 16px; }
-.flow-arrow { position: relative; background: var(--bg); color: var(--accent); flex-shrink: 0; }
-.assignment { position: absolute; top: 100%; left: -16px; right: -16px; text-align: center; font-size: 12px; color: var(--accent); }
+.connection-paths { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.connection-paths path { fill: none; stroke: var(--line); stroke-width: 1.5; transition: d 350ms ease, stroke 250ms ease; }
+.connection-paths path.selected { stroke: var(--accent); stroke-width: 2; }
+.connection-selection { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 16px; color: var(--muted); font-size: 12px; }
+.connection-browser { min-width: 0; }
+.connection-browser h3 { font-size: 13px; margin: 18px 0 8px; overflow-wrap: anywhere; }
+.connection-browser-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px 10px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: 12px 4px; }
+.connection-browser-row > strong, .connection-browser-row > span { min-width: 0; overflow-wrap: anywhere; }
+.connection-browser-row > span { grid-column: 2; color: var(--muted); font-size: 12px; }
+.connection-browser-pages { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.connection-browser-pages > span { margin-right: auto; font-size: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .connection-paths path { transition: none; }
+}
 @media (max-width: 900px) {
-  .connections { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-  .grove-hub { flex-direction: column; padding: 12px 0; }
-  .grove-hub::before { left: 50%; right: auto; top: 0; bottom: 0; width: 1px; height: auto; }
-  .connection-items { max-height: 400px; }
-  .flow-arrow { transform: rotate(90deg); }
-  .assignment { position: relative; margin: 0; top: auto; left: auto; right: auto; background: var(--bg); }
+  .connections { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .connection-column { margin: 0 12px; }
+  .grove-hub { padding: 12px 0; }
 }
 @media (max-width: 600px) {
   .nav-group { display: none; }

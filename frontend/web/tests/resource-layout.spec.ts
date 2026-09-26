@@ -45,6 +45,10 @@ for (const width of [320, 768, 1440])
       await expect(
         page.locator(".connection-item.selected .connection-title"),
       ).toContainText("home-storage-long-name-6");
+      await expect(page.locator(".connection-paths path.selected")).toHaveCount(
+        2,
+      );
+      await page.emulateMedia({ reducedMotion: "reduce" });
       await capture("connections");
       const hub = await page.locator(".grove-hub").boundingBox();
       const left = await page

@@ -1,11 +1,20 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ArrowUpRight, HardDrive, AppWindow } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  HardDrive,
+  AppWindow,
+  Layers,
+} from "lucide-react";
 import { command } from "../../api/commands";
 import { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
 import { storageLink } from "../../app/navigation";
-import { Client, ClientUsage, clientLink, totals } from "../clients/model";
+import { Client, ClientUsage, clientLink } from "../clients/model";
+import { clientTotals, foldConnections, sumClients } from "./connectionsModel";
+import { ConnectionPaths } from "./ConnectionPaths";
+import { ConnectionBrowser } from "./ConnectionBrowser";
 
 export function Connections({
   clients,
@@ -16,199 +25,289 @@ export function Connections({
   storages: Usage[];
   ready: boolean;
 }) {
-  const [clientSearch, setClientSearch] = useState("");
-  const [storageSearch, setStorageSearch] = useState("");
+  const graph = useRef<HTMLElement>(null);
   const [selected, setSelected] = useState("");
+  const [selectedStorage, setSelectedStorage] = useState("");
+  const [browser, setBrowser] = useState<"client" | "storage" | null>(null);
+  const selectedClient = clients.includes(selected) ? selected : "";
   const usage = useQuery({
     queryKey: ["clients", "usage"],
     enabled: clients.length > 0,
     queryFn: ({ signal }) =>
       command<ClientUsage[]>("usage.clients", {}, signal),
   });
+  const totals = useMemo(
+    () => (usage.isSuccess ? clientTotals(usage.data) : undefined),
+    [usage.isSuccess, usage.data],
+  );
   const assignment = useQuery({
-    queryKey: ["clients", "detail", selected],
-    enabled: Boolean(selected),
+    queryKey: ["clients", "detail", selectedClient],
+    enabled: Boolean(selectedClient),
     queryFn: ({ signal }) =>
-      command<Client>("client.show", { id: selected }, signal),
+      command<Client>("client.show", { id: selectedClient }, signal),
+    retry: false,
   });
-  const assigned = assignment.isSuccess
-    ? assignment.data.storage_id
-    : undefined;
-  const clientRows = clients
-    .filter((id) => id.toLowerCase().includes(clientSearch.toLowerCase()))
-    .sort((a, b) => a.localeCompare(b))
-    .slice(0, 5);
-  const matches = storages
-    .filter((row) =>
-      row.storage_id.toLowerCase().includes(storageSearch.toLowerCase()),
-    )
-    .sort((a, b) => a.storage_id.localeCompare(b.storage_id));
-  const target = storages.find((row) => row.storage_id === assigned);
-  const storageRows = target
-    ? [target, ...matches.filter((row) => row !== target)].slice(0, 5)
-    : matches.slice(0, 5);
+  const assigned =
+    selectedClient && assignment.isSuccess
+      ? assignment.data.storage_id
+      : undefined;
+  const activeStorage = selectedClient ? assigned : selectedStorage;
+  const clientRows = foldConnections(clients, (id) => id, selectedClient);
+  const storageRows = foldConnections(
+    storages,
+    (row) => row.storage_id,
+    activeStorage,
+  );
+  const hiddenClients = sumClients(clientRows.hidden, totals);
+  const hiddenStorage = storageRows.hidden.reduce(
+    (sum, row) => ({
+      files: sum.files + row.active_files,
+      bytes: sum.bytes + row.active_bytes,
+      capacity: sum.capacity + row.capacity_bytes,
+    }),
+    { files: 0, bytes: 0, capacity: 0 },
+  );
+  const revision = JSON.stringify([
+    clientRows.visible,
+    storageRows.visible.map((row) => row.storage_id),
+    selectedClient,
+    activeStorage,
+    clientRows.hidden.length,
+    storageRows.hidden.length,
+  ]);
+  function chooseClient(id: string) {
+    setSelected(id);
+    setSelectedStorage("");
+  }
+  function chooseStorage(id: string) {
+    setSelected("");
+    setSelectedStorage(id);
+  }
   return (
-    <section className="connections" aria-label="Storage connections">
-      <div className="connection-column">
-        <div className="section-heading">
-          <h2>Clients</h2>
-          <span className="muted">
-            {clientRows.length} / {clients.length}
-          </span>
-        </div>
-        <label className="connection-search">
-          <span className="sr-only">Find client</span>
-          <input
-            type="search"
-            placeholder="Find client"
-            value={clientSearch}
-            onChange={(e) => {
-              setClientSearch(e.target.value);
-              setSelected("");
-            }}
-          />
-        </label>
-        <div className="connection-items" role="region" aria-label="Client connections" tabIndex={0}>
-          {clientRows.map((id) => {
-            const summary = usage.isSuccess
-              ? totals(usage.data, id)
-              : undefined;
-            return (
-              <article
-                className={`connection-item ${selected === id ? "selected" : ""}`}
-                key={id}
-              >
-                <button
-                  className="connection-select"
-                  aria-pressed={selected === id}
-                  aria-label={`Select client ${id}`}
-                  onClick={() => setSelected(selected === id ? "" : id)}
+    <>
+      <div className="connections-heading">
+        <h2>Connections</h2>
+        <span className="muted">Configured routes</span>
+      </div>
+      <section
+        className="connections"
+        aria-label="Storage connections"
+        ref={graph}
+      >
+        <ConnectionPaths container={graph} revision={revision} />
+        <div className="connection-column">
+          <div className="section-heading">
+            <h2>Clients</h2>
+            <span className="muted">{clients.length}</span>
+          </div>
+          <div
+            className="connection-items"
+            role="region"
+            aria-label="Client connections"
+          >
+            {clientRows.visible.map((id) => {
+              const summary = sumClients([id], totals);
+              return (
+                <article
+                  className={`connection-item ${selectedClient === id ? "selected" : ""}`}
+                  key={id}
+                  data-connection={`client:${id}`}
+                  data-side="client"
+                  data-selected={selectedClient === id}
                 >
-                  <AppWindow size={18} />
-                  <strong>{id}</strong>
-                </button>
-                <p className="muted">
-                  {summary
-                    ? `${summary.files.toLocaleString("en-US")} files · ${bytes(summary.bytes)}`
-                    : "Usage unavailable"}
-                </p>
-                <a className="connection-open" href={clientLink(id)}>
-                  Open client <ArrowUpRight size={14} />
-                </a>
-              </article>
-            );
-          })}
-        </div>
-        {!clientRows.length && (
-          <p className="empty">
-            {clients.length ? "No matching clients." : "No clients registered."}
-          </p>
-        )}
-        <a className="connection-all" href="#clients">
-          View all clients <ArrowRight size={16} />
-        </a>
-      </div>
-      <div className="grove-hub">
-        <ArrowRight className="flow-arrow" size={22} aria-hidden="true" />
-        <div className="hub-label">
-          <img
-            src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
-            alt=""
-          />
-          <h2>Grove Storage</h2>
-          <span className="muted">S3 gateway</span>
-          <p>
-            <span className={`dot ${ready ? "online" : ""}`} />
-            API {ready ? "ready" : "unavailable"}
-          </p>
-        </div>
-        <ArrowRight className="flow-arrow" size={22} aria-hidden="true" />
-        {selected && (
-          <p className="assignment" role="status">
-            {assignment.isError
-              ? "Storage assignment unavailable"
-              : assigned
-                ? `${selected} → ${assigned}`
-                : "Loading storage assignment..."}
-          </p>
-        )}
-      </div>
-      <div className="connection-column">
-        <div className="section-heading">
-          <h2>Storage</h2>
-          <span className="muted">
-            {storageRows.length} / {storages.length}
-          </span>
-        </div>
-        <label className="connection-search">
-          <span className="sr-only">Find storage</span>
-          <input
-            type="search"
-            placeholder="Find storage"
-            value={storageSearch}
-            onChange={(e) => {
-              setStorageSearch(e.target.value);
-              setSelected("");
-            }}
-          />
-        </label>
-        <div className="connection-items" role="region" aria-label="Registered storage connections" tabIndex={0}>
-          {storageRows.map((row) => (
-            <article
-              className={`connection-item ${row.storage_id === assigned ? "selected" : ""}`}
-              key={row.storage_id}
-            >
-              <a
-                className="connection-title"
-                href={storageLink(row.storage_id)}
+                  <button
+                    className="connection-select"
+                    aria-pressed={selectedClient === id}
+                    aria-label={`Select client ${id}`}
+                    onClick={() =>
+                      chooseClient(selectedClient === id ? "" : id)
+                    }
+                  >
+                    <AppWindow size={18} />
+                    <strong>{id}</strong>
+                  </button>
+                  <p className="connection-usage">
+                    {summary ? (
+                      <>
+                        <span>
+                          {summary.files.toLocaleString("en-US")} files
+                        </span>
+                        <strong>{bytes(summary.bytes)}</strong>
+                      </>
+                    ) : (
+                      <span className="muted">Usage unavailable</span>
+                    )}
+                  </p>
+                  <a className="connection-open" href={clientLink(id)}>
+                    Open client <ArrowUpRight size={14} />
+                  </a>
+                </article>
+              );
+            })}
+            {clientRows.hidden.length > 0 && (
+              <button
+                className="connection-item connection-more"
+                data-connection="client:more"
+                data-side="client"
+                aria-label={`Show ${clientRows.hidden.length} more clients`}
+                aria-haspopup="dialog"
+                onClick={() => setBrowser("client")}
               >
-                <HardDrive size={18} />
-                <h3>{row.storage_id}</h3>
-                <ArrowUpRight size={14} />
-              </a>
-              <p className="muted">
-                {row.kind.toUpperCase()} · Active files:{" "}
-                {row.active_files.toLocaleString("en-US")}
-              </p>
-              <strong>
-                {bytes(
-                  row.active_bytes +
-                    row.reserved_bytes +
-                    row.purge_pending_bytes,
-                )}{" "}
-                / {bytes(row.capacity_bytes)}
-              </strong>
-              <progress
-                aria-label={`${row.storage_id} usage`}
-                max={Math.max(1, row.capacity_bytes)}
-                value={Math.max(
-                  0,
-                  row.active_bytes +
-                    row.reserved_bytes +
-                    row.purge_pending_bytes,
-                )}
-              />
-              <div className="capacity-breakdown">
-                <span>Active {bytes(row.active_bytes)}</span>
-                <span>Remaining {bytes(row.remaining_bytes)}</span>
-              </div>
-              <span className="muted">
-                Registered capacity · Connection not checked
-              </span>
-            </article>
-          ))}
+                <strong>
+                  <Layers size={16} /> + {clientRows.hidden.length} clients
+                </strong>
+                <span>
+                  {hiddenClients
+                    ? `${hiddenClients.files.toLocaleString("en-US")} files · ${bytes(hiddenClients.bytes)}`
+                    : "Usage unavailable"}
+                </span>
+              </button>
+            )}
+          </div>
+          {!clients.length && <p className="empty">No clients registered.</p>}
+          <a className="connection-all" href="#clients">
+            View all clients <ArrowRight size={16} />
+          </a>
         </div>
-        {!storageRows.length && (
-          <p className="empty">
-            {storages.length
-              ? "No matching storage."
-              : "No storage registered."}
-          </p>
-        )}
-        <a className="connection-all" href="#storages">
-          View all storage <ArrowRight size={16} />
-        </a>
+        <div className="grove-hub">
+          <div className="hub-label">
+            <img
+              src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
+              alt=""
+            />
+            <h2>Grove Storage</h2>
+            <span className="muted">S3 gateway</span>
+            <p>
+              <span className={`dot ${ready ? "online" : ""}`} />
+              API {ready ? "ready" : "unavailable"}
+            </p>
+          </div>
+        </div>
+        <div className="connection-column">
+          <div className="section-heading">
+            <h2>Storage</h2>
+            <span className="muted">{storages.length}</span>
+          </div>
+          <div
+            className="connection-items"
+            role="region"
+            aria-label="Registered storage connections"
+          >
+            {storageRows.visible.map((row) => (
+              <article
+                className={`connection-item ${row.storage_id === activeStorage ? "selected" : ""}`}
+                key={row.storage_id}
+                data-connection={`storage:${row.storage_id}`}
+                data-side="storage"
+                data-selected={row.storage_id === activeStorage}
+              >
+                <div className="connection-storage-heading">
+                  <button
+                    className="connection-select connection-title"
+                    aria-label={`Select storage ${row.storage_id}`}
+                    aria-pressed={row.storage_id === activeStorage}
+                    onClick={() =>
+                      chooseStorage(
+                        selectedStorage === row.storage_id
+                          ? ""
+                          : row.storage_id,
+                      )
+                    }
+                  >
+                    <HardDrive size={18} />
+                    <strong>{row.storage_id}</strong>
+                  </button>
+                  <a
+                    className="connection-open"
+                    href={storageLink(row.storage_id)}
+                    title={`Open storage ${row.storage_id}`}
+                    aria-label={`Open storage ${row.storage_id}`}
+                  >
+                    <ArrowUpRight size={16} />
+                  </a>
+                </div>
+                <p className="muted">
+                  {row.kind.toUpperCase()} · Active files:{" "}
+                  {row.active_files.toLocaleString("en-US")}
+                </p>
+                <div className="connection-usage">
+                  <strong>
+                    {bytes(
+                      row.active_bytes +
+                        row.reserved_bytes +
+                        row.purge_pending_bytes,
+                    )}
+                  </strong>
+                  <span>/ {bytes(row.capacity_bytes)}</span>
+                </div>
+                <progress
+                  aria-label={`${row.storage_id} usage`}
+                  max={Math.max(1, row.capacity_bytes)}
+                  value={Math.max(
+                    0,
+                    row.active_bytes +
+                      row.reserved_bytes +
+                      row.purge_pending_bytes,
+                  )}
+                />
+                <div className="capacity-breakdown">
+                  <span>Remaining {bytes(row.remaining_bytes)}</span>
+                  <span>Registered capacity</span>
+                </div>
+              </article>
+            ))}
+            {storageRows.hidden.length > 0 && (
+              <button
+                className="connection-item connection-more"
+                data-connection="storage:more"
+                data-side="storage"
+                aria-label={`Show ${storageRows.hidden.length} more storage`}
+                aria-haspopup="dialog"
+                onClick={() => setBrowser("storage")}
+              >
+                <strong>
+                  <Layers size={16} /> + {storageRows.hidden.length} storage
+                </strong>
+                <span>
+                  {hiddenStorage.files.toLocaleString("en-US")} files ·{" "}
+                  {bytes(hiddenStorage.bytes)} active
+                </span>
+                <span>{bytes(hiddenStorage.capacity)} registered capacity</span>
+              </button>
+            )}
+          </div>
+          {!storages.length && <p className="empty">No storage registered.</p>}
+          <a className="connection-all" href="#storages">
+            View all storage <ArrowRight size={16} />
+          </a>
+        </div>
+      </section>
+      <div className="connection-selection" role="status">
+        {selectedClient
+          ? assignment.isError
+            ? "Storage assignment unavailable"
+            : assigned
+              ? `${selectedClient} → ${assigned}${storages.some((row) => row.storage_id === assigned) ? "" : " · Storage unavailable"}`
+              : "Loading storage assignment..."
+          : activeStorage &&
+              storages.some((row) => row.storage_id === activeStorage)
+            ? activeStorage
+            : "Configured connections · Storage connectivity not checked"}
       </div>
-    </section>
+      {browser && (
+        <ConnectionBrowser
+          kind={browser}
+          clients={clientRows.hidden}
+          storages={storageRows.hidden}
+          totals={totals}
+          onClose={() => setBrowser(null)}
+          onSelect={(id) => {
+            if (browser === "client") chooseClient(id);
+            else chooseStorage(id);
+            setBrowser(null);
+          }}
+        />
+      )}
+    </>
   );
 }

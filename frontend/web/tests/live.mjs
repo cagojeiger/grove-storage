@@ -63,7 +63,7 @@ try {
   async function login() {
     await page.getByLabel("Account token").fill(token);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.getByRole("heading", { name: "console-live" }).waitFor();
+    await page.getByRole("button", { name: "Select storage console-live", exact: true }).waitFor();
   }
   await login();
   execFileSync(
@@ -86,7 +86,7 @@ try {
   await page.getByRole("button", { name: "Refresh" }).click();
   await page.getByLabel("Account token").waitFor();
   assert.equal(
-    await page.getByRole("heading", { name: "console-live" }).count(),
+    await page.getByRole("button", { name: "Select storage console-live", exact: true }).count(),
     0,
   );
   await login();

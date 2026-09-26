@@ -55,9 +55,12 @@ The signed-out entry links to Initial setup / recovery.
 |---|---|
 | Sidebar | Overview, Resources (Storage / Clients), Management (existing Accounts / Activity / Settings); management behavior unchanged |
 | Overview | Clients on the left, Grove in the center, Storage on the right; stacked on narrow screens |
-| Relationships | Select a Client to resolve its registered Storage and highlight it. Arrows represent configured routing, not observed traffic |
-| Overview bounds | Up to five Clients and five Storage entries, search and View all links; selected Storage is included even outside the initial five |
-| Summary | Counts and usage remain installation-wide; Storage occupancy includes active, reserved and pending deletion against registered capacity |
+| Relationships | Individual curved branches join Clients, Grove and Storage. Selecting a Client resolves its registered Storage and highlights both branches; curves represent configured routing, not observed traffic |
+| Overview bounds | Each side shows all entries through six; seven or more shows five entries plus a remaining-count group. Natural ID order is stable; selected Client and Storage stay visible |
+| Overflow browser | Search hidden entries, browse 20 per page, select to bring an entry onto the map. Client assignments on the current page are grouped by authoritative `client.show` results; unavailable assignments remain explicit |
+| Summary | Installation-wide Client count, total active files, active stored bytes and registered capacity include hidden entries. Reserved, pending deletion and remaining bytes stay separate |
+| Folded totals | Hidden Clients sum active file counts and bytes across their locations; hidden Storage sums active files/bytes and registered capacity. Missing Client usage remains unavailable |
+| Motion | Curves resize with nodes and viewport and transition on selection/layout changes; reduced-motion disables transitions. No simulated traffic or inferred provider health |
 | Storage list | ID, endpoint/bucket, active/reserved/pending/remaining and registered capacity; missing usage remains unavailable |
 | Client list | ID, assigned Storage, active files and data; visible rows use `client.show`, including Clients with no usage records |
 | Detail | Row opens read-only detail; explicit controls register/create, edit, test or delete under existing permissions |
@@ -65,7 +68,9 @@ The signed-out entry links to Initial setup / recovery.
 | Search / sort | Storage searches ID/endpoint/bucket; Client searches ID. Natural ID ascending/descending; changes reset page to one |
 | Return state | Hash query retains search, order, size and page across detail, reload and Back; deleting the final row clamps to the last nonempty page |
 
-Client detail lookup fan-out is bounded to the visible page (at most 100).
+Client list detail lookup fan-out is bounded to the visible page (at most 100).
+Overview loads one selected Client assignment; its overflow browser loads at most
+20 assignments per page, without querying the entire registry for grouping.
 Server-side list summaries/search/pagination are a future contract, not provided by
 these controls. API docs, Client Logs and Management redesign remain separate work.
 
