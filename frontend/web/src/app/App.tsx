@@ -17,7 +17,7 @@ import { UsageHistory } from "../features/overview/UsageHistory";
 
 export function App() {
   const cache = useQueryClient();
-  const route = useRoute();
+  const route = useRoute().split("?")[0];
   const storagePage = route === "storages" || route.startsWith("storages/");
   const accessPage = route === "accounts" || route === "access" || route.startsWith("access/");
   const clientPage = route === "clients" || route.startsWith("clients/");
@@ -105,6 +105,7 @@ export function App() {
                 <LayoutDashboard size={18} />
                 <span>Overview</span>
               </a>
+              <p className="nav-group">Resources</p>
               <a
                 href="#storages"
                 aria-current={storagePage ? "page" : undefined}
@@ -113,6 +114,7 @@ export function App() {
                 <span>Storage</span>
               </a>
               <a href="#clients" aria-current={clientPage ? "page" : undefined}><AppWindow size={18} /><span>Clients</span></a>
+              <p className="nav-group">Management</p>
               {["admin", "root"].includes(session.data.role) && (
                 <a
                   href="#accounts"

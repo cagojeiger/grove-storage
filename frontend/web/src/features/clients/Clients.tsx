@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { command } from "../../api/commands";
 import { message } from "../../api/http";
 import { bytes } from "../../design/format";
@@ -14,6 +14,9 @@ import {
 } from "./model";
 import { ClientDialog } from "./ClientDialog";
 import { ClientKeys } from "./ClientKeys";
+import { ClientRows } from "./ClientRows";
+import { paginate, useResourceList } from "../../app/resourceList";
+import { ListToolbar, Pagination } from "../../design/ResourceList";
 
 export function Clients({
   route,
@@ -24,7 +27,7 @@ export function Clients({
 }) {
   const cache = useQueryClient();
   const [dialog, setDialog] = useState(false);
-  const [search, setSearch] = useState("");
+  const listing = useResourceList();
   let id = "";
   try {
     if (route.startsWith("clients/")) id = decodeURIComponent(route.slice(8));
@@ -48,10 +51,11 @@ export function Clients({
   });
   const current = id ? detail : list;
   const used = usage.isSuccess ? totals(usage.data, id) : undefined;
+  const page = paginate(list.data ?? [], listing, (id) => id);
   return (
     <main className="overview storages clients">
       {id && (
-        <a className="back-link" href="#clients">
+        <a className="back-link" href={listing.href("#clients")}>
           <ArrowLeft size={16} />
           Clients
         </a>
@@ -102,6 +106,10 @@ export function Clients({
               <dd>{id}</dd>
             </div>
             <div>
+              <dt>S3 bucket</dt>
+              <dd>{id}</dd>
+            </div>
+            <div>
               <dt>Storage</dt>
               <dd>
                 <a href={storageLink(detail.data.storage_id)}>
@@ -128,46 +136,20 @@ export function Clients({
         </>
       ) : (
         <>
-          <div className="list-toolbar">
-            <label>
-              <span className="sr-only">Search clients</span>
-              <input
-                type="search"
-                placeholder="Search clients"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-            <span className="muted">{list.data?.length ?? 0}</span>
-          </div>
-          <div className="account-list">
-            {list.data
-              ?.filter((row) =>
-                row.toLowerCase().includes(search.toLowerCase()),
-              )
-              .map((row) => {
-                const summary = usage.isSuccess
-                  ? totals(usage.data, row)
-                  : undefined;
-                return (
-                  <a className="account-row" key={row} href={clientLink(row)}>
-                    <strong>{row}</strong>
-                    <span>
-                      {summary
-                        ? `${summary.files.toLocaleString("en-US")} files`
-                        : "Unavailable"}
-                    </span>
-                    <span>
-                      {summary ? bytes(summary.bytes) : "Unavailable"}
-                    </span>
-                    <ChevronRight size={16} />
-                  </a>
-                );
-              })}
-          </div>
-          {list.data?.length === 0 && (
-            <p className="empty">No clients registered.</p>
+          <ListToolbar state={listing} label="Search clients" />
+          <ClientRows
+            ids={page.rows}
+            usage={usage.isSuccess ? usage.data : undefined}
+            href={listing.href}
+          />
+          {page.total === 0 && (
+            <p className="empty">
+              {listing.search
+                ? "No matching clients."
+                : "No clients registered."}
+            </p>
           )}
+          <Pagination state={listing} {...page} />
         </>
       )}
       {usage.isError && (
@@ -179,7 +161,9 @@ export function Clients({
           onClose={() => setDialog(false)}
           onSaved={(target) => {
             setDialog(false);
-            location.hash = target ? clientLink(target) : "clients";
+            location.hash = listing.href(
+              target ? clientLink(target) : "#clients",
+            );
           }}
         />
       )}

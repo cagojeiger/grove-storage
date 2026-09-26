@@ -49,6 +49,26 @@ remote per-storage command for Console/CLI/MCP.
 Overview, Storage, Clients, Admin/Root-only Accounts, Activity and Settings are linked in `App.tsx`.
 The signed-out entry links to Initial setup / recovery.
 
+### Resource Navigation
+
+| Surface | Current UI contract |
+|---|---|
+| Sidebar | Overview, Resources (Storage / Clients), Management (existing Accounts / Activity / Settings); management behavior unchanged |
+| Overview | Clients on the left, Grove in the center, Storage on the right; stacked on narrow screens |
+| Relationships | Select a Client to resolve its registered Storage and highlight it. Arrows represent configured routing, not observed traffic |
+| Overview bounds | Up to five Clients and five Storage entries, search and View all links; selected Storage is included even outside the initial five |
+| Summary | Counts and usage remain installation-wide; Storage occupancy includes active, reserved and pending deletion against registered capacity |
+| Storage list | ID, endpoint/bucket, active/reserved/pending/remaining and registered capacity; missing usage remains unavailable |
+| Client list | ID, assigned Storage, active files and data; visible rows use `client.show`, including Clients with no usage records |
+| Detail | Row opens read-only detail; explicit controls register/create, edit, test or delete under existing permissions |
+| Pagination | Default 20, choices 20/50/100; page numbers, previous/next, filtered count; current API returns full lists, slicing is client-side |
+| Search / sort | Storage searches ID/endpoint/bucket; Client searches ID. Natural ID ascending/descending; changes reset page to one |
+| Return state | Hash query retains search, order, size and page across detail, reload and Back; deleting the final row clamps to the last nonempty page |
+
+Client detail lookup fan-out is bounded to the visible page (at most 100).
+Server-side list summaries/search/pagination are a future contract, not provided by
+these controls. API docs, Client Logs and Management redesign remain separate work.
+
 ```text
 Grove Storage
 ├── Overview

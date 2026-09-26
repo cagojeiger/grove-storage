@@ -41,6 +41,8 @@ async function mock(page: Page, signedIn = true) {
     const { command } = route.request().postDataJSON() as { command: string };
     if (command === "client.list")
       await route.fulfill({ json: envelope(command, ["notegate"]) });
+    else if (command === "usage.clients")
+      await route.fulfill({ json: envelope(command, [{ client_id: "notegate", storage_id: "home-storage-long-identifier", active_files: 1240, active_bytes: 1024 ** 3 * 128 }]) });
     else
       await route.fulfill({
         json: envelope(command, [
