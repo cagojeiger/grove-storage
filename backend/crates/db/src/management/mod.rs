@@ -10,6 +10,7 @@ mod credentials;
 pub mod history;
 mod identity;
 pub mod master;
+pub mod password_setup;
 pub mod passwords;
 pub mod queries;
 mod resource_metadata;
@@ -37,6 +38,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 #[derive(Debug)]
 pub enum Error {
     Database(sqlx::Error),
+    Unauthenticated,
+    Forbidden,
     AlreadyInitialized,
     NotFound,
     InactiveAccount,

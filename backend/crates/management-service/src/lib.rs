@@ -10,6 +10,7 @@ pub mod local_accounts;
 mod logging;
 pub mod master;
 pub mod password_changes;
+pub mod password_setups;
 pub mod passwords;
 pub mod resources;
 pub mod root;
@@ -70,6 +71,8 @@ impl Error {
 impl From<db::Error> for Error {
     fn from(error: db::Error) -> Self {
         match error {
+            db::Error::Unauthenticated => Self::Unauthenticated,
+            db::Error::Forbidden => Self::Forbidden,
             db::Error::NotFound => Self::NotFound,
             db::Error::AlreadyInitialized
             | db::Error::LastAdmin

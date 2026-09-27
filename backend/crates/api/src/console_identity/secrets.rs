@@ -7,6 +7,7 @@ pub(super) const ROOT_PREFIX: &str = "gsrt_";
 pub(super) const ROOT_SESSION_PREFIX: &str = "gsrs_";
 pub(super) const MASTER_PREFIX: &str = "gsmt_";
 pub(super) const MASTER_SESSION_PREFIX: &str = "gsms_";
+pub(super) const SETUP_PREFIX: &str = "gsps_";
 
 pub(crate) fn valid(raw: &str, prefix: &str) -> bool {
     raw.strip_prefix(prefix).is_some_and(|value| {
@@ -40,6 +41,10 @@ pub(super) fn master_session_hash(raw: &str) -> String {
 }
 pub(super) fn root_session_hash(raw: &str) -> String {
     hash("grove-root-session-v1", raw)
+}
+
+pub(super) fn setup_hash(raw: &str) -> String {
+    hash("grove-password-setup-v1", raw)
 }
 
 // The same one-time issuance material serves master recovery and Admin issuance.

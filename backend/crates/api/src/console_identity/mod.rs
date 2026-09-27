@@ -9,6 +9,7 @@ mod master;
 pub(crate) mod master_config;
 mod output;
 mod password;
+mod password_setup;
 pub(crate) mod resources;
 pub(crate) mod secrets;
 mod session;
@@ -55,6 +56,9 @@ pub fn routes(state: AppState) -> Router<AppState> {
         )
         .route("/credentials/{id}", delete(credentials::revoke))
         .route("/me/password", post(password::change))
+        .route("/accounts/{id}/password-setup", post(password_setup::issue))
+        .route("/password-setup/inspect", post(password_setup::inspect))
+        .route("/password-setup", post(password_setup::complete))
         .route("/sessions", get(history::sessions))
         .route("/sessions/{id}", delete(history::revoke_session))
         .route("/history/audit", get(history::audit))

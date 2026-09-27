@@ -16,7 +16,8 @@ pub async fn find(pool: &PgPool, login: &str) -> Result<Option<PasswordCredentia
     let row: Option<(Uuid, String, String, Uuid)> = sqlx::query_as(
         "SELECT p.account_id,p.login_name,p.password_hash,p.generation
          FROM management.password_credentials p JOIN management.accounts a ON a.id=p.account_id
-         WHERE p.login_name=$1 AND a.is_active AND a.deleted_at IS NULL",
+         WHERE p.login_name=$1 AND p.password_hash IS NOT NULL
+           AND a.is_active AND a.deleted_at IS NULL",
     )
     .bind(login)
     .fetch_optional(pool)
@@ -38,7 +39,8 @@ pub async fn find_by_account(
     let row: Option<(Uuid, String, String, Uuid)> = sqlx::query_as(
         "SELECT p.account_id,p.login_name,p.password_hash,p.generation
          FROM management.password_credentials p JOIN management.accounts a ON a.id=p.account_id
-         WHERE p.account_id=$1 AND a.is_active AND a.deleted_at IS NULL",
+         WHERE p.account_id=$1 AND p.password_hash IS NOT NULL
+           AND a.is_active AND a.deleted_at IS NULL",
     )
     .bind(account)
     .fetch_optional(pool)
@@ -169,6 +171,10 @@ pub async fn recover(
         return Err(Error::InvalidInput);
     }
     replace(&mut tx, account, login, password_hash).await?;
+    sqlx::query("DELETE FROM management.password_setup_tokens WHERE account_id=$1")
+        .bind(account)
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
     sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE account_id=$1 AND revoked_at IS NULL")

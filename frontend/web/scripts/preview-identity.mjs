@@ -17,8 +17,9 @@ export function previewIdentity(json) {
     ],
   ]);
   const credentials = new Map();
+  const passwords = new Map([[owner, { username: "owner", password: "a private phrase for preview" }]]);
+  const setups = new Map();
   let current = null;
-  let currentPassword = "a private phrase for preview";
   let master = false;
   let signedInAt = new Date().toISOString();
   function issue(
@@ -92,11 +93,14 @@ export function previewIdentity(json) {
       if (path === "/session") {
         if (method === "POST") {
           signedInAt = new Date().toISOString();
-          if (body.username !== "owner" || body.password !== currentPassword) {
+          const match = [...passwords].find(([id, login]) =>
+            login.username === body.username && login.password === body.password &&
+            accounts.get(id)?.is_active && !accounts.get(id)?.deleted_at);
+          if (!match) {
             fail(401, "unauthenticated");
             return true;
           }
-          current = { account_id: owner, session_id: randomUUID() };
+          current = { account_id: match[0], session_id: randomUUID() };
         }
         if (method === "DELETE") {
           current = null;
@@ -105,6 +109,22 @@ export function previewIdentity(json) {
         }
         const value = session();
         value ? json(res, 200, value) : fail(401, "unauthenticated");
+        return true;
+      }
+      if (path === "/password-setup/inspect" || path === "/password-setup") {
+        const entry = [...setups].find(([id, setup]) => setup.token === body.token &&
+          Date.parse(setup.expires_at) > Date.now() && accounts.get(id)?.is_active &&
+          !accounts.get(id)?.deleted_at);
+        if (!entry) fail(404, "not_found");
+        else if (path === "/password-setup/inspect")
+          json(res, 200, { username: entry[1].username, expires_at: entry[1].expires_at });
+        else if (typeof body.password !== "string" || [...body.password].length < 15 || [...body.password].length > 128)
+          fail(400, "invalid_input");
+        else {
+          passwords.set(entry[0], { username: entry[1].username, password: body.password });
+          setups.delete(entry[0]);
+          json(res, 204, null);
+        }
         return true;
       }
       if (path.startsWith("/master/")) {
@@ -151,13 +171,14 @@ export function previewIdentity(json) {
         return true;
       }
       if (path === "/me/password" && method === "POST") {
-        if (body.current_password !== currentPassword ||
+        const login = passwords.get(current.account_id);
+        if (body.current_password !== login?.password ||
             typeof body.new_password !== "string" ||
             [...body.new_password].length < 15 ||
             [...body.new_password].length > 128) {
-          fail(body.current_password === currentPassword ? 400 : 401, "invalid_input");
+          fail(body.current_password === login?.password ? 400 : 401, "invalid_input");
         } else {
-          currentPassword = body.new_password;
+          passwords.set(current.account_id, { ...login, password: body.new_password });
           current = null;
           json(res, 204, null);
         }
@@ -241,6 +262,24 @@ export function previewIdentity(json) {
         } else if (!account) fail(404, "not_found");
         else if (parts[1] === "accounts" && parts.length === 3 && method === "GET")
           json(res, 200, account);
+        else if (parts[3] === "password-setup" && method === "POST") {
+          const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
+          const reserved = [...setups].some(([id, setup]) => id !== account.id && setup.username === username);
+          if (body.current_password !== passwords.get(current.account_id)?.password) fail(401, "unauthenticated");
+          else if (!account.is_active || account.deleted_at || passwords.has(account.id) ||
+                   reserved || [...passwords.values()].some((login) => login.username === username)) fail(409, "conflict");
+          else if (!/^[a-z0-9][a-z0-9._-]{2,63}$/.test(username) ||
+                   (setups.has(account.id) && setups.get(account.id).username !== username)) fail(400, "invalid_input");
+          else {
+            const setup = {
+              username,
+              token: "gsps_" + randomBytes(32).toString("hex"),
+              expires_at: new Date(Date.now() + 86400000).toISOString(),
+            };
+            setups.set(account.id, setup);
+            json(res, 200, { account_id: account.id, ...setup });
+          }
+        }
         else if (parts[3] === "credentials") {
           if (method === "GET")
             json(
@@ -290,6 +329,7 @@ export function previewIdentity(json) {
             if (method === "DELETE") {
               account.deleted_at = new Date().toISOString();
               account.is_active = false;
+              setups.delete(account.id);
               for (const key of credentials.values())
                 if (key.account_id === account.id)
                   key.revoked_at = new Date().toISOString();

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
 import { Login } from "../auth/Login";
+import { SetPassword } from "../auth/SetPassword";
 import { ThemePicker } from "../design/Theme";
 import { Overview } from "../features/overview/Overview";
 import { Storages } from "../features/storages/Storages";
@@ -84,7 +85,9 @@ export function App() {
           )}
         </div>
       </header>
-      {session.isPending ? (
+      {route === "set-password" ? (
+        <SetPassword key={fullRoute} />
+      ) : session.isPending ? (
         <main className="connection" role="status">
           Checking session...
         </main>

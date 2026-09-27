@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { storageChecks } from "./live-storages.mjs";
 import { bootstrapChecks, accessChecks } from "./live-access.mjs";
@@ -128,6 +128,42 @@ try {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "My account", exact: true }).waitFor();
   console.log("PASS real local recovery, password login, password change and re-login");
+  await page.getByRole("link", { name: "Accounts", exact: true }).click();
+  await page.getByRole("button", { name: "Create user", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Setup recipient");
+  await page.getByLabel("Role", { exact: true }).selectOption("reader");
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("heading", { name: "Setup recipient", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Issue setup link" }).click();
+  await page.getByLabel("Username").fill("recipient");
+  await page.getByLabel("Current password").fill(replacement);
+  await page.getByRole("button", { name: "Issue link" }).click();
+  const setupLink = await page.getByRole("textbox", { name: "Setup link", exact: true }).inputValue();
+  assert.match(setupLink, /#set-password\/gsps_[a-f0-9]{64}$/);
+  await page.getByLabel("I have saved this setup link.").check();
+  await page.getByRole("button", { name: "Done" }).click();
+  const recipientContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const recipient = await recipientContext.newPage();
+    await recipient.goto(setupLink);
+    await expect(recipient).not.toHaveURL(/gsps_/);
+    await recipient.getByLabel("Username").waitFor();
+    assert.equal(await recipient.getByLabel("Username").inputValue(), "recipient");
+    const recipientPassword = "a separate private phrase for recipient";
+    await recipient.getByLabel("New password").fill(recipientPassword);
+    await recipient.getByLabel("Confirm password").fill(recipientPassword);
+    await recipient.getByRole("button", { name: "Set password" }).click();
+    await recipient.getByText("Password set. Sign in with your username and password.").waitFor();
+    await recipient.getByRole("link", { name: "Sign in" }).click();
+    await recipient.getByLabel("Username").fill("recipient");
+    await recipient.getByLabel("Password").fill(recipientPassword);
+    await recipient.getByRole("button", { name: "Sign in", exact: true }).click();
+    await recipient.getByText("Reader · Read-only").waitFor();
+    await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
+  } finally {
+    await recipientContext.close();
+  }
+  console.log("PASS real one-time account setup link, recipient password and Reader login");
   console.log(
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );

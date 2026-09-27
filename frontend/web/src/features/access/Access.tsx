@@ -12,6 +12,7 @@ import { Account, identityRequest, isAccount } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { AccountAction, AccountDialog } from "./AccountDialog";
 import { Tokens } from "./Tokens";
+import { PasswordSetupIssue } from "./PasswordSetupIssue";
 import { RootAccount } from "./RootAccount";
 import { AccountsList } from "./AccountsList";
 import { useAccountList } from "./accountList";
@@ -140,6 +141,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                 </dd>
               </div>
             </dl>
+            <PasswordSetupIssue key={account.id} account={account} />
             <Tokens key={account.id} account={account} />
           </>
         ) : (
