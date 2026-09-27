@@ -17,40 +17,27 @@ use sha2::Sha256;
 use tokio::io::AsyncWriteExt as _;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use filegate_infra::backend::StorageBackend;
-
 /// 청크 사이 유휴 상한 — 두 표면 공통.
 pub const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// S3 중계 스풀 동시성 상한. 중계는 body를 공유 임시 볼륨(temp_dir)에
 /// 통과-스풀하므로, 동시 스풀 수를 묶지 않으면 인증된 다수 업로드가 볼륨을
-/// 채워 같은 파드의 다른 전송까지 무너뜨린다(자원 고갈 DoS). fs 백엔드는
-/// 자기 대상 마운트에 직접 쓰므로 이 상한 밖이다.
+/// 채워 같은 파드의 다른 전송까지 무너뜨린다(자원 고갈 DoS).
 pub const SPOOL_CONCURRENCY_LIMIT: usize = 16;
 
-/// S3 백엔드일 때만 스풀 슬롯을 잡는다 — permit이 살아있는 동안 스풀+중계가
+/// 스풀 슬롯을 잡는다 — permit이 살아있는 동안 스풀+중계가
 /// 진행되고, 스코프를 벗어나면(정상·에러 무관) 자동 반납된다. 세마포어는
 /// close하지 않지만, 만약 close됐다면 스로틀을 건너뛴다(기능 보존).
-pub async fn acquire_spool_slot(
-    backend: &StorageBackend,
-    slots: &Arc<Semaphore>,
-) -> Option<OwnedSemaphorePermit> {
-    match backend {
-        StorageBackend::S3 { .. } => slots.clone().acquire_owned().await.ok(),
-        StorageBackend::Fs { .. } => None,
-    }
+pub async fn acquire_spool_slot(slots: &Arc<Semaphore>) -> Option<OwnedSemaphorePermit> {
+    slots.clone().acquire_owned().await.ok()
 }
 /// 스트림 버퍼 크기 — 다운로드 재청크와 업로드 스풀 쓰기가 공유한다.
 /// 기본 4KiB로 두면 GiB급 전송이 수십만 번의 블로킹 풀 왕복이 된다.
 pub const STREAM_BUF_SIZE: usize = 256 * 1024;
 
-/// 쓰기 스풀 목적지: fs는 대상 root의 임시 파일(같은 마운트 rename),
-/// s3 중계는 OS 로컬 스풀을 거친다.
-pub fn spool_root(backend: &StorageBackend) -> std::path::PathBuf {
-    match backend {
-        StorageBackend::Fs { root } => root.clone(),
-        StorageBackend::S3 { .. } => std::env::temp_dir(),
-    }
+/// Request spools are local disposable buffers, independent of storage placement.
+pub fn spool_root() -> std::path::PathBuf {
+    std::env::temp_dir()
 }
 
 /// 스풀 실측 결과. S3 요청은 SHA256·CRC32도 실측하며 네이티브 중계는 MD5를 쓴다.
@@ -93,19 +80,19 @@ pub async fn spool_to_temp(
     loop {
         let chunk = match tokio::time::timeout(STREAM_IDLE_TIMEOUT, stream.next()).await {
             Err(_) => {
-                fs_backend_abort(temp_path).await;
+                abort_spool(temp_path).await;
                 return Err(SpoolError::Idle);
             }
             Ok(None) => break,
             Ok(Some(Err(_))) => {
-                fs_backend_abort(temp_path).await;
+                abort_spool(temp_path).await;
                 return Err(SpoolError::Aborted);
             }
             Ok(Some(Ok(chunk))) => chunk,
         };
         written += chunk.len() as i64;
         if written > declared_size {
-            fs_backend_abort(temp_path).await;
+            abort_spool(temp_path).await;
             return Err(SpoolError::TooLarge);
         }
         md5.update(&chunk);
@@ -117,7 +104,7 @@ pub async fn spool_to_temp(
             sha.update(&chunk);
         }
         if let Err(error) = writer.write_all(&chunk).await {
-            fs_backend_abort(temp_path).await;
+            abort_spool(temp_path).await;
             return Err(SpoolError::Io(error));
         }
     }
@@ -132,8 +119,8 @@ pub async fn spool_to_temp(
     })
 }
 
-async fn fs_backend_abort(temp_path: &Path) {
-    filegate_infra::fs::abort_write(temp_path).await;
+async fn abort_spool(temp_path: &Path) {
+    filegate_infra::temp_spool::abort_write(temp_path).await;
 }
 
 #[cfg(test)]

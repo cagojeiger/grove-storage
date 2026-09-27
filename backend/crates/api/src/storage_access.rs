@@ -27,7 +27,7 @@ pub fn backend_from_row(
                         .ok_or_else(|| missing(row, "secret_key_nonce"))?,
                 },
             )?;
-            Ok(StorageBackend::S3 {
+            Ok(StorageBackend {
                 spec: S3StorageSpec {
                     endpoint: field(row, row.endpoint.clone(), "endpoint")?,
                     public_endpoint: field(row, row.public_endpoint.clone(), "public_endpoint")?,

@@ -36,7 +36,7 @@ pub(crate) fn test_state() -> AppState {
         multipart_threshold: 8 * 1024 * 1024,
         part_size: 5 * 1024 * 1024,
         s3_clients: Arc::new(filegate_infra::S3ClientCache::default()),
-        part_promotions: Arc::new(tokio::sync::Semaphore::new(1)),
+        single_upload_claims: Arc::new(tokio::sync::Semaphore::new(1)),
         spool_slots: Arc::new(tokio::sync::Semaphore::new(1)),
     }
 }

@@ -10,10 +10,10 @@ aws-sdk-s3 = { workspace = true }
 aws-smithy-http-client = { workspace = true }
 secrecy = { workspace = true }
 grove-object-policy = { workspace = true }
-uuid = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

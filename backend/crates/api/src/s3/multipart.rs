@@ -17,7 +17,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use filegate_db::files::{self, CreateOutcome, CreateSpec};
 use filegate_db::s3_registry as s3reg;
-use filegate_infra::{Address, fs as fs_backend};
+use filegate_infra::{Address, temp_spool};
 use grove_object_policy::multipart::{MAX_PARTS, composite_etag, part_number_ok};
 use uuid::Uuid;
 
@@ -34,7 +34,7 @@ use crate::lease::{
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
 use crate::storage_access::backend_from_row;
-use filegate_infra::backend::{StorageBackend, cleanup_backend_upload};
+use filegate_infra::backend::cleanup_backend_upload;
 use grove_object_policy::validation::content_type_ok;
 
 /// Complete 요청 XML 본문 상한 — part 목록만 담긴다 (10,000개 × ~120B ≈ 1.2MB).
@@ -97,8 +97,8 @@ pub(super) async fn create_multipart(
     // s3 백엔드는 벤더 세션을 열어 upload_id를 lease에 기록한다 (파생 불가능한
     // 외부 값). 기록 전에 실패하면 회수가 핸들을 몰라 세션이 영구 과금 고아가
     // 되므로, 기록 실패 시 방금 연 세션을 즉시 best-effort로 중단한다.
-    // fs 백엔드는 지금 열 것이 없다 — 조립은 Complete로 미룬다 (part별 임시).
-    if let StorageBackend::S3 { spec, .. } = &backend {
+    {
+        let spec = &backend.spec;
         let storage = state
             .s3_clients
             .get(&created.storage.id, spec, Address::Internal);
@@ -160,9 +160,7 @@ async fn schedule_create_cleanup(state: &AppState, client_id: &str, key: &str, f
 
 // ── UploadPart ───────────────────────────────────────────────
 
-/// part 바이트를 스풀로 받아 실측(크기·MD5)하고 백엔드로 중계한다. s3는 벤더
-/// UploadPart로 그대로 넘기고, fs는 part별 임시 파일에 계측 보관만 한다 —
-/// 조립은 Complete로 미룬다 (part가 동시·비순차로 와 offset을 아직 모른다).
+/// part 바이트를 스풀로 받아 실측(크기·MD5)하고 벤더 UploadPart로 중계한다.
 /// 발급(part 업로드)마다 write lease를 갱신해 진행 중 세션을 살린다. 같은
 /// partNumber 재업로드는 last-write-wins.
 pub(super) async fn upload_part(
@@ -210,15 +208,15 @@ pub(super) async fn upload_part(
     let backend =
         backend_from_row(&state.crypto, &file.storage).map_err(|e| xml_internal("backend", e))?;
     // s3 중계는 공유 임시 볼륨에 스풀한다 — 슬롯으로 볼륨 고갈(DoS)을 막는다.
-    let _spool_slot = spool::acquire_spool_slot(&backend, &state.spool_slots).await;
-    let temp_root = spool_root(&backend);
+    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
+    let temp_root = spool_root();
     let temp_name = format!(
         "s3mp-{}-p{}-{}",
         lease.lease_id,
         part_number,
         Uuid::new_v4()
     );
-    let (temp_path, file_handle) = fs_backend::begin_write(&temp_root, &temp_name)
+    let (temp_path, file_handle) = temp_spool::begin_write(&temp_root, &temp_name)
         .await
         .map_err(|e| xml_internal("spool", e))?;
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file_handle);
@@ -229,7 +227,7 @@ pub(super) async fn upload_part(
             Err(error) => return Err(spool_error_to_xml(error)),
         };
     if measured.written != content_length {
-        fs_backend::abort_write(&temp_path).await;
+        temp_spool::abort_write(&temp_path).await;
         return Err(xml_error(
             StatusCode::BAD_REQUEST,
             "IncompleteBody",
@@ -237,14 +235,14 @@ pub(super) async fn upload_part(
         ));
     }
     if let Err(error) = super::integrity::verify(headers, &measured) {
-        fs_backend::abort_write(&temp_path).await;
+        temp_spool::abort_write(&temp_path).await;
         return Err(error);
     }
     let md5_hex = measured.md5_hex;
 
     use tokio::io::AsyncWriteExt as _;
     if let Err(error) = writer.flush().await {
-        fs_backend::abort_write(&temp_path).await;
+        temp_spool::abort_write(&temp_path).await;
         return Err(xml_internal("spool flush", error));
     }
     drop(writer.into_inner());
@@ -263,7 +261,7 @@ pub(super) async fn upload_part(
     {
         s3reg::UploadPartClaim::Claimed => {}
         s3reg::UploadPartClaim::Busy => {
-            fs_backend::abort_write(&temp_path).await;
+            temp_spool::abort_write(&temp_path).await;
             return Err(xml_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "ServiceUnavailable",
@@ -271,50 +269,39 @@ pub(super) async fn upload_part(
             ));
         }
         s3reg::UploadPartClaim::Unavailable => {
-            fs_backend::abort_write(&temp_path).await;
+            temp_spool::abort_write(&temp_path).await;
             return Err(no_such_upload());
         }
     }
 
     let physical_upload = async {
-        match &backend {
-            StorageBackend::Fs { root } => {
-                let part_temp =
-                    fs_backend::multipart_part_temp(root, &lease.lease_id.to_string(), part_number);
-                fs_backend::rename_into(&temp_path, &part_temp)
-                    .await
-                    .map_err(|error| xml_internal("promote part", error))?;
-                Ok(md5_hex.clone())
-            }
-            StorageBackend::S3 { spec, .. } => {
-                let Some(vendor_upload_id) = &lease.upload_id else {
-                    return Err(xml_internal(
-                        "upload part",
-                        "s3 multipart lease has no upload id",
-                    ));
-                };
-                let storage = state
-                    .s3_clients
-                    .get(&file.storage.id, spec, Address::Internal);
-                let vendor_etag = filegate_infra::s3_upload_part_from_path(
-                    &storage,
-                    &file.object_key,
-                    vendor_upload_id,
-                    part_number,
-                    &temp_path,
-                )
-                .await
-                .map_err(|error| xml_storage_error("upload part", error))?;
-                // 실측 md5와 벤더 part ETag 대조 — 전달 중 손상을 여기서 끊는다.
-                if !vendor_etag.eq_ignore_ascii_case(&md5_hex) {
-                    return Err(xml_storage_error(
-                        "upload part",
-                        "vendor part etag does not match measured md5",
-                    ));
-                }
-                Ok(vendor_etag)
-            }
+        let spec = &backend.spec;
+        let Some(vendor_upload_id) = &lease.upload_id else {
+            return Err(xml_internal(
+                "upload part",
+                "s3 multipart lease has no upload id",
+            ));
+        };
+        let storage = state
+            .s3_clients
+            .get(&file.storage.id, spec, Address::Internal);
+        let vendor_etag = filegate_infra::s3_upload_part_from_path(
+            &storage,
+            &file.object_key,
+            vendor_upload_id,
+            part_number,
+            &temp_path,
+        )
+        .await
+        .map_err(|error| xml_storage_error("upload part", error))?;
+        // 실측 md5와 벤더 part ETag 대조 — 전달 중 손상을 여기서 끊는다.
+        if !vendor_etag.eq_ignore_ascii_case(&md5_hex) {
+            return Err(xml_storage_error(
+                "upload part",
+                "vendor part etag does not match measured md5",
+            ));
         }
+        Ok(vendor_etag)
     };
     let uploaded = run_with_upload_part_heartbeat(
         &state.pool,
@@ -324,8 +311,8 @@ pub(super) async fn upload_part(
         physical_upload,
     )
     .await;
-    // S3는 업로드 뒤, fs는 rename 뒤 source가 이미 없으므로 둘 다 멱등이다.
-    fs_backend::abort_write(&temp_path).await;
+    // Release the request spool after the provider attempt.
+    temp_spool::abort_write(&temp_path).await;
     let Some(uploaded) = uploaded else {
         return Err(xml_error(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -384,8 +371,8 @@ pub(super) async fn upload_part(
 // ── CompleteMultipartUpload ──────────────────────────────────
 
 /// 요청 XML의 part 목록을 원장의 실측과 대조해(존재·ETag 일치) 완성한다 —
-/// 목록은 검증 입력이고 크기의 진실은 원장이다 (spec 03). s3는 벤더 Complete,
-/// fs는 이 시점에 part를 번호순으로 정렬해 실측 누계 offset으로 조립한다.
+/// 목록은 검증 입력이고 크기의 진실은 원장이다 (spec 03). 검증 후 벤더
+/// Complete에 정확한 part 번호와 ETag 목록을 전달한다.
 /// 크기 상한(part_size×10000)은 실측 합으로 여기서 강제한다. 확정점이다.
 pub(super) async fn complete_multipart(
     state: &AppState,
@@ -494,68 +481,35 @@ pub(super) async fn complete_multipart(
     let backend =
         backend_from_row(&state.crypto, &file.storage).map_err(|e| xml_internal("backend", e))?;
     let physical_complete = async {
-        match &backend {
-            StorageBackend::S3 { spec, .. } => {
-                let Some(vendor_upload_id) = &lease.upload_id else {
-                    return Err(xml_internal(
-                        "complete multipart",
-                        "s3 multipart lease has no upload id",
-                    ));
-                };
-                let storage = state
-                    .s3_clients
-                    .get(&file.storage.id, spec, Address::Internal);
-                let listed: Vec<(i32, String)> = completion
-                    .iter()
-                    .map(|(n, _, etag)| (*n, etag.clone()))
-                    .collect();
-                let vendor_etag = filegate_infra::s3_complete_multipart(
-                    &storage,
-                    &file.object_key,
-                    vendor_upload_id,
-                    &listed,
-                )
-                .await
-                .map_err(|e| xml_storage_error("complete multipart", e))?;
-                if !vendor_etag.eq_ignore_ascii_case(&expected_etag) {
-                    return Err(xml_storage_error(
-                        "complete multipart",
-                        "vendor multipart etag does not match the part ledger",
-                    ));
-                }
-                Ok(expected_etag.clone())
-            }
-            StorageBackend::Fs { root } => {
-                // 조립은 Complete뿐이다 — 모든 part가 도착한 뒤라야 누계 offset이 정해진다.
-                let lease_str = lease.lease_id.to_string();
-                let assembly = fs_backend::multipart_temp(root, &lease_str);
-                let mut offset = 0_u64;
-                for (n, size, _) in &completion {
-                    let part_temp = fs_backend::multipart_part_temp(root, &lease_str, *n);
-                    if let Err(error) =
-                        fs_backend::write_part_at(&assembly, offset, &part_temp).await
-                    {
-                        return Err(xml_internal("assemble part", error));
-                    }
-                    offset = offset.saturating_add(*size as u64);
-                }
-                // 실측 합으로 자른다 — 이전 실패 시도가 더 긴 꼬리를 남겼어도
-                // 확정 객체는 정확히 total 바이트다.
-                if let Err(error) = fs_backend::truncate_to(&assembly, offset).await {
-                    return Err(xml_internal("truncate assembly", error));
-                }
-                if let Err(error) = fs_backend::commit_path(root, &assembly, &file.object_key).await
-                {
-                    return Err(xml_internal("fs commit", error));
-                }
-                // part 임시 정리 (best-effort — 실패해도 mtime sweep이 뒤에 줍는다).
-                for (n, _, _) in &completion {
-                    fs_backend::abort_write(&fs_backend::multipart_part_temp(root, &lease_str, *n))
-                        .await;
-                }
-                Ok(expected_etag.clone())
-            }
+        let spec = &backend.spec;
+        let Some(vendor_upload_id) = &lease.upload_id else {
+            return Err(xml_internal(
+                "complete multipart",
+                "s3 multipart lease has no upload id",
+            ));
+        };
+        let storage = state
+            .s3_clients
+            .get(&file.storage.id, spec, Address::Internal);
+        let listed: Vec<(i32, String)> = completion
+            .iter()
+            .map(|(n, _, etag)| (*n, etag.clone()))
+            .collect();
+        let vendor_etag = filegate_infra::s3_complete_multipart(
+            &storage,
+            &file.object_key,
+            vendor_upload_id,
+            &listed,
+        )
+        .await
+        .map_err(|e| xml_storage_error("complete multipart", e))?;
+        if !vendor_etag.eq_ignore_ascii_case(&expected_etag) {
+            return Err(xml_storage_error(
+                "complete multipart",
+                "vendor multipart etag does not match the part ledger",
+            ));
         }
+        Ok(expected_etag.clone())
     };
     let Some(etag) = run_with_completion_heartbeat(&state.pool, file_id, physical_complete).await
     else {
@@ -629,14 +583,10 @@ pub(super) async fn abort_multipart(
         &file.storage.id,
         &file.object_key,
         lease.upload_id.as_deref(),
-        Some(lease.lease_id),
         true,
     )
     .await
-    .map_err(|error| match &backend {
-        StorageBackend::S3 { .. } => xml_storage_error("abort multipart", error),
-        StorageBackend::Fs { .. } => xml_internal("abort multipart", error),
-    })?;
+    .map_err(|error| xml_storage_error("abort multipart", error))?;
     s3reg::finalize_abort(&state.pool, file_id)
         .await
         .map_err(|e| xml_internal("finalize abort", e))?;

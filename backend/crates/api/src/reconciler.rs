@@ -6,7 +6,7 @@
 //!   1. 만료 회수  — 쓰기 lease가 만료된 pending의 예약 해제 + 실물 정리
 //!   2. purge      — deleted 파일의 물리 삭제 + purge 대기 점유 해제
 //!   3. read lease GC / 5. 종료 lease GC / 6. 이력 보존 정리 / 8. 종착 파일 정리
-//!   7. 일별 사용량 스냅샷 (전량 집계) / 4. fs 임시 파일 sweep
+//!   7. 일별 사용량 스냅샷 (전량 집계), pod-local request spool sweep
 //!
 //! generic 회수는 pending→reclaimed 선점 후 위치를 보존해 물리 정리를 재시도한다.
 //! S3 호환 회수는 aborting 선점 뒤 session/location을 보존한 채 물리를 먼저
@@ -23,7 +23,7 @@ use std::time::Duration;
 use filegate_core::Crypto;
 use filegate_db::files::{self, SweepCandidate};
 use filegate_db::{PgPool, registry, s3_registry as s3reg, usage};
-use filegate_infra::{Address, S3ClientCache, fs as fs_backend, s3_head_object};
+use filegate_infra::{Address, S3ClientCache, s3_head_object, temp_spool};
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
@@ -302,10 +302,7 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
 /// 매 tick, 모든 pod에서 돈다 (s3 중계 스풀은 pod 로컬 디스크에 살므로).
 async fn sweep_local_temps() {
     let dir = std::env::temp_dir();
-    // OS temp에는 s3 중계 스풀(단일 part)만 있고 조립 파일은 없다 — 보호 목록
-    // 불필요(빈 셋). 조립 파일은 fs storage root에만 산다.
-    let protected = std::collections::HashSet::new();
-    match fs_backend::sweep_stale_temps(&dir, TEMP_MAX_AGE, &protected).await {
+    match temp_spool::sweep_stale_temps(&dir, TEMP_MAX_AGE).await {
         Ok(0) => {}
         Ok(count) => tracing::info!(event = "reconciler.local_temps_swept", count),
         Err(error) => tracing::warn!(
@@ -332,9 +329,7 @@ async fn observe_commit(
             None => return Ok(false), // 아직 업로드 전
         }
     } else {
-        let filegate_infra::backend::StorageBackend::S3 { spec, .. } = &backend else {
-            return Ok(false);
-        };
+        let spec = &backend.spec;
         let storage = s3_clients.get(&candidate.storage.id, spec, Address::Internal);
         match s3_head_object(&storage, &candidate.object_key).await? {
             Some(head) => head,
@@ -353,10 +348,8 @@ async fn observe_commit(
 }
 
 /// 실물 제거 — 등록부에서 백엔드를 복원해 내부 경로로 지운다.
-/// s3 DeleteObject·fs remove 모두 없는 대상에 성공하므로 멱등이다.
-/// multipart 회수 재료가 있으면 함께 치운다 (spec 02): s3는 벤더 세션
-/// 중단(중단하지 않은 미완성 part는 보이지 않게 과금된다), fs는 offset
-/// 기록 중이던 대상 임시 파일.
+/// S3 DeleteObject succeeds for absent objects, making retries idempotent.
+/// Multipart cleanup also aborts provider sessions to release unfinished parts.
 async fn sweep_object(
     pool: &PgPool,
     crypto: &Crypto,
@@ -373,7 +366,6 @@ async fn sweep_object(
         &candidate.storage_id,
         &candidate.object_key,
         candidate.upload_id.as_deref(),
-        candidate.write_lease_id,
         candidate.multipart,
     )
     .await

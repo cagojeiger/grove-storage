@@ -35,11 +35,8 @@ pub(super) async fn commit(
     part_size: i64,
     backend: &StorageBackend,
 ) -> Result<Response, ApiError> {
-    let Some(files::WriteLease {
-        lease_id,
-        upload_id,
-        ..
-    }) = files::write_lease(&state.pool, file_id).await?
+    let Some(files::WriteLease { upload_id, .. }) =
+        files::write_lease(&state.pool, file_id).await?
     else {
         return Err(internal("multipart file has no write lease"));
     };
@@ -49,7 +46,6 @@ pub(super) async fn commit(
         file_id,
         file,
         part_size,
-        lease_id,
         upload_id: upload_id.as_deref(),
         backend,
     })
@@ -72,7 +68,6 @@ struct Completion<'a> {
     file_id: Uuid,
     file: &'a files::FileAccess,
     part_size: i64,
-    lease_id: Uuid,
     upload_id: Option<&'a str>,
     backend: &'a StorageBackend,
 }
@@ -97,7 +92,6 @@ impl MultipartCommit for Completion<'_> {
         let physical = complete_backend(
             self.state,
             self.file,
-            self.lease_id,
             self.upload_id,
             self.backend,
             prepared,
@@ -129,7 +123,7 @@ async fn prepare_completion(
 ) -> Result<Option<PreparedCompletion>, ApiError> {
     let count = part_count(file.declared_size, part_size);
     let ledger = match backend {
-        StorageBackend::S3 {
+        StorageBackend {
             spec,
             force_relay: false,
         } => {
@@ -175,7 +169,7 @@ async fn prepare_completion(
 
     if matches!(
         backend,
-        StorageBackend::S3 {
+        StorageBackend {
             force_relay: false,
             ..
         }
@@ -210,37 +204,28 @@ async fn prepare_completion(
 async fn complete_backend(
     state: &AppState,
     file: &files::FileAccess,
-    lease_id: Uuid,
     upload_id: Option<&str>,
     backend: &StorageBackend,
     prepared: &PreparedCompletion,
 ) -> Result<String, ApiError> {
-    match backend {
-        StorageBackend::S3 { spec, .. } => {
-            let upload_id =
-                upload_id.ok_or_else(|| internal("multipart lease has no upload id"))?;
-            let storage = state
-                .s3_clients
-                .get(&file.storage.id, spec, Address::Internal);
-            let vendor_etag = filegate_infra::s3_complete_multipart(
-                &storage,
-                &file.object_key,
-                upload_id,
-                &prepared.parts,
-            )
-            .await
-            .map_err(ApiError::Storage)?;
-            if !vendor_etag.eq_ignore_ascii_case(&prepared.expected_etag) {
-                return Err(ApiError::Storage(anyhow::anyhow!(
-                    "vendor multipart etag does not match the part ledger"
-                )));
-            }
-        }
-        StorageBackend::Fs { root } => {
-            let temp = filegate_infra::fs::multipart_temp(root, &lease_id.to_string());
-            filegate_infra::fs::commit_path(root, &temp, &file.object_key)
-                .await
-                .map_err(internal)?;
+    let spec = &backend.spec;
+    {
+        let upload_id = upload_id.ok_or_else(|| internal("multipart lease has no upload id"))?;
+        let storage = state
+            .s3_clients
+            .get(&file.storage.id, spec, Address::Internal);
+        let vendor_etag = filegate_infra::s3_complete_multipart(
+            &storage,
+            &file.object_key,
+            upload_id,
+            &prepared.parts,
+        )
+        .await
+        .map_err(ApiError::Storage)?;
+        if !vendor_etag.eq_ignore_ascii_case(&prepared.expected_etag) {
+            return Err(ApiError::Storage(anyhow::anyhow!(
+                "vendor multipart etag does not match the part ledger"
+            )));
         }
     }
     Ok(prepared.expected_etag.clone())
@@ -318,7 +303,7 @@ pub(super) async fn parts(
     let backend = backend_from_row(&state.crypto, &file.storage)?;
     let mut out = Vec::with_capacity(body.parts.len());
     match &backend {
-        StorageBackend::S3 {
+        StorageBackend {
             spec,
             force_relay: false,
         } => {

@@ -136,8 +136,8 @@ async fn serve() -> anyhow::Result<()> {
         multipart_threshold: config.server.multipart_threshold_bytes,
         part_size: config.server.part_size_bytes,
         s3_clients,
-        part_promotions: std::sync::Arc::new(tokio::sync::Semaphore::new(
-            blobs::PART_PROMOTION_LIMIT,
+        single_upload_claims: std::sync::Arc::new(tokio::sync::Semaphore::new(
+            blobs::SINGLE_UPLOAD_CLAIM_LIMIT,
         )),
         spool_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(
             spool::SPOOL_CONCURRENCY_LIMIT,

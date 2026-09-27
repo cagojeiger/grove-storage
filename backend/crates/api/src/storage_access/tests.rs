@@ -34,9 +34,7 @@ fn resolving_settings_preserves_the_row_and_does_not_probe_the_provider() {
         let backend = backend_from_row(&crypto, &row).unwrap();
         assert_eq!(row, before);
         assert_eq!(backend.is_relay(), force_relay);
-        let StorageBackend::S3 { spec, .. } = backend else {
-            panic!("expected S3 settings");
-        };
+        let StorageBackend { spec, .. } = backend;
         assert_eq!(spec.endpoint, "http://internal.invalid");
         assert_eq!(spec.public_endpoint, "https://public.invalid");
         assert_eq!(spec.region, "local");

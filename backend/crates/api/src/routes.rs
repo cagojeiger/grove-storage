@@ -52,11 +52,10 @@ pub struct AppState {
     pub part_size: i64,
     /// storage당 S3 클라이언트 재사용 — 커넥션 풀을 웜 상태로 유지한다.
     pub s3_clients: Arc<filegate_infra::S3ClientCache>,
-    /// fs part 승격 동시성 상한 — 승격은 claim(DB 행 락 + 커넥션)을 쥔 채
-    /// 디스크 복사를 하므로, 파드당 동시 승격 수를 묶어 풀 고갈을 막는다.
-    pub part_promotions: Arc<tokio::sync::Semaphore>,
+    /// Bound the DB connections held by Native single-upload relay claims.
+    pub single_upload_claims: Arc<tokio::sync::Semaphore>,
     /// S3 중계 스풀 동시성 상한 — 공유 임시 볼륨(temp_dir)을 채우는 자원
-    /// 고갈(DoS)을 막는다. 진입 시 S3 백엔드만 슬롯을 잡는다(spool 모듈).
+    /// 고갈(DoS)을 막는다. relay 진입 시 슬롯을 잡는다(spool 모듈).
     pub spool_slots: Arc<tokio::sync::Semaphore>,
 }
 

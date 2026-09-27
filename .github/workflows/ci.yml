@@ -106,13 +106,11 @@ jobs:
           /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-cli.py
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-mcp.py
-          python3 -B -u scripts/e2e-relay-upload.py --backend fs
 
       - name: S3 SDK contract
         run: |
           /tmp/grove-s3-sdk/bin/python -B -m unittest discover -s scripts/tests -v
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-relay-upload.py --backend minio
-          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart

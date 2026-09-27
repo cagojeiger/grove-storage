@@ -47,7 +47,7 @@ impl Provider {
             axum::serve(listener, router).await.unwrap();
         });
         Self {
-            backend: StorageBackend::S3 {
+            backend: StorageBackend {
                 spec: S3StorageSpec {
                     endpoint,
                     public_endpoint: "http://public.invalid".into(),

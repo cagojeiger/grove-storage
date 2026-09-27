@@ -179,7 +179,7 @@ def check_s3_lifecycle(endpoint, directory, backend):
 
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
-         reconciler_interval=1, management=False, verify_log=None):
+         reconciler_interval=1, management=False, verify_log=None, multipart=False):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -204,6 +204,9 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             )
             if with_database:
                 env["FILEGATE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
+            if multipart:
+                env.update(FILEGATE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
+                           FILEGATE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
             if console_origin:
                 env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
             if management:

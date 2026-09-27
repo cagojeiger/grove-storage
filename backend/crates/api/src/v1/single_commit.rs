@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::ClientId;
 use crate::{
-    error::{ApiError, bad_request, conflict, internal, not_found},
+    error::{ApiError, bad_request, conflict, not_found},
     routes::AppState,
 };
 
@@ -25,9 +25,7 @@ impl SingleCommit for Operations<'_> {
         if self.backend.is_relay() {
             return Ok(files::recorded_upload(&self.state.pool, self.file_id).await?);
         }
-        let StorageBackend::S3 { spec, .. } = self.backend else {
-            return Err(internal("direct access requires an s3 storage"));
-        };
+        let spec = &self.backend.spec;
         let storage = self
             .state
             .s3_clients

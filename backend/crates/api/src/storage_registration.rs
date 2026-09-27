@@ -49,11 +49,8 @@ pub(crate) async fn verify_command(
             if row.kind != "s3" {
                 return Err(Error::InvalidInput);
             }
-            let StorageBackend::S3 { spec, .. } =
-                backend_from_row(crypto, &row).map_err(|_| Error::Unavailable)?
-            else {
-                return Err(Error::InvalidInput);
-            };
+            let StorageBackend { spec, .. } =
+                backend_from_row(crypto, &row).map_err(|_| Error::Unavailable)?;
             // Neither provider diagnostics nor credentials cross this boundary.
             s3_connect(&spec).await.map_err(|_| Error::Unavailable)?;
             return Ok(row);
@@ -224,13 +221,7 @@ pub async fn check_registered(pool: &PgPool, crypto: &Crypto) -> anyhow::Result<
     for row in registry::list_storages(pool).await? {
         let detail = match backend_from_row(crypto, &row) {
             Err(error) => Some(error.to_string()),
-            Ok(StorageBackend::S3 { spec, .. }) => {
-                s3_connect(&spec).await.err().map(|e| e.to_string())
-            }
-            Ok(StorageBackend::Fs { root }) => filegate_infra::fs::connect(&root.to_string_lossy())
-                .await
-                .err()
-                .map(|e| e.to_string()),
+            Ok(StorageBackend { spec, .. }) => s3_connect(&spec).await.err().map(|e| e.to_string()),
         };
         checks.push(StorageCheck {
             id: row.id,

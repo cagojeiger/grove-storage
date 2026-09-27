@@ -37,7 +37,7 @@ flowchart LR
 | 1차 운영 이관 | FileGate 등록부의 Terraform 관리 해제 | state·DB·키 복구 준비, 리소스 삭제 없이 기존 소비자 검증 |
 | 2차 | 독립 Storage Server·Agent 조인 + 사전 마운트 filesystem | 인증된 조인·상태 보고·객체 I/O·단절 복구 검증 |
 
-외부 S3 지원은 2차에도 유지한다. 현재 서버 로컬 fs adapter와 독립 Agent는 구분한다.
+외부 S3 지원은 2차에도 유지한다. 독립 filesystem Agent는 현재 서버와 별도 설계한다.
 자동 배치·이동·복제는 2차 이후 별도 계약과 검증 범위로 정한다.
 
 ### Phase-One Supported Backends
@@ -49,8 +49,8 @@ not the client protocol. Mounted-filesystem Storage Nodes belong to phase two.
 Console, shared commands (CLI/MCP) and legacy REST accept only S3 registration
 and replacement. Migration `0017` enforces S3-only rows and removes `root_path`;
 any remaining FS row blocks migration for explicit data transfer first.
-The registry adapter resolves S3 only. Lower-level FS implementation cleanup is a
-separate step; S3 relay spooling remains supported. Native and S3 API contracts,
+The registry and byte-transfer adapters support S3 only. Local request buffers
+live in `infra::temp_spool`, independently of storage placement. Native and S3 API contracts,
 stored object keys, credentials and recovery state remain unchanged.
 
 ## 책임 경계

@@ -1,18 +1,15 @@
 #!/bin/sh
-# 3-모드 동등성 E2E (완료 조건): minio 직결 = minio 중계 = fs 중계.
-# storage가 다른 세 client로 같은 시나리오를 돌려 상태 전이·회계·응답이
-# 동일함을 검증하고,
+# S3 direct/relay parity on a disposable local development installation.
+# Run the same scenario through two clients to compare lifecycle and accounting.
 # 중계 전용 강화 케이스(secret·CL·CORS·kind 교차)를 추가로 찌른다.
 #
 # 전제: docker compose up, 서버 실행 중(FILEGATE_PUBLIC_URL 필수, tick 짧게,
 #       FILEGATE_S3_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173),
-#       terraform 그래프 적용(deploy/local — 3 storage + 3 client),
-#       /tmp/filegate-fs-demo 존재. 로컬 개발 DB 전용.
+#       Register minio-local/minio-relay and their client keys first.
 # 사용: sh scripts/e2e-relay.sh   (종료 코드 = FAIL 수)
 BASE=http://127.0.0.1:8080
 AUTH_DIRECT="Authorization: Bearer fg_local-dev-notegate-key-0123456789abcdef"
 AUTH_RELAY="Authorization: Bearer fg_local-dev-notegate-relay-key-0123456789abcdef"
-AUTH_FS="Authorization: Bearer fg_local-dev-notegate-fs-key-0123456789abcdef"
 CORS_ORIGIN=http://127.0.0.1:5173
 JSON="Content-Type: application/json"
 PG_CONTAINER="${FILEGATE_PG_CONTAINER:-filegate-postgres-1}"
@@ -26,12 +23,7 @@ expect() { if [ "$3" = "$2" ]; then ok; else bad "$1 (want $2, got $3)"; fi }
 $PSQL "DELETE FROM leases;" >/dev/null 2>&1
 $PSQL "DELETE FROM locations;" >/dev/null 2>&1
 $PSQL "DELETE FROM files;" >/dev/null 2>&1
-mkdir -p /tmp/filegate-fs-demo
-rm -rf /tmp/filegate-fs-demo/fg /tmp/filegate-fs-demo/.fg-tmp-* 2>/dev/null
 
-# fs 실물 파일 수 — 물리 배치(fg/{client}/{yyyy}/{mm}/{zz}/...)가 중첩이라
-# 재귀로 센다. 임시(.fg-tmp-*)는 제외.
-fs_count() { find /tmp/filegate-fs-demo -type f ! -name '.fg-tmp-*' | wc -l | tr -d ' '; }
 
 md5of() { printf '%s' "$1" | md5 -q 2>/dev/null || printf '%s' "$1" | md5sum | cut -d' ' -f1; }
 
@@ -69,23 +61,12 @@ run_mode() {
   case "$LABEL" in
     direct) FID_DIRECT=$FID;;
     relay_s3) FID_RELAY_S3=$FID; GURL_RELAY_S3=$GURL;;
-    relay_fs) FID_RELAY_FS=$FID;;
   esac
 }
 
-echo "=== 3-모드 동등성 ==="
+echo "=== S3 direct/relay 동등성 ==="
 run_mode direct   minio-local "$AUTH_DIRECT" direct "동등성 페이로드 — 직결 minio"
 run_mode relay_s3 minio-relay "$AUTH_RELAY"  relay  "동등성 페이로드 — 중계 minio"
-run_mode relay_fs fs-local     "$AUTH_FS"     relay  "동등성 페이로드 — 중계 fs"
-
-echo "=== fs 실물 확인 (root_path에 파일이 실제로, 규약 경로로) ==="
-expect "fs 객체 1개" 1 "$(fs_count)"
-# 물리 배치 규약 검증 (spec 00): fg/{client}/{yyyy}/{mm}/{zz}/{uuid}[.ext]
-FSPATH=$(find /tmp/filegate-fs-demo -type f ! -name '.fg-tmp-*' | head -1)
-case "$FSPATH" in
-  /tmp/filegate-fs-demo/fg/notegate-fs/20[0-9][0-9]/[0-9][0-9]/??/*) ok;;
-  *) bad "fs 키가 규약 경로 아님: $FSPATH";;
-esac
 
 echo "=== 중계 강화 케이스 ==="
 # 새 중계 파일 하나로 secret 계열 공격
@@ -112,26 +93,24 @@ PF=$(curl -s -o /dev/null -D - -X OPTIONS -H "Origin: $CORS_ORIGIN" \
 case "$PF" in *"access-control-allow-origin: $CORS_ORIGIN"*|*"Access-Control-Allow-Origin: $CORS_ORIGIN"*) ok;; *) bad "preflight CORS 헤더 없음: $PF";; esac
 # md5 불일치 (중계 검증 경로): 선언 md5와 다른 내용 업로드 → commit 400
 WRONGMD5=$(md5of "다른 내용")
-C4=$(curl -s -H "$AUTH_FS" -H "$JSON" -X POST $BASE/api/v1/files -d "{\"declared_size\":9,\"declared_md5\":\"$WRONGMD5\"}")
+C4=$(curl -s -H "$AUTH_RELAY" -H "$JSON" -X POST $BASE/api/v1/files -d "{\"declared_size\":9,\"declared_md5\":\"$WRONGMD5\"}")
 F4=$(printf '%s' "$C4" | sed -n 's/.*"file_id":"\([^"]*\)".*/\1/p')
 U4=$(printf '%s' "$C4" | sed -n 's/.*"put_url":"\([^"]*\)".*/\1/p')
 printf '123456789' | curl -s -o /dev/null -X PUT --data-binary @- "$U4"
-expect "중계 md5 불일치 commit 400" 400 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_FS" -X POST $BASE/api/v1/files/$F4/commit)"
+expect "중계 md5 불일치 commit 400" 400 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_RELAY" -X POST $BASE/api/v1/files/$F4/commit)"
 expect "불일치 후 pending 유지" "pending" "$($PSQL "SELECT state FROM files WHERE id='$F4';" | tr -d ' ')"
 
 # 불일치 파일(F4)은 pending으로 남는 게 계약 — 회수 경로로 정리한다
-# (fs 백엔드의 reclaim sweep 검증을 겸함).
+# (S3 reclaim cleanup is retried by the reconciler).
 $PSQL "UPDATE leases SET expires_at = now() - interval '1 second' WHERE file_id='$F4' AND kind='write';" >/dev/null
 
-echo "=== 세 모드 delete → purge + F4 회수 → 회계 0 + 중계 GET 404 ==="
+echo "=== S3 direct/relay delete -> purge + reclaim -> usage 0 + GET 404 ==="
 expect "[direct] delete 200" 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_DIRECT" -X DELETE $BASE/api/v1/files/$FID_DIRECT)"
 expect "[relay_s3] delete 200" 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_RELAY" -X DELETE $BASE/api/v1/files/$FID_RELAY_S3)"
-expect "[relay_fs] delete 200" 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_FS" -X DELETE $BASE/api/v1/files/$FID_RELAY_FS)"
 sleep 8
-expect "회계 전부 0" "0" "$($PSQL "SELECT coalesce(sum(f.declared_size),0) FROM files f JOIN locations l ON l.file_id=f.id WHERE l.storage_id IN ('minio-local','minio-relay','fs-local');" | tr -d ' ')"
+expect "회계 전부 0" "0" "$($PSQL "SELECT coalesce(sum(f.declared_size),0) FROM files f JOIN locations l ON l.file_id=f.id WHERE l.storage_id IN ('minio-local','minio-relay');" | tr -d ' ')"
 GURL_R=$GURL_RELAY_S3
 expect "purge 후 중계 GET 404" 404 "$(curl -s -o /dev/null -w '%{http_code}' "$GURL_R")"
-expect "fs 실물 전부 소멸" 0 "$(fs_count)"
 
 # 정리
 $PSQL "DELETE FROM leases;" >/dev/null 2>&1

@@ -73,9 +73,9 @@ part별 실측 크기와 완료 목록으로 조립한다.
 
 | 단계 | 파일·세션 | 물리 처리 |
 |---|---|---|
-| Create | pending + open, (client, key, multipart)에 바인딩 | S3 backend는 vendor 세션 개시; fs는 part 도착 시 저장 |
-| UploadPart | 계측 뒤 claimed 선점·done 기록 | S3 UploadPart 또는 fs part 파일 원자 교체 |
-| Complete | 목록·ETag·실측 합 검증 → completing | S3 Complete 또는 fs partNumber 순 누계 offset 조립 |
+| Create | pending + open, (client, key, multipart)에 바인딩 | S3 vendor 세션 개시 |
+| UploadPart | 계측 뒤 claimed 선점·done 기록 | S3 UploadPart |
+| Complete | 목록·ETag·실측 합 검증 → completing | S3 Complete |
 | Abort | open → aborting | vendor 세션·임시·최종 객체 정리 후 DB 회수 |
 
 | 경계 | 결과 |
@@ -117,7 +117,7 @@ stateDiagram-v2
 | 복구 후보 | completing의 만료된 write lease |
 | 실제 전이 | 파일 락 아래 만료 재확인 |
 | 예상 실물 일치 | 파일 활성화·lease 확정·key 교체·옛 파일 detach를 한 transaction으로 처리 |
-| 관찰 근거 | 고유 object_key; fs는 크기, S3는 크기·ETag |
+| 관찰 근거 | 고유 object_key; S3 크기·ETag |
 | 정리 실패 | session·location·lease·vendor upload_id 보존 |
 | generic 회수·관찰·commit | s3_uploads 소유 파일을 제외 |
 | terminal lease GC | 세션이 남은 파일의 복구 재료 보호 |
@@ -156,7 +156,7 @@ scripts/s3-capture.py의 단일 객체·Range·자동 multipart·key-bound Abort
 잠금 대기 중 복구 전이는 db/tests/s3_heartbeat_fencing.rs에서 실행 순서를 고정해 검증한다.
 FileGate에서는 S3_EXPECT_WRONG_KEY_404=1로 다른 key의 Abort가 404인지 확인한다.
 
-`scripts/e2e-s3.py --backend fs|minio`는 격리 PostgreSQL·저장소·서버를 준비해 위 boto3 검증과
+`scripts/e2e-s3.py --backend minio`는 격리 PostgreSQL·저장소·서버를 준비해 위 boto3 검증과
 서명된 잘못된 XML 거부·정상 Complete 재시도·presigned GET을 실행한다.
 XML 파싱·서명 계산은 `grove-s3-protocol`에서 DB 없이 검증한다.
 MinIO 모드는 vendor bucket의 실제 바이트·열린 multipart 세션 0개를 확인하고,

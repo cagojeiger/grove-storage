@@ -1,10 +1,10 @@
-//! Provider I/O for S3 and historical filesystem storage.
+//! S3 provider I/O and disposable local transfer spools.
 //! Backend operations consume resolved settings; registry writes, authorization,
 //! and object metadata transitions belong to their callers.
 
 pub mod backend;
-pub mod fs;
 mod s3;
+pub mod temp_spool;
 
 pub use s3::{
     Address, S3ClientCache, S3Storage, S3StorageSpec, abort_multipart as s3_abort_multipart,

@@ -105,7 +105,7 @@ pub(super) async fn create(
     if multipart {
         // multipart는 PUT URL 대신 서술자를 준다 — part 접근은 parts 발급으로
         // (spec 02). s3 계열은 지금 벤더 세션을 열어 핸들을 lease에 기록하고,
-        // 중계(fs 또는 force_relay)는 lease id에서 파생한 secret의 해시를
+        // 중계(force_relay)는 lease id에서 파생한 secret의 해시를
         // 남긴다 — 이후 parts() 발급이 매번 같은 secret을 재파생해 회전이 없다.
         grove_object_service::multipart_create::initialize(&super::multipart_create::Operations {
             state: &state,
@@ -136,7 +136,7 @@ pub(super) async fn create(
     }
 
     let put_url = match &backend {
-        StorageBackend::S3 {
+        StorageBackend {
             spec,
             force_relay: false,
         } => {
@@ -266,7 +266,7 @@ pub(super) async fn read(
     // 현재 location 재해석 — 이동해도 같은 file_id로 접근한다 (spec 00).
     let backend = backend_from_row(&state.crypto, &file.storage)?;
     let get_url = match &backend {
-        StorageBackend::S3 {
+        StorageBackend {
             spec,
             force_relay: false,
         } => {

@@ -3,10 +3,7 @@ mod support;
 
 use filegate_infra::{
     S3ClientCache,
-    backend::{
-        CommitErr, StorageBackend, cleanup_backend_upload, commit_temp_to_backend,
-        observe_backend_object,
-    },
+    backend::{cleanup_backend_upload, commit_temp_to_backend, observe_backend_object},
 };
 
 #[tokio::test]
@@ -31,7 +28,6 @@ async fn abort_failure_still_attempts_object_deletion_and_reports_failure() {
         "home",
         "file",
         Some("upload"),
-        None,
         true,
     )
     .await;
@@ -50,7 +46,6 @@ async fn single_put_cleanup_only_deletes_the_object() {
         &provider.backend,
         "home",
         "file",
-        None,
         None,
         false,
     )
@@ -77,7 +72,7 @@ async fn completed_s3_upload_attempts_always_remove_the_spool() {
         )
         .await;
         if fail {
-            assert!(matches!(result, Err(CommitErr::Storage(_))));
+            assert!(result.is_err());
         } else {
             assert!(result.is_ok());
         }
@@ -90,9 +85,7 @@ async fn completed_s3_upload_attempts_always_remove_the_spool() {
 async fn s3_relay_mode_follows_the_registered_setting() {
     let mut provider = support::Provider::start(false).await;
     assert!(!provider.backend.is_relay());
-    if let StorageBackend::S3 { force_relay, .. } = &mut provider.backend {
-        *force_relay = true;
-    }
+    provider.backend.force_relay = true;
     assert!(provider.backend.is_relay());
     assert!(provider.requests.lock().unwrap().is_empty());
 }
