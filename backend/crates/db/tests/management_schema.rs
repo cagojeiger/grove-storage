@@ -8,12 +8,11 @@ use support::*;
 use uuid::Uuid;
 
 #[sqlx::test(migrations = "./migrations")]
-async fn schema_accepts_only_users_and_preserves_user_fk(pool: PgPool) {
+async fn accounts_are_complete_without_a_subtype_table(pool: PgPool) {
     let mut tx = pool.begin().await.unwrap();
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','orphan','reader')").bind(id).execute(&mut *tx).await.unwrap();
-    assert!(tx.commit().await.is_err());
-    bootstrap(&pool).await;
+    tx.commit().await.unwrap();
     assert!(sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'agent','rejected','reader')").bind(Uuid::new_v4()).execute(&pool).await.is_err());
     let agents: Option<String> =
         sqlx::query_scalar("SELECT to_regclass('management.agents')::text")
@@ -21,6 +20,11 @@ async fn schema_accepts_only_users_and_preserves_user_fk(pool: PgPool) {
             .await
             .unwrap();
     assert!(agents.is_none());
+    let users: Option<String> = sqlx::query_scalar("SELECT to_regclass('management.users')::text")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(users.is_none());
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -42,6 +46,32 @@ async fn session_fk_rejects_cross_user_credentials(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn live_credentials_and_sessions_protect_their_account(pool: PgPool) {
+    let (owner, credential) = bootstrap(&pool).await;
+    db::create_session(&pool, Uuid::new_v4(), &hash(1), &hash(10))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        sqlx::query("DELETE FROM management.accounts WHERE id=$1")
+            .bind(owner)
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    assert!(
+        sqlx::query("DELETE FROM management.credentials WHERE id=$1")
+            .bind(credential.id)
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    let actor = db::session_actor(&pool, &hash(10)).await.unwrap().unwrap();
+    assert_eq!(actor.account_id, owner);
+    assert_eq!(actor.credential_id, credential.id);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn schema_rejects_plaintext_hashes_and_audit_survives_physical_removal(pool: PgPool) {
     bootstrap(&pool).await;
     let target = user(&pool, Role::Reader).await;
@@ -52,11 +82,6 @@ async fn schema_rejects_plaintext_hashes_and_audit_survives_physical_removal(poo
     );
     let before = audit_count(&pool).await;
     let mut tx = pool.begin().await.unwrap();
-    sqlx::query("DELETE FROM management.users WHERE account_id=$1")
-        .bind(target)
-        .execute(&mut *tx)
-        .await
-        .unwrap();
     sqlx::query("DELETE FROM management.accounts WHERE id=$1")
         .bind(target)
         .execute(&mut *tx)

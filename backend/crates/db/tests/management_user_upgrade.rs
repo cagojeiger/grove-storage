@@ -18,7 +18,20 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
         connection.apply(migration).await.unwrap();
     }
     drop(connection);
-    let (owner, original) = bootstrap(&pool).await;
+    // Seed the old schema directly; current writers target the latest schema.
+    let owner = Uuid::new_v4();
+    let original = Uuid::new_v4();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','Owner','admin')")
+        .bind(owner).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO management.users(account_id) VALUES($1)")
+        .bind(owner)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO management.credentials(id,account_id,label,token_prefix,token_hash,expires_at) VALUES($1,$2,'Owner token','gst_old',$3,clock_timestamp()+interval '1 day')")
+        .bind(original).bind(owner).bind(hash(1)).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
     db::create_session(&pool, Uuid::new_v4(), &hash(1), &hash(10))
         .await
         .unwrap()
@@ -69,7 +82,7 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
             .unwrap()
             .unwrap()
             .credential_id,
-        original.id
+        original
     );
     assert!(db::session_actor(&pool, &hash(10)).await.unwrap().is_some());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_none());

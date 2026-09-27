@@ -40,7 +40,7 @@ fn context() -> db::AuditContext {
 }
 
 async fn account(pool: &PgPool, role: Role) -> (Uuid, Uuid, String) {
-    let initialized: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.users)")
+    let initialized: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts)")
         .fetch_one(pool)
         .await
         .unwrap();

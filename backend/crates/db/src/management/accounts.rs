@@ -46,10 +46,6 @@ pub(super) async fn bootstrap_in(
     .bind(name)
     .execute(&mut *tx)
     .await?;
-    sqlx::query("INSERT INTO management.users(account_id) VALUES($1)")
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
     let credential = credentials::insert(&mut tx, id, key).await?;
     audit::record(&mut tx, context, "user.bootstrap", "account", id).await?;
     audit::record(
@@ -79,7 +75,7 @@ pub(super) async fn create_in(
 ) -> Result<Uuid, Error> {
     let name = account.display_name;
     let role = role_name(account.role);
-    let initialized: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.users)")
+    let initialized: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts)")
         .fetch_one(&mut *tx)
         .await?;
     if !initialized {
@@ -91,10 +87,6 @@ pub(super) async fn create_in(
         .bind("user")
         .bind(name)
         .bind(role)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO management.users(account_id) VALUES($1)")
-        .bind(id)
         .execute(&mut *tx)
         .await?;
     audit::record(&mut tx, context, "account.create", "account", id).await?;

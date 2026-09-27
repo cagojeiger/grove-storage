@@ -75,11 +75,6 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         .execute(&mut *tx)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM management.users WHERE account_id=$1")
-        .bind(own_agent)
-        .execute(&mut *tx)
-        .await
-        .unwrap();
     sqlx::query("DELETE FROM management.accounts WHERE id=$1")
         .bind(own_agent)
         .execute(&mut *tx)

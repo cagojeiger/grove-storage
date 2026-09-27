@@ -14,12 +14,15 @@ async fn legacy_rows(pool: &PgPool) -> Vec<Vec<String>> {
         "admin_sessions",
         "admin_audit_events",
     ] {
-        let rows = sqlx::query_scalar(&format!(
-            "SELECT row_to_json(t)::text FROM {table} t ORDER BY row_to_json(t)::text"
-        ))
-        .fetch_all(pool)
-        .await
-        .unwrap();
+        let projection = if matches!(table, "storages" | "clients") {
+            "(to_jsonb(t)-'metadata')::text"
+        } else {
+            "to_jsonb(t)::text"
+        };
+        let rows = sqlx::query_scalar(&format!("SELECT {projection} FROM {table} t ORDER BY 1"))
+            .fetch_all(pool)
+            .await
+            .unwrap();
         snapshot.push(rows);
     }
     snapshot
@@ -55,6 +58,14 @@ async fn additive_upgrade_preserves_existing_registry_credentials_and_sessions(p
     filegate_db::migrate(&pool).await.unwrap();
     filegate_db::migrate(&pool).await.unwrap();
     assert_eq!(legacy_rows(&pool).await, before);
+    for table in ["storages", "clients"] {
+        let metadata: serde_json::Value =
+            sqlx::query_scalar(&format!("SELECT metadata FROM {table}"))
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(metadata, serde_json::json!({}));
+    }
     assert_eq!(
         admin_auth::session_actor(&pool, "old-session")
             .await

@@ -209,13 +209,13 @@ accounts/users/agents/credentials/sessions/audit_events는 `0008`에 구현했�
 command_invocations/security_events와 공통 로그인 예산은 `0009`에 구현했다.
 로그인 성공/제한 이벤트는 `0010`, master 구성 세대는 `0011`에 구현했다.
 `0012`는 Agent를 비활성 User로 전환하고 기존 Agent 토큰을 폐기한다. ID·역할·과거 로그는 유지하며 `agents` 테이블을 제거한다. 기존 User 토큰·세션과 데이터 서비스 테이블은 유지한다.
+`0016`은 계정의 기준을 `accounts` 하나로 통합한다. `users` 보조 테이블·순환 FK·중복 복합 UNIQUE를 제거하고 세션은 `accounts`를 직접 참조한다. 계정 ID·역할·토큰·세션·감사 snapshot은 유지한다.
 
 배포 시 이전 서버의 쓰기를 중지한 뒤 migration과 새 서버를 함께 적용한다. 이전 바이너리는 새 스키마와 함께 운영하지 않는다.
 
 | 테이블 (`management.*`) | 주요 컬럼 |
 |---|---|
 | `accounts` | id, kind(user 고정), display_name, role, is_active, deleted_at, created_at, updated_at |
-| `users` | account_id PK/FK |
 | `credentials` | id, account_id FK, label, token_prefix, token_hash UNIQUE, hash_version, created_at, expires_at, revoked_at, last_used_at |
 | `sessions` | id, session_hash UNIQUE, auth_method, user_id FK, credential_id FK, master_generation, created_at, expires_at, revoked_at |
 | `audit_events` | id, created_at, actor context, request_id, surface, action, resource_type, resource_id, metadata |
@@ -226,9 +226,9 @@ command_invocations/security_events와 공통 로그인 예산은 `0009`에 구�
 
 ```text
 accounts
-├─ kind=user  → users(account_id PK/FK)
-└─ 1:N       → credentials(account_id FK)
-users + credentials ──1:N── sessions
+├─ 1:N → credentials(account_id FK)
+└─ 1:N → sessions(user_id FK)
+credentials(account_id, id) ← sessions(user_id, credential_id)
 
 master (config) ──설정 세대 검증── setup/recovery sessions
 audit / invocation / security ── actor snapshot + request_id
@@ -236,7 +236,7 @@ audit / invocation / security ── actor snapshot + request_id
 
 | 제약 | 검증할 내용 |
 |---|---|
-| User | accounts.kind=user 고정; users FK로 세션 소유 관계 보장 |
+| User | accounts.kind=user 고정; accounts FK로 세션 소유 관계 보장 |
 | 세션 | token 방식은 user_id와 같은 User의 credential 필수; master 방식은 둘 다 NULL이며 master_generation 필수 |
 | credential | 서버가 생성한 고엔트로피 값의 검증용 해시; 만료·폐기·소유자 상태를 매 요청 확인 |
 | actor context | actor_kind(user/agent/master/anonymous/system), actor_id, owner_user_id, credential_id, session_id |
@@ -251,7 +251,7 @@ audit / invocation / security ── actor snapshot + request_id
 
 | 구현 | 보장·경계 |
 |---|---|
-| subtype FK | accounts의 User generated ID + deferred FK로 commit 시 User 행 보장 |
+| 계정 기준 | accounts 단일 행; credentials와 sessions가 직접 참조하며 세션의 복합 FK로 토큰 소유자 일치 보장 |
 | 최초 설정 | 계정·첫 credential·감사 함께 commit; 기존 management 계정이 있으면 초기화 거부 |
 | 변경 직렬화 | bootstrap·계정 변경·발급·복구·폐기·로그인이 같은 transaction advisory lock 사용 |
 | 마지막 Admin | 활성 Admin의 강등·비활성화·삭제를 현재 DB 상태로 검사; 데이터 경로는 잠금 공유 없이 유지 |
