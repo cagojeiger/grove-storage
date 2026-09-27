@@ -16,7 +16,7 @@ gscli status
 | 입력 | 우선순위·형식 |
 |---|---|
 | endpoint | `--endpoint` → `GROVE_ENDPOINT` |
-| token | `--token-file` → `GROVE_TOKEN` → `GROVE_OPERATOR_TOKEN` (변수명 alias; 새 토큰만 허용) |
+| token | `--token-file` → `GROVE_TOKEN` (새 관리 토큰만 허용) |
 | 출력 | `--output table|json`, 기본 table |
 | 제한시간 | `--timeout SECONDS`, 기본 30 |
 

@@ -101,9 +101,8 @@ CLI의 이전 `/`, `/healthz`, `/readyz`, `/usage`, `/clients` 5회 호출은 �
 | 설정 | 계약 |
 |---|---|
 | endpoint | `--endpoint` > `GROVE_ENDPOINT` |
-| 관리 토큰 | `--token-file PATH` > `GROVE_TOKEN` > 이전 변수명 `GROVE_OPERATOR_TOKEN` |
+| 관리 토큰 | `--token-file PATH` > `GROVE_TOKEN` |
 | 토큰 종류 | `gsm_` + 소문자 hex 64자, User; 기존 운영자/master/서비스 키는 로컬에서 거부 |
-| 이전 변수명 | 새 관리 토큰을 전달하는 alias만 유지; 이전 인증·REST 선택 기능과 구분 |
 | 우선순위 | 우선 설정 값이 비어 있거나 잘못됐으면 오류; 하위 값으로 재시도하지 않음 |
 | 파일 | regular file·최대 8 KiB 읽기, 말미 LF/CRLF 한 개 허용 |
 | origin | HTTPS, 또는 literal loopback HTTP; userinfo·query·fragment·하위 path 제외 |

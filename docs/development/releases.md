@@ -6,7 +6,7 @@
 |---|---|
 | CLI 패키지·실행 파일 | `gscli` (Grove Storage CLI) |
 | 서버·이미지·저장소 | `filegate` 유지 |
-| CLI 연결 | `GROVE_ENDPOINT`, `GROVE_TOKEN`, `--token-file`; `GROVE_OPERATOR_TOKEN`은 새 User 토큰의 변수명 alias |
+| CLI 연결 | `GROVE_ENDPOINT`, `GROVE_TOKEN`, `--token-file` |
 | 배포 채널 | `cagojeiger/filegate` GitHub Releases의 독립 실행 파일 |
 | 패키지 버전 | 서버·CLI가 workspace의 `MAJOR.MINOR.PATCH`를 공유 |
 | 버전 정합성 | `VERSION` = `Cargo.toml` workspace = 내부 패키지 `Cargo.lock` |

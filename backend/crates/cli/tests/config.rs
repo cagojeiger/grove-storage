@@ -198,15 +198,16 @@ fn working_directory_dotenv_is_not_loaded() {
 }
 
 #[test]
-fn new_token_setting_precedes_legacy_alias_without_invalid_value_fallback() {
-    let server = Server::new(vec![("client.list", Reply::json(json!([])))]);
+fn legacy_operator_token_environment_is_not_used() {
+    let server = Server::new(vec![]);
     let output = server
         .command()
+        .env_remove("GROVE_TOKEN")
         .env("GROVE_OPERATOR_TOKEN", "invalid-old-value")
         .args(["client", "list"])
         .output()
         .unwrap();
-    envelope(&output, 0);
+    envelope(&output, 2);
     let output = server
         .command()
         .env_remove("GROVE_TOKEN")
@@ -214,14 +215,6 @@ fn new_token_setting_precedes_legacy_alias_without_invalid_value_fallback() {
         .args(["client", "list"])
         .output()
         .unwrap();
-    envelope(&output, 0);
-    let output = server
-        .command()
-        .env("GROVE_TOKEN", "")
-        .env("GROVE_OPERATOR_TOKEN", TOKEN)
-        .args(["client", "list"])
-        .output()
-        .unwrap();
     envelope(&output, 2);
-    assert_eq!(server.seen().len(), 2);
+    assert!(server.seen().is_empty());
 }
