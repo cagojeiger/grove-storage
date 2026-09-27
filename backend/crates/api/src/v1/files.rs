@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use filegate_db::files::{self, CreateOutcome, CreateSpec, DeleteOutcome};
-use filegate_infra::{Address, s3_head_object, s3_presign_get, s3_presign_put};
+use filegate_infra::{Address, s3_presign_get, s3_presign_put};
 use grove_object_policy::multipart::part_count;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -201,60 +201,35 @@ pub(super) async fn commit(
         return super::multipart::commit(&state, &client, file_id, &file, part_size, &backend)
             .await;
     }
-    let (actual_size, etag) = if backend.is_relay() {
-        match files::recorded_upload(&state.pool, file_id).await? {
-            Some(recorded) => recorded,
-            // 아직 업로드 전 — pending에 남아 재시도할 수 있다 (spec 00).
-            None => return Err(bad_request("no uploaded object to commit")),
-        }
-    } else {
-        let StorageBackend::S3 { spec, .. } = &backend else {
-            return Err(internal("direct access requires an s3 storage"));
-        };
-        let storage = state
-            .s3_clients
-            .get(&file.storage.id, spec, Address::Internal);
-        match s3_head_object(&storage, &file.object_key)
-            .await
-            .map_err(ApiError::Storage)?
-        {
-            Some(head) => head,
-            None => return Err(bad_request("no uploaded object to commit")),
-        }
-    };
-    // 직결·중계 공용 사후 게이트. 중계는 바이트 엔드포인트가 이미 크기를
-    // 강제해 이 검사에 걸릴 수 없지만, 직결은 head_object 실측이라 걸린다.
-    if actual_size != file.declared_size {
-        return Err(bad_request("uploaded size does not match declaration"));
-    }
-    if let Some(declared_md5) = &file.declared_md5
-        && !declared_md5.eq_ignore_ascii_case(&etag)
-    {
-        return Err(bad_request("uploaded content does not match declared md5"));
-    }
-
-    if files::finalize_commit(&state.pool, file_id, &etag).await? {
+    let committed = grove_object_service::single_commit::commit(
+        &super::single_commit::Operations {
+            state: &state,
+            client: &client,
+            file_id,
+            file: &file,
+            backend: &backend,
+        },
+        file.declared_size,
+        file.declared_md5.as_deref(),
+    )
+    .await
+    .map_err(super::single_commit::error)?;
+    if committed.transitioned {
         tracing::info!(event = "file.committed", file = %file_id, client = %client.0);
-        return Ok(committed_response(file_id, etag));
     }
-
-    // 전이 경합의 패자 — 현재 상태로 멱등 응답한다.
-    committed_or_conflict(&state, &client, file_id).await
+    Ok(committed_response(file_id, committed.etag))
 }
 
-/// commit 전이 경합의 패자 처리 (단일 PUT·multipart 공용): 현재 상태를 다시
-/// 읽어 active면 멱등 응답, 아니면 409. 승자가 확정을 끝낸 뒤라 대개 active다.
+/// Multipart lost-transition response; the ownership-checked current-state read
+/// is shared with single uploads. Only an active file yields idempotent success.
 pub(super) async fn committed_or_conflict(
     state: &AppState,
     client: &ClientId,
     file_id: Uuid,
 ) -> Result<Response, ApiError> {
-    let now = files::access(&state.pool, &client.0, file_id)
-        .await?
-        .ok_or_else(|| not_found("file not found"))?;
-    match now.state.as_str() {
-        "active" => Ok(committed_response(file_id, now.etag.unwrap_or_default())),
-        _ => Err(conflict("file is not committable")),
+    match super::single_commit::current_etag(state, client, file_id).await? {
+        Some(etag) => Ok(committed_response(file_id, etag)),
+        None => Err(conflict("file is not committable")),
     }
 }
 
@@ -410,6 +385,9 @@ pub(super) fn committed_response(file_id: Uuid, etag: String) -> Response {
     })
     .into_response()
 }
+
+#[cfg(test)]
+mod commit_tests;
 
 #[cfg(test)]
 mod tests {

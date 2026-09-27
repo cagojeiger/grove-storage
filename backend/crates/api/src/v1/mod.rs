@@ -8,6 +8,7 @@ mod files;
 mod multipart;
 mod multipart_create;
 mod relay;
+mod single_commit;
 
 use axum::Router;
 use axum::extract::{Request, State};
