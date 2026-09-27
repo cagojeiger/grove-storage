@@ -336,6 +336,11 @@ nav a[aria-current="page"] {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+@media (min-width: 1001px) {
+  .topology-overview .metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
 .metrics .compact-value {
   font-size: 19px;
 }

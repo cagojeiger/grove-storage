@@ -84,6 +84,10 @@ for (const count of [0, 1, 6, 7]) {
     await expect(
       page.getByRole("heading", { name: "Connections", exact: true }),
     ).toBeVisible();
+    await expect(page.locator(".metrics dt")).toHaveText([
+      "Clients", "Storage", "Total files", "Total stored", "Registered capacity",
+    ]);
+    await expect(page.locator(".metrics > div").nth(1).locator("dd")).toHaveText(String(count));
     await expect(page.locator('[data-side="client"]')).toHaveCount(
       count > 6 ? 6 : count,
     );

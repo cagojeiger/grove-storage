@@ -71,6 +71,10 @@ export function Overview() {
                 <dd>{data.clients.length}</dd>
               </div>
               <div>
+                <dt>Storage</dt>
+                <dd>{data.usage.length}</dd>
+              </div>
+              <div>
                 <dt>Total files</dt>
                 <dd>{sum("active_files").toLocaleString("en-US")}</dd>
               </div>
