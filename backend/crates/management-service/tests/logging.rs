@@ -39,7 +39,7 @@ async fn mutations_audit_once_and_reads_only_record_invocations(pool: PgPool) {
             &pool,
             Proof::Session(&admin.session),
             Surface::Console,
-            Command::Accounts(Page::default())
+            Command::Accounts(Page::default().into())
         )
         .await
         .result
@@ -55,7 +55,7 @@ async fn invalid_proof_logs_anonymous_security_without_payload(pool: PgPool) {
         &pool,
         Proof::Token(secret),
         Surface::Mcp,
-        Command::Accounts(Page::default()),
+        Command::Accounts(Page::default().into()),
     )
     .await;
     assert!(matches!(result.result, Err(Error::Unauthenticated)));
@@ -145,7 +145,7 @@ async fn audit_failure_rejects_change_but_invocation_failure_does_not(pool: PgPo
             &pool,
             Proof::Token(&admin.token),
             Surface::Cli,
-            Command::Accounts(Page::default())
+            Command::Accounts(Page::default().into())
         )
         .await
         .result,

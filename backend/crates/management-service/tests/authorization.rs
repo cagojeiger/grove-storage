@@ -33,7 +33,7 @@ fn commands(target: Uuid, key_hash: &str) -> Vec<(Command<'_>, bool)> {
             true,
         ),
         (Command::RevokeCredential(Uuid::new_v4()), true),
-        (Command::Accounts(Page::default()), true),
+        (Command::Accounts(Page::default().into()), true),
         (
             Command::Credentials {
                 account: target,
@@ -137,7 +137,7 @@ async fn admin_bearer_cannot_use_any_console_command_or_fake_its_surface(pool: P
             &pool,
             Proof::Session(&login.session),
             Surface::Cli,
-            Command::Accounts(Page::default())
+            Command::Accounts(Page::default().into())
         )
         .await
         .result,
@@ -253,7 +253,7 @@ async fn waiting_mutation_rechecks_credential_after_lock_acquisition(pool: PgPoo
             &task_pool,
             Proof::Session(&login.session),
             Surface::Console,
-            Command::Accounts(Page::default()),
+            Command::Accounts(Page::default().into()),
         )
         .await
     });

@@ -28,12 +28,12 @@ test("details survive reload and history without reading the account list", asyn
 
 test("creation opens the returned account even outside the loaded page", async ({ page }) => {
   await accessMock(page);
-  await page.route("**/v1/accounts?*", route => route.fulfill({ json: { items: [owner], next_before: owner.id } }));
+  await page.route("**/v1/accounts?*", route => route.fulfill({ json: { items: [owner], next_before: owner.id, previous_after: null, initialized: true } }));
   await page.goto(base);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("New account");
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page).toHaveURL(/#accounts\/33333333-3333-3333-3333-333333333333$/);
+  await expect(page).toHaveURL(/#accounts\/33333333-3333-3333-3333-333333333333\?/);
   await expect(page.getByRole("heading", { name: "New account" })).toBeVisible();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await expect(page.getByLabel("Label", { exact: true })).toBeVisible();

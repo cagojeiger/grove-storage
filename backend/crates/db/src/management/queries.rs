@@ -1,6 +1,66 @@
 use super::{Error, IdentityTransaction};
 use chrono::{DateTime, Utc};
+use grove_management_policy::Role;
 use uuid::Uuid;
+
+#[derive(Default, Clone, Copy)]
+pub enum AccountStatus {
+    #[default]
+    All,
+    Current,
+    Active,
+    Disabled,
+    Deleted,
+}
+
+pub struct AccountQuery {
+    page: Page<Uuid>,
+    after: Option<Uuid>,
+    search: String,
+    role: Option<Role>,
+    status: AccountStatus,
+}
+
+impl From<Page<Uuid>> for AccountQuery {
+    fn from(page: Page<Uuid>) -> Self {
+        Self {
+            page,
+            after: None,
+            search: String::new(),
+            role: None,
+            status: AccountStatus::All,
+        }
+    }
+}
+
+impl AccountQuery {
+    pub fn new(
+        page: Page<Uuid>,
+        after: Option<Uuid>,
+        search: String,
+        role: Option<Role>,
+        status: AccountStatus,
+    ) -> Result<Self, Error> {
+        if (page.before.is_some() && after.is_some()) || search.chars().count() > 80 {
+            return Err(Error::InvalidInput);
+        }
+        Ok(Self {
+            page,
+            after,
+            search: search.trim().to_owned(),
+            role,
+            status,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct AccountPage {
+    pub items: Vec<AccountSummary>,
+    pub next_before: Option<Uuid>,
+    pub previous_after: Option<Uuid>,
+    pub initialized: bool,
+}
 
 /// Private bounds make every query bounded, including internal callers.
 #[derive(Clone, Copy)]
@@ -68,16 +128,59 @@ impl IdentityTransaction<'_> {
         .ok_or(Error::NotFound)
     }
 
-    pub async fn accounts(&mut self, page: Page<Uuid>) -> Result<Vec<AccountSummary>, Error> {
-        Ok(sqlx::query_as(
+    pub async fn accounts(&mut self, query: AccountQuery) -> Result<AccountPage, Error> {
+        let status = match query.status {
+            AccountStatus::All => "all",
+            AccountStatus::Current => "current",
+            AccountStatus::Active => "active",
+            AccountStatus::Disabled => "disabled",
+            AccountStatus::Deleted => "deleted",
+        };
+        let mut rows: Vec<AccountSummary> = sqlx::query_as(
             "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at
             FROM management.accounts a
-            WHERE ($1::uuid IS NULL OR a.id<$1) ORDER BY a.id DESC LIMIT $2",
+            WHERE ($1::uuid IS NULL OR a.id<$1) AND ($2::uuid IS NULL OR a.id>$2)
+            AND ($3='' OR strpos(lower(a.display_name),lower($3))>0 OR strpos(a.id::text,lower($3))>0)
+            AND ($4::text IS NULL OR a.role=$4)
+            AND ($5='all' OR ($5='current' AND a.deleted_at IS NULL)
+                OR ($5='active' AND a.deleted_at IS NULL AND a.is_active)
+                OR ($5='disabled' AND a.deleted_at IS NULL AND NOT a.is_active)
+                OR ($5='deleted' AND a.deleted_at IS NOT NULL))
+            ORDER BY CASE WHEN $2::uuid IS NOT NULL THEN a.id END ASC, a.id DESC LIMIT $6",
         )
-        .bind(page.before)
-        .bind(page.limit)
+        .bind(query.page.before)
+        .bind(query.after)
+        .bind(query.search)
+        .bind(query.role.map(super::role_name))
+        .bind(status)
+        .bind(query.page.limit + 1)
         .fetch_all(&mut *self.inner)
-        .await?)
+        .await?;
+        // The extra row detects the page boundary; backward reads return in display order.
+        let more = rows.len() > query.page.limit as usize;
+        rows.truncate(query.page.limit as usize);
+        if query.after.is_some() {
+            rows.reverse();
+        }
+        let next_before = if query.after.is_some() || more {
+            rows.last().map(|row| row.id).or(query.after)
+        } else {
+            None
+        };
+        let previous_after = if query.page.before.is_some() || (query.after.is_some() && more) {
+            rows.first().map(|row| row.id).or(query.page.before)
+        } else {
+            None
+        };
+        let initialized = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts)")
+            .fetch_one(&mut *self.inner)
+            .await?;
+        Ok(AccountPage {
+            items: rows,
+            next_before,
+            previous_after,
+            initialized,
+        })
     }
     pub async fn credentials(
         &mut self,

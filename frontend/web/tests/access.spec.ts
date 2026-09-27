@@ -138,20 +138,21 @@ test("Reader cannot discover Access or request accounts", async ({ page }) => {
   expect(writes).toHaveLength(0);
 });
 
-test("account paging preserves earlier Users", async ({ page }) => {
+test("account paging can return to earlier Users", async ({ page }) => {
   await accessMock(page);
   await page.route("**/v1/accounts?*", (route) =>
     route.fulfill({
       json: new URL(route.request().url()).searchParams.has("before")
-        ? { items: [owner], next_before: null }
-        : { items: [otherUser], next_before: otherUser.id },
+        ? { items: [owner], next_before: null, previous_after: owner.id, initialized: true }
+        : { items: [otherUser], next_before: otherUser.id, previous_after: null, initialized: true },
     }),
   );
   await page.goto(root);
-  await page.getByRole("button", { name: "Load more accounts" }).click();
+  await page.getByRole("button", { name: "Next page" }).click();
   await expect(
     page.getByRole("button", { name: /Home administrator.*Active/ }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Previous page" }).click();
   await expect(
     page.getByRole("button", { name: /Writer.*Active/ }),
   ).toBeVisible();

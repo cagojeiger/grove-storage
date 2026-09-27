@@ -43,7 +43,7 @@ export async function accessMock(
     if (path === "/root" && method === "GET") return route.fulfill({ json: { id: "root", configured: true, protected: true, source: "config" } });
     if (method !== "GET") writes.push({ path, method, body });
     if (path === "/accounts" && method === "GET")
-      return route.fulfill({ json: { items: accounts, next_before: null } });
+      return route.fulfill({ json: accountPage(accounts, new URL(req.url()).searchParams) });
     if (path === "/accounts" && method === "POST") {
       const row: Account = {
         ...owner,
@@ -96,4 +96,26 @@ export async function accessMock(
     return route.fulfill({ json: { changed: true } });
   });
   return { writes, accounts, tokens };
+}
+
+export function accountPage(accounts: Account[], params: URLSearchParams) {
+  const search = (params.get("q") ?? "").toLowerCase();
+  const status = params.get("status") ?? "all";
+  const role = params.get("role");
+  const before = params.get("before"), after = params.get("after");
+  const limit = Number(params.get("limit") ?? 50);
+  const rows = accounts.filter(row =>
+    (!search || row.display_name.toLowerCase().includes(search) || row.id.includes(search)) &&
+    (!role || row.role === role) &&
+    (status === "all" || (status === "deleted" ? Boolean(row.deleted_at) : !row.deleted_at &&
+      (status === "current" || (status === "active" ? row.is_active : !row.is_active)))) &&
+    (!before || row.id < before) && (!after || row.id > after),
+  ).sort((a, b) => a.id.localeCompare(b.id) * (after ? 1 : -1));
+  const more = rows.length > limit;
+  const items = rows.slice(0, limit);
+  if (after) items.reverse();
+  return { items, initialized: accounts.length > 0,
+    next_before: after || more ? items.at(-1)?.id ?? after : null,
+    previous_after: before || (after && more) ? items[0]?.id ?? before : null,
+  };
 }

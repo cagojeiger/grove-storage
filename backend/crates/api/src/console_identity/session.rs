@@ -147,7 +147,7 @@ pub(super) async fn root_account(State(state): State<AppState>, headers: HeaderM
     let execution = execute(
         &state,
         &headers,
-        Command::Accounts(service::Page::default()),
+        Command::Accounts(service::Page::default().into()),
     )
     .await;
     match execution.result {

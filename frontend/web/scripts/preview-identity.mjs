@@ -178,8 +178,33 @@ export function previewIdentity(json) {
         return true;
       }
       if (path === "/root" && method === "GET") json(res, 200, { id: "root", configured: true, protected: true, source: "config" });
-      else if (path === "/accounts" && method === "GET")
-        json(res, 200, page([...accounts.values()]));
+      else if (path === "/accounts" && method === "GET") {
+        const params = url.searchParams;
+        const q = (params.get("q") ?? "").trim().toLowerCase();
+        const role = params.get("role"), status = params.get("status") ?? "all";
+        const before = params.get("before"), after = params.get("after");
+        const limit = Number(params.get("limit") ?? 50);
+        if (q.length > 80 || (before && after) || !Number.isInteger(limit) || limit < 1 || limit > 100 ||
+            (role && !["admin", "writer", "reader"].includes(role)) ||
+            !["all", "current", "active", "disabled", "deleted"].includes(status)) {
+          fail(400, "invalid_input");
+          return true;
+        }
+        const rows = [...accounts.values()].filter(row =>
+          (!q || row.display_name.toLowerCase().includes(q) || row.id.includes(q)) &&
+          (!role || row.role === role) &&
+          (status === "all" || (status === "deleted" ? Boolean(row.deleted_at) : !row.deleted_at &&
+            (status === "current" || (status === "active" ? row.is_active : !row.is_active)))) &&
+          (!before || row.id < before) && (!after || row.id > after),
+        ).sort((a, b) => a.id.localeCompare(b.id) * (after ? 1 : -1));
+        const more = rows.length > limit;
+        const items = rows.slice(0, limit);
+        if (after) items.reverse();
+        json(res, 200, { items, initialized: accounts.size > 0,
+          next_before: after || more ? items.at(-1)?.id ?? after : null,
+          previous_after: before || (after && more) ? items[0]?.id ?? before : null,
+        });
+      }
       else if (path === "/accounts" && method === "POST") {
         if (
           !body.display_name?.trim() ||

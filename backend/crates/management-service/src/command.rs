@@ -1,4 +1,7 @@
-use filegate_db::management::{AccountChange, NewAccount, NewCredential, queries::Page};
+use filegate_db::management::{
+    AccountChange, NewAccount, NewCredential,
+    queries::{AccountQuery, Page},
+};
 use grove_management_policy::Action;
 use uuid::Uuid;
 
@@ -17,7 +20,7 @@ pub enum Command<'a> {
     RevokeOwnSession(Uuid),
     CurrentSession,
     Logout,
-    Accounts(Page<Uuid>),
+    Accounts(AccountQuery),
     Account(Uuid),
     Credentials {
         account: Uuid,

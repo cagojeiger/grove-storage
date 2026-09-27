@@ -221,10 +221,10 @@ async fn secret_free_lists_and_page_bounds(pool: PgPool) {
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::Accounts(Page::new(None, 1).unwrap()),
+        Command::Accounts(Page::new(None, 1).unwrap().into()),
     )
     .await
     .result
     .unwrap();
-    assert!(matches!(result, Output::Accounts(ref rows) if rows.len()==1));
+    assert!(matches!(result, Output::Accounts(ref page) if page.items.len()==1));
 }

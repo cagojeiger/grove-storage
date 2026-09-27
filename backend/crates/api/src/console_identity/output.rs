@@ -23,9 +23,12 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
         }
         Output::Changed(changed) => json!({"changed":changed}),
         Output::AccountDetails(row) => account(row),
-        Output::Accounts(rows) => page(rows.into_iter().map(|r| {
-            (r.id.to_string(), account(r))
-        }), limit),
+        Output::Accounts(page) => json!({
+            "items": page.items.into_iter().map(account).collect::<Vec<_>>(),
+            "next_before": page.next_before,
+            "previous_after": page.previous_after,
+            "initialized": page.initialized,
+        }),
         Output::Credentials(rows) => page(rows.into_iter().map(|r| {
             (r.id.to_string(), json!({
                 "id": r.id, "account_id": r.account_id, "label": r.label,
