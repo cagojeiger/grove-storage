@@ -56,10 +56,7 @@ async fn reauthenticate_admin(
     session_hash: &str,
     current_password: SecretString,
 ) -> Result<(), Error> {
-    let actor = db::session_actor(pool, session_hash)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::Unauthenticated)?;
+    let actor = reauthenticate(pool, session_hash, current_password).await?;
     if !matches!(
         actor.caller.actor,
         Actor::User {
@@ -69,6 +66,24 @@ async fn reauthenticate_admin(
     ) {
         return Err(Error::Forbidden);
     }
+    Ok(())
+}
+
+pub(crate) async fn reauthenticate(
+    pool: &PgPool,
+    session_hash: &str,
+    current_password: SecretString,
+) -> Result<db::Identity, Error> {
+    if !db::telemetry::login_allowed(pool)
+        .await
+        .map_err(Error::from)?
+    {
+        return Err(Error::RateLimited);
+    }
+    let actor = db::session_actor(pool, session_hash)
+        .await
+        .map_err(Error::from)?
+        .ok_or(Error::Unauthenticated)?;
     let credential = db::passwords::find_by_account(pool, actor.account_id)
         .await
         .map_err(Error::from)?
@@ -82,7 +97,7 @@ async fn reauthenticate_admin(
     {
         return Err(Error::Unauthenticated);
     }
-    Ok(())
+    Ok(actor)
 }
 
 pub async fn inspect(pool: &PgPool, token_hash: &str) -> Result<db::password_setup::Setup, Error> {

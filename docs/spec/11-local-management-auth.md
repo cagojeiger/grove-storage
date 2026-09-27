@@ -121,7 +121,7 @@ Paths below are relative to the console identity API prefix.
 | `GET /session`, `DELETE /session` | Current identity / logout |
 | `GET /me`, `PATCH /me` | Own profile |
 | `POST /me/password` | Current/new password -> revoke sessions |
-| `GET /me/tokens`, `POST /me/tokens`, `DELETE /me/tokens/{id}` | Own named API tokens |
+| `GET /me/tokens`, `POST /me/tokens`, `DELETE /me/tokens/{id}` | Password-session-only own named API tokens; issuance rechecks current password |
 | `GET /me/sessions`, `DELETE /me/sessions/{id}` | Own sessions |
 | `/accounts`, `/accounts/{id}` | Admin account lifecycle; account read includes username and password readiness |
 | `POST /accounts` with `kind=user_with_password_setup` | Admin password reauthentication -> atomic account, username and single-use setup link |
@@ -152,7 +152,7 @@ used as authorization evidence.
 |---|---|---|
 | 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
 | 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally; legacy fallback remains for Stage 5 |
-| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | In progress: combined creation and setup link implemented; personal tokens pending |
+| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | In progress: setup, tokens and sessions verified locally; own profile pending |
 | 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Pending |
 | 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Pending |
 
@@ -206,7 +206,17 @@ Console creation atomically reserves the username and issues a setup link; the
 link is displayed once. Account lists/details show username and password
 readiness. Legacy account creation without a password remains for existing
 callers during migration; it requires separate link issuance to enable password
-login. Personal token controls remain Stage 3 work.
+login. A password session can issue, list and revoke its own management tokens;
+issuance requires current-password verification and the shared login budget.
+Legacy token sessions cannot use the personal token routes.
+
+### Personal Token Evidence
+
+| Check | Result |
+|---|---|
+| DB/API ownership tests | Self-only list/revoke, password-session gate, reauthentication and CSRF passed against PostgreSQL 17 |
+| Browser regression | 225 Playwright tests passed, including personal-token lifecycle and phone/desktop light/dark layouts |
+| Real HTTPS fixture | Reader setup/login, own token issue, Resource `status` 200 and revoked token 401 passed with PostgreSQL and MinIO |
 
 ## References
 

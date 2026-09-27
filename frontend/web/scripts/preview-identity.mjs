@@ -187,6 +187,34 @@ export function previewIdentity(json) {
         }
         return true;
       }
+      if (path === "/me/tokens" && method === "GET") {
+        const before = url.searchParams.get("before");
+        const limit = Number(url.searchParams.get("limit") ?? 50);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) fail(400, "invalid_input");
+        else {
+          const rows = [...credentials.values()]
+            .filter(token => token.account_id === current.account_id && (!before || token.id < before))
+            .sort((a, b) => b.id.localeCompare(a.id));
+          const items = rows.slice(0, limit).map(({ token, ...item }) => item);
+          json(res, 200, { items, next_before: items.length === limit ? items.at(-1).id : null });
+        }
+        return true;
+      }
+      if (path === "/me/tokens" && method === "POST") {
+        const login = passwords.get(current.account_id);
+        if (body.current_password !== login?.password) fail(401, "unauthenticated");
+        else if (!body.label?.trim() || body.label.trim().length > 80 ||
+                 !Number.isInteger(body.expires_in_days) || body.expires_in_days < 1 || body.expires_in_days > 90)
+          fail(400, "invalid_input");
+        else json(res, 201, issue(current.account_id, body.label.trim(), body.expires_in_days));
+        return true;
+      }
+      if (path.startsWith("/me/tokens/") && method === "DELETE") {
+        const token = credentials.get(path.slice("/me/tokens/".length));
+        if (!token || token.account_id !== current.account_id) fail(404, "not_found");
+        else { const changed = !token.revoked_at; token.revoked_at = new Date().toISOString(); json(res, 200, { changed }); }
+        return true;
+      }
       if (path === "/sessions" && method === "GET") {
         const value = session();
         json(res, 200, { items: [{ id: value.session_id, credential_id: value.credential_id ?? null, created_at: signedInAt, expires_at: new Date(Date.parse(signedInAt)+1800000).toISOString(), revoked_at: null }], next_before: null });

@@ -158,6 +158,30 @@ try {
     await recipient.getByRole("button", { name: "Sign in", exact: true }).click();
     await recipient.getByText("Reader · Read-only").waitFor();
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
+    await recipient.getByRole("link", { name: "My account" }).click();
+    await recipient.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();
+    await recipient.getByLabel("Label", { exact: true }).fill("Reader CLI");
+    await recipient.getByLabel("Expires in days").fill("1");
+    await recipient.getByRole("dialog").getByLabel("Current password").fill(recipientPassword);
+    await recipient.getByRole("button", { name: "Issue", exact: true }).click();
+    const readerToken = await recipient.getByRole("textbox", { name: "Issued token" }).inputValue();
+    assert.match(readerToken, /^gsm_[a-f0-9]{64}$/);
+    await recipient.getByLabel("I have saved this token. It is shown only once.").check();
+    await recipient.getByRole("button", { name: "Done" }).click();
+    async function readerStatus() {
+      return (await fetch(`${endpoint}/api/admin/commands/v1`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${readerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ protocol: 1, command: "status", input: {} }),
+      })).status;
+    }
+    assert.equal(await readerStatus(), 200);
+    await recipient.getByRole("button", { name: "Revoke Reader CLI" }).click();
+    await recipient.getByRole("checkbox", { name: "Revoke Reader CLI" }).check();
+    await recipient.getByRole("button", { name: "Revoke", exact: true }).click();
+    await recipient.getByRole("region", { name: "My API tokens" }).getByText("Revoked").waitFor();
+    assert.equal(await readerStatus(), 401);
+    console.log("PASS real Reader personal token, Resource status and immediate revocation");
   } finally {
     await recipientContext.close();
   }

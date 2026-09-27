@@ -13,6 +13,7 @@ import { Dialog } from "../../design/Dialog";
 import { useAction } from "../access/useAction";
 import { time } from "../../design/format";
 import { PasswordChange } from "./PasswordChange";
+import { PersonalTokens } from "./PersonalTokens";
 
 type LoginSession = {
   id: string;
@@ -72,6 +73,7 @@ export function Sessions({ session }: { session: Session }) {
         </div>
       </dl>
       {session.principal === "user" && session.credential_id === null && <PasswordChange />}
+      {session.principal === "user" && session.credential_id === null && <PersonalTokens session={session} />}
       <section className="storage-section" aria-label="My sessions">
         <h2>My sessions</h2>
         {query.isPending ? (

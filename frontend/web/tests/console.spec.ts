@@ -24,6 +24,9 @@ async function mock(page: Page, signedIn = true, passwordSession = false) {
     await page.route("**/api/admin/identity/v1/sessions?*", (route) =>
       route.fulfill({ json: { items: [], next_before: null } }),
     );
+    await page.route("**/api/admin/identity/v1/me/tokens?*", (route) =>
+      route.fulfill({ json: { items: [], next_before: null } }),
+    );
   }
   await page.route("**/readyz", (route) =>
     route.fulfill({ json: { status: "ready" } }),

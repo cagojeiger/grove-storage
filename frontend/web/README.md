@@ -29,7 +29,7 @@ The real fixture below verifies first-Admin bootstrap against an empty database.
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
 | API readiness, client count, per-storage/client usage and daily snapshot history | Server-paged large usage histories |
 | Activity: audit, command history, security events; scoped cursor paging and event details | Server-side actor/resource/date filters |
-| My account: role, password change, own sessions and confirmed revocation | Personal management API tokens |
+| My account: role, password change, own sessions and own management API tokens | Legacy token-session cleanup |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 

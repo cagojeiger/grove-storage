@@ -29,13 +29,7 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
             "previous_after": page.previous_after,
             "initialized": page.initialized,
         }),
-        Output::Credentials(rows) => page(rows.into_iter().map(|r| {
-            (r.id.to_string(), json!({
-                "id": r.id, "account_id": r.account_id, "label": r.label,
-                "token_prefix": r.token_prefix, "created_at": r.created_at,
-                "expires_at": r.expires_at, "revoked_at": r.revoked_at,
-            }))
-        }), limit),
+        Output::Credentials(rows) => credential_page(rows, limit),
         Output::Sessions(rows) => page(rows.into_iter().map(|r| {
             (r.id.to_string(), json!({
                 "id": r.id, "credential_id": r.credential_id, "created_at": r.created_at,
@@ -64,6 +58,25 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
         _ => return failure(Error::Unavailable, execution.request_id),
     };
     identified(Json(body).into_response(), execution.request_id)
+}
+
+pub(super) fn credential_page(
+    rows: Vec<filegate_db::management::queries::CredentialSummary>,
+    limit: u16,
+) -> Value {
+    page(
+        rows.into_iter().map(|r| {
+            (
+                r.id.to_string(),
+                json!({
+                    "id": r.id, "account_id": r.account_id, "label": r.label,
+                    "token_prefix": r.token_prefix, "created_at": r.created_at,
+                    "expires_at": r.expires_at, "revoked_at": r.revoked_at,
+                }),
+            )
+        }),
+        limit,
+    )
 }
 
 fn account(r: filegate_db::management::queries::AccountSummary) -> Value {

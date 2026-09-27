@@ -12,6 +12,7 @@ mod identity;
 pub mod master;
 pub mod password_setup;
 pub mod passwords;
+pub mod personal_tokens;
 pub mod queries;
 mod resource_metadata;
 mod resource_writes;
