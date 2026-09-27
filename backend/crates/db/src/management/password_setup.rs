@@ -68,9 +68,7 @@ async fn admin_password_session(
     request_id: Uuid,
     session_hash: &str,
 ) -> Result<AuditContext, Error> {
-    let actor = identity::session(tx, session_hash)
-        .await?
-        .ok_or(Error::Unauthenticated)?;
+    let actor = identity::password_session(tx, session_hash).await?;
     let actor_session = actor.session_id.ok_or(Error::InvalidInput)?;
     if !matches!(
         actor.caller.actor,
@@ -79,14 +77,6 @@ async fn admin_password_session(
             ..
         }
     ) {
-        return Err(Error::Forbidden);
-    }
-    let password_session: bool =
-        sqlx::query_scalar("SELECT auth_method='password' FROM management.sessions WHERE id=$1")
-            .bind(actor_session)
-            .fetch_one(&mut **tx)
-            .await?;
-    if !password_session {
         return Err(Error::Forbidden);
     }
     Ok(AuditContext {

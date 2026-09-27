@@ -127,6 +127,14 @@ try {
   await page.getByLabel("Password").fill(replacement);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "My account", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Edit my name" }).click();
+  await page.getByRole("dialog").getByLabel("Name").fill("Console owner updated");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("heading", { name: "Console owner updated", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Edit my name" }).click();
+  await page.getByRole("dialog").getByLabel("Name").fill("Console test owner");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("heading", { name: "Console test owner", exact: true }).waitFor();
   console.log("PASS real local recovery, password login, password change and re-login");
   await page.getByRole("link", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();

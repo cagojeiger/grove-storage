@@ -11,6 +11,7 @@ mod output;
 mod password;
 mod password_setup;
 mod personal_tokens;
+mod profile;
 pub(crate) mod resources;
 pub(crate) mod secrets;
 mod session;
@@ -57,6 +58,9 @@ pub fn routes(state: AppState) -> Router<AppState> {
         )
         .route("/credentials/{id}", delete(credentials::revoke))
         .route("/me/password", post(password::change))
+        .route("/me", get(profile::get).patch(profile::rename))
+        .route("/me/sessions", get(history::sessions))
+        .route("/me/sessions/{id}", delete(history::revoke_session))
         .route(
             "/me/tokens",
             get(personal_tokens::list).post(personal_tokens::issue),

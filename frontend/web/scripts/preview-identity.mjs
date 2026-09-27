@@ -173,6 +173,20 @@ export function previewIdentity(json) {
         fail(401, "unauthenticated");
         return true;
       }
+      if (path === "/me" && method === "GET") {
+        json(res, 200, accounts.get(current.account_id));
+        return true;
+      }
+      if (path === "/me" && method === "PATCH") {
+        if (!body.display_name?.trim() || body.display_name.trim().length > 80) fail(400, "invalid_input");
+        else {
+          const account = accounts.get(current.account_id);
+          const changed = account.display_name !== body.display_name.trim();
+          account.display_name = body.display_name.trim();
+          json(res, 200, { changed });
+        }
+        return true;
+      }
       if (path === "/me/password" && method === "POST") {
         const login = passwords.get(current.account_id);
         if (body.current_password !== login?.password ||
@@ -215,13 +229,13 @@ export function previewIdentity(json) {
         else { const changed = !token.revoked_at; token.revoked_at = new Date().toISOString(); json(res, 200, { changed }); }
         return true;
       }
-      if (path === "/sessions" && method === "GET") {
+      if (["/sessions", "/me/sessions"].includes(path) && method === "GET") {
         const value = session();
         json(res, 200, { items: [{ id: value.session_id, credential_id: value.credential_id ?? null, created_at: signedInAt, expires_at: new Date(Date.parse(signedInAt)+1800000).toISOString(), revoked_at: null }], next_before: null });
         return true;
       }
-      if (path.startsWith("/sessions/") && method === "DELETE") {
-        const id = decodeURIComponent(path.slice("/sessions/".length));
+      if ((path.startsWith("/sessions/") || path.startsWith("/me/sessions/")) && method === "DELETE") {
+        const id = decodeURIComponent(path.slice(path.startsWith("/me/") ? "/me/sessions/".length : "/sessions/".length));
         if (id !== session().session_id) fail(403, "forbidden");
         else { current = null; json(res, 200, { changed: true }); }
         return true;

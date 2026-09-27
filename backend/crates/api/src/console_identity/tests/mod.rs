@@ -8,6 +8,7 @@ mod master_recovery;
 mod password_login;
 mod password_setup;
 mod personal_tokens;
+mod profile;
 mod resources;
 mod root;
 

@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, RefreshCw } from "lucide-react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LogOut, Pencil, RefreshCw } from "lucide-react";
 import { ApiError, Session, message } from "../../api/http";
 import {
+  Account,
   identityPage,
   identityRequest,
+  isAccount,
   isChanged,
   isObject,
 } from "../../api/identity";
@@ -36,11 +38,19 @@ function isSession(v: unknown): v is LoginSession {
 export function Sessions({ session }: { session: Session }) {
   const cache = useQueryClient();
   const [selected, setSelected] = useState<LoginSession | null>(null);
+  const [editing, setEditing] = useState(false);
+  const passwordSession = session.principal === "user" && session.credential_id === null;
+  const profile = useQuery({
+    queryKey: ["me", "profile", session.principal === "user" ? session.user_id : "root"],
+    enabled: passwordSession,
+    queryFn: ({ signal }) => identityRequest("/me", isAccount, { signal }),
+    gcTime: 0,
+  });
   const query = useInfiniteQuery({
     queryKey: ["sessions", session.session_id],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
-      identityPage("/sessions", isSession, pageParam, signal),
+      identityPage("/me/sessions", isSession, pageParam, signal),
     getNextPageParam: (page) => page.next_before,
     gcTime: 0,
   });
@@ -62,7 +72,14 @@ export function Sessions({ session }: { session: Session }) {
           <RefreshCw size={18} />
         </button>
       </div>
+      {passwordSession && profile.isPending && <p role="status">Loading profile...</p>}
+      {passwordSession && profile.isError && <p role="alert">{message(profile.error)} <button onClick={() => void profile.refetch()}>Retry</button></p>}
+      {profile.data && <div className="section-heading">
+        <h2>{profile.data.display_name}</h2>
+        <button className="icon-button" title="Edit my name" aria-label="Edit my name" onClick={() => setEditing(true)}><Pencil size={16} /></button>
+      </div>}
       <dl className="detail-fields">
+        {profile.data && <div><dt>Username</dt><dd>{profile.data.username}</dd></div>}
         <div>
           <dt>Account</dt>
           <dd>{session.principal === "root" ? "Root" : session.user_id}</dd>
@@ -72,8 +89,10 @@ export function Sessions({ session }: { session: Session }) {
           <dd>{session.role}</dd>
         </div>
       </dl>
-      {session.principal === "user" && session.credential_id === null && <PasswordChange />}
-      {session.principal === "user" && session.credential_id === null && <PersonalTokens session={session} />}
+      {editing && profile.data && <EditProfile account={profile.data} onClose={() => setEditing(false)}
+        onSaved={async () => { await cache.invalidateQueries({ queryKey: ["me", "profile"] }); }} />}
+      {passwordSession && <PasswordChange />}
+      {passwordSession && <PersonalTokens session={session} />}
       <section className="storage-section" aria-label="My sessions">
         <h2>My sessions</h2>
         {query.isPending ? (
@@ -160,6 +179,36 @@ export function Sessions({ session }: { session: Session }) {
     </main>
   );
 }
+
+function EditProfile({ account, onClose, onSaved }: {
+  account: Account;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const action = useAction();
+  const [name, setName] = useState(account.display_name);
+  return <Dialog title="Edit my name" busy={action.busy} onClose={onClose}>
+    <form onSubmit={(event) => {
+      event.preventDefault();
+      void action.run(async () => {
+        await identityRequest("/me", isChanged, {
+          method: "PATCH", body: JSON.stringify({ display_name: name.trim() }),
+        });
+        onClose();
+        await onSaved();
+      });
+    }}>
+      <fieldset className="storage-form" disabled={action.busy || action.unknown}>
+        <label className="full-field">Name<input value={name} onChange={event => setName(event.target.value)} required maxLength={80} /></label>
+      </fieldset>
+      {action.error && <p role="alert" className="form-error">{action.error}</p>}
+      <div className="dialog-actions">
+        <button type="button" disabled={action.busy} onClick={onClose}>{action.unknown ? "Close and review" : "Cancel"}</button>
+        <button className="primary" disabled={action.busy || action.unknown || !name.trim() || name.trim() === account.display_name}>Save</button>
+      </div>
+    </form>
+  </Dialog>;
+}
 function RevokeSession({
   row,
   current,
@@ -195,7 +244,7 @@ function RevokeSession({
           onClick={() =>
             void action.run(async () => {
               await identityRequest(
-                `/sessions/${encodeURIComponent(row.id)}`,
+                `/me/sessions/${encodeURIComponent(row.id)}`,
                 isChanged,
                 { method: "DELETE" },
               );

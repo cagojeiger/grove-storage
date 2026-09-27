@@ -21,7 +21,10 @@ test.describe("English default", () => {
 async function mock(page: Page, signedIn = true, passwordSession = false) {
   let loggedIn = signedIn;
   if (passwordSession) {
-    await page.route("**/api/admin/identity/v1/sessions?*", (route) =>
+    await page.route("**/api/admin/identity/v1/me", (route) =>
+      route.fulfill({ json: { id: "11111111-1111-1111-1111-111111111111", kind: "user", display_name: "Owner", role: "admin", is_active: true, deleted_at: null, username: "owner", password_ready: true } }),
+    );
+    await page.route("**/api/admin/identity/v1/me/sessions?*", (route) =>
       route.fulfill({ json: { items: [], next_before: null } }),
     );
     await page.route("**/api/admin/identity/v1/me/tokens?*", (route) =>

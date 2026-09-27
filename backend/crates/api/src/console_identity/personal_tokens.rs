@@ -24,7 +24,7 @@ pub(super) struct Issue {
     current_password: SecretString,
 }
 
-fn session(headers: &HeaderMap) -> Result<String, Error> {
+pub(super) fn session(headers: &HeaderMap) -> Result<String, Error> {
     let (hash, root) = browser::session_hash(headers);
     if root || browser::cookie(headers).is_none() {
         return Err(Error::Unauthenticated);

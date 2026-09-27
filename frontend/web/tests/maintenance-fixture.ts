@@ -42,7 +42,7 @@ export async function maintenanceMock(page: Page, role = "admin") {
   await page.route("**/api/admin/identity/v1/session", (route) =>
     route.fulfill({ json: { ...session, role } }),
   );
-  await page.route("**/api/admin/identity/v1/sessions?*", (route) =>
+  await page.route("**/api/admin/identity/v1/me/sessions?*", (route) =>
     route.fulfill({
       json: {
         items: [

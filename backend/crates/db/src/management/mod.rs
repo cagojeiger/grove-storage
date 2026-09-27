@@ -13,6 +13,7 @@ pub mod master;
 pub mod password_setup;
 pub mod passwords;
 pub mod personal_tokens;
+pub mod profile;
 pub mod queries;
 mod resource_metadata;
 mod resource_writes;

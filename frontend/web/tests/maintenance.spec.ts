@@ -97,7 +97,7 @@ test("sessions page confirms revocation and signs out when revoking the current 
 }) => {
   await maintenanceMock(page);
   const requests: string[] = [];
-  await page.route("**/identity/v1/sessions/*", (route) => {
+  await page.route("**/identity/v1/me/sessions/*", (route) => {
     requests.push(
       route.request().method() + " " + new URL(route.request().url()).pathname,
     );
@@ -117,8 +117,8 @@ test("sessions page confirms revocation and signs out when revoking the current 
   await page.getByRole("button", { name: "Confirm revoke" }).click();
   await expect(page.getByLabel("Password")).toBeVisible();
   expect(requests).toEqual([
-    "DELETE /api/admin/identity/v1/sessions/other",
-    "DELETE /api/admin/identity/v1/sessions/session",
+    "DELETE /api/admin/identity/v1/me/sessions/other",
+    "DELETE /api/admin/identity/v1/me/sessions/session",
   ]);
 });
 
@@ -136,7 +136,7 @@ test("unknown revocation is never retried and Root sessions accept a null token 
       },
     }),
   );
-  await page.route("**/identity/v1/sessions?*", (r) =>
+  await page.route("**/identity/v1/me/sessions?*", (r) =>
     r.fulfill({
       json: {
         items: [{ ...loginSession, credential_id: null }],
@@ -145,7 +145,7 @@ test("unknown revocation is never retried and Root sessions accept a null token 
     }),
   );
   let calls = 0;
-  await page.route("**/identity/v1/sessions/session", (r) => {
+  await page.route("**/identity/v1/me/sessions/session", (r) => {
     calls++;
     return r.abort();
   });
@@ -167,7 +167,7 @@ for (const pageName of ["activity", "settings"])
     const url =
       pageName === "activity"
         ? "**/identity/v1/history/audit?*"
-        : "**/identity/v1/sessions?*";
+        : "**/identity/v1/me/sessions?*";
     await page.route(url, (r) =>
       r.fulfill({ json: { items: [{}], next_before: null } }),
     );

@@ -119,10 +119,10 @@ Paths below are relative to the console identity API prefix.
 |---|---|
 | `POST /session` | Username/password -> opaque cookie; legacy token-to-session login is removed at Stage 5 |
 | `GET /session`, `DELETE /session` | Current identity / logout |
-| `GET /me`, `PATCH /me` | Own profile |
+| `GET /me`, `PATCH /me` | Password-session-only own profile; PATCH changes display name |
 | `POST /me/password` | Current/new password -> revoke sessions |
 | `GET /me/tokens`, `POST /me/tokens`, `DELETE /me/tokens/{id}` | Password-session-only own named API tokens; issuance rechecks current password |
-| `GET /me/sessions`, `DELETE /me/sessions/{id}` | Own sessions |
+| `GET /me/sessions`, `DELETE /me/sessions/{id}` | Own sessions; legacy `/sessions` alias remains through Stage 5 |
 | `/accounts`, `/accounts/{id}` | Admin account lifecycle; account read includes username and password readiness |
 | `POST /accounts` with `kind=user_with_password_setup` | Admin password reauthentication -> atomic account, username and single-use setup link |
 | `POST /accounts/{id}/password-setup` | Admin issues/replaces initial setup challenge |
@@ -152,7 +152,7 @@ used as authorization evidence.
 |---|---|---|
 | 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
 | 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally; legacy fallback remains for Stage 5 |
-| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | In progress: setup, tokens and sessions verified locally; own profile pending |
+| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | Verified locally; legacy paths remain for Stage 5 |
 | 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Pending |
 | 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Pending |
 
@@ -217,6 +217,14 @@ Legacy token sessions cannot use the personal token routes.
 | DB/API ownership tests | Self-only list/revoke, password-session gate, reauthentication and CSRF passed against PostgreSQL 17 |
 | Browser regression | 225 Playwright tests passed, including personal-token lifecycle and phone/desktop light/dark layouts |
 | Real HTTPS fixture | Reader setup/login, own token issue, Resource `status` 200 and revoked token 401 passed with PostgreSQL and MinIO |
+
+### Profile Evidence
+
+| Check | Result |
+|---|---|
+| API | Own profile, same-account name change, CSRF/Origin, token-session denial and audit metadata passed |
+| Browser | 226 Playwright tests passed, including profile edit and return to original name |
+| Real HTTPS fixture | Password user changed and restored display name while retaining account identity and role |
 
 ## References
 

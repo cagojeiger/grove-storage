@@ -13,6 +13,7 @@ pub mod password_changes;
 pub mod password_setups;
 pub mod passwords;
 pub mod personal_tokens;
+pub mod profile;
 pub mod resources;
 pub mod root;
 pub mod sessions;

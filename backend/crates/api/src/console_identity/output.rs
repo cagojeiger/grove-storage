@@ -79,7 +79,7 @@ pub(super) fn credential_page(
     )
 }
 
-fn account(r: filegate_db::management::queries::AccountSummary) -> Value {
+pub(super) fn account(r: filegate_db::management::queries::AccountSummary) -> Value {
     json!({
         "id": r.id, "kind": r.kind, "display_name": r.display_name,
         "role": r.role, "is_active": r.is_active, "deleted_at": r.deleted_at,

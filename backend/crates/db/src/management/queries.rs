@@ -118,19 +118,26 @@ pub struct SessionSummary {
     pub revoked_at: Option<DateTime<Utc>>,
 }
 
+pub(super) async fn account_in(
+    connection: &mut sqlx::PgConnection,
+    id: Uuid,
+) -> Result<AccountSummary, Error> {
+    sqlx::query_as(
+        "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,
+                p.login_name,(p.password_hash IS NOT NULL) AS password_ready
+         FROM management.accounts a
+         LEFT JOIN management.password_credentials p ON p.account_id=a.id
+         WHERE a.id=$1",
+    )
+    .bind(id)
+    .fetch_optional(connection)
+    .await?
+    .ok_or(Error::NotFound)
+}
+
 impl IdentityTransaction<'_> {
     pub async fn account(&mut self, id: Uuid) -> Result<AccountSummary, Error> {
-        sqlx::query_as(
-            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,
-                    p.login_name,(p.password_hash IS NOT NULL) AS password_ready
-            FROM management.accounts a
-            LEFT JOIN management.password_credentials p ON p.account_id=a.id
-            WHERE a.id=$1",
-        )
-        .bind(id)
-        .fetch_optional(&mut *self.inner)
-        .await?
-        .ok_or(Error::NotFound)
+        account_in(&mut self.inner, id).await
     }
 
     pub async fn accounts(&mut self, query: AccountQuery) -> Result<AccountPage, Error> {
