@@ -21,7 +21,8 @@ use super::relay::relay_base;
 use crate::error::{ApiError, bad_request, conflict, internal, not_found};
 use crate::lease::{WRITE_LEASE_TTL, run_with_native_completion_heartbeat};
 use crate::routes::AppState;
-use crate::storage_access::{StorageBackend, backend_from_row};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::StorageBackend;
 
 /// multipart 확정 (spec 02): 중계는 원장(part 실측), 직결은 벤더 ListParts를
 /// 대조해 완성한다. 미완성이면 400과 함께 pending에 남는다.

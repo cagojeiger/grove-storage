@@ -109,12 +109,12 @@ async fn observe_s3_completion(
     crypto: &Crypto,
     s3_clients: &S3ClientCache,
     candidate: &s3reg::CompletionCandidate,
-) -> anyhow::Result<Option<crate::storage_access::ObjectObservation>> {
+) -> anyhow::Result<Option<grove_object_policy::completion::ObjectObservation>> {
     let row = registry::get_storage(pool, &candidate.storage_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("storage '{}' not registered", candidate.storage_id))?;
     let backend = crate::storage_access::backend_from_row(crypto, &row)?;
-    crate::storage_access::observe_backend_object(
+    filegate_infra::backend::observe_backend_object(
         s3_clients,
         &backend,
         &candidate.storage_id,

@@ -17,7 +17,7 @@ use sha2::Sha256;
 use tokio::io::AsyncWriteExt as _;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use crate::storage_access::StorageBackend;
+use filegate_infra::backend::StorageBackend;
 
 /// 청크 사이 유휴 상한 — 두 표면 공통.
 pub const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(30);

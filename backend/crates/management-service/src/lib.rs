@@ -1,5 +1,7 @@
 //! Policy-enforced identity/history and resource services. Transports validate
 //! their authentication envelope and select Surface. No HTTP or MCP routes here.
+//! Owns configuration changes and their safety guards; object lifecycle changes
+//! and physical transfers remain in the object and provider paths.
 #![forbid(unsafe_code)]
 
 mod command;

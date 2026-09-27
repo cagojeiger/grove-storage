@@ -33,7 +33,8 @@ use crate::lease::{
 };
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
-use crate::storage_access::{StorageBackend, backend_from_row, cleanup_backend_upload};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::{StorageBackend, cleanup_backend_upload};
 use grove_object_policy::validation::content_type_ok;
 
 /// Complete 요청 XML 본문 상한 — part 목록만 담긴다 (10,000개 × ~120B ≈ 1.2MB).

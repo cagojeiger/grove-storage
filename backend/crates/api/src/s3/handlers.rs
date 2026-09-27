@@ -1,5 +1,5 @@
 //! S3 객체 I/O와 파일·논리키 확정을 조율한다.
-//! 응답 프로토콜은 object_response, 물리 접근은 storage_access·infra가 담당한다.
+//! 응답 프로토콜은 object_response, 설정 해석은 storage_access, 물리 I/O는 infra가 담당한다.
 
 use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -19,7 +19,8 @@ use super::xml::{no_such_key, xml_error, xml_internal, xml_storage_error};
 use crate::lease::{WRITE_LEASE_TTL, run_with_completion_heartbeat};
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
-use crate::storage_access::{CommitErr, StorageBackend, backend_from_row, commit_temp_to_backend};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::{CommitErr, StorageBackend, commit_temp_to_backend};
 use grove_object_policy::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
 
 // ── PutObject ────────────────────────────────────────────────

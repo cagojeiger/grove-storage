@@ -4,7 +4,7 @@ use grove_object_service::multipart_create::MultipartCreate;
 
 use crate::error::{ApiError, internal};
 use crate::routes::AppState;
-use crate::storage_access::StorageBackend;
+use filegate_infra::backend::StorageBackend;
 
 pub(super) struct Operations<'a> {
     pub state: &'a AppState,

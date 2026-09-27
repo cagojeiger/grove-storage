@@ -20,7 +20,8 @@ use super::relay::{RelaySecret, relay_base, relay_url};
 use crate::error::{ApiError, bad_request, conflict, internal, not_found};
 use crate::lease::{READ_LEASE_TTL, WRITE_LEASE_TTL};
 use crate::routes::AppState;
-use crate::storage_access::{StorageBackend, backend_from_row};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::StorageBackend;
 use grove_object_policy::validation::{classify_upload, content_type_ok, declared_md5_format_ok};
 
 #[derive(Deserialize)]

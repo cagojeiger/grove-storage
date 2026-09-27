@@ -8,7 +8,8 @@ use filegate_infra::{S3StorageSpec, s3_connect};
 use serde::Deserialize;
 
 use crate::error::{ApiError, bad_request};
-use crate::storage_access::{StorageBackend, backend_from_row};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::StorageBackend;
 
 /// Shared registration fields; legacy JSON defaults remain compatible.
 #[derive(Deserialize)]

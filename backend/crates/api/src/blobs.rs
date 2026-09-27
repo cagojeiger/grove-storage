@@ -31,7 +31,8 @@ use crate::error::{ApiError, internal, not_found, status};
 use crate::lease::{WRITE_LEASE_TTL, run_with_native_upload_part_heartbeat};
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
-use crate::storage_access::{CommitErr, StorageBackend, backend_from_row, commit_temp_to_backend};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::{CommitErr, StorageBackend, commit_temp_to_backend};
 
 /// 단일 relay 수신과 fs part 승격이 공유하는 DB claim 상한.
 /// 풀(기본 20)의 나머지 연결은 인증·확정·회수 요청에 남긴다.

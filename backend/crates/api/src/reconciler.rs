@@ -370,7 +370,7 @@ async fn observe_commit(
             None => return Ok(false), // 아직 업로드 전
         }
     } else {
-        let crate::storage_access::StorageBackend::S3 { spec, .. } = &backend else {
+        let filegate_infra::backend::StorageBackend::S3 { spec, .. } = &backend else {
             return Ok(false);
         };
         let storage = s3_clients.get(&candidate.storage.id, spec, Address::Internal);
@@ -405,7 +405,7 @@ async fn sweep_object(
         .await?
         .ok_or_else(|| anyhow::anyhow!("storage '{}' not registered", candidate.storage_id))?;
     let backend = crate::storage_access::backend_from_row(crypto, &row)?;
-    crate::storage_access::cleanup_backend_upload(
+    filegate_infra::backend::cleanup_backend_upload(
         s3_clients,
         &backend,
         &candidate.storage_id,
