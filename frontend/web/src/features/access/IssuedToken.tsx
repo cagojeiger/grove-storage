@@ -45,6 +45,13 @@ export function IssuedToken({
         <dt>Expires</dt>
         <dd>{new Date(value.expires_at).toLocaleString("en-US")}</dd>
       </dl>
+      <div className="token-connections">
+        <strong>CLI</strong>
+        <code>gscli --endpoint {window.location.origin} --token-file &lt;token-file&gt; status</code>
+        <strong>MCP</strong>
+        <code>{window.location.origin}/api/admin/mcp</code>
+        <code>Authorization: Bearer &lt;token&gt;</code>
+      </div>
       <label className="check-field">
         <input
           type="checkbox"

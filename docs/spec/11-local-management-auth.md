@@ -153,7 +153,7 @@ used as authorization evidence.
 | 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
 | 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally; legacy fallback remains for Stage 5 |
 | 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | Verified locally; legacy paths remain for Stage 5 |
-| 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Pending |
+| 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Verified locally |
 | 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Pending |
 
 Existing migration checksums and Resource tables remain intact. Incremental
@@ -225,6 +225,16 @@ Legacy token sessions cannot use the personal token routes.
 | API | Own profile, same-account name change, CSRF/Origin, token-session denial and audit metadata passed |
 | Browser | 226 Playwright tests passed, including profile edit and return to original name |
 | Real HTTPS fixture | Password user changed and restored display name while retaining account identity and role |
+
+### Machine Interface Evidence
+
+| Check | Result |
+|---|---|
+| Real HTTPS fixture | Reader's own `gsm_` token passed `gscli status`, MCP `status` and Resource `status`; identity account API rejected it |
+| Revocation | The same token was rejected by CLI, MCP and Resource immediately after self-revocation |
+| Role freshness | MCP and Resource tests cover Reader write denial after demotion and disabled-account rejection |
+| Expiry | Credential lookup excludes expired tokens; existing API lifecycle tests exercise expiry |
+| Console | Issuance displays CLI and MCP connection details without putting the token into a command snippet |
 
 ## References
 

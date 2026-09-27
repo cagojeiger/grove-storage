@@ -727,6 +727,8 @@ dialog::backdrop {
 .token-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
 .token-row p { margin-top: 6px; }
 .issued-token { display: grid; gap: 16px; min-width: 0; }
+.token-connections { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.token-connections code { overflow-wrap: anywhere; }
 .service-keys { margin-top: 28px; }
 .clients .section-heading, .clients .page-actions { flex-wrap: wrap; }
 .storage-section .section-heading { flex-wrap: wrap; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }

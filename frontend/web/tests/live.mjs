@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium, expect } from "@playwright/test";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { storageChecks } from "./live-storages.mjs";
 import { bootstrapChecks, accessChecks } from "./live-access.mjs";
 import { permissionChecks } from "./live-permissions.mjs";
@@ -183,13 +184,51 @@ try {
         body: JSON.stringify({ protocol: 1, command: "status", input: {} }),
       })).status;
     }
+    function readerCli() {
+      return spawnSync(fileURLToPath(new URL("../../../target/debug/gscli", import.meta.url)),
+        ["--output", "json", "status"], {
+          env: { ...process.env, GROVE_ENDPOINT: endpoint, GROVE_TOKEN: readerToken },
+          encoding: "utf8", timeout: 10000,
+        });
+    }
+    async function readerMcp() {
+      return fetch(`${endpoint}/api/admin/mcp`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${readerToken}`,
+          Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
+          "Mcp-Method": "tools/call",
+          "Mcp-Name": "status",
+          "Mcp-Protocol-Version": "2026-07-28",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: {
+          name: "status", arguments: {}, _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {},
+          },
+        } }),
+      });
+    }
     assert.equal(await readerStatus(), 200);
+    const cli = readerCli();
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(JSON.parse(cli.stdout).ok, true);
+    const mcp = await readerMcp();
+    assert.equal(mcp.status, 200);
+    assert.equal((await mcp.json()).result.structuredContent.result.registry.storage_count, 1);
+    const identityDenied = await fetch(`${endpoint}/api/admin/identity/v1/accounts`, {
+      headers: { Authorization: `Bearer ${readerToken}` },
+    });
+    assert.equal(identityDenied.status, 401);
     await recipient.getByRole("button", { name: "Revoke Reader CLI" }).click();
     await recipient.getByRole("checkbox", { name: "Revoke Reader CLI" }).check();
     await recipient.getByRole("button", { name: "Revoke", exact: true }).click();
     await recipient.getByRole("region", { name: "My API tokens" }).getByText("Revoked").waitFor();
     assert.equal(await readerStatus(), 401);
-    console.log("PASS real Reader personal token, Resource status and immediate revocation");
+    assert.notEqual(readerCli().status, 0);
+    assert.equal((await readerMcp()).status, 401);
+    console.log("PASS real Reader personal token, CLI/MCP/Resource parity and immediate revocation");
   } finally {
     await recipientContext.close();
   }
