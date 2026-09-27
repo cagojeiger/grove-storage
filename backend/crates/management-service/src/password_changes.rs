@@ -3,7 +3,6 @@ use filegate_db::{
     PgPool,
     management::{self as db, telemetry},
 };
-use grove_management_policy::Surface;
 use uuid::Uuid;
 
 use crate::{Error, local_accounts::password_error, logging, passwords};
@@ -20,16 +19,12 @@ pub async fn change(
     replacement: SecretString,
 ) -> Change {
     let request_id = Uuid::new_v4();
-    let started = std::time::Instant::now();
-    let result = run(pool, request_id, session_hash, current, replacement).await;
-    logging::record(
+    let result = logging::session_operation(
         pool,
-        None,
         request_id,
-        Surface::Console,
+        session_hash,
         "account.password_change",
-        started.elapsed(),
-        &result,
+        run(pool, request_id, session_hash, current, replacement),
     )
     .await;
     Change { request_id, result }

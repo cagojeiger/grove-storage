@@ -144,9 +144,20 @@ pub(super) async fn change_in(
         return Ok(false);
     }
     if kind == "user" && old_role == "admin" && old_active && (role != "admin" || !active) {
-        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.accounts WHERE kind='user' AND role='admin' AND is_active AND deleted_at IS NULL").fetch_one(&mut *tx).await?;
-        if count <= 1 {
-            return Err(Error::LastAdmin);
+        let password_ready: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.password_credentials WHERE account_id=$1 AND password_hash IS NOT NULL)")
+            .bind(id).fetch_one(&mut *tx).await?;
+        if password_ready {
+            let another_ready: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts a JOIN management.password_credentials p ON p.account_id=a.id WHERE a.id<>$1 AND a.kind='user' AND a.role='admin' AND a.is_active AND a.deleted_at IS NULL AND p.password_hash IS NOT NULL)")
+                .bind(id).fetch_one(&mut *tx).await?;
+            if !another_ready {
+                return Err(Error::LastAdmin);
+            }
+        } else {
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.accounts WHERE kind='user' AND role='admin' AND is_active AND deleted_at IS NULL")
+                .fetch_one(&mut *tx).await?;
+            if count <= 1 {
+                return Err(Error::LastAdmin);
+            }
         }
     }
     sqlx::query("UPDATE management.accounts SET role=$2,is_active=$3,deleted_at=CASE WHEN $4 THEN clock_timestamp() END,updated_at=clock_timestamp() WHERE id=$1")

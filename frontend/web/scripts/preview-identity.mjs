@@ -191,7 +191,7 @@ export function previewIdentity(json) {
       }
       if (path === "/me/sessions" && method === "GET") {
         const value = session();
-        json(res, 200, { items: [{ id: value.session_id, credential_id: value.credential_id ?? null, created_at: signedInAt, expires_at: new Date(Date.parse(signedInAt)+1800000).toISOString(), revoked_at: null }], next_before: null });
+        json(res, 200, { items: [{ id: value.session_id, credential_id: value.credential_id ?? null, created_at: signedInAt, expires_at: new Date(Date.parse(signedInAt)+8*60*60*1000).toISOString(), revoked_at: null }], next_before: null });
         return true;
       }
       if (path.startsWith("/me/sessions/") && method === "DELETE") {

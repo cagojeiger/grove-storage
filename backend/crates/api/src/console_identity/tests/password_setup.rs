@@ -45,6 +45,22 @@ fn issue_path(id: Uuid) -> String {
     format!("/api/admin/identity/v1/accounts/{id}/password-setup")
 }
 
+async fn enable_admin_password(pool: &PgPool, id: Uuid) {
+    let username = format!("admin{}", id.simple());
+    let hash = grove_management_service::passwords::hash(&username, OWNER_PASSWORD.into())
+        .await
+        .unwrap();
+    db::passwords::recover(
+        pool,
+        Uuid::new_v4(),
+        id,
+        &username,
+        filegate_core::ExposeSecret::expose_secret(&hash),
+    )
+    .await
+    .unwrap();
+}
+
 #[sqlx::test(migrations = "../db/migrations")]
 async fn setup_link_is_one_time_and_creates_a_login_without_browser_session(pool: PgPool) {
     let (_, admin_cookie) = admin(&pool).await;
@@ -221,6 +237,7 @@ async fn setup_issuance_requires_admin_password_session_and_same_origin(pool: Pg
     .await
     .unwrap();
     assert_ne!(second_admin, owner);
+    enable_admin_password(&pool, second_admin).await;
     db::change_account(
         &pool,
         &context(),
@@ -281,11 +298,19 @@ async fn account_creation_issues_setup_link_atomically(pool: PgPool) {
     )
     .await;
     assert_eq!(created.status(), StatusCode::CREATED);
+    let request_id: Uuid = created.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     let value = json(created).await;
     let account: Uuid = value["account_id"].as_str().unwrap().parse().unwrap();
     assert_eq!(value["username"], "reader");
     let token = value["token"].as_str().unwrap();
     assert!(secrets::valid(token, secrets::SETUP_PREFIX));
+    let invocations: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='identity.account.create' AND outcome='succeeded'")
+        .bind(request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(invocations, 1);
     let details = request(
         app(&pool),
         "GET",
@@ -353,6 +378,7 @@ async fn account_creation_issues_setup_link_atomically(pool: PgPool) {
     .await
     .unwrap();
     assert_ne!(extra_admin, owner);
+    enable_admin_password(&pool, extra_admin).await;
     db::change_account(
         &pool,
         &context(),

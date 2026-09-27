@@ -274,6 +274,9 @@ async fn only_current_admin_password_sessions_issue_setup(pool: PgPool) {
             .is_err()
     );
     let other_admin = user(&pool, Role::Admin).await;
+    db::passwords::recover(&pool, Uuid::new_v4(), other_admin, "other-admin", PHC)
+        .await
+        .unwrap();
     db::change_account(
         &pool,
         &context(),
@@ -372,6 +375,9 @@ async fn create_with_setup_is_atomic_and_requires_current_admin(pool: PgPool) {
         .unwrap();
 
     let extra_admin = user(&pool, Role::Admin).await;
+    db::passwords::recover(&pool, Uuid::new_v4(), extra_admin, "extra-admin", PHC)
+        .await
+        .unwrap();
     db::change_account(
         &pool,
         &context(),

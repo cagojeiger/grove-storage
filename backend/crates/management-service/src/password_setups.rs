@@ -3,7 +3,7 @@ use filegate_db::{PgPool, management as db};
 use grove_management_policy::{Actor, Role};
 use uuid::Uuid;
 
-use crate::{Error, local_accounts::password_error, passwords};
+use crate::{Error, local_accounts::password_error, logging, passwords};
 
 pub async fn issue(
     pool: &PgPool,
@@ -14,18 +14,27 @@ pub async fn issue(
     current_password: SecretString,
     token_hash: &str,
 ) -> Result<db::password_setup::Setup, Error> {
-    let username = passwords::username(username).map_err(password_error)?;
-    reauthenticate_admin(pool, session_hash, current_password).await?;
-    db::password_setup::issue(
+    logging::session_operation(
         pool,
         request_id,
         session_hash,
-        account,
-        &username,
-        token_hash,
+        "identity.account.password_setup.issue",
+        async {
+            let username = passwords::username(username).map_err(password_error)?;
+            reauthenticate_admin(pool, session_hash, current_password).await?;
+            db::password_setup::issue(
+                pool,
+                request_id,
+                session_hash,
+                account,
+                &username,
+                token_hash,
+            )
+            .await
+            .map_err(Error::from)
+        },
     )
     .await
-    .map_err(Error::from)
 }
 
 pub async fn create(
@@ -37,18 +46,27 @@ pub async fn create(
     current_password: SecretString,
     token_hash: &str,
 ) -> Result<db::password_setup::Setup, Error> {
-    let username = passwords::username(username).map_err(password_error)?;
-    reauthenticate_admin(pool, session_hash, current_password).await?;
-    db::password_setup::create(
+    logging::session_operation(
         pool,
         request_id,
         session_hash,
-        account,
-        &username,
-        token_hash,
+        "identity.account.create",
+        async {
+            let username = passwords::username(username).map_err(password_error)?;
+            reauthenticate_admin(pool, session_hash, current_password).await?;
+            db::password_setup::create(
+                pool,
+                request_id,
+                session_hash,
+                account,
+                &username,
+                token_hash,
+            )
+            .await
+            .map_err(Error::from)
+        },
     )
     .await
-    .map_err(Error::from)
 }
 
 async fn reauthenticate_admin(

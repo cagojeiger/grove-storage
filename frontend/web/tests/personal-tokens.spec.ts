@@ -16,6 +16,16 @@ async function signIn(page: import("@playwright/test").Page) {
   await expect(page.getByRole("heading", { name: "My API tokens" })).toBeVisible();
 }
 
+test("preview password session lasts eight hours", async ({ page }) => {
+  await signIn(page);
+  const session = await page.evaluate(async () => {
+    const response = await fetch("/api/admin/identity/v1/me/sessions?limit=50");
+    const body = (await response.json()) as { items: Array<{ created_at: string; expires_at: string }> };
+    return body.items[0];
+  });
+  expect(Date.parse(session.expires_at) - Date.parse(session.created_at)).toBe(8 * 60 * 60 * 1000);
+});
+
 test("password user manages only own API tokens", async ({ page }) => {
   await signIn(page);
   await page.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();

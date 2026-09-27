@@ -1,12 +1,25 @@
 use filegate_db::{PgPool, management as db};
 use uuid::Uuid;
 
-use crate::Error;
+use crate::{Error, logging};
 
-pub async fn get(pool: &PgPool, session_hash: &str) -> Result<db::queries::AccountSummary, Error> {
-    db::profile::get(pool, session_hash)
-        .await
-        .map_err(Error::from)
+pub async fn get(
+    pool: &PgPool,
+    request_id: Uuid,
+    session_hash: &str,
+) -> Result<db::queries::AccountSummary, Error> {
+    logging::session_operation(
+        pool,
+        request_id,
+        session_hash,
+        "identity.account.get",
+        async {
+            db::profile::get(pool, session_hash)
+                .await
+                .map_err(Error::from)
+        },
+    )
+    .await
 }
 
 pub async fn rename(
@@ -15,7 +28,16 @@ pub async fn rename(
     session_hash: &str,
     display_name: String,
 ) -> Result<bool, Error> {
-    db::profile::rename(pool, request_id, session_hash, display_name)
-        .await
-        .map_err(Error::from)
+    logging::session_operation(
+        pool,
+        request_id,
+        session_hash,
+        "identity.account.name",
+        async {
+            db::profile::rename(pool, request_id, session_hash, display_name)
+                .await
+                .map_err(Error::from)
+        },
+    )
+    .await
 }

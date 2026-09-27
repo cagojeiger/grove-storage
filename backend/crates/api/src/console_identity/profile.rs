@@ -27,7 +27,7 @@ pub(super) async fn get(State(state): State<AppState>, headers: HeaderMap) -> Re
         Ok(hash) => hash,
         Err(error) => return failure(error, request_id),
     };
-    match service::profile::get(&state.pool, &session_hash).await {
+    match service::profile::get(&state.pool, request_id, &session_hash).await {
         Ok(row) => identified(Json(output::account(row)).into_response(), request_id),
         Err(error) => failure(error, request_id),
     }

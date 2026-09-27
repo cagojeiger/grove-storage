@@ -292,6 +292,14 @@ async fn password_change_revokes_browser_sessions_but_keeps_management_tokens(po
     let new = "a new secret phrase for owner";
     let response = change_password(app(&pool), &first_cookie, PASSWORD, new).await;
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let request_id: Uuid = response.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let invocations: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='account.password_change' AND outcome='succeeded'")
+        .bind(request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(invocations, 1);
     assert!(
         response.headers()[header::SET_COOKIE]
             .to_str()

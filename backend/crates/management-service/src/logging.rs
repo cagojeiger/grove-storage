@@ -2,15 +2,50 @@ use crate::Error;
 use filegate_db::{
     PgPool,
     management::{
-        AuditContext,
+        self as db, AuditActor, AuditContext,
         telemetry::{self, Outcome, SecurityReason},
     },
 };
 use grove_management_policy::Surface;
-use std::time::Duration;
+use std::{future::Future, time::Duration};
 use uuid::Uuid;
 
 const LOG_TIMEOUT: Duration = Duration::from_millis(250);
+
+pub(crate) async fn session_operation<T>(
+    pool: &PgPool,
+    request_id: Uuid,
+    session_hash: &str,
+    operation: &'static str,
+    work: impl Future<Output = Result<T, Error>>,
+) -> Result<T, Error> {
+    let started = std::time::Instant::now();
+    let context = db::session_actor(pool, session_hash)
+        .await
+        .ok()
+        .flatten()
+        .map(|actor| AuditContext {
+            actor: AuditActor::User {
+                id: actor.account_id,
+                credential_id: actor.credential_id,
+                session_id: actor.session_id,
+            },
+            request_id,
+            surface: Surface::Console,
+        });
+    let result = work.await;
+    record(
+        pool,
+        context.as_ref(),
+        request_id,
+        Surface::Console,
+        operation,
+        started.elapsed(),
+        &result,
+    )
+    .await;
+    result
+}
 
 pub(super) async fn record<T>(
     pool: &PgPool,

@@ -49,12 +49,16 @@ async fn personal_tokens_require_password_session_and_cannot_cross_accounts(pool
         post(app(&pool), path, None, input(PASSWORD)).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        post(app(&pool), path, Some(&own_cookie), input("wrong"))
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
+    let wrong_password = post(app(&pool), path, Some(&own_cookie), input("wrong")).await;
+    assert_eq!(wrong_password.status(), StatusCode::UNAUTHORIZED);
+    let failed_request: Uuid = wrong_password.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let failed_history: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='identity.credential.issue' AND outcome='failed' AND error_code='unauthenticated'")
+        .bind(failed_request).fetch_one(&pool).await.unwrap();
+    assert_eq!(failed_history, 1);
     let no_csrf = request(
         app(&pool),
         "POST",
@@ -66,11 +70,19 @@ async fn personal_tokens_require_password_session_and_cannot_cross_accounts(pool
     assert_eq!(no_csrf.status(), StatusCode::FORBIDDEN);
     let issued = post(app(&pool), path, Some(&own_cookie), input(PASSWORD)).await;
     assert_eq!(issued.status(), StatusCode::CREATED);
+    let issue_request: Uuid = issued.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     let issued = json(issued).await;
     let raw = issued["token"].as_str().unwrap();
     let token_id: Uuid = issued["credential_id"].as_str().unwrap().parse().unwrap();
     assert_eq!(issued["account_id"], owner.to_string());
     assert!(secrets::valid(raw, secrets::TOKEN_PREFIX));
+    let issue_history: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='identity.credential.issue' AND outcome='succeeded'")
+        .bind(issue_request).fetch_one(&pool).await.unwrap();
+    assert_eq!(issue_history, 1);
     let list = request(
         app(&pool),
         "GET",
@@ -125,7 +137,15 @@ async fn personal_tokens_require_password_session_and_cannot_cross_accounts(pool
     )
     .await;
     assert_eq!(revoke_own.status(), StatusCode::OK);
+    let revoke_request: Uuid = revoke_own.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     assert_eq!(json(revoke_own).await["changed"], true);
+    let revoke_history: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='identity.credential.revoke' AND outcome='succeeded'")
+        .bind(revoke_request).fetch_one(&pool).await.unwrap();
+    assert_eq!(revoke_history, 1);
     assert!(
         db::authenticate(&pool, &secrets::token_hash(raw))
             .await

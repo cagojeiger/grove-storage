@@ -98,7 +98,15 @@ async fn own_profile_is_password_session_scoped_and_audited(pool: PgPool) {
     )
     .await;
     assert_eq!(renamed.status(), StatusCode::OK);
+    let rename_request: Uuid = renamed.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     assert_eq!(json(renamed).await["changed"], true);
+    let rename_history: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='identity.account.name' AND outcome='succeeded'")
+        .bind(rename_request).fetch_one(&pool).await.unwrap();
+    assert_eq!(rename_history, 1);
     let updated = request(
         app(&pool),
         "GET",

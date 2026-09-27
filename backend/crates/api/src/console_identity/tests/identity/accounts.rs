@@ -108,6 +108,56 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
+async fn passwordless_admin_does_not_satisfy_last_admin_guard(pool: PgPool) {
+    let (admin, cookie) = actor(&pool, Role::Admin).await;
+    let bootstrap: Uuid =
+        sqlx::query_scalar("SELECT id FROM management.accounts WHERE display_name='Owner'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    db::change_account(
+        &pool,
+        &context(),
+        bootstrap,
+        db::AccountChange::Active(false),
+    )
+    .await
+    .unwrap();
+    let other = create(
+        &pool,
+        &cookie,
+        serde_json::json!({"kind":"user","display_name":"Pending admin","role":"admin"}),
+    )
+    .await;
+    let ready: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM management.password_credentials WHERE account_id=$1 AND password_hash IS NOT NULL)",
+    )
+    .bind(other)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!ready);
+    for (method, body) in [
+        (
+            "PATCH",
+            serde_json::json!({"operation":"active","is_active":false}),
+        ),
+        (
+            "PATCH",
+            serde_json::json!({"operation":"role","role":"reader"}),
+        ),
+        ("DELETE", serde_json::Value::Null),
+    ] {
+        assert_eq!(
+            send(&pool, &cookie, method, &format!("/accounts/{admin}"), body)
+                .await
+                .status(),
+            StatusCode::CONFLICT
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
 async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
     let (_, cookie) = actor(&pool, Role::Admin).await;
     let target = create(

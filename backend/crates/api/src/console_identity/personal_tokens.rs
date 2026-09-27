@@ -48,7 +48,7 @@ pub(super) async fn list(
         Ok(hash) => hash,
         Err(error) => return failure(error, request_id),
     };
-    match service::personal_tokens::list(&state.pool, &session_hash, page).await {
+    match service::personal_tokens::list(&state.pool, request_id, &session_hash, page).await {
         Ok(rows) => identified(
             Json(output::credential_page(rows, query.limit)).into_response(),
             request_id,

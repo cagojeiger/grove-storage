@@ -108,6 +108,11 @@ claim of NIST or ISO compliance.
 | Recover | Replace hash/generation + revoke sessions and management tokens + invalidate setup challenges + audit |
 | Complete setup | Consume current challenge + set password/generation + audit; one concurrent winner |
 
+The role and activation guard preserves at least one active, password-ready
+Admin. A pending setup does not count. Before local password initialization,
+the legacy active-Admin count guard remains in force. Password browser sessions
+expire after eight hours.
+
 Password changes preserve API tokens; recovery revokes them. Neither changes
 Client service keys, provider secrets or object metadata. Recovery accepts an
 existing active account and preserves its ID, role and existing login name.
@@ -130,6 +135,10 @@ Paths below are relative to the console identity API prefix.
 | `POST /password-setup/inspect` | Challenge in request body -> username and expiry, without consuming it |
 | `POST /password-setup` | Single-use challenge + chosen password; no automatic login |
 | Existing history routes | Role-scoped administrative history |
+
+Authenticated local account, profile and personal-token operations record
+command outcomes under the response request ID. Successful mutations also
+write their audit event in the same transaction as the change.
 
 Setup links put their secret in a fragment, immediately remove it from browser
 history and submit it in a body. The setup page uses no third-party content.
