@@ -1,5 +1,9 @@
 """Console-only identity setup for the isolated CLI integration test."""
 import json
+import os
+from pathlib import Path
+import secrets
+import subprocess
 import urllib.error
 import urllib.request
 
@@ -8,24 +12,36 @@ IDENTITY = "/api/admin/identity/v1"
 
 
 class Management:
-    def __init__(self, endpoint, master):
+    def __init__(self, endpoint, database):
         self.endpoint = endpoint
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self.cookie = None
-        self.request("POST", "/master/session", {"token": master})
-        owner = self.request("POST", "/master/bootstrap", {"display_name": "CLI test owner"}, expected=201)
-        self.request("POST", "/session", {"token": owner["token"]})
-        self.user_id = self.request("POST", "/accounts", {
-            "kind": "user", "role": "writer", "display_name": "CLI writer",
-        }, expected=201)["account_id"]
-        personal = self.request("POST", f"/accounts/{self.user_id}/credentials", {
-            "label": "cli-user", "expires_in_days": 1,
+        owner_password = "fixture-" + secrets.token_urlsafe(32)
+        subprocess.check_output(
+            ["python3", "scripts/e2e-password-account.py", database],
+            cwd=Path(__file__).resolve().parent.parent,
+            env=dict(os.environ, GROVE_E2E_PASSWORD=owner_password,
+                     GROVE_E2E_DISPLAY_NAME="CLI test owner"), text=True, timeout=45)
+        self.request("POST", "/session", {"username": "owner", "password": owner_password})
+        setup = self.request("POST", "/accounts", {
+            "kind": "user_with_password_setup", "role": "writer", "display_name": "CLI writer",
+            "username": "cli-writer", "current_password": owner_password,
+        }, expected=201)
+        self.user_id = setup["account_id"]
+        writer_password = "fixture-" + secrets.token_urlsafe(32)
+        self.request("POST", "/password-setup", {
+            "token": setup["token"], "password": writer_password,
+        }, expected=204)
+        self.request("POST", "/session", {"username": "cli-writer", "password": writer_password})
+        personal = self.request("POST", "/me/tokens", {
+            "label": "cli-user", "expires_in_days": 1, "current_password": writer_password,
         }, expected=201)
         self.user_token, self.personal_credential_id = personal["token"], personal["credential_id"]
-        issued = self.request("POST", f"/accounts/{self.user_id}/credentials", {
-            "label": "cli-automation", "expires_in_days": 1,
+        issued = self.request("POST", "/me/tokens", {
+            "label": "cli-automation", "expires_in_days": 1, "current_password": writer_password,
         }, expected=201)
         self.token, self.credential_id = issued["token"], issued["credential_id"]
+        self.request("POST", "/session", {"username": "owner", "password": owner_password})
 
     def request(self, method, path, body=None, expected=200):
         headers = {"Origin": ORIGIN, "X-Grove-CSRF": "1", "Content-Type": "application/json"}

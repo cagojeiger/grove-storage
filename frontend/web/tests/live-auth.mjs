@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 
+export async function loginWithPassword(page, username, password) {
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "Sign out" }).waitFor();
+}
+
 // Existing token sessions remain a migration oracle without exposing a token form.
 export async function loginWithToken(page, token) {
   const origin = new URL(page.url()).origin;

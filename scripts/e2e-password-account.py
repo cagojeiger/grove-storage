@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recover a disposable browser account through the real local TTY command."""
+"""Initialize or recover a disposable account through the real local TTY command."""
 
 import errno
 import json
@@ -16,19 +16,21 @@ SERVER = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve() / "
 
 
 def main():
-    if len(sys.argv) != 3:
-        raise SystemExit("usage: e2e-password-account.py <container> <account-id>")
+    if len(sys.argv) not in (2, 3):
+        raise SystemExit("usage: e2e-password-account.py <container> [account-id]")
     password = os.environ["GROVE_E2E_PASSWORD"]
     port = subprocess.check_output(
         ["docker", "port", sys.argv[1], "5432"], text=True, timeout=10
     ).strip().rsplit(":", 1)[1]
     env = dict(os.environ)
     env["FILEGATE_DATABASE_URL"] = f"postgres://filegate:filegate@127.0.0.1:{port}/filegate"
+    command = (["recover", sys.argv[2], os.environ.get("GROVE_E2E_USERNAME", "owner"), "--yes"] if len(sys.argv) == 3 else
+               ["init", "owner", os.environ.get("GROVE_E2E_DISPLAY_NAME", "Fixture owner")])
     pid, terminal = pty.fork()
     if pid == 0:
         os.execve(
             SERVER,
-            [str(SERVER), "account", "recover", sys.argv[2], "owner", "--yes"],
+            [str(SERVER), "account", *command],
             env,
         )
     output = bytearray()
@@ -53,14 +55,14 @@ def main():
                 prompts.pop(0)
         else:
             os.kill(pid, 9)
-            raise RuntimeError("local account recovery timed out")
+            raise RuntimeError("local account command timed out")
     finally:
         os.close(terminal)
     _, status = os.waitpid(pid, 0)
     if status != 0 or prompts:
-        raise RuntimeError("local account recovery failed")
+        raise RuntimeError("local account command failed")
     result = json.loads(output.decode().splitlines()[-1])
-    if result["account_id"] != sys.argv[2]:
+    if len(sys.argv) == 3 and result["account_id"] != sys.argv[2]:
         raise RuntimeError("local recovery changed the account identity")
     print(json.dumps(result))
 

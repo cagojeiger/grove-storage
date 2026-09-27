@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { expect } from "@playwright/test";
-import { loginWithToken } from "./live-auth.mjs";
+import { loginWithPassword } from "./live-auth.mjs";
 
 async function takeToken(page) {
   const input = page.getByRole("textbox", {
@@ -25,24 +26,26 @@ async function takeToken(page) {
   return token;
 }
 
-export async function bootstrapChecks(page, origin, masterToken) {
-  await page.goto(origin + "/api/admin/console/#setup");
-  await page.getByLabel("Root token").fill(masterToken);
-  await page.getByRole("button", { name: "Verify Root token" }).click();
-  await page.getByLabel("Admin name").fill("Console test owner");
-  await page.getByRole("button", { name: "Create Admin", exact: true }).click();
-  const token = await takeToken(page);
-  await loginWithToken(page, token);
+export async function bootstrapChecks(page, origin, ownerPassword) {
+  await page.goto(origin + "/api/admin/console/");
+  await loginWithPassword(page, "owner", ownerPassword);
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
   ).toBeVisible();
   const session = await page.evaluate(async () =>
     (await fetch("/api/admin/identity/v1/session")).json(),
   );
-  console.log(
-    "PASS real browser master bootstrap, one-time token and separate User login",
-  );
-  return { token, credentialId: session.credential_id, accountId: session.user_id };
+  const issued = await page.evaluate(async (password) => {
+    const response = await fetch("/api/admin/identity/v1/me/tokens", {
+      method: "POST", headers: { "X-Grove-CSRF": "1", "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Fixture token", expires_in_days: 1, current_password: password }),
+    });
+    if (response.status !== 201) throw new Error(`Token issuance returned ${response.status}`);
+    return response.json();
+  }, ownerPassword);
+  assert.match(issued.token, /^gsm_[a-f0-9]{64}$/);
+  console.log("PASS real local first Admin and password login");
+  return { token: issued.token, credentialId: issued.credential_id, accountId: session.user_id };
 }
 
 export async function accessChecks(
@@ -50,22 +53,9 @@ export async function accessChecks(
   page,
   origin,
   endpoint,
-  masterToken,
+  database,
   currentPassword,
 ) {
-  const rootContext = await browser.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const rootPage = await rootContext.newPage();
-    await rootPage.goto(origin + "/api/admin/console/#accounts");
-    await loginWithToken(rootPage, masterToken);
-    await expect(rootPage.getByText("Root · Protected")).toBeVisible();
-    await rootPage.getByRole("button", { name: "Root Config Protected Configured" }).click();
-    await expect(rootPage.getByRole("region", { name: "Root account" })).toBeVisible();
-    await expect(rootPage.getByRole("button", { name: "Delete account" })).toHaveCount(0);
-    await rootPage.getByRole("button", { name: "Sign out" }).click();
-    await expect(rootPage.getByLabel("Password")).toBeVisible();
-    console.log("PASS real Root console login, protected Accounts entry and logout");
-  } finally { await rootContext.close(); }
   await page.getByRole("link", { name: "Accounts", exact: true }).click();
   await page
     .getByRole("button", { name: /Console test owner.*Active/ })
@@ -122,20 +112,28 @@ export async function accessChecks(
   await page.getByRole("button", { name: "Revoke", exact: true }).click();
   await expect(page.getByText("Revoked", { exact: true })).toBeVisible();
   assert.equal(await status(automationToken), 401);
+  const recoveredPassword = "a separate private recovery phrase";
+  const recovered = JSON.parse(execFileSync("python3", ["scripts/e2e-password-account.py", database, userId], {
+    cwd: new URL("../../..", import.meta.url),
+    env: { ...process.env, GROVE_E2E_PASSWORD: recoveredPassword, GROVE_E2E_USERNAME: "recovery-admin" },
+    encoding: "utf8", timeout: 45000,
+  }));
+  assert.equal(recovered.account_id, userId);
+  assert.equal(await status(oldToken), 401);
   const recovery = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const other = await recovery.newPage();
-    await other.goto(origin + "/api/admin/console/#setup");
-    await other.getByLabel("Root token").fill(masterToken);
-    await other.getByRole("button", { name: "Verify Root token" }).click();
-    await other.getByLabel("Admin user ID").fill(userId);
-    await other
-      .getByLabel("Replace this Admin's tokens and revoke its sessions")
-      .check();
-    await other.getByRole("button", { name: "Recover access" }).click();
-    const newToken = await takeToken(other);
-    assert.equal(await status(oldToken), 401);
-    assert.equal(await status(newToken), 200);
+    await other.goto(origin + "/api/admin/console/");
+    await loginWithPassword(other, "recovery-admin", recoveredPassword);
+    const issued = await other.evaluate(async (password) => {
+      const response = await fetch("/api/admin/identity/v1/me/tokens", {
+        method: "POST", headers: { "X-Grove-CSRF": "1", "Content-Type": "application/json" },
+        body: JSON.stringify({ label: "Recovered key", expires_in_days: 1, current_password: password }),
+      });
+      if (response.status !== 201) throw new Error(`Recovered token issuance returned ${response.status}`);
+      return response.json();
+    }, recoveredPassword);
+    assert.equal(await status(issued.token), 200);
   } finally {
     await recovery.close();
   }
@@ -147,6 +145,6 @@ export async function accessChecks(
   await expect(page.getByText("Deleted", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Overview", exact: true }).click();
   console.log(
-    "PASS real Access CRUD, last Admin guard, User token use/revocation and targeted master recovery",
+    "PASS real Access CRUD, last Admin guard, User token use/revocation and targeted local recovery",
   );
 }

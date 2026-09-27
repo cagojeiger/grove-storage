@@ -4,7 +4,6 @@
 import hashlib
 import json
 import os
-import secrets
 from pathlib import Path
 import socket
 import signal
@@ -21,20 +20,19 @@ TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
 SERVER = TARGET / "debug" / "filegate"
 CLI = TARGET / "debug" / "gscli"
 TOKEN = "cli-local-integration-token"
-MASTER_TOKEN = "gsmt_" + secrets.token_hex(32)
 
 
 def docker(*args):
     return subprocess.check_output(["docker", *args], text=True, timeout=90).strip()
 
 
-def check_lifecycle(endpoint, directory):
+def check_lifecycle(endpoint, directory, database):
     from s3_backend_fixture import minio_backend
     with minio_backend() as backend:
-        check_s3_lifecycle(endpoint, directory, backend)
+        check_s3_lifecycle(endpoint, directory, backend, database)
 
 
-def check_s3_lifecycle(endpoint, directory, backend):
+def check_s3_lifecycle(endpoint, directory, backend, database):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def request(method, path, body=None, token=TOKEN):
@@ -60,7 +58,7 @@ def check_s3_lifecycle(endpoint, directory, backend):
 
     admin = "/api/admin/v1"
     from cli_management_fixture import Management
-    management = Management(endpoint, MASTER_TOKEN)
+    management = Management(endpoint, database)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FILEGATE_", "GROVE_"))}
     env.pop("DATABASE_URL", None)
     env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
@@ -213,8 +211,7 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             if s3_cors_origins:
                 env["FILEGATE_S3_CORS_ALLOWED_ORIGINS"] = ",".join(s3_cors_origins)
             if management:
-                env.update(FILEGATE_MASTER_TOKEN=MASTER_TOKEN, FILEGATE_MASTER_GENERATION="1",
-                           FILEGATE_CONSOLE_ORIGIN=console_origin or "https://console.test")
+                env["FILEGATE_CONSOLE_ORIGIN"] = console_origin or "https://console.test"
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
@@ -258,4 +255,4 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
 
 
 if __name__ == "__main__":
-    main(management=True)
+    main(with_database=True, management=True)

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import runpy
+import secrets
 import socket
 import signal
 import ssl
@@ -30,19 +31,11 @@ def check(endpoint, directory, database, origin, serve, minio):
         if time.monotonic() > deadline:
             raise RuntimeError('API readiness timeout')
         time.sleep(.2)
-    headers = {'Origin': origin, 'X-Grove-CSRF': '1', 'Content-Type': 'application/json'}
-    def identity(path, body):
-        request = urllib.request.Request(endpoint + '/api/admin/identity/v1' + path,
-                                         headers=headers, data=json.dumps(body).encode())
-        with opener.open(request, timeout=5) as response:
-            cookie = response.headers.get('Set-Cookie')
-            if cookie:
-                headers['Cookie'] = cookie.split(';', 1)[0]
-            return json.loads(response.read())
-    if serve:
-        identity('/master/session', {'token': HARNESS['MASTER_TOKEN']})
-        credential = identity('/master/bootstrap', {'display_name': 'Console test owner'})
-        token = credential['token']
+    owner_password = 'fixture-' + secrets.token_urlsafe(32)
+    owner = json.loads(subprocess.check_output(
+        ['python3', 'scripts/e2e-password-account.py', database], cwd=ROOT,
+        env=dict(os.environ, GROVE_E2E_PASSWORD=owner_password,
+                 GROVE_E2E_DISPLAY_NAME='Console test owner'), text=True, timeout=45))
     key, cert = Path(directory) / 'key.pem', Path(directory) / 'cert.pem'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                     '-keyout', str(key), '-out', str(cert), '-days', '1',
@@ -64,17 +57,18 @@ def check(endpoint, directory, database, origin, serve, minio):
                         raise RuntimeError('HTTPS Vite readiness timeout')
                     time.sleep(.2)
             if serve:
-                token_file = Path(directory) / 'user-token'
+                token_file = Path(directory) / 'owner-password'
                 fd = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(fd, 'w') as output:
-                    output.write(token)
+                    output.write(owner_password)
                 print('Console:', origin + '/api/admin/console/', flush=True)
-                print('Local disposable User token:', token_file, flush=True)
+                print('Username: owner; local disposable password file:', token_file, flush=True)
                 while vite.poll() is None:
                     time.sleep(1)
             else:
                 subprocess.run(['node', 'tests/live.mjs'], cwd=ROOT / 'frontend/web',
-                               input=json.dumps({'origin': origin, 'masterToken': HARNESS['MASTER_TOKEN'],
+                               input=json.dumps({'origin': origin, 'ownerPassword': owner_password,
+                                                 'ownerId': owner['account_id'],
                                                  'database': database, 'endpoint': endpoint,
                                                  'minio': minio.spec}), text=True,
                                check=True, timeout=150)

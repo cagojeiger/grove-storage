@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
-import { loginWithToken } from "./live-auth.mjs";
+import { loginWithPassword } from "./live-auth.mjs";
 
-export async function maintenanceChecks(browser, page, origin, token) {
+export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await page
     .getByRole("button", { name: "Test connection", exact: true })
     .click();
@@ -35,7 +35,7 @@ export async function maintenanceChecks(browser, page, origin, token) {
   try {
     const other = await context.newPage();
     await other.goto(`${origin}/api/admin/console/#settings`);
-    await loginWithToken(other, token);
+    await loginWithPassword(other, "owner", ownerPassword);
     await expect(
       other.getByRole("heading", { name: "My sessions", exact: true }),
     ).toBeVisible();
@@ -70,8 +70,8 @@ export async function maintenanceChecks(browser, page, origin, token) {
     await page
       .getByRole("button", { name: "Confirm revoke", exact: true })
       .click();
-    await expect(page.getByLabel("Password")).toBeVisible();
-    await loginWithToken(page, token);
+    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+    await loginWithPassword(page, "owner", ownerPassword);
     await expect(
       page.getByRole("heading", { name: "My sessions", exact: true }),
     ).toBeVisible();

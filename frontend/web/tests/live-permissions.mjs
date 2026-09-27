@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
-import { loginWithToken } from "./live-auth.mjs";
+import { loginWithPassword } from "./live-auth.mjs";
 
-export async function permissionChecks(browser, admin, origin) {
+export async function permissionChecks(browser, admin, origin, ownerPassword) {
   async function identity(method, path, body) {
     return admin.evaluate(async ({ method, path, body }) => {
       const response = await fetch(`/api/admin/identity/v1${path}`, {
@@ -13,14 +13,24 @@ export async function permissionChecks(browser, admin, origin) {
       return response.json();
     }, { method, path, body });
   }
-  const user = await identity("POST", "/accounts", { kind: "user", role: "writer", display_name: "Console writer" });
+  const writerPassword = "a separate private writer phrase";
+  const user = await identity("POST", "/accounts", { kind: "user_with_password_setup", role: "writer",
+    display_name: "Console writer", username: "console-writer", current_password: ownerPassword });
+  const setupStatus = await admin.evaluate(async ({ token, password }) => {
+    const response = await fetch("/api/admin/identity/v1/password-setup", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Grove-CSRF": "1" },
+      body: JSON.stringify({ token, password }),
+    });
+    return response.status;
+  }, { token: user.token, password: writerPassword });
+  assert.equal(setupStatus, 204);
   const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "browser-test", expires_in_days: 1 });
   const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "automation", expires_in_days: 1 });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const page = await context.newPage();
     await page.goto(`${origin}/api/admin/console/#storages/console-live`);
-    await loginWithToken(page, credential.token);
+    await loginWithPassword(page, "console-writer", writerPassword);
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "reader" });
@@ -39,7 +49,7 @@ export async function permissionChecks(browser, admin, origin) {
     });
     assert.equal(blocked, 403);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await loginWithToken(page, automationKey.token);
+    await loginWithPassword(page, "console-writer", writerPassword);
     await expect(page.getByText("Reader · Read-only")).toBeVisible();
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");
@@ -57,6 +67,6 @@ export async function permissionChecks(browser, admin, origin) {
     assert.equal(await page.evaluate(async () => (await fetch("/api/admin/identity/v1/history/security")).status), 403);
     await page.goto(`${origin}/api/admin/console/#settings`);
     await expect(page.getByRole("button", { name: "Revoke current session", exact: true })).toBeVisible();
-    console.log("PASS real role demotion, Reader read-only UI/server, named User token login, console audit");
+    console.log("PASS real role demotion, Reader read-only UI/server, password login and console audit");
   } finally { await context.close(); }
 }

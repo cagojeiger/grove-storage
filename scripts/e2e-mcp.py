@@ -17,13 +17,13 @@ VERSION = "2026-07-28"
 SECRETS = []
 
 
-def check(endpoint, directory):
+def check(endpoint, directory, database):
     from s3_backend_fixture import minio_backend
     with minio_backend() as backend:
-        check_s3(endpoint, directory, backend)
+        check_s3(endpoint, directory, backend, database)
 
 
-def check_s3(endpoint, directory, backend):
+def check_s3(endpoint, directory, backend, database):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 20
     while True:
@@ -36,8 +36,8 @@ def check_s3(endpoint, directory, backend):
         if time.monotonic() >= deadline:
             raise RuntimeError("MCP fixture readiness timeout")
         time.sleep(0.1)
-    management = Management(endpoint, HARNESS["MASTER_TOKEN"])
-    SECRETS.extend([HARNESS["MASTER_TOKEN"], management.token, management.user_token])
+    management = Management(endpoint, database)
+    SECRETS.extend([management.token, management.user_token])
     calls = set()
     counter = 0
 
@@ -181,4 +181,4 @@ def verify_log(data):
 
 if __name__ == "__main__":
     os.environ["RUST_LOG"] = "info,rmcp=trace"
-    HARNESS["main"](check, management=True, verify_log=verify_log)
+    HARNESS["main"](check, with_database=True, management=True, verify_log=verify_log)

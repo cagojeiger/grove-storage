@@ -10,19 +10,20 @@ import { maintenanceChecks } from "./live-maintenance.mjs";
 import { usageChecks } from "./live-usage.mjs";
 import { resourceChecks } from "./live-resources.mjs";
 import { metadataChecks } from "./live-metadata.mjs";
-import { loginWithToken } from "./live-auth.mjs";
+import { loginWithPassword } from "./live-auth.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const fixture = JSON.parse(input);
-const { origin, masterToken, database, endpoint } = fixture;
+const { origin, ownerPassword, ownerId, database, endpoint } = fixture;
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  const { token, credentialId, accountId } = await bootstrapChecks(page, origin, masterToken);
+  const { token, credentialId, accountId } = await bootstrapChecks(page, origin, ownerPassword);
+  assert.equal(accountId, ownerId);
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await page.getByText("No storage registered.").waitFor();
   await storageChecks(page, fixture);
@@ -30,8 +31,8 @@ try {
   await resourceChecks(page, fixture);
   await metadataChecks(page, fixture);
   await usageChecks(page, fixture);
-  await maintenanceChecks(browser, page, origin, token);
-  await permissionChecks(browser, page, origin);
+  await maintenanceChecks(browser, page, origin, ownerPassword);
+  await permissionChecks(browser, page, origin, ownerPassword);
   const cookie = (await context.cookies()).find(
     (cookie) => cookie.name === "__Host-grove_session",
   );
@@ -53,19 +54,19 @@ try {
   );
   assert.equal(csrf, 403);
   await page.getByRole("button", { name: "Sign out" }).click();
-  await page.getByLabel("Password").waitFor();
+  await page.getByLabel("Password", { exact: true }).waitFor();
   assert(
     !(await context.cookies()).some(
       (cookie) => cookie.name === "__Host-grove_session",
     ),
   );
   await page.reload();
-  await page.getByLabel("Password").waitFor();
+  await page.getByLabel("Password", { exact: true }).waitFor();
   console.log(
     "PASS real HTTPS login, Secure/HttpOnly cookie, reload, CSRF rejection, logout",
   );
   async function login() {
-    await loginWithToken(page, token);
+    await loginWithPassword(page, "owner", ownerPassword);
     await page.getByRole("button", { name: "Select storage console-live", exact: true }).waitFor();
   }
   await login();
@@ -82,12 +83,12 @@ try {
       "-v",
       "ON_ERROR_STOP=1",
       "-c",
-      "UPDATE management.sessions SET created_at = now() - interval '1 day', expires_at = now() - interval '1 second' WHERE auth_method='token'",
+      "UPDATE management.sessions SET created_at = now() - interval '1 day', expires_at = now() - interval '1 second' WHERE auth_method='password'",
     ],
     { timeout: 10000, stdio: "pipe" },
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Password").waitFor();
+  await page.getByLabel("Password", { exact: true }).waitFor();
   assert.equal(
     await page.getByRole("button", { name: "Select storage console-live", exact: true }).count(),
     0,
@@ -101,11 +102,12 @@ try {
   }, credentialId);
   assert.equal(revoked, 200);
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Password").waitFor();
-  const rejected = await page.request.post(`${origin}/api/admin/identity/v1/session`, {
-    data: { token }, headers: { Origin: origin, "X-Grove-CSRF": "1" },
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  const rejected = await fetch(`${endpoint}/api/admin/commands/v1`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ protocol: 1, command: "status", input: {} }),
   });
-  assert.equal(rejected.status(), 401);
+  assert.equal(rejected.status, 401);
   const password = "an isolated browser integration passphrase";
   const recovered = JSON.parse(execFileSync("python3", ["scripts/e2e-password-account.py", database, accountId], {
     cwd: new URL("../../..", import.meta.url),
@@ -113,8 +115,10 @@ try {
     encoding: "utf8", timeout: 45000,
   }));
   assert.equal(recovered.account_id, accountId);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByLabel("Password", { exact: true }).waitFor();
   await page.getByLabel("Username").fill("owner");
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await page.goto(`${origin}/api/admin/console/#settings`);
@@ -125,7 +129,7 @@ try {
   await page.getByRole("button", { name: "Change password" }).click();
   await page.getByRole("button", { name: "Sign in", exact: true }).waitFor();
   await page.getByLabel("Username").fill("owner");
-  await page.getByLabel("Password").fill(replacement);
+  await page.getByLabel("Password", { exact: true }).fill(replacement);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "My account", exact: true }).waitFor();
   await page.getByRole("button", { name: "Edit my name" }).click();
@@ -163,7 +167,7 @@ try {
     await recipient.getByText("Password set. Sign in with your username and password.").waitFor();
     await recipient.getByRole("link", { name: "Sign in" }).click();
     await recipient.getByLabel("Username").fill("recipient");
-    await recipient.getByLabel("Password").fill(recipientPassword);
+    await recipient.getByLabel("Password", { exact: true }).fill(recipientPassword);
     await recipient.getByRole("button", { name: "Sign in", exact: true }).click();
     await recipient.getByText("Reader · Read-only").waitFor();
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
@@ -233,7 +237,7 @@ try {
     await recipientContext.close();
   }
   console.log("PASS real one-time account setup link, recipient password and Reader login");
-  await accessChecks(browser, page, origin, endpoint, masterToken, replacement);
+  await accessChecks(browser, page, origin, endpoint, database, replacement);
   console.log(
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );
