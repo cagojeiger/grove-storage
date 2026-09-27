@@ -4,7 +4,7 @@
 
 | 대상 | 이번 검증 |
 |---|---|
-| 서버 | Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·filesystem 또는 별도 MinIO 컨테이너 |
+| 서버 | S3-only Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·MinIO 컨테이너 |
 | SDK | boto3/botocore 1.43.99, path-style, HTTP |
 | 외부 S3 backend | MinIO RELEASE.2025-09-07T16-13-09Z 경유 검증; AWS S3·R2·운영 endpoint는 별도 |
 | 운영 | 배포·데이터 이관 없음 |
@@ -113,9 +113,9 @@ api/s3                          HTTP·자격증명 조회·복호화·오류 응
   -> s3-protocol/multipart       Complete XML 파싱 (DB 없음)
   -> s3-protocol/completion      S3 완료 목록과 실측 원장 대조 (DB 없음)
   -> object-policy              공통 업로드 규칙·완료 관찰 판단
-  -> object-service             정리·실패 보상 순서
+  -> object-service             정리·Native 생성/완료·실패 보상 순서
   -> db                         파일 락·세션·원장·논리키 원자 전이
-  -> infra                      filesystem·vendor S3 I/O
+  -> infra                      vendor S3 I/O·전송용 임시 스풀
 ```
 
 SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션을 분리하기보다
@@ -127,7 +127,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 |---|---|---|
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
 | 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
-| 3 | 읽기·쓰기 추가 옵션 | 원자적 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
+| 3 | 읽기·쓰기 추가 옵션 | 단일 PUT wildcard 외 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
 | 4 | 쓰기 장애 복구 | DB COMMIT 응답 유실·쓰기 진행 도중 종료, AWS S3/R2 별도 호환성 |
 
 현재 raw query 정렬 방식은 유지한다. 필수 query 인증 파라미터의 중복은 거부하며,
@@ -141,19 +141,21 @@ cargo test -p grove-s3-protocol --locked
 cargo build --bin filegate --bin gscli --locked
 python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
-/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
 ```
 
-두 모드는 같은 SDK 성공·거부·재시도 시나리오를 사용한다. MinIO 모드는 테스트가
+MinIO 경로에서 SDK 성공·거부·재시도 시나리오를 실행한다. 테스트가
 직접 만든 컨테이너만 중지·재시작하며 기존 운영 endpoint를 받지 않는다. 컨테이너·
 볼륨·PG·임시 파일은 finally에서 정리한다. 재시작 시 endpoint 유지가 계약이므로
 Docker 자동 포트 재할당 대신 명시적 임시 포트를 사용한다.
 
-이번 단계는 테스트/CI/문서 변경이다. 제품 Rust 코드는 변경하지 않았다.
+검증은 여러 단계에 걸쳐 실행했다. `019ff79`는 조건부 PUT 제품 코드·migration을,
+`f9458ff`·`520e172`는 NoteGate 연결 검증을 추가했다. 현재 마감 상태는
+[리소스 체크포인트](refactor-checkpoint.md)를 따른다.
+
 ### 완료 응답 유실 검증
 
 | 시점 | 확인 |

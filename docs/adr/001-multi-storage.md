@@ -3,16 +3,16 @@
 - 상태: Accepted
 - 최초 결정: 2026-07-03
 - 근거: [000](000-identity.md), 단계별 storage 확장은 [007](007-grove-storage-foundation.md)
+- 적용 범위 갱신: ADR 007의 S3-only 전환으로 FS 접근 계약은 후속 독립 Node 설계로 이동.
 
 ## 결정
 
 | 항목 | 현재 계약 |
 |---|---|
-| storage | fs 경로 또는 외부 S3 endpoint·계정·공간·자격증명 |
+| storage | 외부 S3 endpoint·계정·공간·자격증명 |
 | S3 backend | S3 호환 API를 공통 adapter로 사용 |
-| fs backend | 준비된 로컬·NFS 경로를 사용 |
 | 내부·공개 주소 | 서버 I/O와 presigned URL 주소를 각각 등록 |
-| 전송 모드 | fs는 중계, S3는 `force_relay` 선언으로 선택 |
+| 전송 모드 | S3 직결 또는 `force_relay` 중계 |
 | 파일·위치 | `file`과 `location`을 분리 |
 | 신규 배치 | client의 `storage_id` 하나로 결정 |
 | 물리 이름 | FileGate가 발급한 고유 키 |

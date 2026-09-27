@@ -9,7 +9,7 @@
 | 현재 S3 API | [S3 계약](spec/03-s3-surface.md) |
 | 등록·인증·키 회전 | [등록부](spec/01-registry.md) |
 | 현행 관리자 인증 | [관리자 인증](spec/05-admin-auth.md) |
-| master·User·권한·DB·CLI/MCP·관리 감사 설계 | [ADR 010](adr/010-unified-users-and-named-tokens.md) · [spec 08](spec/08-management-plane.md) |
+| Root·Account·권한·DB·CLI/MCP·관리 감사 설계 | [ADR 010](adr/010-unified-users-and-named-tokens.md) · [spec 08](spec/08-management-plane.md) |
 | 관리 MCP 연결·CLI 대응·비밀 전달 | [spec 10](spec/10-management-mcp.md) |
 | CLI/MCP 공통 명령·입출력·오류·권한 계약 | [명령 계약](spec/09-management-commands.md) |
 | 관리 콘솔의 화면·API 대응·완료 기준 | [콘솔 구현 계획](spec/06-console.md) |
@@ -19,27 +19,30 @@
 | 서비스 연결 | [네이티브](guide/service-integration.md) · [S3](guide/s3-onboarding.md) |
 | 등록부 운영·Terraform 이관 | [CLI 등록 절차](guide/registry-management.md) |
 | 코드 책임·테스트 위치 | [소스 구조](development/source-layout.md) |
+| 리소스 구조 마감·검증 경계 | [리소스 체크포인트](development/refactor-checkpoint.md) · [S3/NoteGate 검증](development/s3-compatibility-review.md) |
+| Management 정리 우선순위·테스트 지도 | [준비 계획](development/management-review.md) |
 | 실행·설정·검증 | [기술·운영](stack/README.md) |
 | 외부 저장소 조사 기록 | [벤더 노트](vendors/README.md) |
 
 ## 현재와 방향
 
-1차·2차 열은 미구현 개선 계획이다. 현재 제공 기능은 현재 구현 열과 각 spec의 상태 표시를 따른다.
+현재 구현과 다음 작업을 구분한다. 로컬 검증과 운영 전환 상태는 별도다.
 
-| 축 | 현재 구현 | 1차 개선 계획 | 2차 확장 계획 |
+| 축 | 현재 구현 | 다음 작업 | 2차 확장 계획 |
 |---|---|---|---|
 | 메타데이터 | PostgreSQL 정본 | 중앙 관리 유지 | Node·Root·작업 상태 추가 |
-| 바이트 | fs + 외부 S3 backend | 외부 S3 presigned 전송 지원 유지 | Agent가 mounted filesystem I/O 수행 |
+| 바이트 | 외부 S3 presigned·relay, 로컬은 전송 임시 스풀 | 운영 endpoint 검증 | Agent가 mounted filesystem I/O 수행 |
 | 클라이언트 | 네이티브 + S3 중계 API | 현행 계약 유지, 소비자 전환은 별도 결정 | 독자 스토리지의 S3 호환 계약 구체화 |
 | 배치 | client에 storage 하나 고정 | 현행 배치 유지 | 조인·배치·이동 모델 설계 |
 | 복구 | 업로드 완료·삭제·만료 복구 | 현행 복구 유지 | Node 장애·작업 복구 설계 |
 | 관리 | 운영자 API, gscli 조회·변경, Terraform 비교 예제 | 등록부 Terraform 운영 이관 | Storage Server·Agent 조인 |
-| 관리 인증 | master 설정/복구·Users·용도별 토큰 UI, 권한·감사 API; 이전 운영자 REST 유지 | 세션·이력 UI, 이전 인증의 운영 이관 | 노드 조인 자격증명은 별도 계약 |
-| 관리 명령·감사 | CLI/MCP/콘솔 공통 자원 실행기, 변경 audit·호출·보안 로그 및 조회 API | 콘솔 이력·세션 UI, 운영 전환 | 데이터 경로의 로그와 별도 |
+| 관리 인증 | 설정 소유 Root·Accounts·토큰·세션 UI/API; 이전 운영자 REST 유지 | 권한 회귀·내부 명칭 정리·운영 이관 | 노드 조인 자격증명은 별도 계약 |
+| 관리 명령·감사 | CLI/MCP/콘솔 공통 자원 실행기, 변경 audit·호출·보안 로그·Activity UI | 로그 보존·조회 비용 점검, 운영 전환 | 데이터 경로의 로그와 별도 |
 | 실행 이름 | 서버 `filegate`·`FILEGATE_*`, CLI `gscli`·`GROVE_*` | 기존 서버 계약 유지 | 서버 이름 변경은 별도 릴리스 |
 
-Grove Storage는 후속 제품명이다. 현재 fs adapter는 서버 로컬 구현이며, 2차의 독립
-Agent가 아니다. Terraform 운영 이관·Node 조인은 계획이며 현재 계약은 spec을 따른다.
+Grove Storage는 후속 제품명이다. 현재 등록부와 backend는 S3-only다.
+Migration `0017`은 FS 행이 있으면 중단하며, 독립 filesystem Node는 2차 설계 대상이다.
+운영 이관 완료 여부는 로컬 코드·검증과 구분하고 현재 계약은 spec을 따른다.
 
 ## 문서 규칙
 

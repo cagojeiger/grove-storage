@@ -17,7 +17,8 @@ flowchart TD
 ```
 
 007·009·010은 새 제품 방향이다. 008은 구현 전에 009로 대체된 기록이다.
-000–006은 현재 FileGate의 네이티브·S3 표면과 멀티 backend를 설명한다.
+000–006은 FileGate에서 이어지는 네이티브·S3 표면을 설명한다.
+저장소 범위는 007의 S3-only 전환을 반영하며 독립 filesystem Node는 후속 설계다.
 구현 전환 상태는 [문서 목차](../README.md#현재와-방향)에 둔다.
 
 | ADR | 결정 |
@@ -39,7 +40,7 @@ flowchart TD
 | 용어 | 뜻 |
 |---|---|
 | client | 서비스를 식별하는 등록 단위; 현재 S3 bucket 이름 |
-| storage | fs 경로 또는 외부 S3 접근 계약 |
+| storage | 외부 S3 접근 계약 |
 | file / location | 파일 정체성 / 현재 물리 위치 |
 | logical key | `(client, key) → file` 매핑의 서비스 소유 이름 |
 | lease | 접근의 목적·만료·진행 기록 |

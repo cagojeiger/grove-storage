@@ -388,7 +388,9 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 
 ## 구현 순서와 완료 조건
 
-아래 단계별 수는 해당 단계의 기록이다. 현재 통합 계약은 ADR 010과 `0012` 전환 테스트를 포함한다.
+아래 단계별 수·FS fixture는 해당 단계의 기록이다. 이후 `0016`은 accounts를 통합했고,
+`0017`은 S3-only로 전환했다. 현재 코드·검증 상태는 [리소스 체크포인트](../development/refactor-checkpoint.md),
+관리 후속 검토는 [Management 준비 계획](../development/management-review.md)을 따른다.
 
 | 단계 | 변경 | 검증 |
 |---|---|---|

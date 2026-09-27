@@ -102,7 +102,7 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 | 로그인·401·secret 제거·CRUD·반응형 | 기존 Playwright suite에 함께 실행 |
 | 파일 HTML을 관리 origin에서 열 수 있는 배포 조건 | 코드·계약에서 확인한 조건부 위험; 운영 ingress는 이번 점검 범위 밖 |
 | 운영 호스트 경로 제한·TLS·응답 헤더 | 배포 완료 조건; 미검증 |
-| User 로그인·자원 UI·역할·폐기 | 실제 HTTPS·PG·fs/MinIO fixture |
+| User 로그인·자원 UI·역할·폐기 | 이전 단계의 실제 HTTPS·PG·fs/MinIO fixture 기록; 현재 backend는 S3-only |
 | master UI·세션 관리·다중 탭 복원 | 후속 인증 화면 단계의 필수 회귀 테스트 |
 | OAuth2 Proxy·기계용 API 분리 | 배포 전 401/403, Bearer 보존, 신원 API 우회 거부 검증 |
 

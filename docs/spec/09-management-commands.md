@@ -197,7 +197,9 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 | `api/src/resource_commands/tests/storage*.rs` | PG HTTP 테스트: FS 등록/교체 거부·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
 | 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 11개·User 현재 역할·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
 | 변경 서버 smoke | 변경 6개·기존 S3 키 목록·Native PUT/commit/GET 바이트 일치·파일 참조 삭제 409·키 폐기 후 401·비밀 없는 감사 확인; S3 실제 전송은 이번 검증에서 제외 |
-| Storage 서버 smoke | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |
+| Storage 서버 smoke (이전 단계 기록) | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·당시 fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |
 
+위 개수·smoke 결과는 각 단계의 기록이다. 현재 명령 정본은 `management-command/src/catalog.rs`,
+S3-only/MinIO·NoteGate 검증은 [호환성 점검](../development/s3-compatibility-review.md)을 따른다.
 현재 검증은 순수 계약·PG 서비스·HTTP 라우터와 자원 변경/audit transaction을 포함한다.
 외부 MCP 앱·운영 proxy는 별도 검증이다. S3 대역 검증은 외부 Provider 운영 검증과 구분한다.

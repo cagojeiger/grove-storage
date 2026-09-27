@@ -5,6 +5,7 @@
 - 선행: [ADR 007](007-grove-storage-foundation.md)
 - 대체: [ADR 008](008-local-owner-and-agent-credentials.md)
 - 계약·DB·검증: [spec 08](../spec/08-management-plane.md)
+- 저장소 범위: 아래는 당시 기록이며 현재 S3-only 계약은 [ADR 007](007-grove-storage-foundation.md)을 따른다.
 
 ## 전제
 
