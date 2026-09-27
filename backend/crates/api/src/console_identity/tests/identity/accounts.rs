@@ -165,7 +165,7 @@ async fn account_cursor_validation_and_audit_once_contract(pool: PgPool) {
         "/accounts?limit=1&limit=2",
         "/history/audit?before=-1",
         "/history/audit?actor_id=forged",
-        "/sessions?owner_user_id=forged",
+        "/me/sessions?owner_user_id=forged",
     ] {
         let response = send(&pool, &cookie, "GET", path, serde_json::Value::Null).await;
         assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{path}");

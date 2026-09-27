@@ -9,7 +9,6 @@ use axum::{
 use grove_management_service::{Error, sessions};
 
 pub(super) const COOKIE: &str = "__Host-grove_session";
-pub(super) const MASTER_COOKIE: &str = "__Host-grove_setup";
 
 fn single<'a>(headers: &'a HeaderMap, name: &str) -> Result<Option<&'a str>, Error> {
     let mut values = headers.get_all(name).iter();
@@ -69,15 +68,7 @@ pub(super) async fn guard(State(state): State<AppState>, request: Request, next:
 }
 
 pub(super) fn cookie(headers: &HeaderMap) -> Option<&str> {
-    named_cookie(
-        headers,
-        COOKIE,
-        &[secrets::SESSION_PREFIX, secrets::ROOT_SESSION_PREFIX],
-    )
-}
-
-pub(super) fn master_cookie(headers: &HeaderMap) -> Option<&str> {
-    named_cookie(headers, MASTER_COOKIE, &[secrets::MASTER_SESSION_PREFIX])
+    named_cookie(headers, COOKIE, &[secrets::SESSION_PREFIX])
 }
 
 fn named_cookie<'a>(
@@ -102,39 +93,13 @@ fn named_cookie<'a>(
     found
 }
 
-pub(super) fn session_hash(headers: &HeaderMap) -> (String, bool) {
+pub(super) fn session_hash(headers: &HeaderMap) -> String {
     let raw = cookie(headers).unwrap_or_default();
-    if raw.starts_with(secrets::ROOT_SESSION_PREFIX) {
-        (secrets::root_session_hash(raw), true)
-    } else {
-        (secrets::session_hash(raw), false)
-    }
-}
-
-pub(super) fn proof<'a>(
-    config: Option<&'a grove_management_service::master::Config>,
-    hash: &'a str,
-    root: bool,
-) -> grove_management_service::Proof<'a> {
-    if root {
-        match config {
-            Some(config) => grove_management_service::Proof::RootSession {
-                hash,
-                binding: config.binding(),
-            },
-            None => grove_management_service::Proof::Session(""),
-        }
-    } else {
-        grove_management_service::Proof::Session(hash)
-    }
+    secrets::session_hash(raw)
 }
 
 pub(super) fn set_cookie(response: &mut Response, raw: &str, seconds: i64) {
     set_named_cookie(response, COOKIE, raw, seconds);
-}
-
-pub(super) fn set_master_cookie(response: &mut Response, raw: &str, seconds: i64) {
-    set_named_cookie(response, MASTER_COOKIE, raw, seconds);
 }
 
 fn set_named_cookie(response: &mut Response, name: &str, raw: &str, seconds: i64) {

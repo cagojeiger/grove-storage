@@ -115,18 +115,20 @@ async fn own_profile_is_password_session_scoped_and_audited(pool: PgPool) {
     assert_eq!(metadata["after_name"], "Updated owner");
 
     let (_, raw) = credential(&pool, owner).await;
-    let legacy = login(app(&pool), &raw).await;
-    let legacy_cookie = cookie(&legacy);
+    assert_eq!(
+        login(app(&pool), &raw).await.status(),
+        StatusCode::BAD_REQUEST
+    );
     assert_eq!(
         request(
             app(&pool),
             "GET",
             path,
-            &[("cookie", &legacy_cookie)],
+            &[("authorization", &format!("Bearer {raw}"))],
             String::new()
         )
         .await
         .status(),
-        StatusCode::FORBIDDEN
+        StatusCode::UNAUTHORIZED
     );
 }

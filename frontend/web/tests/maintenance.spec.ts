@@ -122,18 +122,13 @@ test("sessions page confirms revocation and signs out when revoking the current 
   ]);
 });
 
-test("unknown revocation is never retried and Root sessions accept a null token ID", async ({
+test("unknown revocation is never retried for a password session", async ({
   page,
 }) => {
   await maintenanceMock(page);
   await page.route("**/identity/v1/session", (r) =>
     r.fulfill({
-      json: {
-        principal: "root",
-        role: "root",
-        session_id: "session",
-        expires_at: loginSession.expires_at,
-      },
+      json: { ...session, credential_id: null },
     }),
   );
   await page.route("**/identity/v1/me/sessions?*", (r) =>
@@ -152,7 +147,7 @@ test("unknown revocation is never retried and Root sessions accept a null token 
   await page.goto("/api/admin/console/#settings");
   await page.getByRole("button", { name: "Revoke current session" }).click();
   await page.getByRole("button", { name: "Confirm revoke" }).click();
-  await expect(page.getByRole("alert")).toContainText("outcome is unknown");
+  await expect(page.getByRole("alert").filter({ hasText: "outcome is unknown" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Confirm revoke" }),
   ).toBeDisabled();

@@ -58,12 +58,11 @@ export type Session = {
   credential_id: string | null;
   session_id: string;
   role: "reader" | "writer" | "admin";
-} | { principal: "root"; role: "root"; session_id: string; expires_at: string };
+};
 
 export async function currentSession(signal?: AbortSignal): Promise<Session> {
   const value = await request<Session>(`${identity}/session`, { signal });
-  if (!value || !((value.principal === "user" && ["reader", "writer", "admin"].includes(value.role)) ||
-      (value.principal === "root" && value.role === "root")) || typeof value.session_id !== "string")
+  if (!value || value.principal !== "user" || !["reader", "writer", "admin"].includes(value.role) || typeof value.session_id !== "string")
     throw new ApiError(502);
   return value;
 }

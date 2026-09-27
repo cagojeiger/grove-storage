@@ -43,7 +43,6 @@ test("previous and next cursors survive reload and reset on filter changes", asy
   await expect(page.getByRole("button", { name: /Account 1 .*Disabled/ })).toBeVisible();
   expect(page.url()).not.toMatch(/before=|after=/);
   await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Root Config Protected Configured" })).toBeVisible();
   await page.getByLabel("Account status").selectOption("deleted");
   await page.getByRole("button", { name: /Account 2 .*Deleted/ }).click();
   await expect(page.getByRole("button", { name: "Delete account" })).toBeDisabled();

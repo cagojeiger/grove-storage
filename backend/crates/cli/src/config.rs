@@ -68,8 +68,7 @@ pub fn authorization(args: &Args) -> Result<HeaderValue, Error> {
             .unwrap_or(&text)
             .to_owned()
     } else {
-        std::env::var("GROVE_TOKEN")
-            .map_err(|_| Error::input("Set --token-file or GROVE_TOKEN"))?
+        std::env::var("GROVE_TOKEN").map_err(|_| Error::input("Set --token-file or GROVE_TOKEN"))?
     };
     if !token.strip_prefix("gsm_").is_some_and(|value| {
         value.len() == 64

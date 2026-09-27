@@ -10,7 +10,6 @@ import { Storages } from "../features/storages/Storages";
 import { clearSession } from "../auth/session";
 import { useRoute } from "./navigation";
 import { Access } from "../features/access/Access";
-import { MasterSetup } from "../auth/MasterSetup";
 import { Clients } from "../features/clients/Clients";
 import { Activity } from "../features/activity/Activity";
 import { Sessions } from "../features/settings/Sessions";
@@ -96,8 +95,6 @@ export function App() {
           <p role="alert">{message(session.error)}</p>
           <button onClick={() => void session.refetch()}>Reconnect</button>
         </main>
-      ) : route === "setup" ? (
-        <MasterSetup />
       ) : session.data ? (
         <div className="workspace">
           <aside>
@@ -119,7 +116,7 @@ export function App() {
               </a>
               <a href="#clients" aria-current={clientPage ? "page" : undefined}><AppWindow size={18} /><span>Clients</span></a>
               <p className="nav-group">Management</p>
-              {["admin", "root"].includes(session.data.role) && (
+              {session.data.role === "admin" && (
                 <a
                   href="#accounts"
                   aria-current={accessPage ? "page" : undefined}
@@ -131,7 +128,7 @@ export function App() {
               <a href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></a>
               <a href="#settings" aria-current={settingsPage ? "page" : undefined}><Settings size={18} /><span>My account</span></a>
             </nav>
-            <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management", root: "Root · Protected" }[session.data.role]}</span>
+            <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
           </aside>
           <div className="content">
             {logoutError && (
@@ -140,13 +137,13 @@ export function App() {
               </p>
             )}
             {accessPage ? (
-              ["admin", "root"].includes(session.data.role) ? (
-                <Access key={`${route}:${session.data.session_id}`} route={route} currentUserId={session.data.principal === "user" ? session.data.user_id : undefined} />
+              session.data.role === "admin" ? (
+                <Access key={`${route}:${session.data.session_id}`} route={route} currentUserId={session.data.user_id} />
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )
             ) : activityPage ? (
-              <Activity key={`${fullRoute}:${session.data.role}:${session.data.session_id}`} route={fullRoute} admin={["admin", "root"].includes(session.data.role)} />
+              <Activity key={`${fullRoute}:${session.data.role}:${session.data.session_id}`} route={fullRoute} admin={session.data.role === "admin"} />
             ) : settingsPage ? (
               <Sessions key={session.data.session_id} session={session.data} />
             ) : clientPage ? (

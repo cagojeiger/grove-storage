@@ -21,9 +21,9 @@ async fn call(pool: &PgPool, cookie: &str, command: &str, input: serde_json::Val
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn resource_session_rechecks_role_and_revocation_with_console_audit(pool: PgPool) {
-    let (user, credential, token) = account(&pool, Role::Writer).await;
+    let (user, _, _) = account(&pool, Role::Writer).await;
     crate::resource_commands::tests::seed(&pool).await;
-    let cookie = cookie(&login(app(&pool), &token).await);
+    let cookie = password_session(&pool, user).await;
     let response = call(
         &pool,
         &cookie,
@@ -36,14 +36,14 @@ async fn resource_session_rechecks_role_and_revocation_with_console_audit(pool: 
     let body = json(response).await;
     let request_id: Uuid = body["request_id"].as_str().unwrap().parse().unwrap();
     assert_eq!(body["command"], "client.create");
-    let record: (String, Uuid, Uuid) = sqlx::query_as(
+    let record: (String, Uuid, Option<Uuid>) = sqlx::query_as(
         "SELECT surface,actor_id,credential_id FROM management.audit_events WHERE request_id=$1",
     )
     .bind(request_id)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(record, ("console".into(), user, credential));
+    assert_eq!(record, ("console".into(), user, None));
     db::change_account(
         &pool,
         &context(),
@@ -64,7 +64,12 @@ async fn resource_session_rechecks_role_and_revocation_with_console_audit(pool: 
         json(denied).await["error"],
         json!({"code":"forbidden","outcome":"not_applied"})
     );
-    db::revoke_credential(&pool, &context(), credential)
+    let session: Uuid = json(current(app(&pool), &cookie).await).await["session_id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    db::revoke_session(&pool, &context(), user, session)
         .await
         .unwrap();
     assert_eq!(
@@ -77,8 +82,8 @@ async fn resource_session_rechecks_role_and_revocation_with_console_audit(pool: 
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn console_commands_reject_other_credentials_and_cross_site_requests(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Admin).await;
-    let cookie = cookie(&login(app(&pool), &token).await);
+    let (user, _, token) = account(&pool, Role::Admin).await;
+    let cookie = password_session(&pool, user).await;
     let authorization = format!("Bearer {token}");
     let body = json!({"protocol":1,"command":"storage.list","input":{}}).to_string();
     for (headers, expected) in [
@@ -164,8 +169,8 @@ async fn console_commands_reject_other_credentials_and_cross_site_requests(pool:
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn console_rejects_filesystem_storage_commands(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Admin).await;
-    let cookie = cookie(&login(app(&pool), &token).await);
+    let (user, _, _) = account(&pool, Role::Admin).await;
+    let cookie = password_session(&pool, user).await;
     for name in ["storage.create", "storage.replace"] {
         let response = call(&pool, &cookie, name,
             json!({"id":"local","spec":{"kind":"fs","root_path":"/never-probed","capacity_bytes":1}})).await;

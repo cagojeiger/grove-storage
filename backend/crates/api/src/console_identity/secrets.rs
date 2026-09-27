@@ -3,10 +3,6 @@ use sha2::{Digest, Sha256};
 
 pub(crate) const TOKEN_PREFIX: &str = "gsm_";
 pub(super) const SESSION_PREFIX: &str = "gss_";
-pub(super) const ROOT_PREFIX: &str = "gsrt_";
-pub(super) const ROOT_SESSION_PREFIX: &str = "gsrs_";
-pub(super) const MASTER_PREFIX: &str = "gsmt_";
-pub(super) const MASTER_SESSION_PREFIX: &str = "gsms_";
 pub(super) const SETUP_PREFIX: &str = "gsps_";
 
 pub(crate) fn valid(raw: &str, prefix: &str) -> bool {
@@ -33,21 +29,11 @@ pub(super) fn session_hash(raw: &str) -> String {
     hash("grove-management-session-v1", raw)
 }
 
-pub(super) fn master_hash(raw: &str) -> String {
-    hash("grove-master-token-v1", raw)
-}
-pub(super) fn master_session_hash(raw: &str) -> String {
-    hash("grove-master-session-v1", raw)
-}
-pub(super) fn root_session_hash(raw: &str) -> String {
-    hash("grove-root-session-v1", raw)
-}
-
 pub(super) fn setup_hash(raw: &str) -> String {
     hash("grove-password-setup-v1", raw)
 }
 
-// The same one-time issuance material serves master recovery and Admin issuance.
+// The same token material serves personal and Admin issuance.
 pub(super) struct IssuedToken {
     raw: SecretString,
     hash: String,

@@ -61,29 +61,28 @@ async fn reader_and_writer_cannot_manage_identities_or_view_security(pool: PgPoo
                 "{method} {path}"
             );
         }
-        for path in ["/sessions", "/history/audit", "/history/invocations"] {
+        for path in ["/me/sessions", "/history/audit", "/history/invocations"] {
             get(&pool, &cookie, path).await;
         }
     }
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn bearer_master_and_cross_site_requests_cannot_bypass_console_boundary(pool: PgPool) {
+async fn bearer_and_cross_site_requests_cannot_bypass_console_boundary(pool: PgPool) {
     let (_, _, token) = account(&pool, Role::Admin).await;
-    let user_cookie = cookie(&login(app(&pool), &token).await);
-    let (router, master_token) = super::super::master::setup(&pool).await;
-    let master_cookie = cookie(&super::super::master::sign_in(router.clone(), &master_token).await);
+    let (_, user_cookie) = actor(&pool, Role::Admin).await;
+    let router = app(&pool);
     for path in [
         "/accounts",
         "/accounts/00000000-0000-0000-0000-000000000001",
-        "/sessions",
+        "/me/sessions",
         "/history/audit",
         "/history/invocations",
         "/history/security",
     ] {
         for headers in [
             vec![("authorization", format!("Bearer {token}"))],
-            vec![("cookie", master_cookie.clone())],
+            vec![("cookie", "__Host-grove_setup=gsms_legacy".into())],
         ] {
             let borrowed: Vec<_> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
             assert_eq!(

@@ -1,7 +1,7 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn tokens_are_one_time_responses_and_revocation_invalidates_sessions(pool: PgPool) {
+async fn tokens_are_one_time_responses_and_revocation_invalidates_api_access(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
     let user = create(
         &pool,
@@ -11,9 +11,16 @@ async fn tokens_are_one_time_responses_and_revocation_invalidates_sessions(pool:
     .await;
     let key = issue(&pool, &admin_cookie, user).await;
     let raw = key["token"].as_str().unwrap();
-    let response = login(app(&pool), raw).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let user_cookie = cookie(&response);
+    assert_eq!(
+        login(app(&pool), raw).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(
+        db::authenticate(&pool, &secrets::token_hash(raw))
+            .await
+            .unwrap()
+            .is_some()
+    );
     let list = get(
         &pool,
         &admin_cookie,
@@ -46,9 +53,11 @@ async fn tokens_are_one_time_responses_and_revocation_invalidates_sessions(pool:
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        current(app(&pool), &user_cookie).await.status(),
-        StatusCode::UNAUTHORIZED
+    assert!(
+        db::authenticate(&pool, &secrets::token_hash(raw))
+            .await
+            .unwrap()
+            .is_none()
     );
     for days in [0, 91] {
         assert_eq!(
@@ -72,8 +81,7 @@ async fn user_deletion_retires_all_credentials_and_session_scope_is_self_only(po
     let (user, user_cookie) = actor(&pool, Role::Reader).await;
     let key = issue(&pool, &admin_cookie, user).await;
     let raw = key["token"].as_str().unwrap();
-    let second_login = login(app(&pool), raw).await;
-    assert_eq!(second_login.status(), StatusCode::OK);
+    let second_cookie = password_login(&pool, user).await;
     let identity = db::authenticate(&pool, &secrets::token_hash(raw))
         .await
         .unwrap()
@@ -86,13 +94,13 @@ async fn user_deletion_retires_all_credentials_and_session_scope_is_self_only(po
         )
         .is_err()
     );
-    let admin_sessions = get(&pool, &admin_cookie, "/sessions").await;
+    let admin_sessions = get(&pool, &admin_cookie, "/me/sessions").await;
     let admin_session = admin_sessions["items"][0]["id"].as_str().unwrap();
     let response = send(
         &pool,
         &user_cookie,
         "DELETE",
-        &format!("/sessions/{admin_session}"),
+        &format!("/me/sessions/{admin_session}"),
         serde_json::Value::Null,
     )
     .await;
@@ -101,8 +109,12 @@ async fn user_deletion_retires_all_credentials_and_session_scope_is_self_only(po
         current(app(&pool), &admin_cookie).await.status(),
         StatusCode::OK
     );
-    let own = get(&pool, &user_cookie, "/sessions").await;
+    let own = get(&pool, &user_cookie, "/me/sessions").await;
     assert_eq!(own["items"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        current(app(&pool), &second_cookie).await.status(),
+        StatusCode::OK
+    );
     let current_id = json(current(app(&pool), &user_cookie).await).await["session_id"]
         .as_str()
         .unwrap()
@@ -111,7 +123,7 @@ async fn user_deletion_retires_all_credentials_and_session_scope_is_self_only(po
         &pool,
         &user_cookie,
         "DELETE",
-        &format!("/sessions/{}", current_id),
+        &format!("/me/sessions/{}", current_id),
         serde_json::Value::Null,
     )
     .await;

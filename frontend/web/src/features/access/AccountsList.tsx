@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { identityRequest } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
-import { RootAccount } from "./RootAccount";
 import { isAccountPage, useAccountList } from "./accountList";
 
 export function AccountsList({ onCreate }: { onCreate: () => void }) {
@@ -39,11 +38,9 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
       <label>Status<select aria-label="Account status" value={listing.status} onChange={e => listing.update({ status: e.target.value })}>
         <option value="current">Current</option><option value="active">Active</option><option value="disabled">Disabled</option><option value="deleted">Deleted</option><option value="all">All statuses</option>
       </select></label>
-      {data?.initialized === false ? <a className="back-link" href="#setup">Set up first Admin</a> :
-        <button className="primary" disabled={!data || query.isError} onClick={onCreate}><Plus size={16} />Create user</button>}
+      <button className="primary" disabled={!data || query.isError} onClick={onCreate}><Plus size={16} />Create user</button>
     </div>
     <div className="account-list">
-      <RootAccount selected={false} onSelect={() => { window.location.hash = listing.href("#accounts/root"); }} />
       {query.isPending ? <p role="status">Loading accounts...</p> : query.isError ?
         <p role="alert">{message(query.error)} <button onClick={() => void query.refetch()}>Retry</button></p> : <>
           {data?.items.map(row => <button className="account-row" key={row.id} onClick={() => { window.location.hash = listing.href(`#accounts/${encodeURIComponent(row.id)}`); }}>

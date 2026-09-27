@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
 import { loginWithPassword } from "./live-auth.mjs";
 
-export async function permissionChecks(browser, admin, origin, ownerPassword) {
+export async function permissionChecks(browser, admin, origin, endpoint, ownerPassword) {
   async function identity(method, path, body) {
     return admin.evaluate(async ({ method, path, body }) => {
       const response = await fetch(`/api/admin/identity/v1${path}`, {
@@ -34,6 +34,16 @@ export async function permissionChecks(browser, admin, origin, ownerPassword) {
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "reader" });
+    const status = await admin.request.post(`${endpoint}/api/admin/commands/v1`, {
+      headers: { Authorization: `Bearer ${automationKey.token}` },
+      data: { protocol: 1, command: "status", input: {} },
+    });
+    assert.equal(status.status(), 200);
+    const forbidden = await admin.request.post(`${endpoint}/api/admin/commands/v1`, {
+      headers: { Authorization: `Bearer ${automationKey.token}` },
+      data: { protocol: 1, command: "client.create", input: { id: "blocked", storage_id: "console-live" } },
+    });
+    assert.equal(forbidden.status(), 403);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Reader · Read-only")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);

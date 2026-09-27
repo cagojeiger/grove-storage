@@ -27,8 +27,8 @@ pub(super) async fn change(
     let Ok(Json(body)) = body else {
         return failure(Error::InvalidInput, Uuid::new_v4());
     };
-    let (hash, root) = browser::session_hash(&headers);
-    if root || browser::cookie(&headers).is_none() {
+    let hash = browser::session_hash(&headers);
+    if browser::cookie(&headers).is_none() {
         return failure(Error::Unauthenticated, Uuid::new_v4());
     }
     let result = service::password_changes::change(

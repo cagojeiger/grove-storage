@@ -57,7 +57,7 @@ async fn uncertain_issuance_commit_never_delivers_a_token_or_retries(pool: PgPoo
 #[sqlx::test(migrations = "../db/migrations")]
 async fn issuance_limit_returns_conflict_without_a_secret(pool: PgPool) {
     let (user, cookie) = actor(&pool, Role::Admin).await;
-    for _ in 1..32 {
+    for _ in 0..32 {
         credential(&pool, user).await;
     }
     let response = send(

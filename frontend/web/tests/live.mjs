@@ -32,7 +32,7 @@ try {
   await metadataChecks(page, fixture);
   await usageChecks(page, fixture);
   await maintenanceChecks(browser, page, origin, ownerPassword);
-  await permissionChecks(browser, page, origin, ownerPassword);
+  await permissionChecks(browser, page, origin, endpoint, ownerPassword);
   const cookie = (await context.cookies()).find(
     (cookie) => cookie.name === "__Host-grove_session",
   );

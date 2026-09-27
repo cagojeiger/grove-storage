@@ -108,19 +108,9 @@ async fn personal_tokens_require_password_session_and_cannot_cross_accounts(pool
     )
     .await;
     assert_eq!(revoke_other.status(), StatusCode::NOT_FOUND);
-    let legacy_login = login(app(&pool), raw).await;
-    assert_eq!(legacy_login.status(), StatusCode::OK);
     assert_eq!(
-        request(
-            app(&pool),
-            "GET",
-            path,
-            &[("cookie", &cookie(&legacy_login))],
-            String::new()
-        )
-        .await
-        .status(),
-        StatusCode::FORBIDDEN
+        login(app(&pool), raw).await.status(),
+        StatusCode::BAD_REQUEST
     );
     let revoke_own = request(
         app(&pool),

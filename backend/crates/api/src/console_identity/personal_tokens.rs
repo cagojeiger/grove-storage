@@ -25,8 +25,8 @@ pub(super) struct Issue {
 }
 
 pub(super) fn session(headers: &HeaderMap) -> Result<String, Error> {
-    let (hash, root) = browser::session_hash(headers);
-    if root || browser::cookie(headers).is_none() {
+    let hash = browser::session_hash(headers);
+    if browser::cookie(headers).is_none() {
         return Err(Error::Unauthenticated);
     }
     Ok(hash)

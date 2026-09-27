@@ -22,11 +22,10 @@ async fn execute(
     headers: HeaderMap,
     body: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> Response {
-    let (hash, root) = browser::session_hash(&headers);
-    let config = state.master.clone();
+    let hash = browser::session_hash(&headers);
     crate::resource_commands::execute_with(
         state,
-        browser::proof(config.as_deref(), &hash, root),
+        grove_management_service::Proof::PasswordSession(&hash),
         Surface::Console,
         body,
     )

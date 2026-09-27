@@ -20,9 +20,46 @@ fn token_syntax_and_hash_domains_are_distinct() {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
+async fn existing_token_session_cookie_cannot_enter_console(pool: PgPool) {
+    let (_, _, token) = account(&pool, Role::Admin).await;
+    let raw = format!("gss_{}", filegate_core::generate_url_secret());
+    db::create_session(
+        &pool,
+        Uuid::new_v4(),
+        &secrets::token_hash(&token),
+        &secrets::session_hash(&raw),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let cookie = format!("{COOKIE}={raw}");
+    assert_eq!(
+        current(app(&pool), &cookie).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            app(&pool),
+            "POST",
+            "/api/admin/console-commands/v1",
+            &[
+                ("cookie", &cookie),
+                ("origin", ORIGIN),
+                ("x-grove-csrf", "1"),
+                ("content-type", "application/json")
+            ],
+            serde_json::json!({"protocol":1,"command":"status","input":{}}).to_string(),
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED,
+    );
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
 async fn browser_admission_rejects_ambiguous_and_cross_site_requests(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Reader).await;
-    let cookie = cookie(&login(app(&pool), &token).await);
+    let (user, _, _) = account(&pool, Role::Reader).await;
+    let cookie = password_session(&pool, user).await;
     for extra in [
         vec![],
         vec![("origin", ORIGIN)],
@@ -54,7 +91,7 @@ async fn browser_admission_rejects_ambiguous_and_cross_site_requests(pool: PgPoo
                 method,
                 PATH,
                 &headers,
-                serde_json::json!({"token":token}).to_string(),
+                serde_json::json!({"username":"owner","password":"invalid"}).to_string(),
             )
             .await;
             assert_eq!(
@@ -138,8 +175,8 @@ async fn browser_admission_rejects_ambiguous_and_cross_site_requests(pool: PgPoo
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn legacy_and_data_authority_remain_separate(pool: PgPool) {
-    let (_, _, token) = account(&pool, Role::Admin).await;
-    let new_cookie = cookie(&login(app(&pool), &token).await);
+    let (user, _, token) = account(&pool, Role::Admin).await;
+    let new_cookie = password_session(&pool, user).await;
     let old_raw = format!("fgop_{}", filegate_core::generate_url_secret());
     filegate_db::admin_auth::issue(
         &pool,
@@ -169,7 +206,7 @@ async fn legacy_and_data_authority_remain_separate(pool: PgPool) {
     );
     assert_eq!(
         login(app(&pool), &old_raw).await.status(),
-        StatusCode::UNAUTHORIZED
+        StatusCode::BAD_REQUEST
     );
     for path in ["/api/admin/v1/clients", "/api/v1/files"] {
         assert_eq!(

@@ -10,6 +10,7 @@ use super::{
 #[derive(Clone, Copy)]
 pub enum Proof<'a> {
     Session(&'a str),
+    PasswordSession(&'a str),
     Token(&'a str),
     RootSession {
         hash: &'a str,
@@ -53,6 +54,11 @@ impl<'a> IdentityTransaction<'a> {
             Proof::Session(hash) => Ok(identity::session(&mut self.inner, hash)
                 .await?
                 .map(ResolvedIdentity::User)),
+            Proof::PasswordSession(hash) => {
+                Ok(identity::password_only_session(&mut self.inner, hash)
+                    .await?
+                    .map(ResolvedIdentity::User))
+            }
             Proof::Token(hash) => Ok(identity::token(&mut self.inner, hash)
                 .await?
                 .map(ResolvedIdentity::User)),

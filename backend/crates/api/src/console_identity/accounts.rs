@@ -131,8 +131,8 @@ pub(super) async fn create(
             current_password,
         } if inputs::valid_label(&display_name) => {
             let request_id = Uuid::new_v4();
-            let (session_hash, root) = browser::session_hash(&headers);
-            if root || browser::cookie(&headers).is_none() {
+            let session_hash = browser::session_hash(&headers);
+            if browser::cookie(&headers).is_none() {
                 return failure(grove_management_service::Error::Unauthenticated, request_id);
             }
             let token = SecretString::from(format!(

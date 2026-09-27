@@ -319,7 +319,16 @@ async fn password_change_revokes_browser_sessions_but_keeps_management_tokens(po
             .await
             .unwrap();
     assert!(current_token);
-    assert_eq!(login(app(&pool), &token).await.status(), StatusCode::OK);
+    assert_eq!(
+        login(app(&pool), &token).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(
+        db::authenticate(&pool, &secrets::token_hash(&token))
+            .await
+            .unwrap()
+            .is_some()
+    );
     let rows: Vec<String> = sqlx::query_scalar(
         "SELECT row_to_json(e)::text FROM management.audit_events e WHERE action='account.password_change'"
     ).fetch_all(&pool).await.unwrap();

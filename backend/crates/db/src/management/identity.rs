@@ -91,6 +91,20 @@ pub(super) async fn session(
         .transpose()
 }
 
+pub(super) async fn password_only_session(
+    connection: &mut PgConnection,
+    hash: &str,
+) -> Result<Option<Identity>, Error> {
+    let row: Option<Row> = sqlx::query_as("SELECT a.id AS account_id,a.kind,a.role,NULL::uuid AS credential_id,s.id AS session_id
+        FROM management.sessions s JOIN management.accounts a ON a.id=s.user_id
+        JOIN management.password_credentials p ON p.account_id=s.user_id
+        WHERE s.session_hash=$1 AND s.auth_method='password' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+          AND p.generation=s.password_generation AND a.kind='user' AND a.is_active AND a.deleted_at IS NULL")
+        .bind(hash).fetch_optional(connection).await?;
+    row.map(|row| row.identity(AuthMethod::UserSession))
+        .transpose()
+}
+
 pub(super) async fn password_session(
     connection: &mut PgConnection,
     hash: &str,

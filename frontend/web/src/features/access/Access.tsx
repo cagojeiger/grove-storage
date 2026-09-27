@@ -14,7 +14,6 @@ import { AccountAction, AccountDialog } from "./AccountDialog";
 import { Tokens } from "./Tokens";
 import { PasswordSetupIssue } from "./PasswordSetupIssue";
 import { CreateUserDialog } from "./CreateUserDialog";
-import { RootAccount } from "./RootAccount";
 import { AccountsList } from "./AccountsList";
 import { useAccountList } from "./accountList";
 import { activityLink } from "../activity/filters";
@@ -27,7 +26,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
   const [creating, setCreating] = useState(false);
   const detail = useQuery({
     queryKey: ["access", "account", selected],
-    enabled: Boolean(selected && selected !== "root"),
+    enabled: Boolean(selected),
     queryFn: async ({ signal }) => {
       try {
         return await identityRequest(
@@ -66,9 +65,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
           <RefreshCw size={18} />
         </button>
       </div>
-      {!selected ? <AccountsList onCreate={() => setCreating(true)} /> : selected === "root" ? (
-        <><button className="back-link" onClick={() => { window.location.hash = listing.href("#accounts"); }}><ArrowLeft size={16} />Accounts</button><RootAccount selected onSelect={() => {}} /></>
-      ) : current.isPending ? (
+      {!selected ? <AccountsList onCreate={() => setCreating(true)} /> : current.isPending ? (
         <p role="status">Loading accounts...</p>
       ) : current.isError ? (
         <p role="alert">

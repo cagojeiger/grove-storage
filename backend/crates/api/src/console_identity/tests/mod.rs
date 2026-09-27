@@ -1,16 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod browser;
-mod failures;
 mod identity;
-mod lifecycle;
-mod master;
-mod master_recovery;
 mod password_login;
 mod password_setup;
 mod personal_tokens;
 mod profile;
 mod resources;
-mod root;
 
 use super::{browser::COOKIE, secrets};
 use axum::{
@@ -97,6 +92,46 @@ async fn credential(pool: &PgPool, user: Uuid) -> (Uuid, String) {
     .await
     .unwrap();
     (credential.id, raw)
+}
+
+async fn password_session(pool: &PgPool, user: Uuid) -> String {
+    let username = format!("u{}", user.simple());
+    let password = "a private phrase for fixture account";
+    let hash = grove_management_service::passwords::hash(
+        &username,
+        filegate_core::SecretString::from(password),
+    )
+    .await
+    .unwrap();
+    db::passwords::recover(
+        pool,
+        Uuid::new_v4(),
+        user,
+        &username,
+        filegate_core::ExposeSecret::expose_secret(&hash),
+    )
+    .await
+    .unwrap();
+    password_login(pool, user).await
+}
+
+async fn password_login(pool: &PgPool, user: Uuid) -> String {
+    let username = format!("u{}", user.simple());
+    let password = "a private phrase for fixture account";
+    let response = request(
+        app(pool),
+        "POST",
+        PATH,
+        &[
+            ("origin", ORIGIN),
+            ("x-grove-csrf", "1"),
+            ("content-type", "application/json"),
+        ],
+        serde_json::json!({"username":username,"password":password}).to_string(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    cookie(&response)
 }
 
 async fn request(

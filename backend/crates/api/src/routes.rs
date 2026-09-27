@@ -45,7 +45,6 @@ pub struct AppState {
     /// 등록·발급이 요구한다 — 없으면 등록이 400으로 거부된다.
     pub public_url: Option<String>,
     pub console_origin: Option<String>,
-    pub master: Option<Arc<grove_management_service::master::Config>>,
     /// 이 선언 크기를 넘으면 create가 multipart를 발급한다 (spec 02).
     pub multipart_threshold: i64,
     /// multipart part 크기 — create 시점 값이 업로드별로 동결된다 (spec 02).

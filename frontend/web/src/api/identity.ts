@@ -28,11 +28,6 @@ export type Issued = {
   account_id?: string;
 };
 export type Page<T> = { items: T[]; next_before: string | null };
-export type MasterSession = {
-  principal: "master";
-  scope: "setup_recovery";
-  initialized: boolean;
-};
 export const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const nullable = (v: unknown) => v === null || typeof v === "string";
@@ -63,11 +58,6 @@ export const isIssued = (v: unknown): v is Issued =>
   typeof v.expires_at === "string" &&
   Number.isFinite(Date.parse(v.expires_at)) &&
   (typeof v.user_id === "string" || typeof v.account_id === "string");
-export const isMaster = (v: unknown): v is MasterSession =>
-  isObject(v) &&
-  v.principal === "master" &&
-  v.scope === "setup_recovery" &&
-  typeof v.initialized === "boolean";
 export const isChanged = (v: unknown): v is { changed: boolean } =>
   isObject(v) && typeof v.changed === "boolean";
 

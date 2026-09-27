@@ -81,13 +81,10 @@ test("unknown rename outcome blocks resubmission", async ({ page }) => {
   expect(mock.accounts[0].display_name).toBe(owner.display_name);
 });
 
-test("deleted accounts and Root have no usable rename action", async ({ page }) => {
+test("deleted accounts have no usable rename action", async ({ page }) => {
   await accessMock(page, [owner, { ...otherUser, deleted_at: "2026-09-27T00:00:00Z", is_active: false }]);
   await page.goto(`/api/admin/console/#accounts/${otherUser.id}`);
   await expect(page.getByRole("button", { name: "Edit name", exact: true })).toBeDisabled();
-  await page.goto("/api/admin/console/#accounts/root");
-  await expect(page.getByRole("heading", { name: "Root", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit name", exact: true })).toHaveCount(0);
 });
 
 for (const width of [320, 768, 1440]) for (const theme of ["light", "dark"]) {

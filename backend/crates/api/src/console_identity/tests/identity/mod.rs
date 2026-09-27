@@ -31,8 +31,8 @@ async fn send(
     .await
 }
 async fn actor(pool: &PgPool, role: Role) -> (Uuid, String) {
-    let (id, _, token) = account(pool, role).await;
-    (id, cookie(&login(app(pool), &token).await))
+    let (id, _, _) = account(pool, role).await;
+    (id, password_session(pool, id).await)
 }
 async fn create(pool: &PgPool, cookie: &str, body: serde_json::Value) -> Uuid {
     let response = send(pool, cookie, "POST", "/accounts", body).await;

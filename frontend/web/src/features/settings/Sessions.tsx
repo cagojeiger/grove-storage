@@ -39,9 +39,9 @@ export function Sessions({ session }: { session: Session }) {
   const cache = useQueryClient();
   const [selected, setSelected] = useState<LoginSession | null>(null);
   const [editing, setEditing] = useState(false);
-  const passwordSession = session.principal === "user" && session.credential_id === null;
+  const passwordSession = session.credential_id === null;
   const profile = useQuery({
-    queryKey: ["me", "profile", session.principal === "user" ? session.user_id : "root"],
+    queryKey: ["me", "profile", session.user_id],
     enabled: passwordSession,
     queryFn: ({ signal }) => identityRequest("/me", isAccount, { signal }),
     gcTime: 0,
@@ -82,7 +82,7 @@ export function Sessions({ session }: { session: Session }) {
         {profile.data && <div><dt>Username</dt><dd>{profile.data.username}</dd></div>}
         <div>
           <dt>Account</dt>
-          <dd>{session.principal === "root" ? "Root" : session.user_id}</dd>
+          <dd>{session.user_id}</dd>
         </div>
         <div>
           <dt>Role</dt>
@@ -118,7 +118,7 @@ export function Sessions({ session }: { session: Session }) {
                     <span className="muted">
                       {row.credential_id
                         ? `Token: ${row.credential_id}`
-                        : session.principal === "root" ? "Root sign-in" : "Password sign-in"}
+                        : "Password sign-in"}
                     </span>
                   </div>
                   <div>

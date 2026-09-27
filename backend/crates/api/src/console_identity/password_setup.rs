@@ -42,8 +42,8 @@ pub(super) async fn issue(
     let Ok(Json(body)) = body else {
         return failure(Error::InvalidInput, request_id);
     };
-    let (session_hash, root) = browser::session_hash(&headers);
-    if root || browser::cookie(&headers).is_none() {
+    let session_hash = browser::session_hash(&headers);
+    if browser::cookie(&headers).is_none() {
         return failure(Error::Unauthenticated, request_id);
     }
     let token = SecretString::from(format!(

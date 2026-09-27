@@ -43,14 +43,6 @@ test("creation opens the returned account even outside the loaded page", async (
   await expect(page.getByLabel("Label", { exact: true })).toBeVisible();
 });
 
-test("Root has a reloadable protected URL", async ({ page }) => {
-  await accessMock(page);
-  await page.goto(`${base}/root`);
-  await page.reload();
-  await expect(page.getByRole("region", { name: "Root account" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Delete account" })).toHaveCount(0);
-});
-
 test("missing accounts show a route back and mismatched responses show no tokens", async ({ page }) => {
   await accessMock(page);
   await page.goto(`${base}/00000000-0000-0000-0000-000000000000`);

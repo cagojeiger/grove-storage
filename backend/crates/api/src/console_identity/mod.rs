@@ -1,12 +1,9 @@
-//! New console identity surface. Legacy operator authentication stays separate
-//! until the explicit migration; neither cookie grants the other's authority.
+//! Console identity surface, separate from Client and Resource token authentication.
 mod accounts;
 mod browser;
 mod credentials;
 mod history;
 mod inputs;
-mod master;
-pub(crate) mod master_config;
 mod output;
 mod password;
 mod password_setup;
@@ -36,16 +33,7 @@ pub fn routes(state: AppState) -> Router<AppState> {
                 .get(session::current)
                 .delete(session::logout),
         )
-        .route(
-            "/master/session",
-            post(master::login)
-                .get(master::current)
-                .delete(master::logout),
-        )
-        .route("/master/bootstrap", post(master::bootstrap))
-        .route("/master/recover", post(master::recover))
         .route("/accounts", get(accounts::list).post(accounts::create))
-        .route("/root", get(session::root_account))
         .route(
             "/accounts/{id}",
             get(accounts::get)
@@ -69,8 +57,6 @@ pub fn routes(state: AppState) -> Router<AppState> {
         .route("/accounts/{id}/password-setup", post(password_setup::issue))
         .route("/password-setup/inspect", post(password_setup::inspect))
         .route("/password-setup", post(password_setup::complete))
-        .route("/sessions", get(history::sessions))
-        .route("/sessions/{id}", delete(history::revoke_session))
         .route("/history/audit", get(history::audit))
         .route("/history/invocations", get(history::invocations))
         .route("/history/security", get(history::security))

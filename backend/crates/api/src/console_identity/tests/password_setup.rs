@@ -203,13 +203,9 @@ async fn setup_issuance_requires_admin_password_session_and_same_origin(pool: Pg
         StatusCode::UNAUTHORIZED
     );
     let (credential_id, token) = credential(&pool, owner).await;
-    let legacy = login(app(&pool), &token).await;
-    assert_eq!(legacy.status(), StatusCode::OK);
     assert_eq!(
-        post(app(&pool), &path, Some(&cookie(&legacy)), input.clone())
-            .await
-            .status(),
-        StatusCode::FORBIDDEN
+        login(app(&pool), &token).await.status(),
+        StatusCode::BAD_REQUEST
     );
     db::revoke_credential(&pool, &context(), credential_id)
         .await
