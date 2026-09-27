@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod boundaries;
+mod legacy_contract;
 mod reads;
 mod storage_failures;
 mod storage_s3;
