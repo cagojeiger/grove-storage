@@ -15,6 +15,47 @@ pub async fn issue(
     token_hash: &str,
 ) -> Result<db::password_setup::Setup, Error> {
     let username = passwords::username(username).map_err(password_error)?;
+    reauthenticate_admin(pool, session_hash, current_password).await?;
+    db::password_setup::issue(
+        pool,
+        request_id,
+        session_hash,
+        account,
+        &username,
+        token_hash,
+    )
+    .await
+    .map_err(Error::from)
+}
+
+pub async fn create(
+    pool: &PgPool,
+    request_id: Uuid,
+    session_hash: &str,
+    account: db::NewAccount<'_>,
+    username: &str,
+    current_password: SecretString,
+    token_hash: &str,
+) -> Result<db::password_setup::Setup, Error> {
+    let username = passwords::username(username).map_err(password_error)?;
+    reauthenticate_admin(pool, session_hash, current_password).await?;
+    db::password_setup::create(
+        pool,
+        request_id,
+        session_hash,
+        account,
+        &username,
+        token_hash,
+    )
+    .await
+    .map_err(Error::from)
+}
+
+async fn reauthenticate_admin(
+    pool: &PgPool,
+    session_hash: &str,
+    current_password: SecretString,
+) -> Result<(), Error> {
     let actor = db::session_actor(pool, session_hash)
         .await
         .map_err(Error::from)?
@@ -41,16 +82,7 @@ pub async fn issue(
     {
         return Err(Error::Unauthenticated);
     }
-    db::password_setup::issue(
-        pool,
-        request_id,
-        session_hash,
-        account,
-        &username,
-        token_hash,
-    )
-    .await
-    .map_err(Error::from)
+    Ok(())
 }
 
 pub async fn inspect(pool: &PgPool, token_hash: &str) -> Result<db::password_setup::Setup, Error> {

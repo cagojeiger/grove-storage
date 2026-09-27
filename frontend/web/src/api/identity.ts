@@ -8,6 +8,8 @@ export type Account = {
   role: Role;
   is_active: boolean;
   deleted_at: string | null;
+  username: string | null;
+  password_ready: boolean;
 };
 export type Credential = {
   id: string;
@@ -40,7 +42,8 @@ export const isAccount = (v: unknown): v is Account =>
   v.kind === "user" &&
   ["reader", "writer", "admin"].includes(String(v.role)) &&
   typeof v.is_active === "boolean" &&
-  nullable(v.deleted_at);
+  nullable(v.deleted_at) && nullable(v.username) &&
+  typeof v.password_ready === "boolean";
 export const isCredential = (v: unknown): v is Credential =>
   isObject(v) &&
   [
@@ -67,8 +70,6 @@ export const isMaster = (v: unknown): v is MasterSession =>
   typeof v.initialized === "boolean";
 export const isChanged = (v: unknown): v is { changed: boolean } =>
   isObject(v) && typeof v.changed === "boolean";
-export const isCreated = (v: unknown): v is { account_id: string } =>
-  isObject(v) && typeof v.account_id === "string";
 
 // Identity errors have a different wire contract from resource commands.
 export async function identityRequest<T>(

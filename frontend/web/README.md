@@ -24,7 +24,7 @@ The real fixture below verifies first-Admin bootstrap against an empty database.
 |---|---|
 | Username/password login/logout, role, session restore, password change and 401 handling | Removal of legacy token login API |
 | Legacy Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Replace Master/Root paths with local recovery and personal account flows |
-| Admin-issued one-time password setup link, recipient setup form and Reader sign-in | Combine account creation and setup issuance; show pending/ready status |
+| Atomic account creation and one-time password setup link, pending/ready status, recipient setup and Reader sign-in | Remove legacy account creation path |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
 | API readiness, client count, per-storage/client usage and daily snapshot history | Server-paged large usage histories |

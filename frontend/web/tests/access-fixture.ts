@@ -9,6 +9,8 @@ export const owner: Account = {
   role: "admin",
   is_active: true,
   deleted_at: null,
+  username: "owner",
+  password_ready: true,
 };
 export const otherUser: Account = {
   ...owner,
@@ -16,8 +18,10 @@ export const otherUser: Account = {
   kind: "user",
   display_name: "Writer",
   role: "writer",
+  username: "writer",
 };
 export const rawToken = "gsm_" + "a".repeat(64);
+export const rawSetupToken = "gsps_" + "b".repeat(64);
 export const root = "/api/admin/console/#access/users";
 export async function accessMock(
   page: Page,
@@ -52,10 +56,18 @@ export async function accessMock(
       const row: Account = {
         ...owner,
         id: "33333333-3333-3333-3333-333333333333",
-        ...body,
+        display_name: String(body.display_name),
+        role: body.role as Account["role"],
+        username: typeof body.username === "string" ? body.username : null,
+        password_ready: false,
       };
       accounts.push(row);
-      return route.fulfill({ status: 201, json: { account_id: row.id } });
+      return route.fulfill({ status: 201, json: body.kind === "user_with_password_setup" ? {
+        account_id: row.id,
+        username: body.username,
+        expires_at: "2099-01-01T00:00:00Z",
+        token: rawSetupToken,
+      } : { account_id: row.id } });
     }
     if (path.endsWith("/credentials")) {
       if (method === "GET")

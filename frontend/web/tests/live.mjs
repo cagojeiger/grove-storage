@@ -31,7 +31,6 @@ try {
   await usageChecks(page, fixture);
   await maintenanceChecks(browser, page, origin, token);
   await permissionChecks(browser, page, origin);
-  await accessChecks(browser, page, origin, endpoint, masterToken);
   const cookie = (await context.cookies()).find(
     (cookie) => cookie.name === "__Host-grove_session",
   );
@@ -44,6 +43,7 @@ try {
       )
     ).includes(token),
   );
+  await page.goto(`${origin}/api/admin/console/#`);
   await page.reload();
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   const csrf = await page.evaluate(
@@ -131,17 +131,15 @@ try {
   await page.getByRole("link", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Setup recipient");
+  await page.getByLabel("Username", { exact: true }).fill("recipient");
   await page.getByLabel("Role", { exact: true }).selectOption("reader");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await page.getByRole("heading", { name: "Setup recipient", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Issue setup link" }).click();
-  await page.getByLabel("Username").fill("recipient");
   await page.getByLabel("Current password").fill(replacement);
-  await page.getByRole("button", { name: "Issue link" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   const setupLink = await page.getByRole("textbox", { name: "Setup link", exact: true }).inputValue();
   assert.match(setupLink, /#set-password\/gsps_[a-f0-9]{64}$/);
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("heading", { name: "Setup recipient", exact: true }).waitFor();
   const recipientContext = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const recipient = await recipientContext.newPage();
@@ -164,6 +162,7 @@ try {
     await recipientContext.close();
   }
   console.log("PASS real one-time account setup link, recipient password and Reader login");
+  await accessChecks(browser, page, origin, endpoint, masterToken, replacement);
   console.log(
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );

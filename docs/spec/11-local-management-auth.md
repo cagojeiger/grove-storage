@@ -123,7 +123,8 @@ Paths below are relative to the console identity API prefix.
 | `POST /me/password` | Current/new password -> revoke sessions |
 | `GET /me/tokens`, `POST /me/tokens`, `DELETE /me/tokens/{id}` | Own named API tokens |
 | `GET /me/sessions`, `DELETE /me/sessions/{id}` | Own sessions |
-| `/accounts`, `/accounts/{id}` | Admin account lifecycle |
+| `/accounts`, `/accounts/{id}` | Admin account lifecycle; account read includes username and password readiness |
+| `POST /accounts` with `kind=user_with_password_setup` | Admin password reauthentication -> atomic account, username and single-use setup link |
 | `POST /accounts/{id}/password-setup` | Admin issues/replaces initial setup challenge |
 | `POST /password-setup/inspect` | Challenge in request body -> username and expiry, without consuming it |
 | `POST /password-setup` | Single-use challenge + chosen password; no automatic login |
@@ -151,7 +152,7 @@ used as authorization evidence.
 |---|---|---|
 | 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
 | 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally; legacy fallback remains for Stage 5 |
-| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | In progress: setup link implemented; combined creation and personal tokens pending |
+| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | In progress: combined creation and setup link implemented; personal tokens pending |
 | 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Pending |
 | 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Pending |
 
@@ -201,10 +202,11 @@ password or PHC hash. These are server operator commands, separate from `gscli`.
 | Browser regression | 220 Playwright tests passed, including one-time link display, fragment removal and responsive setup form |
 | Real HTTPS fixture | Disposable PostgreSQL and MinIO: Admin issued a link, another browser set a password and signed in as Reader |
 
-Account creation and link issuance are currently separate Console actions. A
-created account without a password remains unable to sign in until an Admin
-issues a setup link. Combining them into one creation flow, showing setup
-status in account lists and personal token controls remain Stage 3 work.
+Console creation atomically reserves the username and issues a setup link; the
+link is displayed once. Account lists/details show username and password
+readiness. Legacy account creation without a password remains for existing
+callers during migration; it requires separate link issuance to enable password
+login. Personal token controls remain Stage 3 work.
 
 ## References
 

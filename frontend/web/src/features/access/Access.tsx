@@ -13,6 +13,7 @@ import { ApiError, message } from "../../api/http";
 import { AccountAction, AccountDialog } from "./AccountDialog";
 import { Tokens } from "./Tokens";
 import { PasswordSetupIssue } from "./PasswordSetupIssue";
+import { CreateUserDialog } from "./CreateUserDialog";
 import { RootAccount } from "./RootAccount";
 import { AccountsList } from "./AccountsList";
 import { useAccountList } from "./accountList";
@@ -23,6 +24,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
   const listing = useAccountList();
   const selected = route.startsWith("accounts/") ? route.slice("accounts/".length) : null;
   const [action, setAction] = useState<AccountAction | null>(null);
+  const [creating, setCreating] = useState(false);
   const detail = useQuery({
     queryKey: ["access", "account", selected],
     enabled: Boolean(selected && selected !== "root"),
@@ -64,7 +66,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
           <RefreshCw size={18} />
         </button>
       </div>
-      {!selected ? <AccountsList onCreate={() => setAction("create")} /> : selected === "root" ? (
+      {!selected ? <AccountsList onCreate={() => setCreating(true)} /> : selected === "root" ? (
         <><button className="back-link" onClick={() => { window.location.hash = listing.href("#accounts"); }}><ArrowLeft size={16} />Accounts</button><RootAccount selected onSelect={() => {}} /></>
       ) : current.isPending ? (
         <p role="status">Loading accounts...</p>
@@ -131,13 +133,19 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                 <dd>{account.role}</dd>
               </div>
               <div>
+                <dt>Username</dt>
+                <dd>{account.username ?? "Not set"}</dd>
+              </div>
+              <div>
                 <dt>Status</dt>
                 <dd>
                   {account.deleted_at
                     ? "Deleted"
-                    : account.is_active
-                      ? "Active"
-                      : "Disabled"}
+                    : !account.is_active
+                      ? "Disabled"
+                      : account.password_ready
+                        ? "Active"
+                        : "Pending setup"}
                 </dd>
               </div>
             </dl>
@@ -160,6 +168,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
           onSaved={refresh}
         />
       )}
+      {creating && <CreateUserDialog onClose={() => setCreating(false)} onCreated={refresh} />}
     </main>
   );
 }

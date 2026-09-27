@@ -1,15 +1,13 @@
 import { FormEvent, useState } from "react";
 import {
   Account,
-  field,
   identityRequest,
   isChanged,
-  isCreated,
 } from "../../api/identity";
 import { Dialog } from "../../design/Dialog";
 import { useAction } from "./useAction";
 
-export type AccountAction = "create" | "name" | "role" | "active" | "delete";
+export type AccountAction = "name" | "role" | "active" | "delete";
 export function AccountDialog({
   account,
   action,
@@ -21,7 +19,7 @@ export function AccountDialog({
   action: AccountAction;
   isSelf?: boolean;
   onClose: () => void;
-  onSaved: (createdId?: string) => Promise<void>;
+  onSaved: () => Promise<void>;
 }) {
   const state = useAction();
   const [confirmation, setConfirmation] = useState("");
@@ -31,9 +29,7 @@ export function AccountDialog({
   const [role, setRole] = useState(account?.role ?? "reader");
   const [acknowledged, setAcknowledged] = useState(false);
   const title =
-    action === "create"
-      ? "Create user"
-      : action === "name"
+    action === "name"
         ? "Edit name"
         : action === "role"
           ? "Change role"
@@ -48,27 +44,15 @@ export function AccountDialog({
     isSelf && action === "role" && account?.role === "admin" && role !== "admin";
   const selfImpact = isSelf && (dangerous || selfDemotion);
   const invalidName =
-    (action === "create" || action === "name") &&
+    action === "name" &&
     (!name.trim() || Array.from(name.trim()).length > 80 ||
-      (action === "name" && name.trim() === account?.display_name));
+      name.trim() === account?.display_name);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
     if (dangerous && confirmation !== account?.display_name) return;
     if (invalidName || (selfImpact && !acknowledged)) return;
     await state.run(async () => {
-      let createdId: string | undefined;
-      if (action === "create") {
-        const created = await identityRequest("/accounts", isCreated, {
-          method: "POST",
-          body: JSON.stringify({
-            kind: "user",
-            display_name: field(data, "display_name").trim(),
-            role: data.get("role"),
-          }),
-        });
-        createdId = created.account_id;
-      } else if (account) {
+      if (account) {
         await identityRequest(
           `/accounts/${encodeURIComponent(account.id)}`,
           isChanged,
@@ -89,7 +73,7 @@ export function AccountDialog({
         );
       }
       onClose();
-      await onSaved(createdId);
+      await onSaved();
     });
   }
   return (
@@ -99,7 +83,7 @@ export function AccountDialog({
           className="storage-form"
           disabled={state.busy || state.unknown}
         >
-          {action === "create" || action === "name" ? (
+          {action === "name" ? (
             <label className="full-field">
               Name
               <input
@@ -113,7 +97,7 @@ export function AccountDialog({
           ) : (
             <p className="full-field">{account?.display_name}</p>
           )}
-          {(action === "create" || action === "role") && (
+          {action === "role" && (
             <label>
               Role
               <select

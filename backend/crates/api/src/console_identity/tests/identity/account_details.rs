@@ -21,7 +21,9 @@ async fn account_lookup_is_independent_of_pages_and_preserves_deleted_state(pool
     let path = format!("/accounts/{target}");
     let row = get(&pool, &cookie, &path).await;
     assert_eq!(&row, expected);
-    assert_eq!(row.as_object().unwrap().len(), 6);
+    assert_eq!(row.as_object().unwrap().len(), 8);
+    assert!(row["username"].is_null());
+    assert_eq!(row["password_ready"], false);
     let id: Uuid = target.parse().unwrap();
     let invocations: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE operation='identity.account.get'")
         .fetch_one(&pool).await.unwrap();

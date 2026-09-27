@@ -14,11 +14,18 @@ test("create a User without Agent or owner fields", async ({ page }) => {
     "Reader", "Writer", "Admin",
   ]);
   await page.getByLabel("Name", { exact: true }).fill("Writer");
+  await page.getByLabel("Username", { exact: true }).fill("writer");
   await page.getByLabel("Role", { exact: true }).selectOption("writer");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByLabel("Current password").fill("a private admin password");
+  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await expect(page.getByRole("textbox", { name: "Setup link", exact: true })).toBeVisible();
+  await page.getByLabel("I have saved this setup link.").check();
+  await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Writer", exact: true })).toBeVisible();
+  await expect(page.getByText("Pending setup", { exact: true })).toBeVisible();
   expect(writes.map((w) => w.body)).toEqual([
-    { kind: "user", display_name: "Writer", role: "writer" },
+    { kind: "user_with_password_setup", display_name: "Writer", role: "writer", username: "writer", current_password: "a private admin password" },
   ]);
 });
 

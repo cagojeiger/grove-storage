@@ -32,7 +32,11 @@ test("creation opens the returned account even outside the loaded page", async (
   await page.goto(base);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("New account");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByLabel("Username", { exact: true }).fill("new.account");
+  await page.getByLabel("Current password").fill("a private admin password");
+  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByLabel("I have saved this setup link.").check();
+  await page.getByRole("button", { name: "Done" }).click();
   await expect(page).toHaveURL(/#accounts\/33333333-3333-3333-3333-333333333333\?/);
   await expect(page.getByRole("heading", { name: "New account" })).toBeVisible();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();

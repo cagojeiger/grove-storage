@@ -51,6 +51,7 @@ export async function accessChecks(
   origin,
   endpoint,
   masterToken,
+  currentPassword,
 ) {
   const rootContext = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
@@ -78,8 +79,12 @@ export async function accessChecks(
   await page.getByRole("button", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Recovery admin");
+  await page.getByLabel("Username", { exact: true }).fill("recovery-admin");
   await page.getByLabel("Role", { exact: true }).selectOption("admin");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByLabel("Current password").fill(currentPassword);
+  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByLabel("I have saved this setup link.").check();
+  await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "Recovery admin", exact: true })).toBeVisible();
   const userId = await page.locator(".detail-fields dd").first().innerText();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
@@ -89,8 +94,12 @@ export async function accessChecks(
   await page.getByRole("button", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("CLI backup");
+  await page.getByLabel("Username", { exact: true }).fill("cli-backup");
   await page.getByLabel("Role", { exact: true }).selectOption("writer");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByLabel("Current password").fill(currentPassword);
+  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByLabel("I have saved this setup link.").check();
+  await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "CLI backup", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("CLI key");

@@ -96,6 +96,8 @@ pub struct AccountSummary {
     pub role: String,
     pub is_active: bool,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub login_name: Option<String>,
+    pub password_ready: bool,
 }
 #[derive(Debug, sqlx::FromRow)]
 pub struct CredentialSummary {
@@ -119,8 +121,11 @@ pub struct SessionSummary {
 impl IdentityTransaction<'_> {
     pub async fn account(&mut self, id: Uuid) -> Result<AccountSummary, Error> {
         sqlx::query_as(
-            "SELECT id,kind,display_name,role,is_active,deleted_at
-            FROM management.accounts WHERE id=$1",
+            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,
+                    p.login_name,(p.password_hash IS NOT NULL) AS password_ready
+            FROM management.accounts a
+            LEFT JOIN management.password_credentials p ON p.account_id=a.id
+            WHERE a.id=$1",
         )
         .bind(id)
         .fetch_optional(&mut *self.inner)
@@ -137,10 +142,13 @@ impl IdentityTransaction<'_> {
             AccountStatus::Deleted => "deleted",
         };
         let mut rows: Vec<AccountSummary> = sqlx::query_as(
-            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at
+            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,
+                    p.login_name,(p.password_hash IS NOT NULL) AS password_ready
             FROM management.accounts a
+            LEFT JOIN management.password_credentials p ON p.account_id=a.id
             WHERE ($1::uuid IS NULL OR a.id<$1) AND ($2::uuid IS NULL OR a.id>$2)
-            AND ($3='' OR strpos(lower(a.display_name),lower($3))>0 OR strpos(a.id::text,lower($3))>0)
+            AND ($3='' OR strpos(lower(a.display_name),lower($3))>0 OR strpos(a.id::text,lower($3))>0
+                OR strpos(coalesce(p.login_name,''),lower($3))>0)
             AND ($4::text IS NULL OR a.role=$4)
             AND ($5='all' OR ($5='current' AND a.deleted_at IS NULL)
                 OR ($5='active' AND a.deleted_at IS NULL AND a.is_active)

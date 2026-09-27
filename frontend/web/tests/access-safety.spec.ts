@@ -18,7 +18,9 @@ test("role demotion during an Access mutation removes private controls", async (
   await page.goto(root);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Rejected");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByLabel("Username", { exact: true }).fill("rejected");
+  await page.getByLabel("Current password").fill("a private admin password");
+  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveText("Admin access required.");
   await expect(

@@ -240,3 +240,140 @@ async fn setup_issuance_requires_admin_password_session_and_same_origin(pool: Pg
         StatusCode::FORBIDDEN
     );
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn account_creation_issues_setup_link_atomically(pool: PgPool) {
+    let (owner, admin_cookie) = admin(&pool).await;
+    let path = "/api/admin/identity/v1/accounts";
+    let create = |username: &str, password: &str| {
+        serde_json::json!({
+            "kind": "user_with_password_setup",
+            "display_name": "New reader",
+            "role": "reader",
+            "username": username,
+            "current_password": password,
+        })
+    };
+    assert_eq!(
+        post(app(&pool), path, None, create("reader", OWNER_PASSWORD))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        post(
+            app(&pool),
+            path,
+            Some(&admin_cookie),
+            create("reader", "wrong")
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.accounts")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+
+    let created = post(
+        app(&pool),
+        path,
+        Some(&admin_cookie),
+        create("reader", OWNER_PASSWORD),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let value = json(created).await;
+    let account: Uuid = value["account_id"].as_str().unwrap().parse().unwrap();
+    assert_eq!(value["username"], "reader");
+    let token = value["token"].as_str().unwrap();
+    assert!(secrets::valid(token, secrets::SETUP_PREFIX));
+    let details = request(
+        app(&pool),
+        "GET",
+        &format!("/api/admin/identity/v1/accounts/{account}"),
+        &[("cookie", &admin_cookie)],
+        String::new(),
+    )
+    .await;
+    assert_eq!(details.status(), StatusCode::OK);
+    let details = json(details).await;
+    assert_eq!(details["username"], "reader");
+    assert_eq!(details["password_ready"], false);
+    assert_eq!(
+        post(
+            app(&pool),
+            path,
+            Some(&admin_cookie),
+            create("reader", OWNER_PASSWORD)
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.accounts WHERE display_name='New reader'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 1);
+    let completed = post(
+        app(&pool),
+        "/api/admin/identity/v1/password-setup",
+        None,
+        serde_json::json!({"token":token,"password":USER_PASSWORD}),
+    )
+    .await;
+    assert_eq!(completed.status(), StatusCode::NO_CONTENT);
+    let details = request(
+        app(&pool),
+        "GET",
+        &format!("/api/admin/identity/v1/accounts/{account}"),
+        &[("cookie", &admin_cookie)],
+        String::new(),
+    )
+    .await;
+    assert_eq!(json(details).await["password_ready"], true);
+    let login = post(
+        app(&pool),
+        PATH,
+        None,
+        serde_json::json!({"username":"reader","password":USER_PASSWORD}),
+    )
+    .await;
+    assert_eq!(login.status(), StatusCode::OK);
+    assert_eq!(json(login).await["user_id"], account.to_string());
+    let extra_admin = db::create_account(
+        &pool,
+        &context(),
+        db::NewAccount {
+            display_name: "Extra admin",
+            role: Role::Admin,
+        },
+    )
+    .await
+    .unwrap();
+    assert_ne!(extra_admin, owner);
+    db::change_account(
+        &pool,
+        &context(),
+        owner,
+        db::AccountChange::Role(Role::Writer),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        post(
+            app(&pool),
+            path,
+            Some(&admin_cookie),
+            create("other", OWNER_PASSWORD)
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+}

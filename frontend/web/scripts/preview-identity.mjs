@@ -13,6 +13,8 @@ export function previewIdentity(json) {
         role: "admin",
         is_active: true,
         deleted_at: null,
+        username: "owner",
+        password_ready: true,
       },
     ],
   ]);
@@ -122,6 +124,7 @@ export function previewIdentity(json) {
           fail(400, "invalid_input");
         else {
           passwords.set(entry[0], { username: entry[1].username, password: body.password });
+          accounts.get(entry[0]).password_ready = true;
           setups.delete(entry[0]);
           json(res, 204, null);
         }
@@ -235,19 +238,38 @@ export function previewIdentity(json) {
       else if (path === "/accounts" && method === "POST") {
         if (
           !body.display_name?.trim() ||
-          body.kind !== "user" ||
+          !["user", "user_with_password_setup"].includes(body.kind) ||
           !["reader", "writer", "admin"].includes(body.role)
         )
+          fail(400, "invalid_input");
+        else if (body.kind === "user_with_password_setup" && body.current_password !== passwords.get(current.account_id)?.password)
+          fail(401, "unauthenticated");
+        else if (body.kind === "user_with_password_setup" && (
+          [...passwords.values()].some(login => login.username === body.username) ||
+          [...setups.values()].some(setup => setup.username === body.username)))
+          fail(409, "conflict");
+        else if (body.kind === "user_with_password_setup" &&
+          !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(body.username))
           fail(400, "invalid_input");
         else {
           const id = randomUUID();
           accounts.set(id, {
             id,
-            ...body,
+            kind: "user",
+            display_name: body.display_name,
+            role: body.role,
             is_active: true,
             deleted_at: null,
+            username: body.kind === "user_with_password_setup" ? body.username : null,
+            password_ready: false,
           });
-          json(res, 201, { account_id: id });
+          if (body.kind === "user_with_password_setup") {
+            const setup = { username: body.username,
+              token: "gsps_" + randomBytes(32).toString("hex"),
+              expires_at: new Date(Date.now() + 86400000).toISOString() };
+            setups.set(id, setup);
+            json(res, 201, { account_id: id, ...setup });
+          } else json(res, 201, { account_id: id });
         }
       } else {
         const parts = path.split("/");
@@ -277,6 +299,7 @@ export function previewIdentity(json) {
               expires_at: new Date(Date.now() + 86400000).toISOString(),
             };
             setups.set(account.id, setup);
+            account.username = username;
             json(res, 200, { account_id: account.id, ...setup });
           }
         }

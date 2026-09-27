@@ -48,7 +48,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
         <p role="alert">{message(query.error)} <button onClick={() => void query.refetch()}>Retry</button></p> : <>
           {data?.items.map(row => <button className="account-row" key={row.id} onClick={() => { window.location.hash = listing.href(`#accounts/${encodeURIComponent(row.id)}`); }}>
             <span><strong>{row.display_name}</strong><span className="muted">{row.id}</span></span>
-            <span>{row.role}</span><span>{row.deleted_at ? "Deleted" : row.is_active ? "Active" : "Disabled"}</span><ChevronRight size={16} />
+            <span>{row.role}</span><span>{row.deleted_at ? "Deleted" : !row.is_active ? "Disabled" : row.password_ready ? "Active" : "Pending setup"}</span><ChevronRight size={16} />
           </button>)}
           {!data?.items.length && <p className="empty">No matching accounts.</p>}
         </>}

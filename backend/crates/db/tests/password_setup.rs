@@ -289,3 +289,111 @@ async fn only_current_admin_password_sessions_issue_setup(pool: PgPool) {
     );
     assert!(other_admin != admin);
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn create_with_setup_is_atomic_and_requires_current_admin(pool: PgPool) {
+    let (admin, session) = owner(&pool).await;
+    let first = db::password_setup::create(
+        &pool,
+        Uuid::new_v4(),
+        &session,
+        db::NewAccount {
+            display_name: "New writer",
+            role: Role::Writer,
+        },
+        "new.writer",
+        &hash(2),
+    )
+    .await
+    .unwrap();
+    assert_eq!(first.login_name, "new.writer");
+    assert!(
+        db::password_setup::inspect(&pool, &hash(2))
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let actions: Vec<String> = sqlx::query_scalar(
+        "SELECT action FROM management.audit_events WHERE resource_id=$1 ORDER BY id",
+    )
+    .bind(first.account_id.to_string())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(actions, ["account.create", "account.password_setup.issue"]);
+
+    let duplicate = db::password_setup::create(
+        &pool,
+        Uuid::new_v4(),
+        &session,
+        db::NewAccount {
+            display_name: "Duplicate",
+            role: Role::Reader,
+        },
+        "new.writer",
+        &hash(3),
+    )
+    .await;
+    assert!(duplicate.is_err());
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.accounts WHERE display_name='Duplicate'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 0);
+
+    reject_audit(&pool).await;
+    assert!(
+        db::password_setup::create(
+            &pool,
+            Uuid::new_v4(),
+            &session,
+            db::NewAccount {
+                display_name: "Rolled back",
+                role: Role::Reader
+            },
+            "rolled.back",
+            &hash(4),
+        )
+        .await
+        .is_err()
+    );
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.accounts WHERE display_name='Rolled back'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 0);
+    sqlx::query("DROP TRIGGER reject_audit ON management.audit_events")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let extra_admin = user(&pool, Role::Admin).await;
+    db::change_account(
+        &pool,
+        &context(),
+        admin,
+        db::AccountChange::Role(Role::Writer),
+    )
+    .await
+    .unwrap();
+    assert_ne!(extra_admin, admin);
+    assert!(matches!(
+        db::password_setup::create(
+            &pool,
+            Uuid::new_v4(),
+            &session,
+            db::NewAccount {
+                display_name: "Forbidden",
+                role: Role::Reader
+            },
+            "forbidden",
+            &hash(5),
+        )
+        .await,
+        Err(db::Error::Forbidden)
+    ));
+}
