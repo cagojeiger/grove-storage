@@ -29,6 +29,15 @@ for (const resource of ["storage", "client"] as const) {
       await route.fulfill({ json: envelope(`${resource}.metadata.replace`, { id, metadata }) });
     });
     await page.goto(`/api/admin/console/#${resource === "client" ? "clients" : "storages"}/${id}`);
+    await expect(page.locator(".detail-fields > .resource-metadata")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Metadata", exact: true })).toHaveCount(0);
+    if (resource === "storage") {
+      await expect(page.getByRole("region", { name: "Storage settings" }).locator(".resource-metadata")).toHaveCount(1);
+    } else {
+      const metadataBeforeKeys = await page.locator(".resource-metadata").evaluate((element) =>
+        Boolean(element.compareDocumentPosition(document.querySelector(".service-keys")!) & Node.DOCUMENT_POSITION_FOLLOWING));
+      expect(metadataBeforeKeys).toBe(true);
+    }
     await page.getByRole("button", { name: "Edit metadata", exact: true }).click();
     await page.getByLabel("Metadata JSON").fill('{"description":42}');
     await page.getByRole("button", { name: "Save", exact: true }).click();

@@ -23,19 +23,21 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
     queryKey: [resource === "storage" ? "storages" : "clients", "metadata", id],
     queryFn: ({ signal }) => command<MetadataResult>(`${resource}.metadata.show`, { id }, signal),
   });
-  return <section className="storage-section resource-metadata" aria-label="Metadata">
-    <div className="section-heading">
-      <h2>Metadata</h2>
+  return <div className="resource-metadata">
+    <dt className="metadata-heading">
+      <span>Metadata</span>
       <div className="page-actions">
         <button className="icon-button" title="Refresh metadata" aria-label="Refresh metadata" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw size={18} /></button>
         {canWrite && <button className="icon-button" title="Edit metadata" aria-label="Edit metadata" disabled={!query.data || query.isError || query.isFetching} onClick={() => setEditing(true)}><Pencil size={18} /></button>}
       </div>
-    </div>
-    {query.isPending ? <p role="status">Loading metadata...</p>
+    </dt>
+    <dd>
+      {query.isPending ? <p role="status">Loading metadata...</p>
       : query.isError ? <p role="alert">{message(query.error)}</p>
       : <pre className="metadata-json">{JSON.stringify(query.data.metadata, null, 2)}</pre>}
     {editing && canWrite && query.data && <MetadataEditor resource={resource} id={id} value={query.data} onClose={() => { setEditing(false); void query.refetch(); }} />}
-  </section>;
+    </dd>
+  </div>;
 }
 
 function MetadataEditor({ resource, id, value, onClose }: Omit<Props, "canWrite"> & { value: MetadataResult; onClose: () => void }) {

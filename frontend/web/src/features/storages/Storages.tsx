@@ -17,7 +17,6 @@ import { Storage, refreshStorages } from "./model";
 import { StorageEditor } from "./StorageEditor";
 import { DeleteStorage } from "./DeleteStorage";
 import { StorageDetail } from "./StorageDetail";
-import { ResourceMetadata } from "../metadata/ResourceMetadata";
 import { TestConnection } from "./TestConnection";
 import { paginate, useResourceList } from "../../app/resourceList";
 import { ListToolbar, Pagination } from "../../design/ResourceList";
@@ -142,13 +141,13 @@ export function Storages({
           )}
           <StorageDetail
             storage={detail.data}
+            canWrite={canWrite}
             usage={
               usage.isError
                 ? undefined
                 : usage.data?.find((row) => row.storage_id === id)
             }
           />
-          <ResourceMetadata key={`metadata:${id}`} resource="storage" id={id} canWrite={canWrite} />
           {detail.data.kind === "s3" && (
             <TestConnection
               key={`${id}:${detail.dataUpdatedAt}`}

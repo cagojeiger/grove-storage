@@ -132,9 +132,9 @@ export function Clients({
                 {usage.isError || !used ? "Unavailable" : bytes(used.bytes)}
               </dd>
             </div>
+            <ResourceMetadata key={`metadata:${id}`} resource="client" id={id} canWrite={canWrite} />
           </dl>
           {canWrite && <ClientKeys key={id} clientId={id} />}
-          <ResourceMetadata key={`metadata:${id}`} resource="client" id={id} canWrite={canWrite} />
         </>
       ) : (
         <>

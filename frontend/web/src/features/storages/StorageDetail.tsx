@@ -1,13 +1,16 @@
 import { Storage } from "./model";
 import { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
+import { ResourceMetadata } from "../metadata/ResourceMetadata";
 
 export function StorageDetail({
   storage,
   usage,
+  canWrite,
 }: {
   storage: Storage;
   usage?: Usage;
+  canWrite: boolean;
 }) {
   const fields =
     storage.kind === "fs"
@@ -45,6 +48,7 @@ export function StorageDetail({
               <dd>{value || "-"}</dd>
             </div>
           ))}
+          <ResourceMetadata key={storage.id} resource="storage" id={storage.id} canWrite={canWrite} />
         </dl>
       </section>
       <section className="storage-section" aria-label="Storage usage">
