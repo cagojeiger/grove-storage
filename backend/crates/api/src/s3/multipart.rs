@@ -73,7 +73,7 @@ pub(super) async fn create_multipart(
         lease_ttl_secs: WRITE_LEASE_TTL.as_secs() as i64,
         part_size: Some(state.part_size),
     };
-    let created = match s3reg::create_upload(&state.pool, spec, key)
+    let created = match s3reg::create_upload(&state.pool, spec, key, false)
         .await
         .map_err(|e| xml_internal("create", e))?
     {
@@ -528,6 +528,13 @@ pub(super) async fn complete_multipart(
         .map_err(|e| xml_internal("finalize", e))?
     {
         s3reg::FinalizeOutcome::Finalized { displaced } => displaced,
+        s3reg::FinalizeOutcome::PreconditionFailed => {
+            return Err(xml_error(
+                StatusCode::PRECONDITION_FAILED,
+                "PreconditionFailed",
+                "the specified key already exists",
+            ));
+        }
         s3reg::FinalizeOutcome::NotPending => {
             return Err(xml_error(
                 StatusCode::SERVICE_UNAVAILABLE,

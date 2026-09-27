@@ -119,6 +119,8 @@ def check(endpoint, directory, database, backend):
     check_multipart(client)
     from s3_integrity_cases import check_integrity
     check_integrity(client, credential, endpoint, opener)
+    from s3_conditional_cases import check_conditional_put
+    check_conditional_put(client, opener)
     backend.verify(client, credential)
     print("PASS signed XML rejection/retry, presigned GET, and unsupported-operation guards")
 

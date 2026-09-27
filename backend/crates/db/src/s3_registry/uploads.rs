@@ -3,7 +3,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::keys::upsert_key_in_tx;
+use super::keys::{insert_key_in_tx, upsert_key_in_tx};
 use crate::files::{CreateOutcome, CreateSpec, SweepCandidate};
 
 /// pending 파일 생성과 S3 논리키 세션 등록을 한 트랜잭션으로 묶는다.
@@ -12,6 +12,7 @@ pub async fn create_upload(
     pool: &PgPool,
     spec: CreateSpec<'_>,
     key: &str,
+    if_none_match: bool,
 ) -> Result<CreateOutcome, sqlx::Error> {
     let multipart = spec.part_size.is_some();
     let mut tx = pool.begin().await?;
@@ -19,12 +20,15 @@ pub async fn create_upload(
     let CreateOutcome::Created(created) = &outcome else {
         return Ok(outcome);
     };
-    sqlx::query("INSERT INTO s3_uploads (file_id, key, multipart) VALUES ($1, $2, $3)")
-        .bind(created.file_id)
-        .bind(key)
-        .bind(multipart)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "INSERT INTO s3_uploads (file_id, key, multipart, if_none_match) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(created.file_id)
+    .bind(key)
+    .bind(multipart)
+    .bind(if_none_match)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(outcome)
 }
@@ -589,6 +593,7 @@ pub async fn claim_abort(
 #[derive(Debug, PartialEq, Eq)]
 pub enum FinalizeOutcome {
     Finalized { displaced: Option<Uuid> },
+    PreconditionFailed,
     NotPending,
 }
 
@@ -634,8 +639,8 @@ async fn finalize_upload(
         return Ok(FinalizeOutcome::NotPending);
     }
 
-    let completion: Option<(i64, String)> = sqlx::query_as(
-        "SELECT expected_size, expected_etag FROM s3_uploads \
+    let completion: Option<(i64, String, bool)> = sqlx::query_as(
+        "SELECT expected_size, expected_etag, if_none_match FROM s3_uploads \
          WHERE file_id = $1 AND key = $2 AND multipart = $3 \
          AND state = 'completing' FOR UPDATE",
     )
@@ -644,9 +649,23 @@ async fn finalize_upload(
     .bind(multipart)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((expected_size, expected_etag)) = completion else {
+    let Some((expected_size, expected_etag, if_none_match)) = completion else {
         return Ok(FinalizeOutcome::NotPending);
     };
+
+    // The unique key claim and activation share one transaction, including recovery.
+    // A losing upload retains its location until physical cleanup succeeds.
+    if if_none_match && !insert_key_in_tx(&mut tx, client_id, key, file_id).await? {
+        sqlx::query(
+            "UPDATE s3_uploads SET state = 'aborting', expected_size = NULL, \
+             expected_etag = NULL, updated_at = now() WHERE file_id = $1",
+        )
+        .bind(file_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        return Ok(FinalizeOutcome::PreconditionFailed);
+    }
 
     sqlx::query(
         "UPDATE files SET state = 'active', declared_size = $2, etag = $3, \
@@ -666,7 +685,11 @@ async fn finalize_upload(
     .execute(&mut *tx)
     .await?;
 
-    let displaced = upsert_key_in_tx(&mut tx, client_id, key, file_id).await?;
+    let displaced = if if_none_match {
+        None
+    } else {
+        upsert_key_in_tx(&mut tx, client_id, key, file_id).await?
+    };
     sqlx::query("DELETE FROM s3_uploads WHERE file_id = $1")
         .bind(file_id)
         .execute(&mut *tx)

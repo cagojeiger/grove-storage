@@ -73,16 +73,6 @@ async fn dispatch(
             "the specified bucket does not exist",
         );
     }
-    if parts.headers.keys().any(|name| {
-        grove_s3_protocol::integrity::is_conditional_header(name.as_str())
-            && !(name == "if-match" && matches!(parts.method.as_str(), "GET" | "HEAD"))
-    }) {
-        return xml::xml_error(
-            StatusCode::NOT_IMPLEMENTED,
-            "NotImplemented",
-            "conditional requests are not supported",
-        );
-    }
     // multipart는 쿼리스트링이 오퍼레이션을 가른다 (spec 03) — POST와
     // ?uploads·?uploadId·?partNumber 분기는 단일 객체 메서드 라우팅에 없는
     // 새 표면이다. 인증·bucket 검사는 이미 공용으로 지났다.
@@ -114,6 +104,13 @@ async fn dispatch(
             return xml::xml_error(status, code, message);
         }
     };
+    if !supported_conditions(&parts.headers, &operation) {
+        return xml::xml_error(
+            StatusCode::NOT_IMPLEMENTED,
+            "NotImplemented",
+            "the conditional request is not supported",
+        );
+    }
     let result = match operation {
         Operation::CreateMultipart => {
             multipart::create_multipart(&state, &client_id, &bucket, &key, &parts.headers).await
@@ -164,6 +161,22 @@ async fn dispatch(
     }
 }
 
+fn supported_conditions(headers: &HeaderMap, operation: &Operation) -> bool {
+    headers.keys().all(|name| {
+        if !grove_s3_protocol::integrity::is_conditional_header(name.as_str()) {
+            return true;
+        }
+        if name == "if-match" && matches!(operation, Operation::Get | Operation::Head) {
+            return true;
+        }
+        if name == "if-none-match" && matches!(operation, Operation::Put) {
+            let mut values = headers.get_all(name).iter();
+            return values.next().is_some_and(|value| value == "*") && values.next().is_none();
+        }
+        false
+    })
+}
+
 /// 헤더 값을 문자열로 — 표면 전역이 쓰는 작은 헬퍼 (auth·handlers 공유).
 pub(super) fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|v| v.to_str().ok())
@@ -172,6 +185,35 @@ pub(super) fn header_str<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn conditional_create_is_limited_to_single_put_and_one_wildcard() {
+        let mut headers = HeaderMap::new();
+        headers.insert("if-none-match", "*".parse().unwrap());
+        assert!(supported_conditions(&headers, &Operation::Put));
+        for operation in [
+            Operation::Get,
+            Operation::Head,
+            Operation::Delete,
+            Operation::CreateMultipart,
+            Operation::UploadPart {
+                upload_id: "id",
+                part_number: 1,
+            },
+            Operation::CompleteMultipart { upload_id: "id" },
+            Operation::AbortMultipart { upload_id: "id" },
+        ] {
+            assert!(!supported_conditions(&headers, &operation));
+        }
+        headers.append("if-none-match", "*".parse().unwrap());
+        assert!(!supported_conditions(&headers, &Operation::Put));
+        headers.insert("if-none-match", "etag".parse().unwrap());
+        assert!(!supported_conditions(&headers, &Operation::Put));
+        headers.insert("if-none-match", "*".parse().unwrap());
+        headers.insert("if-match", "etag".parse().unwrap());
+        assert!(!supported_conditions(&headers, &Operation::Put));
+    }
 
     #[test]
     fn uploads_flag_is_detected_with_or_without_value() {

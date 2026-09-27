@@ -8,7 +8,7 @@
 
 | 동작 | 요청 | 성공 | 주요 실패 |
 |---|---|---|---|
-| PutObject | PUT /{bucket}/{key} | 200·ETag | 403·404·400 |
+| PutObject | PUT /{bucket}/{key} | 200·ETag | 403·404·400·412 |
 | HeadObject | HEAD /{bucket}/{key} | 200·객체 헤더 | 404 |
 | GetObject | GET /{bucket}/{key} | 200·스트림 / 206·Range | 404·416 |
 | DeleteObject | DELETE /{bucket}/{key} | 멱등 204 | 403 |
@@ -63,7 +63,9 @@ multipart의 누락·중복·상충 파라미터는 400 InvalidArgument로 거�
 | PUT·UploadPart 추가 알고리즘 | 지원하지 않는 checksum 알고리즘·옵션은 501 NotImplemented |
 | checksum 범위 | 요청 무결성 검증; checksum 저장·GET/HEAD 반환·multipart 전체 checksum 계약은 후속 |
 | GET·HEAD If-Match | 현재 읽는 객체의 strong ETag 비교, 불일치 412 PreconditionFailed; wildcard·목록 지원 |
-| 기타 조건부 요청 | 조건부 쓰기·삭제 및 미지원 읽기 조건은 501 NotImplemented로 명시적 거부 |
+| PUT If-None-Match: * | 헤더·presigned 인증 모두 지원. DB 확정 시 논리 키가 비어 있으면 생성, 기존 키 또는 동시 생성의 후발 요청은 412 PreconditionFailed |
+| 조건부 PUT 복구 | `s3_uploads.if_none_match`에 조건 보존. 복구도 같은 원자적 키 생성 사용; 실패한 실물은 aborting 정리 경로로 회수 |
+| 기타 조건부 요청 | PUT의 다른 조건값·중복 조건, multipart·삭제·미지원 읽기 조건은 501 NotImplemented |
 | 접근 기록 | 내부 lease 원장 사용 |
 
 ## Multipart

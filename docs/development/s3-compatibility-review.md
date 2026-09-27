@@ -26,7 +26,8 @@
 | 완료·회수·GC | 기존 DB 통합 테스트 | 전체 workspace 회귀 실행 |
 | Complete part 계약 | `completion` 단위 테스트·`s3_multipart_cases.py` | 5 MiB 경계·순서·중복·누락·ETag; 실패 시 기존 객체 보존·같은 UploadId 복구 |
 | 요청 무결성 | `s3_integrity_cases.py`·spool 테스트 | PUT checksum·UploadPart signed hash 실패 시 기존 객체/part 유지, 정상 MD5·CRC32·SHA256 |
-| 조건부 요청 | 같은 SDK 시나리오 | GET/HEAD If-Match 정상·stale 412, 미지원 조건부 쓰기 501 |
+| 조건부 요청 | `s3_conditional_cases.py`·DB 조건부 PUT 테스트 | presigned PUT If-None-Match: *·동시 생성 단일 승자·412·삭제 후 재생성, GET/HEAD If-Match 정상·stale 412 |
+| 조건부 PUT 복구 | `e2e-s3-recovery.py --restart` | 실물 쓰기 후 DB commit 실패·강제 종료·재시작; 빈 키 게시 또는 기존 승자 보존·패자 실물 삭제 |
 | vendor 데이터 | `s3_backend_fixture.py` | 실제 MinIO bucket의 바이트 일치, 시나리오 종료 시 열린 multipart 0개 |
 | vendor 가용성 | 같은 fixture의 stop/start | 중지 중 GET 503 ServiceUnavailable, 같은 주소 재시작 후 동일 객체 읽기 |
 | Complete 응답 유실 | `e2e-s3-recovery.py`·`s3_fault_proxy.py` | MinIO 성공 후 응답 차단, 기존 객체 보존, 재시도 fencing, 실물 관찰 확정·purge·점유 정산 |
@@ -43,7 +44,7 @@
 | 604801초 presigned URL·host 없는 서명 수용 | 인증 단계에서 403 AccessDenied |
 | Complete 본문 바이트 변경 후 성공 | 상태 전이 전 400 XAmzContentSHA256Mismatch |
 | 작은 비최종 part 완료·역순 목록 InvalidPart | EntityTooSmall·InvalidPartOrder로 구분, 완료 선점 전 거부 |
-| If-None-Match 쓰기·잘못된 MD5/CRC32·변조된 UploadPart 성공 | 미지원 조건 501, checksum·서명 hash 대조 후에만 승격 |
+| If-None-Match 쓰기·잘못된 MD5/CRC32·변조된 UploadPart 성공 | 단일 PUT wildcard는 원자적 create-only·실패 412, 기타 조건 501, checksum·서명 hash 대조 후에만 승격 |
 
 XML 실패는 이전 파서 단위 테스트에서, CopyObject 성공은 수정 전 실제 boto3
 요청에서 재현했다. 운영 사고를 관찰했다는 의미와 구분한다.

@@ -59,6 +59,10 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                         file = %candidate.file_id,
                     ),
                     Ok(s3reg::FinalizeOutcome::NotPending) => {}
+                    Ok(s3reg::FinalizeOutcome::PreconditionFailed) => tracing::info!(
+                        event = "s3.precondition_failed",
+                        file = %candidate.file_id,
+                    ),
                     Err(error) => tracing::error!(
                         event = "reconciler.commit_failed",
                         file = %candidate.file_id,

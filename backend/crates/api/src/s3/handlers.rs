@@ -75,9 +75,14 @@ pub(super) async fn put_object(
         lease_ttl_secs: WRITE_LEASE_TTL.as_secs() as i64,
         part_size: None,
     };
-    let created = match s3reg::create_upload(&state.pool, spec, key)
-        .await
-        .map_err(|e| xml_internal("create", e))?
+    let created = match s3reg::create_upload(
+        &state.pool,
+        spec,
+        key,
+        headers.contains_key("if-none-match"),
+    )
+    .await
+    .map_err(|e| xml_internal("create", e))?
     {
         CreateOutcome::Created(created) => *created,
         // 인증된 클라이언트는 등록부에 있다 (자격증명 FK) — 도달하지 않는다.
@@ -201,6 +206,13 @@ pub(super) async fn put_object(
             .map_err(|e| xml_internal("finalize", e))?
         {
             s3reg::FinalizeOutcome::Finalized { displaced } => displaced,
+            s3reg::FinalizeOutcome::PreconditionFailed => {
+                return Err(xml_error(
+                    StatusCode::PRECONDITION_FAILED,
+                    "PreconditionFailed",
+                    "the specified key already exists",
+                ));
+            }
             s3reg::FinalizeOutcome::NotPending => {
                 return Err(xml_error(
                     StatusCode::SERVICE_UNAVAILABLE,

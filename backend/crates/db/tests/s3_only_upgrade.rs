@@ -38,6 +38,8 @@ async fn snapshot(pool: &PgPool) -> Vec<Vec<Value>> {
     ] {
         let projection = if table == "storages" {
             "to_jsonb(t)-'root_path'"
+        } else if table == "s3_uploads" {
+            "to_jsonb(t)-'if_none_match'"
         } else {
             "to_jsonb(t)"
         };
@@ -101,6 +103,14 @@ async fn s3_upgrade_preserves_resource_rows_and_management_identity(pool: PgPool
     filegate_db::migrate(&pool).await.unwrap();
     filegate_db::migrate(&pool).await.unwrap();
     assert_eq!(snapshot(&pool).await, before);
+    let conditional: bool = sqlx::query_scalar("SELECT if_none_match FROM s3_uploads")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(
+        !conditional,
+        "existing uploads retain unconditional overwrite semantics"
+    );
     let root_column: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='storages' AND column_name='root_path')")
         .fetch_one(&pool).await.unwrap();
     assert!(!root_column);
