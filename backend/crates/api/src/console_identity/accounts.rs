@@ -61,6 +61,15 @@ pub(super) async fn create(
         0,
     )
 }
+pub(super) async fn get(State(state): State<AppState>, headers: HeaderMap, id: Id) -> Response {
+    let Ok(Path(id)) = id else {
+        return inputs::invalid();
+    };
+    output::respond(
+        session::execute(&state, &headers, Command::Account(id)).await,
+        0,
+    )
+}
 pub(super) async fn change(
     State(state): State<AppState>,
     headers: HeaderMap,

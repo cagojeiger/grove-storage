@@ -19,7 +19,7 @@ export function App() {
   const cache = useQueryClient();
   const route = useRoute().split("?")[0];
   const storagePage = route === "storages" || route.startsWith("storages/");
-  const accessPage = route === "accounts" || route === "access" || route.startsWith("access/");
+  const accessPage = route === "accounts" || route.startsWith("accounts/") || route === "access" || route.startsWith("access/");
   const clientPage = route === "clients" || route.startsWith("clients/");
   const activityPage = route === "activity" || route.startsWith("activity/");
   const settingsPage = route === "settings";
@@ -137,7 +137,7 @@ export function App() {
             )}
             {accessPage ? (
               ["admin", "root"].includes(session.data.role) ? (
-                <Access />
+                <Access key={`${route}:${session.data.session_id}`} route={route} />
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )

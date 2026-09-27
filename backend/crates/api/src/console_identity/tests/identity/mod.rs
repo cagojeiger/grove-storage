@@ -1,4 +1,5 @@
 use super::*;
+mod account_details;
 mod accounts;
 mod authorization;
 mod credentials;

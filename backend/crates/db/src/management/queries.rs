@@ -57,6 +57,17 @@ pub struct SessionSummary {
 }
 
 impl IdentityTransaction<'_> {
+    pub async fn account(&mut self, id: Uuid) -> Result<AccountSummary, Error> {
+        sqlx::query_as(
+            "SELECT id,kind,display_name,role,is_active,deleted_at
+            FROM management.accounts WHERE id=$1",
+        )
+        .bind(id)
+        .fetch_optional(&mut *self.inner)
+        .await?
+        .ok_or(Error::NotFound)
+    }
+
     pub async fn accounts(&mut self, page: Page<Uuid>) -> Result<Vec<AccountSummary>, Error> {
         Ok(sqlx::query_as(
             "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at

@@ -22,11 +22,9 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
             );
         }
         Output::Changed(changed) => json!({"changed":changed}),
+        Output::AccountDetails(row) => account(row),
         Output::Accounts(rows) => page(rows.into_iter().map(|r| {
-            (r.id.to_string(), json!({
-                "id": r.id, "kind": r.kind, "display_name": r.display_name,
-                "role": r.role, "is_active": r.is_active, "deleted_at": r.deleted_at,
-            }))
+            (r.id.to_string(), account(r))
         }), limit),
         Output::Credentials(rows) => page(rows.into_iter().map(|r| {
             (r.id.to_string(), json!({
@@ -63,6 +61,13 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
         _ => return failure(Error::Unavailable, execution.request_id),
     };
     identified(Json(body).into_response(), execution.request_id)
+}
+
+fn account(r: filegate_db::management::queries::AccountSummary) -> Value {
+    json!({
+        "id": r.id, "kind": r.kind, "display_name": r.display_name,
+        "role": r.role, "is_active": r.is_active, "deleted_at": r.deleted_at,
+    })
 }
 
 fn page(rows: impl Iterator<Item = (String, Value)>, limit: u16) -> Value {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronRight,
@@ -8,19 +8,20 @@ import {
   Shield,
   Trash2,
 } from "lucide-react";
-import { identityPage, isAccount } from "../../api/identity";
+import { Account, identityPage, identityRequest, isAccount } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { AccountAction, AccountDialog } from "./AccountDialog";
 import { Tokens } from "./Tokens";
 import { RootAccount } from "./RootAccount";
 
-export function Access() {
+export function Access({ route }: { route: string }) {
   const cache = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const selected = route.startsWith("accounts/") ? route.slice("accounts/".length) : null;
   const [action, setAction] = useState<AccountAction | null>(null);
   const [search, setSearch] = useState("");
   const query = useInfiniteQuery({
     queryKey: ["access", "accounts"],
+    enabled: !selected,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
       try {
@@ -33,8 +34,26 @@ export function Access() {
     },
     getNextPageParam: (page) => page.next_before ?? undefined,
   });
+  const detail = useQuery({
+    queryKey: ["access", "account", selected],
+    enabled: Boolean(selected && selected !== "root"),
+    queryFn: async ({ signal }) => {
+      try {
+        return await identityRequest(
+          `/accounts/${encodeURIComponent(selected ?? "")}`,
+          (v): v is Account => isAccount(v) && v.id === selected,
+          { signal },
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 403)
+          void cache.invalidateQueries({ queryKey: ["session"] });
+        throw error;
+      }
+    },
+  });
   const accounts = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const account = accounts.find((row) => row.id === selected);
+  const account = detail.data;
+  const current = selected ? detail : query;
   const rows = accounts.filter(
     (row) =>
       !row.deleted_at &&
@@ -42,7 +61,8 @@ export function Access() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  async function refresh() {
+  async function refresh(createdId?: string) {
+    if (createdId) window.location.hash = `accounts/${encodeURIComponent(createdId)}`;
     await cache.invalidateQueries({ queryKey: ["access"] });
     await cache.invalidateQueries({ queryKey: ["session"] });
   }
@@ -57,25 +77,26 @@ export function Access() {
           className="icon-button"
           title="Refresh accounts"
           aria-label="Refresh accounts"
-          disabled={query.isFetching}
+          disabled={current.isFetching}
           onClick={() => void refresh()}
         >
           <RefreshCw size={18} />
         </button>
       </div>
-      {query.isPending ? (
+      {selected === "root" ? (
+        <><button className="back-link" onClick={() => { window.location.hash = "accounts"; }}><ArrowLeft size={16} />Accounts</button><RootAccount selected onSelect={() => {}} /></>
+      ) : current.isPending ? (
         <p role="status">Loading accounts...</p>
-      ) : query.isError ? (
+      ) : current.isError ? (
         <p role="alert">
-          {message(query.error)}{" "}
-          <button onClick={() => void query.refetch()}>Retry</button>
+          {current.error instanceof ApiError && current.error.status === 404 ? "Account unavailable." : message(current.error)}{" "}
+          <button onClick={() => void current.refetch()}>Retry</button>
+          {selected && <a href="#accounts">Back to accounts</a>}
         </p>
-      ) : selected === "root" ? (
-        <><button className="back-link" onClick={() => setSelected(null)}><ArrowLeft size={16} />Accounts</button><RootAccount selected onSelect={() => {}} /></>
       ) : selected ? (
         account ? (
           <>
-            <button className="back-link" onClick={() => setSelected(null)}>
+            <button className="back-link" onClick={() => { window.location.hash = "accounts"; }}>
               <ArrowLeft size={16} />
               Accounts
             </button>
@@ -132,7 +153,7 @@ export function Access() {
         ) : (
           <p>
             Account unavailable.{" "}
-            <button onClick={() => setSelected(null)}>Back to accounts</button>
+            <button onClick={() => { window.location.hash = "accounts"; }}>Back to accounts</button>
           </p>
         )
       ) : (
@@ -157,12 +178,12 @@ export function Access() {
             )}
           </div>
           <div className="account-list">
-            {(!search || "root config protected".includes(search.toLowerCase())) && <RootAccount selected={false} onSelect={() => setSelected("root")} />}
+            {(!search || "root config protected".includes(search.toLowerCase())) && <RootAccount selected={false} onSelect={() => { window.location.hash = "accounts/root"; }} />}
             {rows.map((row) => (
               <button
                 className="account-row"
                 key={row.id}
-                onClick={() => setSelected(row.id)}
+                onClick={() => { window.location.hash = `accounts/${encodeURIComponent(row.id)}`; }}
               >
                 <span>
                   <strong>{row.display_name}</strong>
@@ -177,7 +198,7 @@ export function Access() {
           {!rows.length && <p className="empty">No users on loaded pages.</p>}
         </>
       )}
-      {!query.isError && query.hasNextPage && (
+      {!selected && !query.isError && query.hasNextPage && (
         <button
           className="load-more"
           disabled={query.isFetchingNextPage}
@@ -186,7 +207,7 @@ export function Access() {
           Load more accounts
         </button>
       )}
-      {action && !query.isError && (
+      {action && !current.isError && (
         <AccountDialog
           account={account}
           action={action}

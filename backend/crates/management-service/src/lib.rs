@@ -29,6 +29,7 @@ pub enum Output {
     Changed(bool),
     Credential(db::Credential),
     Accounts(Vec<db::queries::AccountSummary>),
+    AccountDetails(db::queries::AccountSummary),
     Credentials(Vec<db::queries::CredentialSummary>),
     Sessions(Vec<db::queries::SessionSummary>),
     Audit(Vec<db::history::AuditEvent>),

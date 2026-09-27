@@ -44,7 +44,9 @@ pub fn routes(state: AppState) -> Router<AppState> {
         .route("/root", get(session::root_account))
         .route(
             "/accounts/{id}",
-            axum::routing::patch(accounts::change).delete(accounts::remove),
+            get(accounts::get)
+                .patch(accounts::change)
+                .delete(accounts::remove),
         )
         .route(
             "/accounts/{id}/credentials",

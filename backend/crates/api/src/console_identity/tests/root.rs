@@ -32,6 +32,20 @@ async fn root_console_is_audited_and_cannot_be_an_editable_user_or_bearer(pool: 
     )
     .await;
     assert_eq!(response.status(), StatusCode::CREATED);
+    let created = json(response).await;
+    let response = request(
+        app.clone(),
+        "GET",
+        &format!(
+            "/api/admin/identity/v1/accounts/{}",
+            created["account_id"].as_str().unwrap()
+        ),
+        &[("cookie", &root_cookie)],
+        String::new(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json(response).await["display_name"], "Created by Root");
     let event: (String, Option<Uuid>, Option<Uuid>) = sqlx::query_as("SELECT actor_kind,actor_id,session_id FROM management.audit_events WHERE action='account.create' ORDER BY id DESC LIMIT 1").fetch_one(&pool).await.unwrap();
     assert_eq!(event.0, "master"); // Stable persisted name for the config-owned principal.
     assert_eq!(event.1, None);

@@ -19,7 +19,7 @@ export function AccountDialog({
   account?: Account;
   action: AccountAction;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (createdId?: string) => Promise<void>;
 }) {
   const state = useAction();
   const [confirmation, setConfirmation] = useState("");
@@ -40,8 +40,9 @@ export function AccountDialog({
     const data = new FormData(e.currentTarget);
     if (dangerous && confirmation !== account?.display_name) return;
     await state.run(async () => {
+      let createdId: string | undefined;
       if (action === "create") {
-        await identityRequest("/accounts", isCreated, {
+        const created = await identityRequest("/accounts", isCreated, {
           method: "POST",
           body: JSON.stringify({
             kind: "user",
@@ -49,6 +50,7 @@ export function AccountDialog({
             role: data.get("role"),
           }),
         });
+        createdId = created.account_id;
       } else if (account) {
         await identityRequest(
           `/accounts/${encodeURIComponent(account.id)}`,
@@ -68,7 +70,7 @@ export function AccountDialog({
         );
       }
       onClose();
-      await onSaved();
+      await onSaved(createdId);
     });
   }
   return (

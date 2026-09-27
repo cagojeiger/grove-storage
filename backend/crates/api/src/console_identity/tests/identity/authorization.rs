@@ -14,6 +14,11 @@ async fn reader_and_writer_cannot_manage_identities_or_view_security(pool: PgPoo
         for (method, path, body) in [
             ("GET", "/accounts".into(), serde_json::Value::Null),
             (
+                "GET",
+                format!("/accounts/{target}"),
+                serde_json::Value::Null,
+            ),
+            (
                 "POST",
                 "/accounts".into(),
                 serde_json::json!({"kind":"user","display_name":"forged","role":"admin"}),
@@ -65,6 +70,7 @@ async fn bearer_master_and_cross_site_requests_cannot_bypass_console_boundary(po
     let master_cookie = cookie(&super::super::master::sign_in(router.clone(), &master_token).await);
     for path in [
         "/accounts",
+        "/accounts/00000000-0000-0000-0000-000000000001",
         "/sessions",
         "/history/audit",
         "/history/invocations",

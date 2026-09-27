@@ -71,6 +71,7 @@ pub(super) async fn run(
                 .map(Output::Changed);
         }
         Command::Accounts(page) => Output::Accounts(tx.accounts(page).await?),
+        Command::Account(id) => Output::AccountDetails(tx.account(id).await?),
         Command::Credentials { account, page } => {
             Output::Credentials(tx.credentials(account, page).await?)
         }

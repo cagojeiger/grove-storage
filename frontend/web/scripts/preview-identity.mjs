@@ -208,6 +208,8 @@ export function previewIdentity(json) {
             json(res, 200, { changed: true });
           }
         } else if (!account) fail(404, "not_found");
+        else if (parts[1] === "accounts" && parts.length === 3 && method === "GET")
+          json(res, 200, account);
         else if (parts[3] === "credentials") {
           if (method === "GET")
             json(

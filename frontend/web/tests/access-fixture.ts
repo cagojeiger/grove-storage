@@ -82,6 +82,9 @@ export async function accessMock(
       if (token) token.revoked_at = "2026-09-24T00:00:00Z";
     } else {
       const row = accounts.find((row) => path.endsWith(row.id));
+      if (method === "GET") return row
+        ? route.fulfill({ json: row })
+        : route.fulfill({ status: 404, json: { error: "not_found" } });
       if (row?.role === "admin")
         return route.fulfill({ status: 409, json: { error: "conflict" } });
       if (row && method === "DELETE") row.deleted_at = "2026-09-24T00:00:00Z";

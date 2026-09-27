@@ -83,7 +83,7 @@ export async function accessChecks(
   await page.getByLabel("Name", { exact: true }).fill("Recovery admin");
   await page.getByLabel("Role", { exact: true }).selectOption("admin");
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await page.getByRole("button", { name: /Recovery admin.*Active/ }).click();
+  await expect(page.getByRole("heading", { name: "Recovery admin", exact: true })).toBeVisible();
   const userId = await page.locator(".detail-fields dd").first().innerText();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("Recovery fixture");
@@ -94,7 +94,7 @@ export async function accessChecks(
   await page.getByLabel("Name", { exact: true }).fill("CLI backup");
   await page.getByLabel("Role", { exact: true }).selectOption("writer");
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await page.getByRole("button", { name: /CLI backup.*Active/ }).click();
+  await expect(page.getByRole("heading", { name: "CLI backup", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("CLI key");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
