@@ -1,6 +1,6 @@
 # ADR 011: Root and Accounts
 
-Status: local implementation; deployment is a separate step.
+Status: superseded by [local management authentication](../spec/11-local-management-auth.md). This ADR records the earlier Root design, not the current console contract.
 
 ```text
 Config-owned Root            Accounts: Config / Protected

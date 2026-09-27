@@ -1,9 +1,10 @@
 # spec 05: 독립형 관리자 인증
 
+- 이 문서는 기존 `/api/admin/v1` 운영자 인증의 기록이다. 현행 콘솔·관리 토큰·로컬 계정 계약은 [spec 11](11-local-management-auth.md)을 따른다.
 - 상태: 작업 브랜치 구현, 미릴리스·미배포
 - 범위: 단일 관리자, 복수 토큰, 콘솔 세션, 로컬 복구
 - 아래는 이전 운영자 REST 인증의 유지 계약이다. 현재 콘솔은 [spec 08](08-management-plane.md)의 User 세션으로 전환했다. 운영 이관·이전 인증 종료는 후속이다.
-- 후속 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md)의 마스터 초기 설정·개인 토큰 로그인·콘솔 전용 신원 관리. 아래는 현재 구현 계약이다.
+- 아래의 운영자 REST 경로는 콘솔 로그인 계약이 아니다.
 - 새 권한·DB·CLI/MCP·감사 설계: [spec 08](08-management-plane.md). 브라우저 보안: [spec 07](07-browser-security.md).
 - 새 UI는 `/api/admin/identity/v1/session`과 `/api/admin/console-commands/v1`을 사용한다. 아래의 기존 인증과 쿠키·토큰을 공유하지 않는다.
 - 아래는 이전 UI·REST 인증 계약이다. 새 CLI는 [spec 04](04-cli.md)의 User 토큰과 공통 명령 API를 사용한다.

@@ -772,8 +772,8 @@ dialog::backdrop {
 .clients .account-row { color: var(--text); text-decoration: none; }
 .issued-token label { display: grid; gap: 8px; font-size: 13px; }
 .issued-token dd { font-size: 13px; overflow-wrap: anywhere; margin: 6px 0 14px; }
-.issued-token .check-field, .master-setup .check-field { display: flex; gap: 10px; align-items: flex-start; }
-.issued-token input[type="checkbox"], .master-setup input[type="checkbox"] { width: 18px; min-height: 18px; flex-shrink: 0; }
+.issued-token .check-field { display: flex; gap: 10px; align-items: flex-start; }
+.issued-token input[type="checkbox"] { width: 18px; min-height: 18px; flex-shrink: 0; }
 .load-more { margin-top: 20px; }
 .delete-summary {
   font-size: 14px;

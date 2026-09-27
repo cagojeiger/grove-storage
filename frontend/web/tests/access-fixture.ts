@@ -48,7 +48,6 @@ export async function accessMock(
         return route.fulfill({ status: 401, json: { error: "unauthenticated" } });
       return route.fulfill({ json: { ...session, user_id: owner.id, role: current?.role ?? session.role } });
     }
-    if (path === "/root" && method === "GET") return route.fulfill({ json: { id: "root", configured: true, protected: true, source: "config" } });
     if (method !== "GET") writes.push({ path, method, body });
     if (path === "/accounts" && method === "GET")
       return route.fulfill({ json: accountPage(accounts, new URL(req.url()).searchParams) });

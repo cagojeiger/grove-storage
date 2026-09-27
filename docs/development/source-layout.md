@@ -13,9 +13,11 @@ backend/crates/
 │   ├── src/command.rs          콘솔 전용 계정·토큰·세션·이력 명령
 │   ├── src/dispatch.rs         현재 신원·권한에 맞는 DB 실행
 │   ├── src/resources/          공통 자원 명령·provider probe·변경 조율
-│   ├── src/sessions.rs         Account 토큰 로그인
-│   ├── src/root.rs             설정 소유 Root 로그인
-│   ├── src/master.rs           기존 초기 설정·복구 세션
+│   ├── src/sessions.rs         비밀번호 로그인·과거 토큰 세션 코드
+│   ├── src/local_accounts.rs  최초 Admin·로컬 계정 복구
+│   ├── src/password_setups.rs 일회성 초기 비밀번호 설정
+│   ├── src/personal_tokens.rs 본인 관리 API 토큰
+│   ├── src/root.rs · master.rs 공개 경로에서 제거된 과거 내부 코드
 │   └── src/logging.rs          bounded best-effort 호출·보안 기록
 ├── s3-protocol/                 SigV4·XML·작업 분류·완료 목록·무결성 규칙
 ├── object-policy/               업로드 검증·파트 계산·ETag·완료 복구 판단
@@ -85,14 +87,14 @@ scripts/
 | 개념 | 현재 의미 |
 |---|---|
 | Account / Token | 관리 주체 / 이름 있는 관리 자격증명; DB `management.accounts`·`credentials` |
-| Root | 설정 소유 권한; 일반 accounts 행 없이 별도 root_sessions 사용 |
+| 로컬 Admin | DB 계정; 서버 로컬 초기화·복구, 콘솔 비밀번호 로그인 |
 | Admin / Writer / Reader | 관리 역할; Client 파일 접근 권한과 별개 |
 | Client | Native 서비스 키·S3 자격증명으로 파일 API를 쓰는 소비자 |
 | Storage | 외부 S3 저장소; 등록 용량·endpoint·provider 비밀·metadata |
 | `root_path` | 응답 호환용 null; migration 0017 이후 DB 열·FS backend 없음 |
 | `temp_spool` | 전송 버퍼; 등록 가능한 저장소와 별개 |
 | 서버 / CLI 이름 | `filegate`·`FILEGATE_*` / `gscli`·`GROVE_*` 유지 |
-| `master`, `User`, `access` | 기존 내부 식별자 일부 유지; 다음 단계의 호환성 점검 대상 |
+| `master`, `root_sessions` | 기존 데이터/내부 코드에 남은 이전 인증 구조; 공개 콘솔 진입 불가 |
 
 명령 수는 [catalog.rs](../../backend/crates/management-command/src/catalog.rs)를 따른다.
 계정/토큰 관리는 콘솔 전용 내부 Command이며 CLI/MCP 자원 catalog와 별개다.

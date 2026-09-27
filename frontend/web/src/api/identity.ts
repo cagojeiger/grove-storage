@@ -128,7 +128,7 @@ export function identityMessage(error: unknown): string {
   if (error.status === 409)
     return "Change blocked. Keep an active Admin, check the account state and token limit, then refresh.";
   if (error.status === 404)
-    return "The account, token, or master configuration is unavailable.";
+    return "The account or token is unavailable.";
   if (error.status === 400) return "Check the name, role and expiry.";
   return error.message;
 }

@@ -22,7 +22,6 @@ export function previewIdentity(json) {
   const passwords = new Map([[owner, { username: "owner", password: "a private phrase for preview" }]]);
   const setups = new Map();
   let current = null;
-  let master = false;
   let signedInAt = new Date().toISOString();
   function issue(
     account,
@@ -130,45 +129,6 @@ export function previewIdentity(json) {
         }
         return true;
       }
-      if (path.startsWith("/master/")) {
-        if (path === "/master/session" && method === "DELETE") {
-          master = false;
-          json(res, 204, null);
-          return true;
-        }
-        if (path === "/master/session" && method === "POST")
-          master = body.token === "qwer1234";
-        if (!master) {
-          fail(401, "unauthenticated");
-          return true;
-        }
-        if (path === "/master/session")
-          json(res, 200, {
-            principal: "master",
-            scope: "setup_recovery",
-            initialized: true,
-          });
-        else if (path === "/master/recover") {
-          const user = accounts.get(body.user_id);
-          if (
-            !body.confirm ||
-            user?.kind !== "user" ||
-            user.role !== "admin" ||
-            !user.is_active ||
-            user.deleted_at
-          )
-            fail(409, "conflict");
-          else {
-            for (const key of credentials.values())
-              if (key.account_id === user.id)
-                key.revoked_at = new Date().toISOString();
-            const key = issue(user.id, "master-issued");
-            master = false;
-            json(res, 201, { ...key, user_id: user.id });
-          }
-        } else fail(409, "conflict");
-        return true;
-      }
       if (!session()) {
         fail(401, "unauthenticated");
         return true;
@@ -229,28 +189,27 @@ export function previewIdentity(json) {
         else { const changed = !token.revoked_at; token.revoked_at = new Date().toISOString(); json(res, 200, { changed }); }
         return true;
       }
-      if (["/sessions", "/me/sessions"].includes(path) && method === "GET") {
+      if (path === "/me/sessions" && method === "GET") {
         const value = session();
         json(res, 200, { items: [{ id: value.session_id, credential_id: value.credential_id ?? null, created_at: signedInAt, expires_at: new Date(Date.parse(signedInAt)+1800000).toISOString(), revoked_at: null }], next_before: null });
         return true;
       }
-      if ((path.startsWith("/sessions/") || path.startsWith("/me/sessions/")) && method === "DELETE") {
-        const id = decodeURIComponent(path.slice(path.startsWith("/me/") ? "/me/sessions/".length : "/sessions/".length));
+      if (path.startsWith("/me/sessions/") && method === "DELETE") {
+        const id = decodeURIComponent(path.slice("/me/sessions/".length));
         if (id !== session().session_id) fail(403, "forbidden");
         else { current = null; json(res, 200, { changed: true }); }
         return true;
       }
       if (path.startsWith("/history/") && method === "GET") {
-        if (path === "/history/security" && !["admin", "root"].includes(session().role)) fail(403, "forbidden");
+        if (path === "/history/security" && session().role !== "admin") fail(403, "forbidden");
         else json(res, 200, { items: [], next_before: null });
         return true;
       }
-      if (!["admin", "root"].includes(session().role)) {
+      if (session().role !== "admin") {
         fail(403, "forbidden");
         return true;
       }
-      if (path === "/root" && method === "GET") json(res, 200, { id: "root", configured: true, protected: true, source: "config" });
-      else if (path === "/accounts" && method === "GET") {
+      if (path === "/accounts" && method === "GET") {
         const params = url.searchParams;
         const q = (params.get("q") ?? "").trim().toLowerCase();
         const role = params.get("role"), status = params.get("status") ?? "all";

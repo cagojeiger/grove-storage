@@ -1,6 +1,7 @@
 # spec 07: 관리 브라우저의 보안 경계
 
-- 상태: 프론트엔드 리다이렉트 차단·로컬 보안 헤더·User/master·신원/이력 HTTP 구현. User UI 로그인·자원 연결은 실제 HTTPS 검증; master/신원 UI·운영 호스팅은 후속.
+- 상태: 콘솔은 로컬 ID·비밀번호 세션을 사용한다. 브라우저 보안 경계는 유지하며 운영 호스팅 검증은 별도다. 이전 master 흐름 기록은 현행 인증 계약이 아니다.
+- 현행 로그인·복구·CLI/MCP 권한은 [spec 11](11-local-management-auth.md)을 따른다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [콘솔](06-console.md).
 - 새 User 세션 HTTP·신원/진입 경계: [spec 08](08-management-plane.md#user-세션-http-3a).
 
@@ -23,7 +24,7 @@ console.example.com               data.example.com
 
 | 진입 호스트 예시 | 앞단·서버 인증 | 경로 제한 |
 |---|---|---|
-| console.example.com | OAuth2 Proxy + Grove User 세션 | 콘솔·세션·신원·관리 자원·감사 API; master는 설정/복구 경로만 |
+| console.example.com | OAuth2 Proxy + Grove 비밀번호 세션 | 콘솔·세션·신원·관리 자원·감사 API |
 | api.example.com | User Bearer; 대화형 OAuth 로그인 없음 | 자원 CLI/MCP/API만; 신원·감사·세션 발급 경로 제외 |
 | data.example.com | 기존 Client key / SigV4 / 발급 URL | 기존 데이터 경로만 |
 

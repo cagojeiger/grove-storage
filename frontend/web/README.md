@@ -17,19 +17,18 @@ memory; the real API stores passwords and sessions in PostgreSQL.
 The preview includes Admin-only Accounts with sample Users and token lifecycle.
 Activity returns an empty sample history; My account lists the current sample session.
 Use the real fixture below to verify persisted history and independent sessions.
-Its setup/recovery entry accepts the same demo master token and starts initialized.
-The real fixture below verifies first-Admin bootstrap against an empty database.
+It initializes the first Admin through a server-local command against an empty database.
 
 | Implemented | Follow-up |
 |---|---|
-| Username/password login/logout, role, session restore, password change and 401 handling | Removal of legacy token login API |
-| Legacy Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Replace Master/Root paths with local recovery and personal account flows |
-| Atomic account creation and one-time password setup link, pending/ready status, recipient setup and Reader sign-in | Remove legacy account creation path |
+| Username/password login/logout, role, session restore, password change and 401 handling | Production deployment |
+| Admin-only Users, roles, enable/disable/delete, token issue/revoke | Remove legacy account creation path |
+| Atomic account creation and one-time password setup link, pending/ready status, recipient setup and Reader sign-in | OIDC integration |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
 | API readiness, client count, per-storage/client usage and daily snapshot history | Server-paged large usage histories |
 | Activity: audit, command history, security events; scoped cursor paging and event details | Server-side actor/resource/date filters |
-| My account: display-name edit, password change, own sessions and own management API tokens | Legacy token-session cleanup |
+| My account: display-name edit, password change, own sessions and own management API tokens | Historical token-session cleanup |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 
@@ -63,7 +62,7 @@ CI runs the same fixture; `--with-minio` remains a compatibility alias. It creat
 
 The fixture needs Docker, Python 3, Node 22.13+ (22.x) or 24+ and OpenSSL. It creates a disposable
 PostgreSQL database, API and HTTPS Vite server. `--serve` prints the URL and a local
-mode-0600 token file. The certificate is self-signed and scoped to this local fixture;
+mode-0600 password file. The certificate is self-signed and scoped to this local fixture;
 the browser may show a trust warning. Ctrl-C or SIGTERM cleans up the fixture.
 No production endpoint or credentials are used. The initial overview is empty.
 
@@ -86,14 +85,13 @@ server with `FILEGATE_DATABASE_URL` set, then sign in with that username and
 the privately entered password. Use `filegate account recover <account-id>
 <username> --yes` from the server terminal to replace a lost password. This
 revokes that account's browser sessions and management API tokens. The real
-HTTPS fixture verifies the password flow. Its `--serve` mode still provisions a
-legacy token fixture, not a manual password-login setup. Legacy Root/Master
-routes remain during the transition; see [the local auth spec](../../docs/spec/11-local-management-auth.md).
+HTTPS fixture verifies the password flow; its `--serve` mode provisions a local
+password account. See [the local auth spec](../../docs/spec/11-local-management-auth.md).
 Clients supports registration, guarded deletion and S3 credentials through
 the same command API as CLI/MCP. S3 secrets are shown once without browser persistence.
 Native API, CLI, MCP and DB compatibility remains unchanged; the console offers
 S3 credentials only. Activity uses the existing scoped management history APIs.
-My account revokes browser sessions without revoking their source account token;
+My account revokes browser sessions without revoking management API tokens;
 changing a password revokes all browser sessions and preserves API tokens.
 Legacy operator tokens do not log
 into the console. The default UI port is 5173; an occupied port fails instead of
@@ -139,7 +137,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/access.spec.ts` | User creation, roles, last-Admin conflict, one-time token issuance/revocation and paging |
 | `tests/access-safety.spec.ts` | Role loss, expired sessions, duplicate submission and issued-token account correlation |
 | `tests/access-layout.spec.ts` | Account detail and token dialog across five widths and both themes |
-| `tests/master-setup.spec.ts` | Separate master/User sessions, initial setup, targeted recovery and unknown outcomes |
+| `tests/password-setup.spec.ts`, `tests/personal-tokens.spec.ts` | One-time setup, own token lifecycle and responsive forms |
 | `tests/clients.spec.ts`, `client-safety.spec.ts`, `client-layout.spec.ts` | S3-only key controls, client lifecycle, conflicts, secret handling and responsive layouts |
 | `tests/maintenance.spec.ts`, `maintenance-layout.spec.ts` | Scoped history, bigint cursors, demotion, session revocation, unknown outcomes and responsive layouts |
 | `tests/usage-history.spec.ts` | Snapshot dates/counts, range validation, empty/error/401, progressive rendering and responsive tables |
@@ -150,7 +148,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
 | `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named User token login and Console audit |
-| `tests/live-access.mjs` via Python fixture | Real first-Admin bootstrap, User lifecycle, token use/revocation, last-Admin protection and targeted master recovery |
+| `tests/live-access.mjs` via Python fixture | Real local Admin initialization, User lifecycle, token use/revocation, last-Admin protection and server-local recovery |
 | `tests/live-clients.mjs` via Python fixture | Real client/S3 credential lifecycle and pending-file deletion guard |
 | `tests/live-maintenance.mjs` via Python fixture | Real history views and revocation of another/current browser session with independent cookies |
 | `tests/live-usage.mjs` via Python fixture | Real usage API and date range against seeded disposable DB snapshots; deleted resource history retained |

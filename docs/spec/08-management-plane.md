@@ -1,5 +1,6 @@
 # spec 08: 관리 신원·명령·감사
 
+- 이 문서의 Root/Master 및 토큰-콘솔-로그인 절은 이전 구현의 설계·검증 기록이다. 현행 로컬 인증·API 계약은 [spec 11](11-local-management-auth.md)을 따른다. 공통 자원 명령과 관리 이력의 책임 경계는 유지한다.
 - 상태: 신원·이력·세션 HTTP와 공통 자원 19개/Bearer HTTP·CLI·MCP 연결 구현·테스트. UI 5a·5b(User 로그인·자원·master 설정/복구·Access) 구현; 세션 목록·이력 화면은 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md), [User 통합 ADR 010](../adr/010-unified-users-and-named-tokens.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
@@ -13,18 +14,16 @@
 | 자원 운영 | Storage·Client·서비스 키·usage/status | 대시보드, CLI, MCP |
 | 관리 이력 | 변경 감사·관리 호출·보안 이벤트 조회 | 대시보드 전용 API |
 | 데이터 서비스 | Native/S3 파일 접근·Client 키 인증 | 기존 runtime API |
-| 설치 복구 | 최초 Admin 생성·관리 접근 복구 | 마스터 인증의 전용 콘솔 흐름 |
+| 설치 복구 | 최초 Admin 생성·관리 접근 복구 | 서버 로컬 `filegate account` 명령 |
 
 서버는 `주체 + 자격증명 종류 + 진입 경계 + 작업 권한`을 함께 검사한다.
 User-Agent 헤더·Origin 문자열·도구 이름은 콘솔 권한의 증거가 아니다.
-모든 유효한 User 토큰은 콘솔 로그인과 CLI/MCP 인증에 사용할 수 있다. 토큰 이름은 용도 표시이며 권한 제한이 아니다.
+User 관리 API 토큰은 CLI/MCP/Resource API에 사용한다. 콘솔 로그인은 비밀번호 세션만 허용한다. 토큰 이름은 용도 표시이며 권한 제한이 아니다.
 콘솔 전용은 세션·역할·CSRF의 인증 경계이며 실제 사람이 화면을 조작했다는 증명은 아니다.
 
 ## 권한
 
-Root/Accounts 확장은 [ADR 011](../adr/011-root-and-accounts.md)을 따른다.
-설정 기반 Root는 보호된 Accounts 항목으로 표시하고, 별도 Root 콘솔 세션으로 관리 명령을 실행한다.
-기존 설정·복구 세션의 제한과 User 권한은 유지한다.
+Root/Accounts의 과거 결정은 [ADR 011](../adr/011-root-and-accounts.md)에 보존한다. 현행 Accounts에는 DB 소유 계정만 표시한다.
 
 | 작업 | Reader | Writer | Admin | 허용 진입점 |
 |---|---|---|---|---|
@@ -38,7 +37,7 @@ Root/Accounts 확장은 [ADR 011](../adr/011-root-and-accounts.md)을 따른다.
 
 자기 범위는 본인 User와 그 토큰들의 관리 이력이다. 이전 Agent의 owner snapshot은 과거 이력 조회에만 보존한다.
 Writer는 Client 서비스 키를 다루는 강한 운영 권한이다. 발급 화면에서 이를 명시한다.
-기존 삭제·참조·주소 변경 제약은 Admin과 master를 포함한 모든 경로에서 유지한다.
+기존 삭제·참조·주소 변경 제약은 Admin을 포함한 모든 경로에서 유지한다.
 역할은 User에 귀속된다. 다른 권한이 필요한 자동화에는 별도 User를 만든다.
 역할 변경·비활성화는 이후 요청에 반영하며 이미 허용된 작업은 완료될 수 있다.
 마지막 활성 Admin의 삭제·비활성화·강등과 첫 Admin 생성은 DB 잠금으로 직렬화한다.
