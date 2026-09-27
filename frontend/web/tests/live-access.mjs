@@ -75,6 +75,7 @@ export async function accessChecks(
     .click();
   await page.getByRole("button", { name: "Disable", exact: true }).click();
   await page.getByLabel("Confirm account name").fill("Console test owner");
+  await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();

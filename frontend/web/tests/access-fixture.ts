@@ -38,8 +38,12 @@ export async function accessMock(
       unknown
     >;
     const method = req.method();
-    if (path === "/session")
-      return route.fulfill({ json: { ...session, user_id: owner.id } });
+    if (path === "/session") {
+      const current = accounts.find(row => row.id === owner.id);
+      if (current && (!current.is_active || current.deleted_at))
+        return route.fulfill({ status: 401, json: { error: "unauthenticated" } });
+      return route.fulfill({ json: { ...session, user_id: owner.id, role: current?.role ?? session.role } });
+    }
     if (path === "/root" && method === "GET") return route.fulfill({ json: { id: "root", configured: true, protected: true, source: "config" } });
     if (method !== "GET") writes.push({ path, method, body });
     if (path === "/accounts" && method === "GET")
@@ -85,8 +89,12 @@ export async function accessMock(
       if (method === "GET") return row
         ? route.fulfill({ json: row })
         : route.fulfill({ status: 404, json: { error: "not_found" } });
-      if (row?.role === "admin")
+      if (row?.role === "admin" && row.is_active &&
+          (method === "DELETE" || (body.operation === "role" && body.role !== "admin") ||
+           (body.operation === "active" && !body.is_active)) &&
+          accounts.filter(a => a.role === "admin" && a.is_active && !a.deleted_at).length === 1)
         return route.fulfill({ status: 409, json: { error: "conflict" } });
+      if (row && body.operation === "name") row.display_name = String(body.display_name).trim();
       if (row && method === "DELETE") row.deleted_at = "2026-09-24T00:00:00Z";
       if (row && body.operation === "active")
         row.is_active = Boolean(body.is_active);

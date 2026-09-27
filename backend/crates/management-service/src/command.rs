@@ -37,6 +37,10 @@ impl Command<'_> {
         match self {
             Self::CreateAccount(_) => "identity.account.create",
             Self::ChangeAccount {
+                change: AccountChange::Name(_),
+                ..
+            } => "identity.account.name",
+            Self::ChangeAccount {
                 change: AccountChange::Role(_),
                 ..
             } => "identity.account.role",

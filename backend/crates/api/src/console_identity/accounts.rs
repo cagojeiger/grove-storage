@@ -68,6 +68,7 @@ pub(super) enum Create {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum Change {
+    Name { display_name: String },
     Role { role: Role },
     Active { is_active: bool },
 }
@@ -128,6 +129,12 @@ pub(super) async fn change(
         return inputs::invalid();
     };
     let change = match body {
+        Change::Name { display_name } => {
+            if !inputs::valid_label(&display_name) {
+                return inputs::invalid();
+            }
+            AccountChange::Name(display_name)
+        }
         Change::Role { role } => AccountChange::Role(role.into()),
         Change::Active { is_active } => AccountChange::Active(is_active),
     };

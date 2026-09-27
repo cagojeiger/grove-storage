@@ -10,6 +10,7 @@ pub struct NewAccount<'a> {
 }
 
 pub enum AccountChange {
+    Name(String),
     Role(Role),
     Active(bool),
     Delete,
@@ -117,16 +118,32 @@ pub(super) async fn change_in(
     id: Uuid,
     change: AccountChange,
 ) -> Result<bool, Error> {
-    let row: Option<(String, String, bool)> = sqlx::query_as(
-        "SELECT kind,role,is_active FROM management.accounts WHERE id=$1 AND deleted_at IS NULL",
+    let row: Option<(String, String, bool, String)> = sqlx::query_as(
+        "SELECT kind,role,is_active,display_name FROM management.accounts WHERE id=$1 AND deleted_at IS NULL",
     )
     .bind(id)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((kind, old_role, old_active)) = row else {
+    let Some((kind, old_role, old_active, old_name)) = row else {
         return Err(Error::NotFound);
     };
     let (role, active, deleted, action) = match change {
+        AccountChange::Name(name) => {
+            let name = name.trim();
+            if name.is_empty() || name.chars().count() > 80 {
+                return Err(Error::InvalidInput);
+            }
+            if name == old_name {
+                return Ok(false);
+            }
+            sqlx::query("UPDATE management.accounts SET display_name=$2,updated_at=clock_timestamp() WHERE id=$1")
+                .bind(id).bind(name).execute(&mut *tx).await?;
+            let event = audit::record(&mut tx, context, "account.name", "account", id).await?;
+            sqlx::query("UPDATE management.audit_events SET metadata=jsonb_build_object('before_name',$2::text,'after_name',$3::text) WHERE id=$1")
+                .bind(event).bind(old_name).bind(name).execute(&mut *tx).await?;
+            tx.commit().await.map_err(|_| Error::CommitUnknown)?;
+            return Ok(true);
+        }
         AccountChange::Role(role) => (role_name(role), old_active, false, "account.role"),
         AccountChange::Active(active) => (old_role.as_str(), active, false, "account.active"),
         AccountChange::Delete => (old_role.as_str(), false, true, "account.delete"),

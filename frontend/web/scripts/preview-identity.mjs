@@ -251,6 +251,17 @@ export function previewIdentity(json) {
           else
             json(res, 201, issue(account.id, body.label, body.expires_in_days));
         } else {
+          if (account.deleted_at) { fail(404, "not_found"); return true; }
+          if (method === "PATCH" && body.operation === "name") {
+            const name = typeof body.display_name === "string" ? body.display_name.trim() : "";
+            if (!name || Array.from(name).length > 80) fail(400, "invalid_input");
+            else {
+              const changed = account.display_name !== name;
+              account.display_name = name;
+              json(res, 200, { changed });
+            }
+            return true;
+          }
           const retiring =
             method === "DELETE" ||
             (body.operation === "role" && body.role !== "admin") ||

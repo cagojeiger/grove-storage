@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   RefreshCw,
+  Pencil,
   Shield,
   Trash2,
 } from "lucide-react";
@@ -14,7 +15,7 @@ import { RootAccount } from "./RootAccount";
 import { AccountsList } from "./AccountsList";
 import { useAccountList } from "./accountList";
 
-export function Access({ route }: { route: string }) {
+export function Access({ route, currentUserId }: { route: string; currentUserId?: string }) {
   const cache = useQueryClient();
   const listing = useAccountList();
   const selected = route.startsWith("accounts/") ? route.slice("accounts/".length) : null;
@@ -40,8 +41,8 @@ export function Access({ route }: { route: string }) {
   const current = detail;
   async function refresh(createdId?: string) {
     if (createdId) window.location.hash = listing.href(`#accounts/${encodeURIComponent(createdId)}`);
-    await cache.invalidateQueries({ queryKey: ["access"] });
     await cache.invalidateQueries({ queryKey: ["session"] });
+    await cache.invalidateQueries({ queryKey: ["access"] });
   }
   return (
     <main className="overview storages access">
@@ -80,6 +81,15 @@ export function Access({ route }: { route: string }) {
             <div className="section-heading">
               <h2>{account.display_name}</h2>
               <div className="page-actions">
+                <button
+                  className="icon-button"
+                  title="Edit name"
+                  aria-label="Edit name"
+                  disabled={Boolean(account.deleted_at)}
+                  onClick={() => setAction("name")}
+                >
+                  <Pencil size={16} />
+                </button>
                 <button
                   className="action-button"
                   disabled={Boolean(account.deleted_at)}
@@ -137,6 +147,7 @@ export function Access({ route }: { route: string }) {
       {action && !current.isError && (
         <AccountDialog
           account={account}
+          isSelf={Boolean(account && account.id === currentUserId)}
           action={action}
           onClose={() => setAction(null)}
           onSaved={refresh}

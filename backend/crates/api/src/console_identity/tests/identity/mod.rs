@@ -1,5 +1,6 @@
 use super::*;
 mod account_details;
+mod account_names;
 mod account_search;
 mod accounts;
 mod authorization;

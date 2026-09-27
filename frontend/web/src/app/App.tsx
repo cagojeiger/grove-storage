@@ -137,7 +137,7 @@ export function App() {
             )}
             {accessPage ? (
               ["admin", "root"].includes(session.data.role) ? (
-                <Access key={`${route}:${session.data.session_id}`} route={route} />
+                <Access key={`${route}:${session.data.session_id}`} route={route} currentUserId={session.data.principal === "user" ? session.data.user_id : undefined} />
               ) : (
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )

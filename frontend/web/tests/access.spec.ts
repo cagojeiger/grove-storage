@@ -81,6 +81,7 @@ test("last Admin conflict remains visible; destructive change requires name", as
     page.getByRole("button", { name: "Confirm", exact: true }),
   ).toBeDisabled();
   await page.getByLabel("Confirm account name").fill(owner.display_name);
+  await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
 });

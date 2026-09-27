@@ -12,6 +12,11 @@ async fn reader_and_writer_cannot_manage_identities_or_view_security(pool: PgPoo
     for role in [Role::Reader, Role::Writer] {
         let (_, cookie) = actor(&pool, role).await;
         for (method, path, body) in [
+            (
+                "PATCH",
+                format!("/accounts/{target}"),
+                serde_json::json!({"operation":"name","display_name":"forged"}),
+            ),
             ("GET", "/accounts".into(), serde_json::Value::Null),
             (
                 "GET",
