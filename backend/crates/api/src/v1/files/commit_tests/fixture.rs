@@ -20,6 +20,14 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) async fn new(pool: PgPool, relay: bool, endpoint: &str) -> Self {
+        Self::reserve(pool, relay, endpoint, None).await
+    }
+
+    pub(super) async fn multipart(pool: PgPool, endpoint: &str) -> Self {
+        Self::reserve(pool, true, endpoint, Some(4)).await
+    }
+
+    async fn reserve(pool: PgPool, relay: bool, endpoint: &str, part_size: Option<i64>) -> Self {
         let mut state = crate::routes::tests::test_state();
         state.pool = pool;
         let secret = state
@@ -64,10 +72,10 @@ impl Fixture {
             CreateSpec {
                 client_id: "app",
                 declared_size: 7,
-                declared_md5: Some(ETAG),
+                declared_md5: part_size.is_none().then_some(ETAG),
                 content_type: None,
                 lease_ttl_secs: 900,
-                part_size: None,
+                part_size,
             },
         )
         .await

@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 mod fixture;
+mod multipart;
 use axum::{Router, body::Body, http::StatusCode, routing::head};
 use filegate_db::{PgPool, files};
 use fixture::{ETAG, Fixture};

@@ -12,6 +12,7 @@ use filegate_infra::Address;
 use grove_object_policy::multipart::{
     composite_etag, part_count, part_expected_size, part_number_ok,
 };
+use grove_object_service::multipart_commit::{self, CommitError, MultipartCommit};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -43,40 +44,72 @@ pub(super) async fn commit(
         return Err(internal("multipart file has no write lease"));
     };
 
-    let Some(prepared) = prepare_completion(
+    let completed = multipart_commit::commit(&Completion {
         state,
         file_id,
         file,
         part_size,
-        backend,
-        upload_id.as_deref(),
-    )
-    .await?
-    else {
-        return committed_or_conflict(state, client, file_id).await;
-    };
-    let physical_complete = complete_backend(
-        state,
-        file,
         lease_id,
-        upload_id.as_deref(),
+        upload_id: upload_id.as_deref(),
         backend,
-        &prepared,
-    );
-    let Some(etag) =
-        run_with_native_completion_heartbeat(&state.pool, file_id, physical_complete).await
-    else {
-        return Err(conflict(
+    })
+    .await;
+    match completed {
+        Ok(Some(etag)) => {
+            tracing::info!(event = "file.committed", file = %file_id, client = %client.0, multipart = true);
+            Ok(committed_response(file_id, etag))
+        }
+        Ok(None) => committed_or_conflict(state, client, file_id).await,
+        Err(CommitError::Operation(error)) => Err(error),
+        Err(CommitError::OwnershipLost) => Err(conflict(
             "multipart completion ownership was lost; retry commit",
-        ));
-    };
-    let etag = etag?;
-
-    if files::finalize_completion(&state.pool, file_id, &etag).await? {
-        tracing::info!(event = "file.committed", file = %file_id, client = %client.0, multipart = true);
-        return Ok(committed_response(file_id, etag));
+        )),
     }
-    committed_or_conflict(state, client, file_id).await
+}
+
+struct Completion<'a> {
+    state: &'a AppState,
+    file_id: Uuid,
+    file: &'a files::FileAccess,
+    part_size: i64,
+    lease_id: Uuid,
+    upload_id: Option<&'a str>,
+    backend: &'a StorageBackend,
+}
+
+impl MultipartCommit for Completion<'_> {
+    type Error = ApiError;
+    type Prepared = PreparedCompletion;
+
+    async fn prepare(&self) -> Result<Option<PreparedCompletion>, ApiError> {
+        prepare_completion(
+            self.state,
+            self.file_id,
+            self.file,
+            self.part_size,
+            self.backend,
+            self.upload_id,
+        )
+        .await
+    }
+
+    async fn complete(&self, prepared: &PreparedCompletion) -> Result<Option<String>, ApiError> {
+        let physical = complete_backend(
+            self.state,
+            self.file,
+            self.lease_id,
+            self.upload_id,
+            self.backend,
+            prepared,
+        );
+        run_with_native_completion_heartbeat(&self.state.pool, self.file_id, physical)
+            .await
+            .transpose()
+    }
+
+    async fn finalize(&self, etag: &str) -> Result<bool, ApiError> {
+        Ok(files::finalize_completion(&self.state.pool, self.file_id, etag).await?)
+    }
 }
 
 struct PreparedCompletion {

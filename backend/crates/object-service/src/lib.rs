@@ -3,5 +3,6 @@
 //! registry configuration and account changes belong to management.
 
 pub mod cleanup;
+pub mod multipart_commit;
 pub mod multipart_create;
 pub mod single_commit;
