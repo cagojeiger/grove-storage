@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, RefreshCw } from "lucide-react";
-import { identityPage } from "../../api/identity";
+import { field, identityPage } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { Dialog } from "../../design/Dialog";
 import {
@@ -13,20 +13,24 @@ import {
   validator,
 } from "./model";
 import { time } from "../../design/format";
+import { activityFilters, uuidPattern } from "./filters";
 
 export function Activity({ route, admin }: { route: string; admin: boolean }) {
+  const path = route.split("?")[0];
+  const { params, valid } = activityFilters(route);
+  const suffix = params.size ? `?${params}` : "";
   const stream: Stream =
-    route === "activity/invocations"
+    path === "activity/invocations"
       ? "invocations"
-      : route === "activity/security"
+      : path === "activity/security"
         ? "security"
         : "audit";
   const denied = stream === "security" && !admin;
   const [selected, setSelected] = useState<Event | null>(null);
   const cache = useQueryClient();
   const query = useInfiniteQuery({
-    queryKey: ["activity", stream, admin],
-    enabled: !denied,
+    queryKey: ["activity", stream, admin, params.toString()],
+    enabled: !denied && valid,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
       try {
@@ -35,6 +39,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           validator(stream),
           pageParam,
           signal,
+          params,
         );
       } catch (error) {
         if (error instanceof ApiError && error.status === 403)
@@ -57,7 +62,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           className="icon-button"
           aria-label="Refresh activity"
           title="Refresh activity"
-          disabled={denied || query.isFetching}
+          disabled={denied || !valid || query.isFetching}
           onClick={() => {
             setSelected(null);
             void query.refetch();
@@ -68,28 +73,51 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       </div>
       <nav className="view-tabs" aria-label="Activity views">
         <a
-          href="#activity"
+          href={`#activity${suffix}`}
           aria-current={stream === "audit" ? "page" : undefined}
         >
           Audit log
         </a>
         <a
-          href="#activity/invocations"
+          href={`#activity/invocations${suffix}`}
           aria-current={stream === "invocations" ? "page" : undefined}
         >
           Command history
         </a>
         {admin && (
           <a
-            href="#activity/security"
+            href={`#activity/security${suffix}`}
             aria-current={stream === "security" ? "page" : undefined}
           >
             Security events
           </a>
         )}
       </nav>
+      {!denied && (
+        <form className="activity-filters" onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          const next = new URLSearchParams();
+          for (const key of ["account_id", "credential_id"]) {
+            const value = field(data, key).trim();
+            if (value) next.set(key, value);
+          }
+          window.location.hash = `${path}${next.size ? `?${next}` : ""}`;
+        }}>
+          <label>Actor account ID
+            <input name="account_id" defaultValue={params.get("account_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
+          </label>
+          <label>Used token ID
+            <input name="credential_id" defaultValue={params.get("credential_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
+          </label>
+          <button type="submit">Apply</button>
+          {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}
+        </form>
+      )}
       {denied ? (
         <p role="alert">Admin access required.</p>
+      ) : !valid ? (
+        <p role="alert">Enter a valid account or token ID.</p>
       ) : query.isPending ? (
         <p role="status">Loading activity...</p>
       ) : query.isError ? (

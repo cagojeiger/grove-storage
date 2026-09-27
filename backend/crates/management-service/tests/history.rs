@@ -90,7 +90,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         &pool,
         Proof::Session(&reader.session),
         Surface::Console,
-        Command::Audit(Page::new(None, 1).unwrap()),
+        Command::Audit(Page::new(None, 1).unwrap().into()),
     )
     .await
     .result
@@ -106,7 +106,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         &pool,
         Proof::Session(&reader.session),
         Surface::Console,
-        Command::Audit(Page::new(Some(cursor), 100).unwrap()),
+        Command::Audit(Page::new(Some(cursor), 100).unwrap().into()),
     )
     .await
     .result
@@ -123,7 +123,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         &pool,
         Proof::Session(&reader.session),
         Surface::Console,
-        Command::Invocations(Page::default()),
+        Command::Invocations(Page::default().into()),
     )
     .await
     .result
@@ -145,7 +145,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::Audit(Page::default()),
+        Command::Audit(Page::default().into()),
     )
     .await
     .result
@@ -163,7 +163,7 @@ async fn security_is_admin_only_and_denials_share_request_id(pool: PgPool) {
         &pool,
         Proof::Session(&reader.session),
         Surface::Console,
-        Command::Security(Page::default()),
+        Command::Security(Page::default().into()),
     )
     .await;
     assert!(matches!(denied.result, Err(Error::Forbidden)));
@@ -171,7 +171,7 @@ async fn security_is_admin_only_and_denials_share_request_id(pool: PgPool) {
         &pool,
         Proof::Session(&admin.session),
         Surface::Console,
-        Command::Security(Page::default()),
+        Command::Security(Page::default().into()),
     )
     .await
     .result

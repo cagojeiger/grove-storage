@@ -2,6 +2,22 @@ use super::{Error, IdentityTransaction, queries::Page};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+/// Actor filters narrow the authorized scope; they do not select mutation targets.
+#[derive(Default)]
+pub struct HistoryQuery {
+    pub page: Page<i64>,
+    pub account_id: Option<Uuid>,
+    pub credential_id: Option<Uuid>,
+}
+impl From<Page<i64>> for HistoryQuery {
+    fn from(page: Page<i64>) -> Self {
+        Self {
+            page,
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum HistoryScope {
     Installation,
@@ -59,23 +75,41 @@ impl IdentityTransaction<'_> {
     pub async fn audit_history(
         &mut self,
         scope: HistoryScope,
-        page: Page<i64>,
+        query: HistoryQuery,
     ) -> Result<Vec<AuditEvent>, Error> {
         Ok(sqlx::query_as("SELECT * FROM management.audit_events WHERE ($1::uuid IS NULL OR actor_id=$1 OR owner_user_id=$1)
-            AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
-            .bind(scope.user()).bind(page.before).bind(page.limit).fetch_all(&mut *self.inner).await?)
+            AND ($2::bigint IS NULL OR id<$2)
+            AND ($4::uuid IS NULL OR actor_id=$4 OR owner_user_id=$4)
+            AND ($5::uuid IS NULL OR credential_id=$5) ORDER BY id DESC LIMIT $3")
+            .bind(scope.user()).bind(query.page.before).bind(query.page.limit)
+            .bind(query.account_id).bind(query.credential_id).fetch_all(&mut *self.inner).await?)
     }
     pub async fn invocation_history(
         &mut self,
         scope: HistoryScope,
-        page: Page<i64>,
+        query: HistoryQuery,
     ) -> Result<Vec<Invocation>, Error> {
         Ok(sqlx::query_as("SELECT * FROM management.command_invocations WHERE ($1::uuid IS NULL OR actor_id=$1 OR owner_user_id=$1)
-            AND ($2::bigint IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
-            .bind(scope.user()).bind(page.before).bind(page.limit).fetch_all(&mut *self.inner).await?)
+            AND ($2::bigint IS NULL OR id<$2)
+            AND ($4::uuid IS NULL OR actor_id=$4 OR owner_user_id=$4)
+            AND ($5::uuid IS NULL OR credential_id=$5) ORDER BY id DESC LIMIT $3")
+            .bind(scope.user()).bind(query.page.before).bind(query.page.limit)
+            .bind(query.account_id).bind(query.credential_id).fetch_all(&mut *self.inner).await?)
     }
-    pub async fn security_history(&mut self, page: Page<i64>) -> Result<Vec<SecurityEvent>, Error> {
-        Ok(sqlx::query_as("SELECT * FROM management.security_events WHERE ($1::bigint IS NULL OR id<$1) ORDER BY id DESC LIMIT $2")
-            .bind(page.before).bind(page.limit).fetch_all(&mut *self.inner).await?)
+    pub async fn security_history(
+        &mut self,
+        query: HistoryQuery,
+    ) -> Result<Vec<SecurityEvent>, Error> {
+        Ok(sqlx::query_as(
+            "SELECT * FROM management.security_events WHERE ($1::bigint IS NULL OR id<$1)
+            AND ($3::uuid IS NULL OR actor_id=$3 OR owner_user_id=$3)
+            AND ($4::uuid IS NULL OR credential_id=$4) ORDER BY id DESC LIMIT $2",
+        )
+        .bind(query.page.before)
+        .bind(query.page.limit)
+        .bind(query.account_id)
+        .bind(query.credential_id)
+        .fetch_all(&mut *self.inner)
+        .await?)
     }
 }

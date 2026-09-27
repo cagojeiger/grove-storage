@@ -17,7 +17,8 @@ import { UsageHistory } from "../features/overview/UsageHistory";
 
 export function App() {
   const cache = useQueryClient();
-  const route = useRoute().split("?")[0];
+  const fullRoute = useRoute();
+  const route = fullRoute.split("?")[0];
   const storagePage = route === "storages" || route.startsWith("storages/");
   const accessPage = route === "accounts" || route.startsWith("accounts/") || route === "access" || route.startsWith("access/");
   const clientPage = route === "clients" || route.startsWith("clients/");
@@ -142,7 +143,7 @@ export function App() {
                 <main className="connection"><p role="alert">Admin access required.</p></main>
               )
             ) : activityPage ? (
-              <Activity key={`${route}:${session.data.role}:${session.data.session_id}`} route={route} admin={["admin", "root"].includes(session.data.role)} />
+              <Activity key={`${fullRoute}:${session.data.role}:${session.data.session_id}`} route={fullRoute} admin={["admin", "root"].includes(session.data.role)} />
             ) : settingsPage ? (
               <Sessions key={session.data.session_id} session={session.data} />
             ) : clientPage ? (

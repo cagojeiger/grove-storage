@@ -1,14 +1,31 @@
 use super::{
-    inputs::{self, Id, QueryPage},
+    inputs::{self, Id, Pagination, QueryPage},
     output, session,
 };
 use crate::routes::AppState;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, rejection::QueryRejection},
     http::HeaderMap,
     response::Response,
 };
+use filegate_db::management::history::HistoryQuery;
 use grove_management_service::Command;
+use serde::Deserialize;
+use uuid::Uuid;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct HistoryParams {
+    before: Option<String>,
+    #[serde(default = "history_limit")]
+    limit: u16,
+    account_id: Option<Uuid>,
+    credential_id: Option<Uuid>,
+}
+fn history_limit() -> u16 {
+    50
+}
+type HistoryInput = Result<Query<HistoryParams>, QueryRejection>;
 
 pub(super) async fn sessions(
     State(state): State<AppState>,
@@ -48,35 +65,49 @@ enum Stream {
 pub(super) async fn audit(
     State(state): State<AppState>,
     headers: HeaderMap,
-    query: QueryPage,
+    query: HistoryInput,
 ) -> Response {
     list(state, headers, query, Stream::Audit).await
 }
 pub(super) async fn invocations(
     State(state): State<AppState>,
     headers: HeaderMap,
-    query: QueryPage,
+    query: HistoryInput,
 ) -> Response {
     list(state, headers, query, Stream::Invocations).await
 }
 pub(super) async fn security(
     State(state): State<AppState>,
     headers: HeaderMap,
-    query: QueryPage,
+    query: HistoryInput,
 ) -> Response {
     list(state, headers, query, Stream::Security).await
 }
-async fn list(state: AppState, headers: HeaderMap, query: QueryPage, stream: Stream) -> Response {
+async fn list(
+    state: AppState,
+    headers: HeaderMap,
+    query: HistoryInput,
+    stream: Stream,
+) -> Response {
     let Ok(Query(query)) = query else {
         return inputs::invalid();
     };
-    let Ok(page) = query.history_page() else {
+    let Ok(page) = (Pagination {
+        before: query.before,
+        limit: query.limit,
+    })
+    .history_page() else {
         return inputs::invalid();
     };
+    let history = HistoryQuery {
+        page,
+        account_id: query.account_id,
+        credential_id: query.credential_id,
+    };
     let command = match stream {
-        Stream::Audit => Command::Audit(page),
-        Stream::Invocations => Command::Invocations(page),
-        Stream::Security => Command::Security(page),
+        Stream::Audit => Command::Audit(history),
+        Stream::Invocations => Command::Invocations(history),
+        Stream::Security => Command::Security(history),
     };
     output::respond(
         session::execute(&state, &headers, command).await,

@@ -66,6 +66,24 @@ async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool:
         .unwrap();
     }
     let first = get(&pool, &user_cookie, "/history/audit?limit=1").await;
+    for stream in ["audit", "invocations"] {
+        for account_id in [agent, user] {
+            let filtered = get(
+                &pool,
+                &user_cookie,
+                &format!(
+                    "/history/{stream}?account_id={account_id}&credential_id={}&limit=1",
+                    key["credential_id"].as_str().unwrap()
+                ),
+            )
+            .await;
+            assert_eq!(filtered["items"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                filtered["items"][0]["context"]["request_id"],
+                ctx.request_id.to_string()
+            );
+        }
+    }
     let event = &first["items"][0];
     assert_eq!(event["context"]["request_id"], ctx.request_id.to_string());
     assert_eq!(event["context"]["id"], "9007199254740994");
@@ -118,4 +136,60 @@ async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool:
             .iter()
             .any(|r| r["context"]["request_id"] == denied_id && r["reason_code"] == "forbidden")
     );
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn history_rejects_invalid_filters_and_preserves_security_authorization(pool: PgPool) {
+    let (_, cookie) = actor(&pool, Role::Admin).await;
+    for stream in ["audit", "invocations", "security"] {
+        for query in [
+            "account_id=invalid",
+            "credential_id=invalid",
+            "before=0",
+            "before=-1",
+            "before=9223372036854775808",
+            "limit=0",
+            "limit=101",
+            "unknown=true",
+        ] {
+            assert_eq!(
+                send(
+                    &pool,
+                    &cookie,
+                    "GET",
+                    &format!("/history/{stream}?{query}"),
+                    serde_json::Value::Null
+                )
+                .await
+                .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        let empty = get(
+            &pool,
+            &cookie,
+            &format!(
+                "/history/{stream}?account_id={}&credential_id={}",
+                Uuid::new_v4(),
+                Uuid::new_v4()
+            ),
+        )
+        .await;
+        assert!(empty["items"].as_array().unwrap().is_empty());
+    }
+    for role in [Role::Reader, Role::Writer] {
+        let (id, cookie) = actor(&pool, role).await;
+        assert_eq!(
+            send(
+                &pool,
+                &cookie,
+                "GET",
+                &format!("/history/security?account_id={id}"),
+                serde_json::Value::Null
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
 }

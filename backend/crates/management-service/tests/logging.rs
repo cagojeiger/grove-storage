@@ -87,7 +87,7 @@ async fn token_denial_retains_user_and_credential_without_creating_audit(pool: P
         &pool,
         Proof::Token(&hash(2)),
         Surface::Mcp,
-        Command::Audit(Page::default()),
+        Command::Audit(Page::default().into()),
     )
     .await;
     assert!(matches!(denied.result, Err(Error::Forbidden)));

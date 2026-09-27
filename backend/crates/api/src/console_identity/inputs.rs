@@ -22,7 +22,7 @@ pub(super) fn invalid() -> Response {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Pagination {
-    before: Option<String>,
+    pub before: Option<String>,
     #[serde(default = "default_limit")]
     pub limit: u16,
 }

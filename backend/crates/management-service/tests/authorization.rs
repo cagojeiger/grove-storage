@@ -41,12 +41,12 @@ fn commands(target: Uuid, key_hash: &str) -> Vec<(Command<'_>, bool)> {
             },
             true,
         ),
-        (Command::Security(Page::default()), true),
+        (Command::Security(Page::default().into()), true),
         (Command::OwnSessions(Page::default()), false),
         (Command::CurrentSession, false),
         (Command::RevokeOwnSession(Uuid::new_v4()), false),
-        (Command::Audit(Page::default()), false),
-        (Command::Invocations(Page::default()), false),
+        (Command::Audit(Page::default().into()), false),
+        (Command::Invocations(Page::default().into()), false),
         (Command::Logout, false),
     ]
 }

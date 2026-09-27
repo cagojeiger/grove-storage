@@ -1,5 +1,6 @@
 use filegate_db::management::{
     AccountChange, NewAccount, NewCredential,
+    history::HistoryQuery,
     queries::{AccountQuery, Page},
 };
 use grove_management_policy::Action;
@@ -27,9 +28,9 @@ pub enum Command<'a> {
         page: Page<Uuid>,
     },
     OwnSessions(Page<Uuid>),
-    Audit(Page<i64>),
-    Invocations(Page<i64>),
-    Security(Page<i64>),
+    Audit(HistoryQuery),
+    Invocations(HistoryQuery),
+    Security(HistoryQuery),
 }
 
 impl Command<'_> {

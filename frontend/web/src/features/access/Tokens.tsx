@@ -16,6 +16,7 @@ import { Dialog } from "../../design/Dialog";
 import { message } from "../../api/http";
 import { IssuedToken } from "./IssuedToken";
 import { useAction } from "./useAction";
+import { activityLink } from "../activity/filters";
 
 export function Tokens({ account }: { account: Account }) {
   const cache = useQueryClient();
@@ -65,6 +66,7 @@ export function Tokens({ account }: { account: Account }) {
                   <strong>{token.label}</strong>
                   <p className="muted">{token.token_prefix}</p>
                   <p className="muted">{token.id}</p>
+                  <a href={activityLink(account.id, token.id)}>View token actions</a>
                 </div>
                 <div>
                   <span>

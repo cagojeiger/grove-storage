@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   RefreshCw,
   Pencil,
+  History,
   Shield,
   Trash2,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { Tokens } from "./Tokens";
 import { RootAccount } from "./RootAccount";
 import { AccountsList } from "./AccountsList";
 import { useAccountList } from "./accountList";
+import { activityLink } from "../activity/filters";
 
 export function Access({ route, currentUserId }: { route: string; currentUserId?: string }) {
   const cache = useQueryClient();
@@ -81,6 +83,9 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
             <div className="section-heading">
               <h2>{account.display_name}</h2>
               <div className="page-actions">
+                <a className="icon-button" href={activityLink(account.id)} title="View account actions" aria-label="View account actions">
+                  <History size={16} />
+                </a>
                 <button
                   className="icon-button"
                   title="Edit name"

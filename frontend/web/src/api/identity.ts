@@ -116,11 +116,13 @@ export function identityPage<T>(
   item: (v: unknown) => v is T,
   before: string | null,
   signal: AbortSignal,
+  filters?: URLSearchParams,
 ) {
   return identityRequest(
     path +
       "?limit=50" +
-      (before ? `&before=${encodeURIComponent(before)}` : ""),
+      (before ? `&before=${encodeURIComponent(before)}` : "") +
+      (filters?.size ? `&${filters}` : ""),
     (v): v is Page<T> =>
       isObject(v) &&
       Array.isArray(v.items) &&
