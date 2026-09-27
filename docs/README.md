@@ -21,6 +21,7 @@
 | 코드 책임·테스트 위치 | [소스 구조](development/source-layout.md) |
 | 리소스 구조 마감·검증 경계 | [리소스 체크포인트](development/refactor-checkpoint.md) · [S3/NoteGate 검증](development/s3-compatibility-review.md) |
 | Management 정리 우선순위·테스트 지도 | [준비 계획](development/management-review.md) |
+| 로컬 로그인 전환·UX·API·DB·검증 단계 | [로컬 관리 인증 계약](spec/11-local-management-auth.md) |
 | 실행·설정·검증 | [기술·운영](stack/README.md) |
 | 외부 저장소 조사 기록 | [벤더 노트](vendors/README.md) |
 

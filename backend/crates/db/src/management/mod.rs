@@ -10,6 +10,7 @@ mod credentials;
 pub mod history;
 mod identity;
 pub mod master;
+pub mod passwords;
 pub mod queries;
 mod resource_metadata;
 mod resource_writes;

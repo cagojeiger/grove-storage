@@ -8,6 +8,7 @@ mod console_identity;
 mod cors;
 mod error;
 mod lease;
+mod local_accounts;
 mod logging;
 mod mcp;
 mod reconciler;
@@ -36,6 +37,7 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
         }
         Some("status") => status::run().await,
         Some("admin") => admin_auth::cli::run().await,
+        Some("account") => local_accounts::run().await,
         Some("--help") | Some("-h") | Some("help") => {
             print_usage();
             Ok(std::process::ExitCode::SUCCESS)
@@ -54,7 +56,8 @@ fn print_usage() {
          USAGE:\n    \
          filegate [serve]   서버를 기동한다 (기본)\n    \
          filegate status    배포 상태를 점검하고 요약을 출력한다\n    \
-         filegate admin     관리자 초기화 및 토큰 관리"
+         filegate admin     관리자 초기화 및 토큰 관리\n    \
+         filegate account   Initialize or recover a local password account"
     );
 }
 

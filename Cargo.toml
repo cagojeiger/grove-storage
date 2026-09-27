@@ -66,6 +66,8 @@ sha2 = "0.10"
 md-5 = "0.10"
 futures-util = { version = "0.3", default-features = false }
 subtle = "2"
+argon2 = { version = "0.6", features = ["zeroize"] }
+unicode-normalization = "0.1"
 hex = "0.4"
 dotenvy = "0.15"
 percent-encoding = "2"

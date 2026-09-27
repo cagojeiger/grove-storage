@@ -12,6 +12,8 @@ uuid.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 subtle.workspace = true
+argon2.workspace = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

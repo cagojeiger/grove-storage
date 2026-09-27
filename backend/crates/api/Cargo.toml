@@ -37,6 +37,7 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 percent-encoding = { workspace = true }
+rpassword = "7.5.4"
 
 [dev-dependencies]
 # CORS preflight 라우터 테스트용 oneshot (ServiceExt). tower는 axum 경유로
