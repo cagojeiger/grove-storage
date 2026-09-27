@@ -58,6 +58,32 @@ python3 -B -u scripts/e2e-notegate.py --notegate-dir ../notegate
 
 배포 환경은 `FILEGATE_S3_CORS_ALLOWED_ORIGINS`에 실제 NoteGate 브라우저 origin을 설정한다.
 
+### 브라우저 전체 경로
+
+```sh
+# NoteGate에서 서버와 프런트엔드를 먼저 빌드한다.
+cargo build -p notegate-api --locked
+pnpm --dir frontend/web build
+# Grove에서 실행한다. Python 환경에 boto3·cryptography가 필요하다.
+python3 -B -u scripts/e2e-notegate-browser.py --notegate-dir ../notegate
+```
+
+| 항목 | 검증 |
+|---|---|
+| 로그인 | Chromium 화면의 로그인 버튼 → NoteGate OIDC callback → HttpOnly·SameSite=Lax 세션 |
+| 인증 제공자 | loopback 전용 테스트 issuer; PKCE·nonce·서명 ID token·userinfo 사용, 제품 인증 코드 변경 없음 |
+| 파일 | 화면에서 Space 생성·파일 선택, 단일 PUT·101MiB multipart, 다운로드 원본 바이트·SHA-256 대조 |
+| 브라우저 통신 | 실제 교차 origin Grove PUT/GET·multipart part, 페이지 JavaScript 오류 확인 |
+| 결과 | 임시 evidence 디렉터리에 화면·파일 hash·비밀값 제외 요청 요약·테스트 소스 revision 기록 |
+| 종료 | 브라우저·NoteGate·Grove·테스트 DB·MinIO 정리, NoteGate 소스 변경 여부 확인 |
+| 별도 검증 | 운영 Google/AuthGate 로그인, Ingress·TLS·Secure cookie, 실제 운영 스토리지 |
+
+관찰된 NoteGate UI 이슈: 파일 두 개 업로드 직후 하단은 `0 items / 0 B`를 유지하지만,
+`/api/v1/me/usage`는 두 파일의 정확한 합계를 반환하고 새로고침 후 `2 items / 101 MB`로 바뀐다.
+`frontend/web/src/features/uploads/UploadProvider.tsx`의 완료 처리는 파일 목록·링크 캐시를
+갱신하고 사용량 캐시는 갱신하지 않는다. 브라우저 결과 JSON에 새로고침 전후 표시를 기록하며,
+NoteGate UI 수정은 별도 작업으로 둔다.
+
 ## 재현 후 수정
 
 | 이전 | 수정 |
