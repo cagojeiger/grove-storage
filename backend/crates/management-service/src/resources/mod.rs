@@ -1,5 +1,6 @@
 //! Shared resource execution; external probes run outside the identity fence.
 mod admission;
+mod credentials;
 mod reads;
 mod storage;
 mod writes;
@@ -19,6 +20,8 @@ use std::future::Future;
 use uuid::Uuid;
 
 pub use admission::admit_mcp;
+pub use credentials::PreparedCredential;
+pub use reads::storage_output;
 
 pub struct Execution {
     pub request_id: Uuid,

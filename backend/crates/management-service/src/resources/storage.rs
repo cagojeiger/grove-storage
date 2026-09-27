@@ -14,7 +14,7 @@ pub(super) async fn write(
     match name {
         CommandName::StorageCreate => {
             tx.create_resource_storage(ctx, &row).await?;
-            Ok(Output::StorageCreate(super::reads::storage(row)?))
+            Ok(Output::StorageCreate(super::storage_output(row)?))
         }
         CommandName::StorageReplace => {
             match tx.replace_resource_storage(ctx, &row).await? {
@@ -22,7 +22,7 @@ pub(super) async fn write(
                 UpdateStorageOutcome::NotFound => return Err(Error::NotFound),
                 UpdateStorageOutcome::LocationInUse => return Err(Error::Conflict),
             }
-            Ok(Output::StorageReplace(super::reads::storage(row)?))
+            Ok(Output::StorageReplace(super::storage_output(row)?))
         }
         _ => Err(Error::RequestRejected),
     }

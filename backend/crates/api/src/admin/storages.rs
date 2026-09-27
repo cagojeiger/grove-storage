@@ -1,13 +1,14 @@
-//! Legacy storage REST handlers and response shape.
+//! Legacy storage REST handlers with shared resource response projection.
 
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use filegate_db::registry::{self, StorageRow};
-use serde::{Deserialize, Serialize};
+use grove_management_command::model::Storage;
+use serde::Deserialize;
 
-use crate::error::{ApiError, conflict, not_found};
+use crate::error::{ApiError, conflict, internal, not_found};
 use crate::routes::AppState;
 use crate::storage_registration::{Submission, verified_row};
 
@@ -18,38 +19,9 @@ pub(super) struct StorageCreateBody {
     spec: Submission,
 }
 
-/// 응답 모양 — 시크릿과 암호화 내부(enc_key_id)는 내보내지 않는다.
-#[derive(Serialize)]
-struct StorageOut {
-    id: String,
-    kind: String,
-    force_relay: bool,
-    root_path: Option<String>,
-    endpoint: Option<String>,
-    public_endpoint: Option<String>,
-    region: Option<String>,
-    bucket: Option<String>,
-    force_path_style: bool,
-    access_key: Option<String>,
-    capacity_bytes: i64,
-}
-
-impl From<StorageRow> for StorageOut {
-    fn from(row: StorageRow) -> Self {
-        Self {
-            id: row.id,
-            kind: row.kind,
-            force_relay: row.force_relay,
-            root_path: row.root_path,
-            endpoint: row.endpoint,
-            public_endpoint: row.public_endpoint,
-            region: row.region,
-            bucket: row.bucket,
-            force_path_style: row.force_path_style,
-            access_key: row.access_key,
-            capacity_bytes: row.capacity_bytes,
-        }
-    }
+fn output(row: StorageRow) -> Result<Storage, ApiError> {
+    grove_management_service::resources::storage_output(row)
+        .map_err(|_| internal("invalid storage kind"))
 }
 
 pub(super) async fn create(
@@ -60,7 +32,7 @@ pub(super) async fn create(
     let row = verified_row(&state.crypto, relay_base_ready, &body.id, body.spec).await?;
     registry::insert_storage(&state.pool, &row).await?;
     tracing::info!(event = "storage.registered", storage = %row.id, kind = %row.kind);
-    Ok((StatusCode::CREATED, Json(StorageOut::from(row))).into_response())
+    Ok((StatusCode::CREATED, Json(output(row)?)).into_response())
 }
 
 pub(super) async fn update(
@@ -84,7 +56,7 @@ pub(super) async fn update(
         }
     }
     tracing::info!(event = "storage.updated", storage = %row.id);
-    Ok(Json(StorageOut::from(row)).into_response())
+    Ok(Json(output(row)?).into_response())
 }
 
 pub(super) async fn get(
@@ -94,12 +66,17 @@ pub(super) async fn get(
     let row = registry::get_storage(&state.pool, &id)
         .await?
         .ok_or_else(|| not_found("storage not found"))?;
-    Ok(Json(StorageOut::from(row)).into_response())
+    Ok(Json(output(row)?).into_response())
 }
 
 pub(super) async fn list(State(state): State<AppState>) -> Result<Response, ApiError> {
     let rows = registry::list_storages(&state.pool).await?;
-    Ok(Json(rows.into_iter().map(StorageOut::from).collect::<Vec<_>>()).into_response())
+    Ok(Json(
+        rows.into_iter()
+            .map(output)
+            .collect::<Result<Vec<_>, _>>()?,
+    )
+    .into_response())
 }
 
 pub(super) async fn delete(

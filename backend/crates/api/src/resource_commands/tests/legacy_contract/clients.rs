@@ -109,6 +109,28 @@ async fn service_keys_keep_ownership_and_cascade_only_with_their_client(pool: Pg
         let access = issued["access_key_id"].as_str().unwrap();
         let secret = issued["secret_key"].as_str().unwrap();
         assert!(!secret.is_empty());
+        let saved = filegate_db::s3_registry::get_credential(&pool, access)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.client_id, "managed");
+        let crypto = crate::routes::tests::test_state().crypto;
+        let encrypted = filegate_core::EncryptedSecret {
+            ciphertext: saved.secret_ciphertext,
+            nonce: saved.secret_nonce,
+        };
+        let restored = crypto
+            .decrypt(&saved.enc_key_id, access, &encrypted)
+            .unwrap();
+        assert_eq!(
+            filegate_core::ExposeSecret::expose_secret(&restored),
+            secret
+        );
+        assert!(
+            crypto
+                .decrypt(&saved.enc_key_id, "different-key", &encrypted)
+                .is_err()
+        );
         assert_eq!(
             api.same_read(
                 "/clients/managed/keys",

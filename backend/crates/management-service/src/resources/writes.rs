@@ -1,6 +1,7 @@
+use super::PreparedCredential;
 use crate::Error;
-use filegate_core::{Crypto, ExposeSecret, SecretString};
-use filegate_db::management::{AuditContext, EncryptedServiceCredential, IdentityTransaction};
+use filegate_core::Crypto;
+use filegate_db::management::{AuditContext, IdentityTransaction};
 use grove_management_command::{Command, Output, model};
 
 pub(super) async fn run(
@@ -66,26 +67,10 @@ pub(super) async fn run(
             Output::ClientKeyDelete(deleted("client-key", input.key_hash, Some(input.client_id)))
         }
         Command::CredentialCreate(input) => {
-            let access_key_id = filegate_core::generate_access_key_id();
-            let secret = SecretString::from(filegate_core::generate_url_secret());
-            let encrypted = crypto
-                .encrypt(&access_key_id, &secret)
-                .map_err(|_| Error::Unavailable)?;
-            tx.create_service_credential(
-                ctx,
-                &input.client_id,
-                EncryptedServiceCredential {
-                    access_key_id: &access_key_id,
-                    ciphertext: &encrypted.ciphertext,
-                    nonce: &encrypted.nonce,
-                    enc_key_id: crypto.active_key_id(),
-                },
-            )
-            .await?;
-            Output::CredentialCreate(model::IssuedCredential {
-                access_key_id,
-                secret_key: secret.expose_secret().to_owned(),
-            })
+            let prepared = PreparedCredential::new(crypto).map_err(|_| Error::Unavailable)?;
+            tx.create_service_credential(ctx, &input.client_id, prepared.encrypted())
+                .await?;
+            Output::CredentialCreate(prepared.into_output())
         }
         Command::CredentialDelete(input) => {
             tx.delete_service_credential(ctx, &input.client_id, &input.access_key_id)

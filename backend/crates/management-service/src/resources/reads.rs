@@ -31,10 +31,12 @@ pub(super) async fn run(
             tx.storages()
                 .await?
                 .into_iter()
-                .map(storage)
+                .map(storage_output)
                 .collect::<Result<_, _>>()?,
         ),
-        Command::StorageShow(input) => Output::StorageShow(storage(tx.storage(&input.id).await?)?),
+        Command::StorageShow(input) => {
+            Output::StorageShow(storage_output(tx.storage(&input.id).await?)?)
+        }
         Command::ClientList(_) => Output::ClientList(tx.clients().await?),
         Command::ClientShow(input) => Output::ClientShow(model::Client {
             storage_id: tx.client_storage(&input.id).await?,
@@ -126,7 +128,8 @@ fn kind(value: &str) -> Result<StorageKind, Error> {
         _ => Err(Error::Unavailable),
     }
 }
-pub(super) fn storage(r: StorageRow) -> Result<model::Storage, Error> {
+/// Public registry fields shared by management transports; encrypted secrets stay internal.
+pub fn storage_output(r: StorageRow) -> Result<model::Storage, Error> {
     Ok(model::Storage {
         id: r.id,
         kind: kind(&r.kind)?,
