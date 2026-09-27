@@ -61,9 +61,7 @@ pub(super) async fn current(State(state): State<AppState>, headers: HeaderMap) -
     let execution = execute(&state, &headers, Command::CurrentSession).await;
     match execution.result {
         Ok(Output::Identity(identity)) => {
-            let Actor::User { role, .. } = identity.caller.actor else {
-                return failure(Error::Unavailable, execution.request_id);
-            };
+            let Actor::User { role, .. } = identity.caller.actor;
             let role = match role {
                 Role::Reader => "reader",
                 Role::Writer => "writer",

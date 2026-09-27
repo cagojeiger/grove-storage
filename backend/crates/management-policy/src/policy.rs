@@ -13,9 +13,6 @@ pub enum Action {
     ReadAuditHistory,
     ReadInvocationHistory,
     ReadSecurityEvents,
-    BootstrapAdmin,
-    RecoverAdmin,
-    ManageSetupSession,
 }
 
 /// The service must apply this scope using authenticated IDs, not owner IDs
@@ -24,7 +21,6 @@ pub enum Action {
 pub enum Scope {
     Installation,
     SelfOnly,
-    SetupRecovery,
 }
 
 /// Internal policy reasons, not raw authentication responses for public clients.
@@ -35,12 +31,9 @@ pub enum Denial {
     InvalidAuthenticationContext,
     ConsoleSessionRequired,
     InsufficientRole,
-    MasterSessionRequired,
-    MasterScopeOnly,
 }
 
 /// Decide an operation's scope from a verified, current authentication snapshot.
-/// Setup/recovery admission does not replace transactional bootstrap checks.
 pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Scope, Denial> {
     if caller.credential_state != CredentialState::Active {
         return Err(Denial::InvalidCredential);
@@ -56,29 +49,10 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
             Actor::User { .. },
             AuthMethod::ManagementToken,
             Surface::Cli | Surface::Mcp | Surface::ResourceApi
-        ) | (Actor::Master, AuthMethod::MasterSession, Surface::Console)
-            | (Actor::Root, AuthMethod::RootSession, Surface::Console)
+        )
     ) {
         return Err(Denial::InvalidAuthenticationContext);
     }
-
-    if caller.actor == Actor::Root {
-        return match action {
-            Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
-                Err(Denial::MasterSessionRequired)
-            }
-            _ => Ok(Scope::Installation),
-        };
-    }
-
-    let Some(role) = role else {
-        return match action {
-            Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
-                Ok(Scope::SetupRecovery)
-            }
-            _ => Err(Denial::MasterScopeOnly),
-        };
-    };
 
     match action {
         Action::ReadResources => Ok(Scope::Installation),
@@ -104,9 +78,6 @@ pub fn authorize(caller: Caller, surface: Surface, action: Action) -> Result<Sco
                 Role::Reader | Role::Writer => Scope::SelfOnly,
             })
         }
-        Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
-            Err(Denial::MasterSessionRequired)
-        }
     }
 }
 
@@ -117,12 +88,11 @@ fn require_console_session(caller: Caller) -> Result<(), Denial> {
     Ok(())
 }
 
-fn effective_role(actor: Actor) -> Result<Option<Role>, Denial> {
+fn effective_role(actor: Actor) -> Result<Role, Denial> {
     match actor {
-        Actor::Master | Actor::Root => Ok(None),
         Actor::User { role, state } => {
             require_active(state)?;
-            Ok(Some(role))
+            Ok(role)
         }
     }
 }

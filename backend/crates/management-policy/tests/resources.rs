@@ -34,11 +34,8 @@ fn resource_roles_match_on_console_cli_mcp_and_direct_api() {
 
 #[test]
 fn cli_and_mcp_agree_for_every_action_and_credential_context() {
-    let mut callers = vec![master()];
     for role in ROLES {
-        callers.push(user(role, AuthMethod::ManagementToken));
-    }
-    for mut caller in callers {
+        let mut caller = user(role, AuthMethod::ManagementToken);
         for method in METHODS {
             caller.method = method;
             for action in ACTIONS {

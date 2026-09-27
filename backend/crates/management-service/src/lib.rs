@@ -8,14 +8,12 @@ mod command;
 mod dispatch;
 pub mod local_accounts;
 mod logging;
-pub mod master;
 pub mod password_changes;
 pub mod password_setups;
 pub mod passwords;
 pub mod personal_tokens;
 pub mod profile;
 pub mod resources;
-pub mod root;
 pub mod sessions;
 pub use command::Command;
 pub use filegate_db::management::{Proof, queries::Page};
@@ -30,7 +28,6 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub enum Output {
     Identity(db::Identity),
-    RootSession(db::master::Session),
     Account(Uuid),
     Changed(bool),
     Credential(db::Credential),
@@ -82,7 +79,6 @@ impl From<db::Error> for Error {
             | db::Error::CredentialLimit => Self::Conflict,
             db::Error::InvalidInput => Self::InvalidInput,
             db::Error::CommitUnknown => Self::OutcomeUnknown,
-            db::Error::MasterConfigurationMismatch => Self::Unavailable,
             db::Error::Database(error) => match error.as_database_error() {
                 Some(error) if error.is_unique_violation() || error.is_foreign_key_violation() => {
                     Self::Conflict
@@ -168,9 +164,6 @@ fn audit_context(
             id: identity.account_id,
             credential_id: identity.credential_id,
             session_id: identity.session_id,
-        },
-        db::ResolvedIdentity::Root(session) => AuditActor::Master {
-            session_id: Some(session.id),
         },
     };
     Ok(AuditContext {

@@ -4,8 +4,8 @@ use grove_management_policy::*;
 use support::*;
 
 #[test]
-fn invalid_credential_state_blocks_every_action_including_master_recovery() {
-    for mut caller in [user(Role::Admin, AuthMethod::UserSession), master()] {
+fn invalid_credential_state_blocks_every_action() {
+    for mut caller in [user(Role::Admin, AuthMethod::UserSession)] {
         for state in [
             CredentialState::Expired,
             CredentialState::Revoked,
@@ -55,7 +55,7 @@ fn disabled_or_deleted_accounts_cannot_use_any_action() {
 
 #[test]
 fn authentication_method_and_surface_must_match_the_actor() {
-    for mut caller in [user(Role::Admin, AuthMethod::UserSession), master()] {
+    for mut caller in [user(Role::Admin, AuthMethod::UserSession)] {
         for method in METHODS {
             caller.method = method;
             for surface in SURFACES {
@@ -69,7 +69,7 @@ fn authentication_method_and_surface_must_match_the_actor() {
                         Actor::User { .. },
                         AuthMethod::ManagementToken,
                         Surface::Cli | Surface::Mcp | Surface::ResourceApi
-                    ) | (Actor::Master, AuthMethod::MasterSession, Surface::Console)
+                    )
                 );
                 for action in ACTIONS {
                     let result = authorize(caller, surface, action);
@@ -89,22 +89,5 @@ fn authentication_method_and_surface_must_match_the_actor() {
                 }
             }
         }
-    }
-}
-
-#[test]
-fn master_session_only_authorizes_setup_and_recovery() {
-    for action in ACTIONS {
-        let expected = match action {
-            Action::BootstrapAdmin | Action::RecoverAdmin | Action::ManageSetupSession => {
-                Ok(Scope::SetupRecovery)
-            }
-            _ => Err(Denial::MasterScopeOnly),
-        };
-        assert_eq!(
-            authorize(master(), Surface::Console, action),
-            expected,
-            "{action:?}"
-        );
     }
 }

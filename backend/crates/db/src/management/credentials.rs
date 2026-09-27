@@ -106,7 +106,7 @@ pub(super) async fn revoke_in(
     Ok(changed)
 }
 
-/// Targeted master recovery preserves other Users and Client credentials.
+/// Legacy token recovery preserves other Users and Client credentials.
 pub async fn recover_admin(
     pool: &PgPool,
     context: &AuditContext,

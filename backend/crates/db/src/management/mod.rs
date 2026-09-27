@@ -9,7 +9,6 @@ mod audit;
 mod credentials;
 pub mod history;
 mod identity;
-pub mod master;
 pub mod password_setup;
 pub mod passwords;
 pub mod personal_tokens;
@@ -18,7 +17,6 @@ pub mod queries;
 mod resource_metadata;
 mod resource_writes;
 mod resources;
-mod root;
 pub mod sessions;
 mod storage_writes;
 pub mod telemetry;
@@ -48,7 +46,6 @@ pub enum Error {
     LastAdmin,
     InvalidInput,
     CommitUnknown,
-    MasterConfigurationMismatch,
     CredentialLimit,
 }
 

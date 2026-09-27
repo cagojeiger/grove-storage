@@ -74,26 +74,3 @@ fn even_admin_bearer_cannot_use_identity_session_or_history_operations() {
         }
     }
 }
-
-#[test]
-fn users_cannot_use_master_setup_or_recovery_even_as_admin() {
-    for role in ROLES {
-        for surface in SURFACES {
-            let method = if surface == Surface::Console {
-                AuthMethod::UserSession
-            } else {
-                AuthMethod::ManagementToken
-            };
-            for action in [
-                Action::BootstrapAdmin,
-                Action::RecoverAdmin,
-                Action::ManageSetupSession,
-            ] {
-                assert_eq!(
-                    authorize(user(role, method), surface, action),
-                    Err(Denial::MasterSessionRequired)
-                );
-            }
-        }
-    }
-}

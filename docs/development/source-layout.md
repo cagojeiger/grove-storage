@@ -17,7 +17,6 @@ backend/crates/
 │   ├── src/local_accounts.rs  최초 Admin·로컬 계정 복구
 │   ├── src/password_setups.rs 일회성 초기 비밀번호 설정
 │   ├── src/personal_tokens.rs 본인 관리 API 토큰
-│   ├── src/root.rs · master.rs 공개 경로에서 제거된 과거 내부 코드
 │   └── src/logging.rs          bounded best-effort 호출·보안 기록
 ├── s3-protocol/                 SigV4·XML·작업 분류·완료 목록·무결성 규칙
 ├── object-policy/               업로드 검증·파트 계산·ETag·완료 복구 판단
@@ -94,7 +93,7 @@ scripts/
 | `root_path` | 응답 호환용 null; migration 0017 이후 DB 열·FS backend 없음 |
 | `temp_spool` | 전송 버퍼; 등록 가능한 저장소와 별개 |
 | 서버 / CLI 이름 | `filegate`·`FILEGATE_*` / `gscli`·`GROVE_*` 유지 |
-| `master`, `root_sessions` | 기존 데이터/내부 코드에 남은 이전 인증 구조; 공개 콘솔 진입 불가 |
+| `master_configuration`, `root_sessions` | 과거 migration의 테이블; 현재 서비스·HTTP 진입점 없음 |
 
 명령 수는 [catalog.rs](../../backend/crates/management-command/src/catalog.rs)를 따른다.
 계정/토큰 관리는 콘솔 전용 내부 Command이며 CLI/MCP 자원 catalog와 별개다.

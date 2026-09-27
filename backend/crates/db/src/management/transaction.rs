@@ -12,26 +12,15 @@ pub enum Proof<'a> {
     Session(&'a str),
     PasswordSession(&'a str),
     Token(&'a str),
-    RootSession {
-        hash: &'a str,
-        binding: super::master::Binding<'a>,
-    },
 }
 
 pub enum ResolvedIdentity {
     User(Identity),
-    Root(super::master::Session),
 }
 impl ResolvedIdentity {
     pub fn caller(&self) -> grove_management_policy::Caller {
-        use grove_management_policy::{Actor, AuthMethod, Caller, CredentialState};
         match self {
             Self::User(identity) => identity.caller,
-            Self::Root(_) => Caller {
-                actor: Actor::Root,
-                method: AuthMethod::RootSession,
-                credential_state: CredentialState::Active,
-            },
         }
     }
 }
@@ -62,10 +51,6 @@ impl<'a> IdentityTransaction<'a> {
             Proof::Token(hash) => Ok(identity::token(&mut self.inner, hash)
                 .await?
                 .map(ResolvedIdentity::User)),
-            Proof::RootSession { hash, binding } => Ok(self
-                .root_session(binding, hash)
-                .await?
-                .map(ResolvedIdentity::Root)),
         }
     }
 

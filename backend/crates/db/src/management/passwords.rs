@@ -12,6 +12,17 @@ pub struct PasswordCredential {
     pub generation: Uuid,
 }
 
+pub async fn initialized(pool: &PgPool) -> Result<bool, Error> {
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM management.password_credentials p
+         JOIN management.accounts a ON a.id=p.account_id
+         WHERE p.password_hash IS NOT NULL AND a.kind='user' AND a.role='admin'
+           AND a.is_active AND a.deleted_at IS NULL)",
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
 pub async fn find(pool: &PgPool, login: &str) -> Result<Option<PasswordCredential>, Error> {
     let row: Option<(Uuid, String, String, Uuid)> = sqlx::query_as(
         "SELECT p.account_id,p.login_name,p.password_hash,p.generation

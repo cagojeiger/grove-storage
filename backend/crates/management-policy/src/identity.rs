@@ -12,8 +12,7 @@ pub enum AccountState {
     Deleted,
 }
 
-/// Effective credential state, including the parent token for a user session
-/// and the current configuration generation for a master session.
+/// Effective credential state for a console session or management API token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CredentialState {
     Active,
@@ -25,16 +24,12 @@ pub enum CredentialState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Actor {
     User { role: Role, state: AccountState },
-    Master,
-    Root,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthMethod {
     UserSession,
     ManagementToken,
-    MasterSession,
-    RootSession,
 }
 
 /// Selected by server routing, never from a client-provided channel header.

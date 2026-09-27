@@ -16,7 +16,7 @@ pub enum AccountChange {
     Delete,
 }
 
-/// Called only after master setup authorization. Account and first key are atomic.
+/// Legacy token bootstrap retained for migration tests; account and key are atomic.
 pub async fn bootstrap(
     pool: &PgPool,
     context: &AuditContext,

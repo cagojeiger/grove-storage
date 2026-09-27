@@ -15,6 +15,23 @@ const HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXJhbmRvbXNhbHQ$AAAAAAAAA
 const NEXT_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXJhbmRvbXNhbHQ$BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 
 #[sqlx::test(migrations = "./migrations")]
+async fn initialization_requires_an_active_password_admin(pool: PgPool) {
+    assert!(!passwords::initialized(&pool).await.unwrap());
+    let (owner, _) = bootstrap(&pool).await;
+    assert!(!passwords::initialized(&pool).await.unwrap());
+    passwords::recover(&pool, Uuid::new_v4(), owner, "owner", HASH)
+        .await
+        .unwrap();
+    assert!(passwords::initialized(&pool).await.unwrap());
+    sqlx::query("UPDATE management.accounts SET is_active=false WHERE id=$1")
+        .bind(owner)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!passwords::initialized(&pool).await.unwrap());
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn concurrent_initialization_has_one_account_and_audit(pool: PgPool) {
     let (a, b) = tokio::join!(
         passwords::initialize(&pool, Uuid::new_v4(), "owner-a", "A", HASH),

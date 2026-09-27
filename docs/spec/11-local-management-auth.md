@@ -1,7 +1,8 @@
 # Local Management Authentication
 
-Status: implementation in progress. Console routes accept password sessions only;
-legacy Root/Master persistence and service code remain pending cleanup.
+Status: locally implemented and verified. Console routes accept password sessions
+only; historical Root/Master tables remain in the migration history but have no
+service or HTTP entry point. Deployment and OIDC are separate work.
 
 ## Boundaries
 
@@ -151,14 +152,16 @@ used as authorization evidence.
 | Stage | Required evidence | State |
 |---|---|---|
 | 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
-| 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally; legacy fallback remains for Stage 5 |
-| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | Verified locally; legacy paths remain for Stage 5 |
+| 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally |
+| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | Verified locally |
 | 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Verified locally |
-| 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Console route/UI cutover verified; internal cleanup pending |
+| 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Verified locally; historical DB schema cleanup deferred to migration planning |
 
 Existing migration checksums and Resource tables remain intact. Incremental
-Management migrations support staged development; temporary legacy paths are
-removed before completion. Deployment and OIDC integration are separate work.
+Management migrations support staged development. Historical `master_configuration`
+and `root_sessions` tables remain inert to preserve upgrade history; a future
+offline data migration can remove them after inspecting deployed data. Deployment
+and OIDC integration are separate work.
 
 ### Foundation Evidence
 

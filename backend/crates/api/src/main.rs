@@ -84,7 +84,7 @@ async fn serve() -> anyhow::Result<()> {
     anyhow::ensure!(
         !config.security.operator_tokens.is_empty()
             || filegate_db::admin_auth::initialized(&pool).await?
-            || filegate_db::management::master::initialized(&pool)
+            || filegate_db::management::passwords::initialized(&pool)
                 .await
                 .map_err(|_| anyhow::anyhow!("management initialization check failed"))?,
         "administrator not initialized; run filegate account init or filegate admin init for legacy authentication"
