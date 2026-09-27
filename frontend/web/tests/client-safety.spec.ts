@@ -71,7 +71,7 @@ for (const code of [401, 403])
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     if (code === 401)
-      await expect(page.getByLabel("Account token")).toBeVisible();
+      await expect(page.getByLabel("Password")).toBeVisible();
     else await expect(page.getByText("Reader · Read-only")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create credential" })).toHaveCount(0);
   });

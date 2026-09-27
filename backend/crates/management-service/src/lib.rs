@@ -9,6 +9,7 @@ mod dispatch;
 pub mod local_accounts;
 mod logging;
 pub mod master;
+pub mod password_changes;
 pub mod passwords;
 pub mod resources;
 pub mod root;

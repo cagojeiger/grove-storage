@@ -16,7 +16,7 @@ mod resource_metadata;
 mod resource_writes;
 mod resources;
 mod root;
-mod sessions;
+pub mod sessions;
 mod storage_writes;
 pub mod telemetry;
 mod transaction;

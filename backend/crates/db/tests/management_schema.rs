@@ -68,7 +68,7 @@ async fn live_credentials_and_sessions_protect_their_account(pool: PgPool) {
     );
     let actor = db::session_actor(&pool, &hash(10)).await.unwrap().unwrap();
     assert_eq!(actor.account_id, owner);
-    assert_eq!(actor.credential_id, credential.id);
+    assert_eq!(actor.credential_id, Some(credential.id));
 }
 
 #[sqlx::test(migrations = "./migrations")]

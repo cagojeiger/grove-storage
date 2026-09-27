@@ -9,7 +9,8 @@ test.describe("English default", () => {
     await mock(page, false);
     await page.goto(root);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await page.getByLabel("Account token").fill("fixture-token");
+    await page.getByLabel("Username").fill("owner");
+    await page.getByLabel("Password").fill("fixture-token");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByText("Active files: 1,240", { exact: false })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
@@ -17,8 +18,13 @@ test.describe("English default", () => {
   });
 });
 
-async function mock(page: Page, signedIn = true) {
+async function mock(page: Page, signedIn = true, passwordSession = false) {
   let loggedIn = signedIn;
+  if (passwordSession) {
+    await page.route("**/api/admin/identity/v1/sessions?*", (route) =>
+      route.fulfill({ json: { items: [], next_before: null } }),
+    );
+  }
   await page.route("**/readyz", (route) =>
     route.fulfill({ json: { status: "ready" } }),
   );
@@ -33,7 +39,7 @@ async function mock(page: Page, signedIn = true) {
       }
       await route.fulfill({
         status: loggedIn ? 200 : 401,
-        json: loggedIn ? session : {},
+        json: loggedIn ? passwordSession ? { ...session, credential_id: null } : session : {},
       });
     }
   });
@@ -66,7 +72,8 @@ async function mock(page: Page, signedIn = true) {
 test("login clears token; logout removes overview", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
-  await page.getByLabel("Account token").fill("test-token");
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password").fill("test-token");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
@@ -77,9 +84,48 @@ test("login clears token; logout removes overview", async ({ page }) => {
     ),
   ).not.toContain("test-token");
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByLabel("Account token")).toHaveValue("");
+  await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
+
+test("password change validates confirmation and signs out", async ({ page }) => {
+  await mock(page, true, true);
+  let submitted: unknown;
+  await page.route("**/api/admin/identity/v1/me/password", async (route) => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ status: 204 });
+  });
+  await page.goto(`${root}#settings`);
+  await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
+  await page.getByLabel("Current password").fill("old-private-password");
+  await page.getByLabel("New password", { exact: true }).fill("new-private-password");
+  await page.getByLabel("Confirm new password").fill("different-password");
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByText("The new passwords do not match.")).toBeVisible();
+  expect(submitted).toBeUndefined();
+  await page.getByLabel("Confirm new password").fill("new-private-password");
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect.poll(() => submitted).toEqual({
+    current_password: "old-private-password",
+    new_password: "new-private-password",
+  });
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("private-password");
+});
+
+for (const width of [320, 1440]) {
+  for (const theme of ["light", "dark"])
+    test(`password settings ${width}px ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await mock(page, true, true);
+      await page.goto(`${root}#settings`);
+      await page.getByLabel("Theme").selectOption(theme);
+      await expect(page.getByLabel("Current password")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change password" })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: `test-results/password-${width}-${theme}.png`, fullPage: true });
+    });
+}
 
 for (const status of [307, 308]) {
   test(`login rejects ${status} without forwarding its token`, async ({ page }) => {
@@ -97,21 +143,22 @@ for (const status of [307, 308]) {
       }
     });
     await page.goto(root);
-    await page.getByLabel("Account token").fill("fixture-secret-not-for-redirect");
+    await page.getByLabel("Username").fill("owner");
+    await page.getByLabel("Password").fill("fixture-secret-not-for-redirect");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(
       page.getByRole("alert").or(page.getByRole("heading", { name: "Overview", exact: true })),
     ).toBeVisible();
     expect(forwarded).toEqual([]);
     await expect(page.getByRole("alert")).toContainText("Unable to connect to the server");
-    await expect(page.getByLabel("Account token")).toHaveValue("");
+    await expect(page.getByLabel("Password")).toHaveValue("");
   });
 }
 
 test("429 clears input and honors Retry-After", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
-  await expect(page.getByLabel("Account token")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
   await page.route("**/session", (route) =>
     route.request().method() === "POST"
       ? route.fulfill({
@@ -121,10 +168,11 @@ test("429 clears input and honors Retry-After", async ({ page }) => {
         })
       : route.fallback(),
   );
-  await page.getByLabel("Account token").fill("do-not-persist");
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password").fill("do-not-persist");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Too many sign-in attempts");
-  await expect(page.getByLabel("Account token")).toHaveValue("");
+  await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(
     page.getByRole("button", { name: /Retry in/ }),
   ).toBeDisabled();
@@ -138,7 +186,7 @@ test("overview 401 removes cached private data", async ({ page }) => {
     route.fulfill({ status: 401, json: failure(401) }),
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByLabel("Account token")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 

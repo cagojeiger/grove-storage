@@ -21,7 +21,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         actor: AuditActor::User {
             id: own_agent,
             session_id: None,
-            credential_id: agent_key.id,
+            credential_id: Some(agent_key.id),
         },
         request_id: Uuid::new_v4(),
         surface: Surface::Mcp,

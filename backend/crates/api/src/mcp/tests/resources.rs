@@ -141,7 +141,7 @@ async fn user_demotion_limits_writes_and_revocation_stops_discovery(pool: PgPool
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(row, ("mcp".into(), user, identity.credential_id));
+    assert_eq!(row, ("mcp".into(), user, identity.credential_id.unwrap()));
     db::change_account(&pool, &ctx, user, db::AccountChange::Role(Role::Reader))
         .await
         .unwrap();

@@ -18,6 +18,7 @@ export function previewIdentity(json) {
   ]);
   const credentials = new Map();
   let current = null;
+  let currentPassword = "a private phrase for preview";
   let master = false;
   let signedInAt = new Date().toISOString();
   function issue(
@@ -40,24 +41,20 @@ export function previewIdentity(json) {
     });
     return { account_id: account, credential_id: id, expires_at, token };
   }
-  issue(owner, "Preview sign-in", 90, "qwer1234");
+  issue(owner, "Preview CLI token");
   function session() {
-    if (current === "root") return { principal: "root", role: "root", session_id: "preview-root", expires_at: new Date(Date.now()+1800000).toISOString() };
-    const key = credentials.get(current);
-    const user = accounts.get(key?.account_id);
+    const user = accounts.get(current?.account_id);
     if (
       !user?.is_active ||
-      user.deleted_at ||
-      key.revoked_at ||
-      Date.parse(key.expires_at) <= Date.now()
+      user.deleted_at
     )
       return null;
     return {
       principal: "user",
       role: user.role,
       user_id: user.id,
-      credential_id: key.id,
-      session_id: key.id,
+      credential_id: null,
+      session_id: current.session_id,
     };
   }
   return {
@@ -95,15 +92,11 @@ export function previewIdentity(json) {
       if (path === "/session") {
         if (method === "POST") {
           signedInAt = new Date().toISOString();
-          if (body.token === "qwer1234") { current = "root"; json(res, 200, session()); return true; }
-          const key = [...credentials.values()].find(
-            (key) => key.token === body.token,
-          );
-          if (accounts.get(key?.account_id)?.kind !== "user") {
+          if (body.username !== "owner" || body.password !== currentPassword) {
             fail(401, "unauthenticated");
             return true;
           }
-          current = key.id;
+          current = { account_id: owner, session_id: randomUUID() };
         }
         if (method === "DELETE") {
           current = null;
@@ -155,6 +148,19 @@ export function previewIdentity(json) {
       }
       if (!session()) {
         fail(401, "unauthenticated");
+        return true;
+      }
+      if (path === "/me/password" && method === "POST") {
+        if (body.current_password !== currentPassword ||
+            typeof body.new_password !== "string" ||
+            [...body.new_password].length < 15 ||
+            [...body.new_password].length > 128) {
+          fail(body.current_password === currentPassword ? 400 : 401, "invalid_input");
+        } else {
+          currentPassword = body.new_password;
+          current = null;
+          json(res, 204, null);
+        }
         return true;
       }
       if (path === "/sessions" && method === "GET") {
@@ -292,7 +298,7 @@ export function previewIdentity(json) {
               account.is_active = body.is_active;
               if (
                 !account.is_active &&
-                credentials.get(current)?.account_id === account.id
+                current?.account_id === account.id
               )
                 current = null;
             }

@@ -39,10 +39,7 @@ for (const initialized of [false, true])
           : { error: "unauthenticated" },
       });
     });
-    await page.goto("/api/admin/console/");
-    await page
-      .getByRole("link", { name: "Setup & recovery", exact: true })
-      .click();
+    await page.goto("/api/admin/console/#setup");
     await page.getByLabel("Root token").fill("gsmt_test-secret");
     await page.getByRole("button", { name: "Verify Root token" }).click();
     await expect(page.getByLabel("Root token")).toHaveCount(0);
@@ -71,7 +68,7 @@ for (const initialized of [false, true])
       .getByLabel("I have saved this token. It is shown only once.")
       .check();
     await page.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(page.getByLabel("Account token")).toBeVisible();
+    await expect(page.getByLabel("Password")).toBeVisible();
     expect(writes).toEqual([
       { path: "/master/session", body: { token: "gsmt_test-secret" } },
       {

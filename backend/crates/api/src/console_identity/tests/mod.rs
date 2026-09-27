@@ -5,6 +5,7 @@ mod identity;
 mod lifecycle;
 mod master;
 mod master_recovery;
+mod password_login;
 mod resources;
 mod root;
 

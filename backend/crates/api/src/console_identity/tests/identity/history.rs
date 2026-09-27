@@ -15,7 +15,7 @@ async fn scoped_history_preserves_bigint_cursors_and_owned_agent_snapshots(pool:
         actor: db::AuditActor::User {
             id: agent,
             session_id: None,
-            credential_id: key["credential_id"].as_str().unwrap().parse().unwrap(),
+            credential_id: Some(key["credential_id"].as_str().unwrap().parse().unwrap()),
         },
         request_id: Uuid::new_v4(),
         surface: Surface::Mcp,

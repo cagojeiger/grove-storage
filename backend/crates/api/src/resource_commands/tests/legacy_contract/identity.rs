@@ -87,7 +87,7 @@ async fn shared_resource_operations_keep_each_audit_actor_and_table_boundary(poo
         managed,
         [(
             user.account_id,
-            user.credential_id,
+            user.credential_id.unwrap(),
             request_id,
             "resource_api".into(),
             "command-client".into()

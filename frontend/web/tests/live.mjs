@@ -9,6 +9,7 @@ import { maintenanceChecks } from "./live-maintenance.mjs";
 import { usageChecks } from "./live-usage.mjs";
 import { resourceChecks } from "./live-resources.mjs";
 import { metadataChecks } from "./live-metadata.mjs";
+import { loginWithToken } from "./live-auth.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -20,7 +21,7 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  const { token, credentialId } = await bootstrapChecks(page, origin, masterToken);
+  const { token, credentialId, accountId } = await bootstrapChecks(page, origin, masterToken);
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await page.getByText("No storage registered.").waitFor();
   await storageChecks(page, fixture);
@@ -51,20 +52,19 @@ try {
   );
   assert.equal(csrf, 403);
   await page.getByRole("button", { name: "Sign out" }).click();
-  await page.getByLabel("Account token").waitFor();
+  await page.getByLabel("Password").waitFor();
   assert(
     !(await context.cookies()).some(
       (cookie) => cookie.name === "__Host-grove_session",
     ),
   );
   await page.reload();
-  await page.getByLabel("Account token").waitFor();
+  await page.getByLabel("Password").waitFor();
   console.log(
     "PASS real HTTPS login, Secure/HttpOnly cookie, reload, CSRF rejection, logout",
   );
   async function login() {
-    await page.getByLabel("Account token").fill(token);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await loginWithToken(page, token);
     await page.getByRole("button", { name: "Select storage console-live", exact: true }).waitFor();
   }
   await login();
@@ -86,7 +86,7 @@ try {
     { timeout: 10000, stdio: "pipe" },
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Account token").waitFor();
+  await page.getByLabel("Password").waitFor();
   assert.equal(
     await page.getByRole("button", { name: "Select storage console-live", exact: true }).count(),
     0,
@@ -100,11 +100,34 @@ try {
   }, credentialId);
   assert.equal(revoked, 200);
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Account token").waitFor();
-  await page.getByLabel("Account token").fill(token);
+  await page.getByLabel("Password").waitFor();
+  const rejected = await page.request.post(`${origin}/api/admin/identity/v1/session`, {
+    data: { token }, headers: { Origin: origin, "X-Grove-CSRF": "1" },
+  });
+  assert.equal(rejected.status(), 401);
+  const password = "an isolated browser integration passphrase";
+  const recovered = JSON.parse(execFileSync("python3", ["scripts/e2e-password-account.py", database, accountId], {
+    cwd: new URL("../../..", import.meta.url),
+    env: { ...process.env, GROVE_E2E_PASSWORD: password },
+    encoding: "utf8", timeout: 45000,
+  }));
+  assert.equal(recovered.account_id, accountId);
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("alert").waitFor();
-  assert.equal(await page.getByLabel("Account token").inputValue(), "");
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await page.goto(`${origin}/api/admin/console/#settings`);
+  const replacement = "a different private browser integration passphrase";
+  await page.getByLabel("Current password").fill(password);
+  await page.getByLabel("New password", { exact: true }).fill(replacement);
+  await page.getByLabel("Confirm new password").fill(replacement);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).waitFor();
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password").fill(replacement);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("heading", { name: "My account", exact: true }).waitFor();
+  console.log("PASS real local recovery, password login, password change and re-login");
   console.log(
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );

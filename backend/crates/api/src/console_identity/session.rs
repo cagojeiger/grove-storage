@@ -16,7 +16,9 @@ use crate::routes::AppState;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Login {
-    token: SecretString,
+    token: Option<SecretString>,
+    username: Option<String>,
+    password: Option<SecretString>,
 }
 
 pub(super) async fn login(
@@ -26,24 +28,33 @@ pub(super) async fn login(
     let Ok(Json(body)) = body else {
         return failure(Error::InvalidInput, Uuid::new_v4());
     };
-    if secrets::valid(body.token.expose_secret(), secrets::ROOT_PREFIX)
-        || secrets::valid(body.token.expose_secret(), secrets::MASTER_PREFIX)
+    let password_login = match (body.token.as_ref(), body.username.as_deref(), body.password) {
+        (None, Some(username), Some(password)) => Some((username, password)),
+        (Some(_), None, None) => None,
+        _ => return failure(Error::InvalidInput, Uuid::new_v4()),
+    };
+    if let Some(token) = body.token.as_ref()
+        && (secrets::valid(token.expose_secret(), secrets::ROOT_PREFIX)
+            || secrets::valid(token.expose_secret(), secrets::MASTER_PREFIX))
     {
-        return root_login(&state, &body.token).await;
+        return root_login(&state, token).await;
     }
-    let hash = secrets::valid(body.token.expose_secret(), secrets::TOKEN_PREFIX)
-        .then(|| secrets::token_hash(body.token.expose_secret()));
+    let hash = body.token.as_ref().and_then(|token| {
+        secrets::valid(token.expose_secret(), secrets::TOKEN_PREFIX)
+            .then(|| secrets::token_hash(token.expose_secret()))
+    });
     let raw = SecretString::from(format!(
         "{}{}",
         secrets::SESSION_PREFIX,
         filegate_core::generate_url_secret()
     ));
-    let result = service::sessions::login(
-        &state.pool,
-        hash.as_deref(),
-        &secrets::session_hash(raw.expose_secret()),
-    )
-    .await;
+    let session_hash = secrets::session_hash(raw.expose_secret());
+    let result = match password_login {
+        Some((username, password)) => {
+            service::sessions::login_password(&state.pool, username, password, &session_hash).await
+        }
+        None => service::sessions::login(&state.pool, hash.as_deref(), &session_hash).await,
+    };
     match result.result {
         Ok(session) => {
             let mut response = Json(serde_json::json!({"principal": "user", "user_id": session.user_id,

@@ -36,7 +36,7 @@ test("expired Access session removes account data", async ({ page }) => {
     route.fulfill({ status: 401, json: { error: "unauthenticated" } }),
   );
   await page.getByRole("button", { name: "Refresh accounts" }).click();
-  await expect(page.getByLabel("Account token")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
   await expect(page.getByText(owner.display_name, { exact: true })).toHaveCount(
     0,
   );

@@ -55,7 +55,7 @@ export const identity = "/api/admin/identity/v1";
 export type Session = {
   principal: "user";
   user_id: string;
-  credential_id: string;
+  credential_id: string | null;
   session_id: string;
   role: "reader" | "writer" | "admin";
 } | { principal: "root"; role: "root"; session_id: string; expires_at: string };

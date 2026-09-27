@@ -64,7 +64,7 @@ async fn recovery_is_targeted_and_preserves_legacy_auth(pool: PgPool) {
             .unwrap()
             .unwrap()
             .credential_id,
-        recovered.id
+        Some(recovered.id)
     );
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_some());
     assert_eq!(

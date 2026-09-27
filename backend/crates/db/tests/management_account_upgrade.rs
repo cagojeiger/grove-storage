@@ -20,6 +20,8 @@ async fn snapshot(pool: &PgPool) -> Vec<Vec<serde_json::Value>> {
     ] {
         let projection = if table == "accounts" {
             "to_jsonb(t)-'user_id'"
+        } else if table == "sessions" {
+            "to_jsonb(t)-'password_generation'"
         } else {
             "to_jsonb(t)"
         };
@@ -72,7 +74,7 @@ async fn account_simplification_preserves_data_and_authentication(pool: PgPool) 
     let ctx = db::AuditContext {
         actor: db::AuditActor::User {
             id: owner,
-            credential_id: credential,
+            credential_id: Some(credential),
             session_id: Some(session.id),
         },
         ..context()
@@ -113,7 +115,7 @@ async fn account_simplification_preserves_data_and_authentication(pool: PgPool) 
         db::session_actor(&pool, &hash(10)).await.unwrap().unwrap(),
     ] {
         assert_eq!(actor.account_id, owner);
-        assert_eq!(actor.credential_id, credential);
+        assert_eq!(actor.credential_id, Some(credential));
     }
     let created = user(&pool, grove_management_policy::Role::Reader).await;
     db::issue_credential(&pool, &context(), created, &key(&hash(2)))

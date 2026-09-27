@@ -47,7 +47,7 @@ for (const action of ["Disable", "Delete account"]) {
     await expect(confirm).toBeDisabled();
     await page.getByRole("checkbox", { name: acknowledgement }).check();
     await confirm.click();
-    await expect(page.getByLabel("Account token")).toBeVisible();
+    await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("heading", { name: owner.display_name })).toHaveCount(0);
   });
 }

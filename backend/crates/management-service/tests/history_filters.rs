@@ -35,7 +35,7 @@ async fn actor_and_token_filters_intersect_scope_before_pagination(pool: PgPool)
         let ctx = AuditContext {
             actor: AuditActor::User {
                 id,
-                credential_id: credential,
+                credential_id: Some(credential),
                 session_id: None,
             },
             request_id: Uuid::new_v4(),

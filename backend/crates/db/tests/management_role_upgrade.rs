@@ -77,7 +77,7 @@ async fn role_rename_preserves_tokens_sessions_and_historical_role_snapshots(poo
             db::session_actor(&pool, &session).await.unwrap().unwrap(),
         ] {
             assert_eq!(identity.account_id, user);
-            assert_eq!(identity.credential_id, credential);
+            assert_eq!(identity.credential_id, Some(credential));
             assert_eq!(
                 identity.caller.actor,
                 Actor::User {

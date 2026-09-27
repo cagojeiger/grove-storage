@@ -82,7 +82,7 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
             .unwrap()
             .unwrap()
             .credential_id,
-        original
+        Some(original)
     );
     assert!(db::session_actor(&pool, &hash(10)).await.unwrap().is_some());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_none());
@@ -105,6 +105,6 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
             .unwrap()
             .unwrap()
             .credential_id,
-        fresh.id
+        Some(fresh.id)
     );
 }

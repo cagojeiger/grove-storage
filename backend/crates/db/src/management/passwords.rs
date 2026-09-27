@@ -31,6 +31,91 @@ pub async fn find(pool: &PgPool, login: &str) -> Result<Option<PasswordCredentia
     ))
 }
 
+pub async fn find_by_account(
+    pool: &PgPool,
+    account: Uuid,
+) -> Result<Option<PasswordCredential>, Error> {
+    let row: Option<(Uuid, String, String, Uuid)> = sqlx::query_as(
+        "SELECT p.account_id,p.login_name,p.password_hash,p.generation
+         FROM management.password_credentials p JOIN management.accounts a ON a.id=p.account_id
+         WHERE p.account_id=$1 AND a.is_active AND a.deleted_at IS NULL",
+    )
+    .bind(account)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(
+        |(account_id, login_name, password_hash, generation)| PasswordCredential {
+            account_id,
+            login_name,
+            password_hash,
+            generation,
+        },
+    ))
+}
+
+/// Password verification and hashing happen before this serialized mutation.
+pub async fn change(
+    pool: &PgPool,
+    request_id: Uuid,
+    session_hash: &str,
+    verified_generation: Uuid,
+    new_hash: &str,
+) -> Result<bool, Error> {
+    let mut tx = lock(pool).await?;
+    let current: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT s.id,s.user_id FROM management.sessions s
+         JOIN management.accounts a ON a.id=s.user_id
+         JOIN management.password_credentials p ON p.account_id=a.id
+         WHERE s.session_hash=$1 AND s.auth_method='password'
+           AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+           AND s.password_generation=$2 AND p.generation=$2
+           AND a.is_active AND a.deleted_at IS NULL",
+    )
+    .bind(session_hash)
+    .bind(verified_generation)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((session, account)) = current else {
+        return Ok(false);
+    };
+    let changed = sqlx::query(
+        "UPDATE management.password_credentials
+         SET password_hash=$2,generation=$3,password_changed_at=clock_timestamp()
+         WHERE account_id=$1 AND generation=$4",
+    )
+    .bind(account)
+    .bind(new_hash)
+    .bind(Uuid::new_v4())
+    .bind(verified_generation)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+    if changed != 1 {
+        return Ok(false);
+    }
+    sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL")
+        .bind(account).execute(&mut *tx).await?;
+    let context = super::AuditContext {
+        actor: super::AuditActor::User {
+            id: account,
+            credential_id: None,
+            session_id: Some(session),
+        },
+        request_id,
+        surface: grove_management_policy::Surface::Console,
+    };
+    super::audit::record(
+        &mut tx,
+        &context,
+        "account.password_change",
+        "account",
+        account,
+    )
+    .await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
+    Ok(true)
+}
+
 pub async fn initialize(
     pool: &PgPool,
     request_id: Uuid,

@@ -1,7 +1,7 @@
 # Local Management Authentication
 
-Status: implementation in progress. This is the target contract; the token-login
-console remains active until the browser/API cutover is verified.
+Status: implementation in progress. Password login is the primary console flow;
+legacy token-to-session API and Root/Master recovery remain during migration.
 
 ## Boundaries
 
@@ -117,7 +117,7 @@ Paths below are relative to the console identity API prefix.
 
 | Method / path | Contract |
 |---|---|
-| `POST /session` | Username/password -> opaque cookie; token-to-session login is replaced |
+| `POST /session` | Username/password -> opaque cookie; legacy token-to-session login is removed at Stage 5 |
 | `GET /session`, `DELETE /session` | Current identity / logout |
 | `GET /me`, `PATCH /me` | Own profile |
 | `POST /me/password` | Current/new password -> revoke sessions |
@@ -149,7 +149,7 @@ used as authorization evidence.
 | Stage | Required evidence | State |
 |---|---|---|
 | 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
-| 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Pending |
+| 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally; legacy fallback remains for Stage 5 |
 | 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | Pending |
 | 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Pending |
 | 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Pending |
@@ -170,7 +170,7 @@ removed before completion. Deployment and OIDC integration are separate work.
 | Server binary | Interactive init/recover passed; same account ID; secret-free local audit; non-TTY rejected |
 | Static checks | Rustfmt, Clippy with warnings denied, diff whitespace check passed |
 
-Current local provisioning commands (browser password sign-in is Stage 2):
+Local provisioning commands:
 
 ```sh
 filegate account init owner "Owner"
@@ -180,6 +180,16 @@ filegate account recover <account-id> owner --yes
 `FILEGATE_DATABASE_URL` selects the database. Password input is hidden and
 confirmed in a terminal. The commands return account/request IDs, never the
 password or PHC hash. These are server operator commands, separate from `gscli`.
+
+### Session Evidence
+
+| Check | Result |
+|---|---|
+| Password login and change API | Five PostgreSQL-backed tests passed: role freshness, recovery fencing, CSRF, revocation and rollback |
+| Existing DB/API/management suites | Passed against fresh isolated PostgreSQL 17; migration upgrade preserves existing session data |
+| Browser regression | 214 Playwright tests passed; password form checked at phone and desktop widths in light/dark |
+| Real HTTPS fixture | Disposable PostgreSQL and MinIO: local recovery, password login, password change, re-login and Resource workflows passed |
+| Static checks | Rustfmt, Clippy with warnings denied, frontend lint and production build passed |
 
 ## References
 

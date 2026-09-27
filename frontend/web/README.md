@@ -11,24 +11,24 @@ sample registry data in memory; edits reset when the preview server stops. It do
 not connect to PostgreSQL or validate S3 credentials. Use the isolated HTTPS fixture
 below to test authentication and the real API.
 
-The sample preview starts signed out. Use `qwer1234` in **Account token** for the local Root preview.
-This fixed demo token and process-wide sample session are only for the loopback
-preview; production uses DB-backed User credentials and browser sessions.
-The preview includes Admin/Root-only Accounts with sample Users and token lifecycle.
-Activity returns an empty sample history; Settings lists the current sample session.
+The sample preview starts signed out. Sign in with username `owner` and password
+`a private phrase for preview`. The sample session is process-wide and held in
+memory; the real API stores passwords and sessions in PostgreSQL.
+The preview includes Admin-only Accounts with sample Users and token lifecycle.
+Activity returns an empty sample history; My account lists the current sample session.
 Use the real fixture below to verify persisted history and independent sessions.
 Its setup/recovery entry accepts the same demo master token and starts initialized.
 The real fixture below verifies first-Admin bootstrap against an empty database.
 
 | Implemented | Follow-up |
 |---|---|
-| Personal User token login/logout, current role, session restore and 401 handling | Production authentication/ingress verification |
-| Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Account rename requires a separate backend contract |
+| Username/password login/logout, role, session restore, password change and 401 handling | Additional-account setup and removal of legacy token login API |
+| Legacy Master setup/recovery, Admin-only Users, roles, enable/disable/delete, token issue/revoke | Replace Master/Root paths with local recovery and personal account flows |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
 | API readiness, client count, per-storage/client usage and daily snapshot history | Server-paged large usage histories |
 | Activity: audit, command history, security events; scoped cursor paging and event details | Server-side actor/resource/date filters |
-| Settings: current account/role, own sessions, confirmed session revocation | Overall navigation and UX review |
+| My account: role, password change, own sessions and confirmed revocation | Personal management API tokens |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
 
@@ -79,21 +79,21 @@ GROVE_DEV_TLS_KEY=/absolute/path/key.pem \
 GROVE_DEV_TLS_CERT=/absolute/path/cert.pem npm run dev
 ```
 
-Set the API's `FILEGATE_CONSOLE_ORIGIN` to the exact HTTPS Vite origin. Open
-**Setup & recovery** on the sign-in screen and enter the configured Root
-token to issue the first Admin's User token. Save it, then sign in separately.
-Recovery requires an existing active Admin UUID and explicit confirmation; it replaces
-that Admin's tokens and revokes its sessions. The browser fixture verifies both flows
-against a disposable DB; `--serve` pre-creates a User token for manual checks.
-Root also signs in through the normal **Account token** form. Its separate,
-30-minute console session supports Accounts and resource management. Accounts
-shows Root as config-owned and protected. See [ADR 011](../../docs/adr/011-root-and-accounts.md)
-for `GROVE_ROOT_*` configuration, legacy compatibility and rotation.
+Set the API's `FILEGATE_CONSOLE_ORIGIN` to the exact HTTPS Vite origin. On an
+empty database, run `filegate account init <username> <display-name>` on the
+server with `FILEGATE_DATABASE_URL` set, then sign in with that username and
+the privately entered password. Use `filegate account recover <account-id>
+<username> --yes` from the server terminal to replace a lost password. This
+revokes that account's browser sessions and management API tokens. The real
+HTTPS fixture verifies the password flow. Its `--serve` mode still provisions a
+legacy token fixture, not a manual password-login setup. Legacy Root/Master
+routes remain during the transition; see [the local auth spec](../../docs/spec/11-local-management-auth.md).
 Clients supports registration, guarded deletion and S3 credentials through
 the same command API as CLI/MCP. S3 secrets are shown once without browser persistence.
 Native API, CLI, MCP and DB compatibility remains unchanged; the console offers
 S3 credentials only. Activity uses the existing scoped management history APIs.
-Settings revokes browser sessions without revoking their source account token.
+My account revokes browser sessions without revoking their source account token;
+changing a password revokes all browser sessions and preserves API tokens.
 Legacy operator tokens do not log
 into the console. The default UI port is 5173; an occupied port fails instead of
 silently changing the allowed origin. Override with `-- --port PORT` and update the origin.
@@ -158,7 +158,7 @@ rules; generated build, browser reports and local TLS files are excluded.
 Expiry is injected into the isolated database; the test does not wait eight hours.
 Run `npm run build` before `npm test`: the browser security suite serves `dist` on
 loopback port 5180, alongside the existing Vite test server on 5179. Login regression
-tests verify that 307/308 redirects do not forward token bodies.
+tests verify that 307/308 redirects do not forward password bodies.
 Real storage registration uses a disposable S3 backend. Mutation requests are not retried automatically; unknown
 outcomes require a fresh read. S3 secrets are cleared at submission and never stored
 in browser storage or the query/mutation cache. Capacity input is limited to exact

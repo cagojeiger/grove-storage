@@ -12,6 +12,7 @@ import { clearSession } from "../../auth/session";
 import { Dialog } from "../../design/Dialog";
 import { useAction } from "../access/useAction";
 import { time } from "../../design/format";
+import { PasswordChange } from "./PasswordChange";
 
 type LoginSession = {
   id: string;
@@ -48,7 +49,7 @@ export function Sessions({ session }: { session: Session }) {
       <div className="page-heading">
         <div>
           <p className="eyebrow">MY ACCOUNT</p>
-          <h1>Settings</h1>
+          <h1>My account</h1>
         </div>
         <button
           className="icon-button"
@@ -70,6 +71,7 @@ export function Sessions({ session }: { session: Session }) {
           <dd>{session.role}</dd>
         </div>
       </dl>
+      {session.principal === "user" && session.credential_id === null && <PasswordChange />}
       <section className="storage-section" aria-label="My sessions">
         <h2>My sessions</h2>
         {query.isPending ? (
@@ -95,7 +97,7 @@ export function Sessions({ session }: { session: Session }) {
                     <span className="muted">
                       {row.credential_id
                         ? `Token: ${row.credential_id}`
-                        : "Root"}
+                        : session.principal === "root" ? "Root sign-in" : "Password sign-in"}
                     </span>
                   </div>
                   <div>

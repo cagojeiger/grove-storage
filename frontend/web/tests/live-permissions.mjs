@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
+import { loginWithToken } from "./live-auth.mjs";
 
 export async function permissionChecks(browser, admin, origin) {
   async function identity(method, path, body) {
@@ -19,8 +20,7 @@ export async function permissionChecks(browser, admin, origin) {
   try {
     const page = await context.newPage();
     await page.goto(`${origin}/api/admin/console/#storages/console-live`);
-    await page.getByLabel("Account token").fill(credential.token);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await loginWithToken(page, credential.token);
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "reader" });
@@ -39,8 +39,7 @@ export async function permissionChecks(browser, admin, origin) {
     });
     assert.equal(blocked, 403);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await page.getByLabel("Account token").fill(automationKey.token);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await loginWithToken(page, automationKey.token);
     await expect(page.getByText("Reader · Read-only")).toBeVisible();
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");

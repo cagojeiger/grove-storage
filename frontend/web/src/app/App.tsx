@@ -126,7 +126,7 @@ export function App() {
                 </a>
               )}
               <a href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></a>
-              <a href="#settings" aria-current={settingsPage ? "page" : undefined}><Settings size={18} /><span>Settings</span></a>
+              <a href="#settings" aria-current={settingsPage ? "page" : undefined}><Settings size={18} /><span>My account</span></a>
             </nav>
             <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management", root: "Root · Protected" }[session.data.role]}</span>
           </aside>

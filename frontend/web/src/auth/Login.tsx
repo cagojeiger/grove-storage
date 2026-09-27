@@ -3,7 +3,8 @@ import { ArrowRight } from "lucide-react";
 import { identity, ApiError, currentSession, message, request, Session } from "../api/http";
 
 export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
-  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [wait, setWait] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -15,15 +16,16 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (pending || wait) return;
-    const value = token.trim();
-    setToken("");
+    const loginName = username.trim();
+    const secret = password;
+    setPassword("");
     setPending(true);
     setError("");
     // Keep credentials out of query/mutation caches and browser storage.
     try {
       await request(`${identity}/session`, {
         method: "POST",
-        body: JSON.stringify({ token: value }),
+        body: JSON.stringify({ username: loginName, password: secret }),
       });
       onLogin(await currentSession());
     } catch (failure) {
@@ -44,14 +46,24 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       <h1>Grove Storage</h1>
       <h2>Sign in</h2>
       <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="token">Account token</label>
+        <label htmlFor="username">Username</label>
         <input
-          id="token"
-          type="password"
-          autoComplete="off"
+          id="username"
+          autoComplete="username"
           spellCheck={false}
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          required
+          disabled={pending}
+        />
+        <label htmlFor="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          autoComplete="current-password"
+          spellCheck={false}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
           required
           disabled={pending}
         />
@@ -59,13 +71,13 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
         <button
           className="primary"
           type="submit"
-          disabled={pending || !token.trim() || wait > 0}
+          disabled={pending || !username.trim() || !password || wait > 0}
         >
           {pending ? "Signing in" : wait ? `Retry in ${wait}s` : "Sign in"}
           <ArrowRight size={16} aria-hidden="true" />
         </button>
       </form>
-      <a className="back-link" href="#setup">Setup &amp; recovery</a>
+      <p className="muted">Lost access? Contact the server operator for account recovery.</p>
     </main>
   );
 }

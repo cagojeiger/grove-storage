@@ -9,7 +9,7 @@ use super::{AuditActor, AuditContext, Error, audit, identity, lock};
 pub struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub credential_id: Uuid,
+    pub credential_id: Option<Uuid>,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -28,15 +28,16 @@ pub async fn create_session(
     if !matches!(actor.caller.actor, Actor::User { .. }) {
         return Ok(None);
     }
+    let credential_id = actor.credential_id.ok_or(Error::InvalidInput)?;
     sqlx::query("DELETE FROM management.sessions WHERE credential_id=$1 AND (expires_at<=clock_timestamp() OR revoked_at IS NOT NULL)")
-        .bind(actor.credential_id).execute(&mut *tx).await?;
+        .bind(credential_id).execute(&mut *tx).await?;
     let evicted: Vec<Uuid> = sqlx::query_scalar("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE id IN
         (SELECT id FROM management.sessions WHERE credential_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC,id DESC OFFSET 63) RETURNING id")
-        .bind(actor.credential_id).fetch_all(&mut *tx).await?;
+        .bind(credential_id).fetch_all(&mut *tx).await?;
     let session: Session = sqlx::query_as("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,credential_id,expires_at)
         SELECT $1,$2,'token',account_id,id,LEAST(expires_at,clock_timestamp()+interval '8 hours') FROM management.credentials WHERE id=$3
         RETURNING id,user_id,credential_id,expires_at")
-        .bind(Uuid::new_v4()).bind(session_hash).bind(actor.credential_id).fetch_one(&mut *tx).await?;
+        .bind(Uuid::new_v4()).bind(session_hash).bind(credential_id).fetch_one(&mut *tx).await?;
     let context = AuditContext {
         actor: AuditActor::User {
             id: actor.account_id,
@@ -51,9 +52,60 @@ pub async fn create_session(
     }
     audit::record(&mut tx, &context, "session.create", "session", session.id).await?;
     sqlx::query("UPDATE management.credentials SET last_used_at=clock_timestamp() WHERE id=$1")
-        .bind(actor.credential_id)
+        .bind(credential_id)
         .execute(&mut *tx)
         .await?;
+    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
+    Ok(Some(session))
+}
+
+/// Recheck the verified password generation while holding the identity lock.
+/// A concurrent recovery/change wins either before login or after it, never
+/// leaves a session authenticated by the old password usable.
+pub async fn create_password_session(
+    pool: &PgPool,
+    request_id: Uuid,
+    account: Uuid,
+    generation: Uuid,
+    session_hash: &str,
+) -> Result<Option<Session>, Error> {
+    let mut tx = lock(pool).await?;
+    let current: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM management.password_credentials p
+         JOIN management.accounts a ON a.id=p.account_id
+         WHERE p.account_id=$1 AND p.generation=$2
+         AND a.kind='user' AND a.is_active AND a.deleted_at IS NULL)",
+    )
+    .bind(account)
+    .bind(generation)
+    .fetch_one(&mut *tx)
+    .await?;
+    if !current {
+        return Ok(None);
+    }
+    sqlx::query("DELETE FROM management.sessions WHERE user_id=$1 AND auth_method='password' AND (expires_at<=clock_timestamp() OR revoked_at IS NOT NULL)")
+        .bind(account).execute(&mut *tx).await?;
+    let evicted: Vec<Uuid> = sqlx::query_scalar("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE id IN
+        (SELECT id FROM management.sessions WHERE user_id=$1 AND auth_method='password' AND revoked_at IS NULL ORDER BY created_at DESC,id DESC OFFSET 63) RETURNING id")
+        .bind(account).fetch_all(&mut *tx).await?;
+    let session: Session = sqlx::query_as("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,password_generation,expires_at)
+        VALUES($1,$2,'password',$3,$4,clock_timestamp()+interval '8 hours')
+        RETURNING id,user_id,credential_id,expires_at")
+        .bind(Uuid::new_v4()).bind(session_hash).bind(account).bind(generation)
+        .fetch_one(&mut *tx).await?;
+    let context = AuditContext {
+        actor: AuditActor::User {
+            id: account,
+            credential_id: None,
+            session_id: Some(session.id),
+        },
+        request_id,
+        surface: Surface::Console,
+    };
+    for id in evicted {
+        audit::record(&mut tx, &context, "session.evict", "session", id).await?;
+    }
+    audit::record(&mut tx, &context, "session.create", "session", session.id).await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(Some(session))
 }

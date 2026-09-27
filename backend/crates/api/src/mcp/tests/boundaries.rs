@@ -50,7 +50,7 @@ async fn discovery_requires_current_bearer_and_rejects_browser_proofs(pool: PgPo
         .await
         .unwrap()
         .unwrap();
-    db::revoke_credential(&pool, &context(), identity.credential_id)
+    db::revoke_credential(&pool, &context(), identity.credential_id.unwrap())
         .await
         .unwrap();
     assert_eq!(

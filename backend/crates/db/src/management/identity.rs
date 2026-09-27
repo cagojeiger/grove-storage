@@ -7,7 +7,7 @@ use super::Error;
 #[derive(Debug)]
 pub struct Identity {
     pub account_id: Uuid,
-    pub credential_id: Uuid,
+    pub credential_id: Option<Uuid>,
     pub session_id: Option<Uuid>,
     pub caller: Caller,
 }
@@ -17,7 +17,7 @@ struct Row {
     account_id: Uuid,
     kind: String,
     role: String,
-    credential_id: Uuid,
+    credential_id: Option<Uuid>,
     session_id: Option<Uuid>,
 }
 
@@ -79,10 +79,12 @@ pub(super) async fn session(
     hash: &str,
 ) -> Result<Option<Identity>, Error> {
     let row: Option<Row> = sqlx::query_as("SELECT a.id AS account_id,a.kind,a.role,c.id AS credential_id,s.id AS session_id
-        FROM management.sessions s JOIN management.credentials c ON c.id=s.credential_id AND c.account_id=s.user_id
+        FROM management.sessions s LEFT JOIN management.credentials c ON c.id=s.credential_id AND c.account_id=s.user_id
         JOIN management.accounts a ON a.id=s.user_id
-        WHERE s.session_hash=$1 AND s.auth_method='token' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
-        AND c.hash_version=1 AND c.revoked_at IS NULL AND c.expires_at>clock_timestamp()
+        LEFT JOIN management.password_credentials p ON p.account_id=s.user_id
+        WHERE s.session_hash=$1 AND s.auth_method IN ('token','password') AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+        AND ((s.auth_method='token' AND c.hash_version=1 AND c.revoked_at IS NULL AND c.expires_at>clock_timestamp())
+            OR (s.auth_method='password' AND p.generation=s.password_generation))
         AND a.kind='user' AND a.is_active AND a.deleted_at IS NULL")
         .bind(hash).fetch_optional(connection).await?;
     row.map(|row| row.identity(AuthMethod::UserSession))

@@ -13,6 +13,7 @@ const MIN_CHARS: usize = 15;
 const MAX_CHARS: usize = 128;
 const MAX_INPUT_BYTES: usize = 1024;
 const HASH_WORKERS: usize = 4;
+const HASH_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -81,13 +82,17 @@ fn workers() -> &'static Arc<Semaphore> {
     WORKERS.get_or_init(|| Arc::new(Semaphore::new(HASH_WORKERS)))
 }
 
+async fn permit() -> Result<tokio::sync::OwnedSemaphorePermit, Error> {
+    tokio::time::timeout(HASH_WAIT, workers().clone().acquire_owned())
+        .await
+        .map_err(|_| Error::Busy)?
+        .map_err(|_| Error::Unavailable)
+}
+
 pub async fn hash(login: &str, password: SecretString) -> Result<SecretString, Error> {
     let login = username(login)?;
     let password = validate_new(password.expose_secret(), &login)?;
-    let permit = workers()
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| Error::Busy)?;
+    let permit = permit().await?;
     tokio::task::spawn_blocking(move || {
         // The permit lives with the CPU task, even if the request is cancelled.
         let _permit = permit;
@@ -106,10 +111,7 @@ pub async fn verify(password: SecretString, hash: SecretString) -> Result<bool, 
         Err(Error::InvalidLength) => return Ok(false),
         Err(error) => return Err(error),
     };
-    let permit = workers()
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| Error::Busy)?;
+    let permit = permit().await?;
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let parsed = PasswordHash::new(hash.expose_secret()).map_err(|_| Error::InvalidHash)?;

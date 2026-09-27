@@ -115,7 +115,7 @@ test("sessions page confirms revocation and signs out when revoking the current 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "Revoke current session" }).click();
   await page.getByRole("button", { name: "Confirm revoke" }).click();
-  await expect(page.getByLabel("Account token")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
   expect(requests).toEqual([
     "DELETE /api/admin/identity/v1/sessions/other",
     "DELETE /api/admin/identity/v1/sessions/session",
@@ -179,5 +179,5 @@ for (const pageName of ["activity", "settings"])
         name: pageName === "activity" ? "Refresh activity" : "Refresh sessions",
       })
       .click();
-    await expect(page.getByLabel("Account token")).toBeVisible();
+    await expect(page.getByLabel("Password")).toBeVisible();
   });

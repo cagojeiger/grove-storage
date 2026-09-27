@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
+import { loginWithToken } from "./live-auth.mjs";
 
 async function takeToken(page) {
   const input = page.getByRole("textbox", {
@@ -25,17 +26,13 @@ async function takeToken(page) {
 }
 
 export async function bootstrapChecks(page, origin, masterToken) {
-  await page.goto(origin + "/api/admin/console/");
-  await page
-    .getByRole("link", { name: "Setup & recovery", exact: true })
-    .click();
+  await page.goto(origin + "/api/admin/console/#setup");
   await page.getByLabel("Root token").fill(masterToken);
   await page.getByRole("button", { name: "Verify Root token" }).click();
   await page.getByLabel("Admin name").fill("Console test owner");
   await page.getByRole("button", { name: "Create Admin", exact: true }).click();
   const token = await takeToken(page);
-  await page.getByLabel("Account token").fill(token);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await loginWithToken(page, token);
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
   ).toBeVisible();
@@ -45,7 +42,7 @@ export async function bootstrapChecks(page, origin, masterToken) {
   console.log(
     "PASS real browser master bootstrap, one-time token and separate User login",
   );
-  return { token, credentialId: session.credential_id };
+  return { token, credentialId: session.credential_id, accountId: session.user_id };
 }
 
 export async function accessChecks(
@@ -59,14 +56,13 @@ export async function accessChecks(
   try {
     const rootPage = await rootContext.newPage();
     await rootPage.goto(origin + "/api/admin/console/#accounts");
-    await rootPage.getByLabel("Account token").fill(masterToken);
-    await rootPage.getByRole("button", { name: "Sign in", exact: true }).click();
+    await loginWithToken(rootPage, masterToken);
     await expect(rootPage.getByText("Root · Protected")).toBeVisible();
     await rootPage.getByRole("button", { name: "Root Config Protected Configured" }).click();
     await expect(rootPage.getByRole("region", { name: "Root account" })).toBeVisible();
     await expect(rootPage.getByRole("button", { name: "Delete account" })).toHaveCount(0);
     await rootPage.getByRole("button", { name: "Sign out" }).click();
-    await expect(rootPage.getByLabel("Account token")).toBeVisible();
+    await expect(rootPage.getByLabel("Password")).toBeVisible();
     console.log("PASS real Root console login, protected Accounts entry and logout");
   } finally { await rootContext.close(); }
   await page.getByRole("link", { name: "Accounts", exact: true }).click();

@@ -11,7 +11,7 @@ pub enum AuditActor {
     },
     User {
         id: Uuid,
-        credential_id: Uuid,
+        credential_id: Option<Uuid>,
         session_id: Option<Uuid>,
     },
 }
@@ -48,7 +48,7 @@ pub(super) fn columns(actor: Option<AuditActor>) -> ActorColumns {
             kind: "user",
             actor: Some(id),
             owner: None,
-            credential: Some(credential_id),
+            credential: credential_id,
             session: session_id,
         },
         None => ActorColumns {

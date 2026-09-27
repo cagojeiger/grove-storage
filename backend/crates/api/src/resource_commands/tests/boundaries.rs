@@ -151,7 +151,7 @@ async fn live_role_and_token_revocation_affect_following_http_reads(pool: PgPool
             .status(),
         StatusCode::FORBIDDEN
     );
-    db::revoke_credential(&pool, &context, identity.credential_id)
+    db::revoke_credential(&pool, &context, identity.credential_id.unwrap())
         .await
         .unwrap();
     assert_eq!(

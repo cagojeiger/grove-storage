@@ -83,7 +83,7 @@ test("empty history is not fabricated as zero usage; failures hide stale rows an
     r.fulfill({ status: 401, json: failure(401) }),
   );
   await page.getByRole("button", { name: "Refresh usage history" }).click();
-  await expect(page.getByLabel("Account token")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
 });
 
 for (const invalid of [
