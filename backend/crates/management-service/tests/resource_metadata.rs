@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use support::*;
 
 async fn seed(pool: &PgPool) {
-    sqlx::raw_sql("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('local','fs','/unchanged',100);
+    sqlx::raw_sql("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('local','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',100);
         INSERT INTO clients(id,storage_id) VALUES('app','local');")
         .execute(pool).await.unwrap();
 }
@@ -102,9 +102,9 @@ async fn metadata_lifecycle_is_independent_of_settings_and_audited_without_paylo
             Some(&json!({}))
         );
     }
-    let row: (String, i64, String) = sqlx::query_as("SELECT s.root_path,s.capacity_bytes,c.storage_id FROM storages s JOIN clients c ON c.storage_id=s.id")
+    let row: (String, i64, String) = sqlx::query_as("SELECT s.endpoint,s.capacity_bytes,c.storage_id FROM storages s JOIN clients c ON c.storage_id=s.id")
         .fetch_one(&pool).await.unwrap();
-    assert_eq!(row, ("/unchanged".into(), 100, "local".into()));
+    assert_eq!(row, ("https://storage.example".into(), 100, "local".into()));
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

@@ -61,23 +61,43 @@ fn legacy_submission_preserves_defaults_and_public_endpoint_fallback() {
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn status_collects_all_checks_while_startup_rejects_failure(pool: PgPool) {
+    use axum::{Router, http::Method, response::IntoResponse};
     let state = crate::routes::tests::test_state();
-    let root = std::env::temp_dir().join(format!("grove-registration-{}", uuid::Uuid::new_v4()));
-    tokio::fs::create_dir(&root).await.unwrap();
-    sqlx::query(
-        "INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('healthy','fs',$1,1)",
-    )
-    .bind(root.to_string_lossy().as_ref())
-    .execute(&pool)
-    .await
-    .unwrap();
-    let mut row = registry::get_storage(&pool, "healthy")
-        .await
-        .unwrap()
-        .unwrap();
-    row.id = "missing".into();
-    row.root_path = Some(root.join("absent").to_string_lossy().into_owned());
-    registry::insert_storage(&pool, &row).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let provider = Router::new().fallback(|request: axum::extract::Request| async move {
+        if request.uri().path().starts_with("/missing") {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        if request.method() == Method::HEAD {
+            return StatusCode::OK.into_response();
+        }
+        (StatusCode::OK, "<ListMultipartUploadsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><IsTruncated>false</IsTruncated></ListMultipartUploadsResult>").into_response()
+    });
+    let task = tokio::spawn(async move {
+        axum::serve(listener, provider).await.unwrap();
+    });
+    for id in ["healthy", "missing"] {
+        let row = encrypted_s3_row(
+            &state.crypto,
+            id,
+            S3Submission {
+                spec: S3StorageSpec {
+                    endpoint: endpoint.clone(),
+                    public_endpoint: endpoint.clone(),
+                    region: "local".into(),
+                    bucket: id.into(),
+                    force_path_style: true,
+                    access_key: "key".into(),
+                    secret_key: "secret".to_owned().into(),
+                },
+                force_relay: false,
+                capacity_bytes: 1,
+            },
+        )
+        .unwrap_or_else(|_| panic!("fixture encryption failed"));
+        registry::insert_storage(&pool, &row).await.unwrap();
+    }
 
     let checks = check_registered(&pool, &state.crypto).await.unwrap();
     assert_eq!(checks.len(), 2);
@@ -98,5 +118,5 @@ async fn status_collects_all_checks_while_startup_rejects_failure(pool: PgPool) 
     assert!(verify_registered(&pool, &state.crypto).await.is_err());
     registry::delete_storage(&pool, "missing").await.unwrap();
     assert!(verify_registered(&pool, &state.crypto).await.is_ok());
-    tokio::fs::remove_dir_all(root).await.unwrap();
+    task.abort();
 }

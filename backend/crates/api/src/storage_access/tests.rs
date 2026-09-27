@@ -11,7 +11,6 @@ fn fixture() -> (Crypto, StorageRow) {
         id: "home".into(),
         kind: "s3".into(),
         force_relay: false,
-        root_path: None,
         endpoint: Some("http://internal.invalid".into()),
         public_endpoint: Some("https://public.invalid".into()),
         region: Some("local".into()),

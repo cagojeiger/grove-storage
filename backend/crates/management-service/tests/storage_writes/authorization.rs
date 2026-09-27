@@ -121,7 +121,7 @@ async fn replacement_rechecks_resource_state_after_probe(pool: PgPool) {
         Some("https://storage.test/fixture")
     );
     let verify = |input| async {
-        sqlx::query("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('new','fs','/concurrent',1)")
+        sqlx::query("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('new','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',1)")
             .execute(&pool).await.unwrap();
         verified(input).await
     };

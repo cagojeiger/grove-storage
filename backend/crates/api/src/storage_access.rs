@@ -1,8 +1,6 @@
 //! Read-only registry-to-backend adapter shared by management and object paths.
 //! Decrypts provider credentials without probing storage or changing metadata.
 
-use std::path::PathBuf;
-
 use filegate_core::{Crypto, EncryptedSecret};
 use filegate_db::registry::StorageRow;
 use filegate_infra::{S3StorageSpec, backend::StorageBackend};
@@ -12,15 +10,6 @@ pub fn backend_from_row(
     row: &StorageRow,
 ) -> filegate_core::Result<StorageBackend> {
     match row.kind.as_str() {
-        "fs" => {
-            let root = row
-                .root_path
-                .as_deref()
-                .ok_or_else(|| missing(row, "root_path"))?;
-            Ok(StorageBackend::Fs {
-                root: PathBuf::from(root),
-            })
-        }
         "s3" => {
             let secret_key = crypto.decrypt(
                 row.enc_key_id

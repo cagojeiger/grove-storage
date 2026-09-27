@@ -20,7 +20,7 @@ fn native_hash() -> String {
     format!("sha256:{}", "a".repeat(64))
 }
 async fn seed(pool: &PgPool) {
-    sqlx::raw_sql("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('local','fs','/fixture',100);
+    sqlx::raw_sql("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('local','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',100);
         INSERT INTO clients(id,storage_id) VALUES('app','local');
         INSERT INTO client_keys(client_id,key_hash) VALUES('app','sha256:'||repeat('a',64));
         INSERT INTO s3_credentials(access_key_id,client_id,secret_key_ciphertext,secret_key_nonce,enc_key_id)

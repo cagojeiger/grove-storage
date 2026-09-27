@@ -296,44 +296,6 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
             tracing::error!(event = "reconciler.scan_failed", job = "usage_snapshot", %error)
         }
     }
-
-    // 잡 4: 공유 fs root의 장부 밖 임시 정리 (spec 00 물리 배치). 이름
-    // 접두사와 mtime을 보되, 진행 중 multipart 조립 파일은 활성 lease 목록으로
-    // 제외한다 (그것만 DB를 본다 — 아래 조회). 공유 마운트라 락 승자 하나만
-    // 훑으면 된다. pod 로컬 OS temp는 tick 루프에서 각 pod가 스스로 치운다.
-    let protected: std::collections::HashSet<String> =
-        match files::active_multipart_lease_ids(pool).await {
-            Ok(ids) => ids.into_iter().map(|id| id.to_string()).collect(),
-            // 활성 목록을 못 얻으면 진행 중 조립 파일을 지울 위험이 있으므로
-            // 이번 tick의 fs sweep 자체를 건너뛴다 — 다음 tick이 다시 줍는다.
-            Err(error) => {
-                tracing::error!(event = "reconciler.scan_failed", job = "temps", %error);
-                return;
-            }
-        };
-    match registry::list_storages(pool).await {
-        Ok(rows) => {
-            let roots = rows
-                .into_iter()
-                .filter_map(|row| row.root_path.map(std::path::PathBuf::from));
-            for dir in roots {
-                match fs_backend::sweep_stale_temps(&dir, TEMP_MAX_AGE, &protected).await {
-                    Ok(0) => {}
-                    Ok(count) => tracing::info!(
-                        event = "reconciler.temps_swept",
-                        dir = %dir.display(),
-                        count,
-                    ),
-                    Err(error) => tracing::warn!(
-                        event = "reconciler.temp_sweep_failed",
-                        dir = %dir.display(),
-                        %error,
-                    ),
-                }
-            }
-        }
-        Err(error) => tracing::error!(event = "reconciler.scan_failed", job = "temps", %error),
-    }
 }
 
 /// pod 로컬 스풀 정리 — OS temp의 `.fg-tmp-*` 중 늙은 것. DB·락과 무관하게

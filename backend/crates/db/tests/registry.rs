@@ -12,33 +12,11 @@ use sqlx::PgPool;
 /// 유효한 클라이언트 키 해시 — `sha256:` + 64 hex (client_keys CHECK).
 const HASH: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-/// fs storage — root_path 하나가 접근 계약의 전부, s3 필드는 전부 None,
-/// force_relay는 반드시 false (storages_fs_fields CHECK).
-fn fs_row(id: &str, capacity: i64) -> StorageRow {
-    StorageRow {
-        id: id.to_owned(),
-        kind: "fs".to_owned(),
-        force_relay: false,
-        root_path: Some("/data".to_owned()),
-        endpoint: None,
-        public_endpoint: None,
-        region: None,
-        bucket: None,
-        force_path_style: false,
-        access_key: None,
-        secret_key_ciphertext: None,
-        secret_key_nonce: None,
-        enc_key_id: None,
-        capacity_bytes: capacity,
-    }
-}
-
 fn s3_row(id: &str, capacity: i64) -> StorageRow {
     StorageRow {
         id: id.to_owned(),
         kind: "s3".to_owned(),
         force_relay: false,
-        root_path: None,
         endpoint: Some("http://minio:9000".to_owned()),
         public_endpoint: Some("http://minio:9000".to_owned()),
         region: Some("us-east-1".to_owned()),
@@ -98,14 +76,17 @@ async fn client_to_missing_storage_is_missing_ref(pool: PgPool) {
 // ── create / CHECK 위반 ──────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]
-async fn fs_storage_registers(pool: PgPool) {
-    registry::insert_storage(&pool, &fs_row("nas", 1000))
-        .await
-        .unwrap();
-    let got = registry::get_storage(&pool, "nas").await.unwrap().unwrap();
-    assert_eq!(got.kind, "fs");
-    assert_eq!(got.root_path.as_deref(), Some("/data"));
-    assert!(got.bucket.is_none());
+async fn non_s3_storage_is_rejected(pool: PgPool) {
+    for kind in ["fs", "unknown"] {
+        let mut row = s3_row("nas", 1000);
+        row.kind = kind.into();
+        let error = registry::insert_storage(&pool, &row).await.unwrap_err();
+        assert_eq!(
+            registry::write_violation(&error, WriteOp::Insert),
+            Some(WriteViolation::Invalid)
+        );
+    }
+    assert!(registry::get_storage(&pool, "nas").await.unwrap().is_none());
 }
 
 #[sqlx::test(migrations = "./migrations")]

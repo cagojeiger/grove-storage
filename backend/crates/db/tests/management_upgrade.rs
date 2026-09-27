@@ -14,7 +14,9 @@ async fn legacy_rows(pool: &PgPool) -> Vec<Vec<String>> {
         "admin_sessions",
         "admin_audit_events",
     ] {
-        let projection = if matches!(table, "storages" | "clients") {
+        let projection = if table == "storages" {
+            "(to_jsonb(t)-'metadata'-'root_path')::text"
+        } else if table == "clients" {
             "(to_jsonb(t)-'metadata')::text"
         } else {
             "to_jsonb(t)::text"
@@ -37,7 +39,7 @@ async fn additive_upgrade_preserves_existing_registry_credentials_and_sessions(p
         connection.apply(migration).await.unwrap();
     }
     drop(connection);
-    sqlx::raw_sql("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('existing','fs','/data/existing',100);
+    sqlx::raw_sql("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('existing','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',100);
         INSERT INTO clients(id,storage_id) VALUES('existing-app','existing');
         INSERT INTO client_keys(key_hash,client_id) VALUES('sha256:' || repeat('a',64),'existing-app');")
         .execute(&pool).await.unwrap();

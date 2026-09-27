@@ -77,7 +77,7 @@ async fn json_body(response: Response) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap()
 }
 pub(crate) async fn seed(pool: &PgPool) {
-    sqlx::raw_sql("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('local','fs','/fixture',100);
+    sqlx::raw_sql("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('local','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',100);
         INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes)
         VALUES('vendor','s3','https://s3.test','https://s3.test','region','bucket','public-access','private-ciphertext',decode(repeat('ab',12),'hex'),'private-key-id',0);
         INSERT INTO clients(id,storage_id) VALUES('app','local');

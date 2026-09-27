@@ -8,16 +8,13 @@ use sqlx::PgPool;
 /// Control-plane routes reserve these names from the S3 bucket namespace.
 pub const RESERVED_CLIENT_IDS: &[&str] = &["api", "blobs", "healthz", "readyz"];
 
-/// storages 행. 종류(kind)가 s3/fs를 가르고, 종류별 필수는 DB CHECK가
-/// 집행한다 (0002). s3 시크릿은 암호문 컬럼 셋으로만 존재 — 복호는
-/// core::Crypto가 행의 enc_key_id 라벨로 한다 (spec 01). fs는 시크릿이
-/// 없는 storage다 — root_path가 접근 계약의 전부.
+/// S3 registry row. Required connection fields are enforced by the database;
+/// provider secrets remain encrypted until the backend adapter resolves them.
 #[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct StorageRow {
     pub id: String,
     pub kind: String,
     pub force_relay: bool,
-    pub root_path: Option<String>,
     pub endpoint: Option<String>,
     pub public_endpoint: Option<String>,
     pub region: Option<String>,
@@ -42,7 +39,7 @@ impl std::fmt::Debug for StorageRow {
     }
 }
 
-pub(crate) const STORAGE_COLUMNS: &str = "id, kind, force_relay, root_path, endpoint, public_endpoint, region, bucket, \
+pub(crate) const STORAGE_COLUMNS: &str = "id, kind, force_relay, endpoint, public_endpoint, region, bucket, \
      force_path_style, access_key, secret_key_ciphertext, secret_key_nonce, enc_key_id, \
      capacity_bytes";
 
@@ -51,15 +48,14 @@ pub async fn insert_storage<'e>(
     row: &StorageRow,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO storages (id, kind, force_relay, root_path, endpoint, public_endpoint, \
+        "INSERT INTO storages (id, kind, force_relay, endpoint, public_endpoint, \
          region, bucket, force_path_style, access_key, secret_key_ciphertext, secret_key_nonce, \
          enc_key_id, capacity_bytes) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
     )
     .bind(&row.id)
     .bind(&row.kind)
     .bind(row.force_relay)
-    .bind(&row.root_path)
     .bind(&row.endpoint)
     .bind(&row.public_endpoint)
     .bind(&row.region)
@@ -84,7 +80,6 @@ pub enum UpdateStorageOutcome {
 
 pub fn storage_address_changed(current: &StorageRow, row: &StorageRow) -> bool {
     current.kind != row.kind
-        || current.root_path != row.root_path
         || current.endpoint != row.endpoint
         || current.public_endpoint != row.public_endpoint
         || current.region != row.region
@@ -139,15 +134,14 @@ pub async fn update_storage_in(
         }
     }
     sqlx::query(
-        "UPDATE storages SET kind = $2, force_relay = $3, root_path = $4, endpoint = $5, \
-         public_endpoint = $6, region = $7, bucket = $8, force_path_style = $9, access_key = $10, \
-         secret_key_ciphertext = $11, secret_key_nonce = $12, enc_key_id = $13, \
-         capacity_bytes = $14, updated_at = now() WHERE id = $1",
+        "UPDATE storages SET kind = $2, force_relay = $3, endpoint = $4, \
+         public_endpoint = $5, region = $6, bucket = $7, force_path_style = $8, access_key = $9, \
+         secret_key_ciphertext = $10, secret_key_nonce = $11, enc_key_id = $12, \
+         capacity_bytes = $13, updated_at = now() WHERE id = $1",
     )
     .bind(&row.id)
     .bind(&row.kind)
     .bind(row.force_relay)
-    .bind(&row.root_path)
     .bind(&row.endpoint)
     .bind(&row.public_endpoint)
     .bind(&row.region)

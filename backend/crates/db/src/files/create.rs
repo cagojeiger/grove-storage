@@ -1,8 +1,7 @@
 //! create의 pending 파일 기록 — 선언 해석 → 기록. 전부 한 트랜잭션.
 //!
-//! capacity는 집행하지 않는다 (spec 00) — 관찰이 목적이다. object storage는
-//! 탄력적이고 fs는 디스크가 스스로 실패를 내므로, 용량으로 발급을 거부하지
-//! 않는다. 사용량은 조회 시점에 집계된다. 저장소 네트워크 호출은 여기 없다.
+//! Registered capacity is observational, not a write quota. Usage is aggregated
+//! from object metadata; this transaction performs no provider network I/O.
 
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -85,7 +84,7 @@ pub(crate) async fn create_in_tx(
 
     // 키는 규칙으로 조합해 저장한다 (spec 00 물리 배치). 읽기·삭제는 저장된
     // 키만 따르므로, 규칙이 바뀌어도 기존 객체는 계속 동작한다 (ADR 001).
-    let object_key = object_key(spec.client_id, &storage.kind, file_id, spec.content_type);
+    let object_key = object_key(spec.client_id, file_id, spec.content_type);
     sqlx::query("INSERT INTO locations (file_id, storage_id, object_key) VALUES ($1, $2, $3)")
         .bind(file_id)
         .bind(&storage.id)
@@ -123,28 +122,15 @@ pub(crate) async fn create_in_tx(
     })))
 }
 
-/// 물리 배치 규칙 (spec 00): `fg/{client}/{yyyy}/{mm}/[{zz}/]{file_id}[.ext]`.
-/// 날짜는 create 시각(UTC), zz(id 마지막 2 hex)는 fs 전용 팬아웃 —
-/// 한 디렉토리에 파일이 무한히 쌓이지 않게 월 안에서 256칸으로 나눈다.
-/// 경로 안전은 등록부 슬러그 CHECK(client_id)와 허용목록 확장자가 보장한다.
-fn object_key(
-    client_id: &str,
-    storage_kind: &str,
-    file_id: Uuid,
-    content_type: Option<&str>,
-) -> String {
+/// New S3 keys preserve `fg/{client}/{yyyy}/{mm}/{file_id}[.ext]`.
+/// Existing objects are always addressed through their stored locations.
+fn object_key(client_id: &str, file_id: Uuid, content_type: Option<&str>) -> String {
     let date = chrono::Utc::now().format("%Y/%m");
     let name = match ext_for(content_type) {
         Some(ext) => format!("{file_id}.{ext}"),
         None => file_id.to_string(),
     };
-    if storage_kind == "fs" {
-        let hex = file_id.simple().to_string();
-        let zz = hex.get(30..).unwrap_or("00").to_owned();
-        format!("fg/{client_id}/{date}/{zz}/{name}")
-    } else {
-        format!("fg/{client_id}/{date}/{name}")
-    }
+    format!("fg/{client_id}/{date}/{name}")
 }
 
 /// 확장자 허용목록 — content_type 문자열을 자르지 않는다 (spec 00: 경로
@@ -172,16 +158,16 @@ mod key_tests {
     use super::*;
 
     #[test]
-    fn s3_key_is_flat_and_fs_key_fans_out_by_trailing_hex() {
+    fn s3_key_preserves_the_existing_prefix_and_extension() {
         let id = Uuid::parse_str("0198a3f2-1111-4222-8333-4444555566ab").unwrap();
-        let s3 = object_key("notegate", "s3", id, Some("application/pdf"));
+        let s3 = object_key("notegate", id, Some("application/pdf"));
         assert!(s3.starts_with("fg/notegate/"));
         assert!(s3.ends_with(&format!("/{id}.pdf")));
         assert_eq!(s3.matches('/').count(), 4); // fg/client/yyyy/mm/name
 
-        let fs = object_key("notegate", "fs", id, None);
-        assert!(fs.ends_with(&format!("/ab/{id}")));
-        assert_eq!(fs.matches('/').count(), 5);
+        let plain = object_key("notegate", id, None);
+        assert!(plain.ends_with(&format!("/{id}")));
+        assert_eq!(plain.matches('/').count(), 4);
     }
 
     #[test]

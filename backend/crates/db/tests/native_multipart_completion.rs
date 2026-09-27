@@ -16,7 +16,6 @@ fn storage() -> StorageRow {
         id: "s".to_owned(),
         kind: "s3".to_owned(),
         force_relay: true,
-        root_path: None,
         endpoint: Some("http://minio:9000".to_owned()),
         public_endpoint: Some("http://minio:9000".to_owned()),
         region: Some("us-east-1".to_owned()),

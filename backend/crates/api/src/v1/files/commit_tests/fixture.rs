@@ -40,7 +40,6 @@ impl Fixture {
                 id: "home".into(),
                 kind: "s3".into(),
                 force_relay: relay,
-                root_path: None,
                 endpoint: Some(endpoint.into()),
                 public_endpoint: Some("http://public.invalid".into()),
                 region: Some("local".into()),

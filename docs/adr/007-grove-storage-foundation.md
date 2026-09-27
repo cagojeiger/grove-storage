@@ -2,7 +2,7 @@
 
 - 상태: Accepted (제품 방향)
 - 날짜: 2026-09-08
-- 구현 상태: 중앙 메타데이터·서버 로컬 fs·외부 S3·CLI 조회·변경 구현, 운영 이관·Agent는 후속 작업
+- 구현 상태: 중앙 메타데이터·S3-only 등록부·CLI 조회·변경 구현, 운영 이관·Agent는 후속 작업
 
 ## 전제와 결정
 
@@ -47,9 +47,11 @@ S3-compatible client APIs remain in scope; this decision restricts backend stora
 not the client protocol. Mounted-filesystem Storage Nodes belong to phase two.
 
 Console, shared commands (CLI/MCP) and legacy REST accept only S3 registration
-and replacement. The server-local FS adapter remains for existing rows and runtime
-compatibility. Runtime/schema removal follows an FS inventory and a verified
-migration/rollback plan; this change preserves existing data and mounts.
+and replacement. Migration `0017` enforces S3-only rows and removes `root_path`;
+any remaining FS row blocks migration for explicit data transfer first.
+The registry adapter resolves S3 only. Lower-level FS implementation cleanup is a
+separate step; S3 relay spooling remains supported. Native and S3 API contracts,
+stored object keys, credentials and recovery state remain unchanged.
 
 ## 책임 경계
 

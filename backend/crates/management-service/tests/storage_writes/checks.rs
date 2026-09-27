@@ -56,13 +56,12 @@ async fn reader_tests_saved_storage_across_surfaces_without_registry_or_audit_mu
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn missing_unsupported_and_unauthenticated_checks_never_probe(pool: PgPool) {
+async fn missing_and_unauthenticated_checks_never_probe(pool: PgPool) {
     let admin = owner(&pool).await;
-    sqlx::query("INSERT INTO storages(id,kind,root_path,capacity_bytes) VALUES('legacy','fs','/never-touch',1)")
+    sqlx::query("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('legacy','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',1)")
         .execute(&pool).await.unwrap();
     for (id, token, expected) in [
         ("missing", admin.token.as_str(), ErrorCode::NotFound),
-        ("legacy", admin.token.as_str(), ErrorCode::InvalidInput),
         ("legacy", "invalid", ErrorCode::Unauthorized),
     ] {
         let result = resources::execute(

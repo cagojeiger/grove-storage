@@ -16,7 +16,7 @@ pub fn storage_output(row: StorageRow) -> Result<model::Storage, Error> {
         id: row.id,
         kind: kind(&row.kind)?,
         force_relay: row.force_relay,
-        root_path: row.root_path,
+        root_path: None,
         endpoint: row.endpoint,
         public_endpoint: row.public_endpoint,
         region: row.region,

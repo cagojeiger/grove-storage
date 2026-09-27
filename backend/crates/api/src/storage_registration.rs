@@ -183,7 +183,6 @@ fn encrypted_s3_row(
         id: id.to_owned(),
         kind: "s3".to_owned(),
         force_relay,
-        root_path: None,
         endpoint: Some(spec.endpoint),
         public_endpoint: Some(spec.public_endpoint),
         region: Some(spec.region),
