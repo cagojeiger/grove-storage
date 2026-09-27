@@ -1,7 +1,9 @@
 //! Characterize both public contracts before consolidating their implementations.
 mod clients;
 mod guards;
+mod identity;
 mod storages;
+mod usage;
 
 use super::*;
 
