@@ -179,7 +179,8 @@ def check_s3_lifecycle(endpoint, directory, backend):
 
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
-         reconciler_interval=1, management=False, verify_log=None, multipart=False):
+         reconciler_interval=1, management=False, verify_log=None, multipart=False,
+         s3_cors_origins=()):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -209,6 +210,8 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                            FILEGATE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
             if console_origin:
                 env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
+            if s3_cors_origins:
+                env["FILEGATE_S3_CORS_ALLOWED_ORIGINS"] = ",".join(s3_cors_origins)
             if management:
                 env.update(FILEGATE_MASTER_TOKEN=MASTER_TOKEN, FILEGATE_MASTER_GENERATION="1",
                            FILEGATE_CONSOLE_ORIGIN=console_origin or "https://console.test")

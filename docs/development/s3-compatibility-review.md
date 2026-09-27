@@ -34,6 +34,30 @@
 | 응답 유실 후 프로세스 재시작 | `e2e-s3-recovery.py --restart` | SIGKILL 종료·새 PID 확인, 동일 DB·endpoint, 소유권 보존과 새 Reconciler 복구 |
 | DB 커밋 거부 | `e2e-s3-recovery.py --db-failure`·`s3_db_fault.py` | vendor 성공, 요청·Reconciler 커밋 롤백, 장애 제거 후 실물 관찰 확정·정산 |
 
+## 로컬 NoteGate 연결
+
+```text
+NoteGate REST/MCP handlers + Rust AWS SDK
+    -> Grove HTTP server -> MinIO
+       Grove PostgreSQL    NoteGate test PostgreSQL
+```
+
+```sh
+cargo build --bin filegate --bin gscli --locked
+python3 -B -u scripts/e2e-notegate.py --notegate-dir ../notegate
+```
+
+| 항목 | 범위 |
+|---|---|
+| 준비 | Docker·boto3·로컬 NoteGate 소스; macOS 링크 설정은 `DEVELOPER_DIR=/Library/Developer/CommandLineTools` |
+| 실행 | NoteGate `rest::file_upload_tests`를 실제 Grove endpoint에 연결; 환경 누락으로 건너뛴 테스트 거부 |
+| 격리 | 임시 MinIO·PostgreSQL 컨테이너, 서비스별 DB; 기존 `.env`·운영 스토리지 변경 없음 |
+| CORS | 테스트 origin `http://localhost:5173`; 조건부 PUT preflight·multipart ETag 노출 확인 |
+| 소스 | 실행한 NoteGate revision·작업 중 diff hash 출력; NoteGate 소스 변경 없음 |
+| 검증 경계 | NoteGate 핸들러는 테스트 프로세스 내 실행. OIDC 로그인·브라우저 UI·운영 Ingress/TLS 검증은 별도 |
+
+배포 환경은 `FILEGATE_S3_CORS_ALLOWED_ORIGINS`에 실제 NoteGate 브라우저 origin을 설정한다.
+
 ## 재현 후 수정
 
 | 이전 | 수정 |
