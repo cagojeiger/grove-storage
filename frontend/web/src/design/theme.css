@@ -42,6 +42,9 @@
 body {
   margin: 0;
 }
+#root { min-height: 100dvh; display: flex; flex-direction: column; }
+.console-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; margin-top: auto; padding: 4px 20px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
+.console-footer > span { color: var(--muted); font-size: 12px; }
 button,
 input,
 select {
@@ -135,7 +138,7 @@ header {
 .account-menu summary { display: flex; align-items: center; gap: 8px; max-width: 220px; padding: 8px; cursor: pointer; list-style: none; font-size: 13px; }
 .account-menu summary::-webkit-details-marker { display: none; }
 .account-menu summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-menu-panel { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: 210px; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: 0 8px 24px #0002; }
+.account-menu-panel { position: absolute; z-index: 20; bottom: calc(100% + 8px); right: 0; width: 210px; max-height: calc(100dvh - 80px); overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: 0 8px 24px #0002; }
 .account-menu-identity { display: grid; gap: 2px; padding: 10px; border-bottom: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
 .account-menu-identity span { color: var(--muted); text-transform: capitalize; font-size: 12px; }
 .account-menu-panel a, .account-menu-panel button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 4px; color: var(--text); background: transparent; text-align: left; text-decoration: none; font-size: 13px; }
@@ -165,7 +168,8 @@ header {
 .workspace {
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr);
-  min-height: calc(100vh - 68px);
+  flex: 1;
+  min-height: 0;
 }
 aside {
   border-right: 1px solid var(--line);
@@ -850,7 +854,7 @@ dialog::backdrop {
   }
   .workspace {
     display: block;
-    min-height: calc(100vh - 64px);
+    min-height: 0;
   }
   aside {
     padding: 8px 18px;

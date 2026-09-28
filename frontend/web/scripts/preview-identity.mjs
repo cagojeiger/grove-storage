@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 // Loopback sample data only. The real API owns authentication and authorization.
-export function previewIdentity(json) {
+export function previewIdentity(json, history) {
   const owner = randomUUID();
   const accounts = new Map([
     [
@@ -98,12 +98,15 @@ export function previewIdentity(json) {
             login.username === body.username && login.password === body.password &&
             accounts.get(id)?.is_active && !accounts.get(id)?.deleted_at);
           if (!match) {
+            history.record("security", null, { event_type: "login.failed", reason_code: "unauthenticated" });
             fail(401, "unauthenticated");
             return true;
           }
           current = { account_id: match[0], session_id: randomUUID() };
+          history.record("security", session(), { event_type: "login.succeeded", reason_code: "password" });
         }
         if (method === "DELETE") {
+          if (session()) history.record("security", session(), { event_type: "logout", reason_code: "user_requested" });
           current = null;
           json(res, 204, null);
           return true;
@@ -143,6 +146,7 @@ export function previewIdentity(json) {
           const account = accounts.get(current.account_id);
           const changed = account.display_name !== body.display_name.trim();
           account.display_name = body.display_name.trim();
+          if (changed) history.record("audit", session(), { action: "account.name", resource_type: "account", resource_id: account.id, metadata: {} });
           json(res, 200, { changed });
         }
         return true;
@@ -202,7 +206,10 @@ export function previewIdentity(json) {
       }
       if (path.startsWith("/history/") && method === "GET") {
         if (path === "/history/security" && session().role !== "admin") fail(403, "forbidden");
-        else json(res, 200, { items: [], next_before: null });
+        else {
+          const result = history.page(path.slice("/history/".length), session(), url.searchParams);
+          result ? json(res, 200, result) : fail(404, "not_found");
+        }
         return true;
       }
       if (session().role !== "admin") {

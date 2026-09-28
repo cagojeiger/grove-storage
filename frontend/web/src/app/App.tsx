@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, CircleUserRound, LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
+import { ChevronUp, CircleUserRound, LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
 import { identityRequest, isAccount } from "../api/identity";
 import { Login } from "../auth/Login";
@@ -78,15 +78,6 @@ export function App() {
         </a>
         <div className="header-actions">
           <ThemePicker />
-          {session.data && (
-            <AccountMenu
-              name={profile.data?.display_name ?? "Account"}
-              role={session.data.role}
-              passwordSession={session.data.credential_id === null}
-              loggingOut={loggingOut}
-              onLogout={() => void logout()}
-            />
-          )}
         </div>
       </header>
       {route === "set-password" ? (
@@ -173,6 +164,18 @@ export function App() {
           }}
         />
       )}
+      <footer className="console-footer">
+        <span>Grove Storage</span>
+        {session.data && (
+          <AccountMenu
+            name={profile.data?.display_name ?? "Account"}
+            role={session.data.role}
+            passwordSession={session.data.credential_id === null}
+            loggingOut={loggingOut}
+            onLogout={() => void logout()}
+          />
+        )}
+      </footer>
     </>
   );
 }
@@ -204,7 +207,7 @@ function AccountMenu({ name, role, passwordSession, loggingOut, onLogout }: {
   }, []);
   const close = () => { if (menu.current) menu.current.open = false; };
   return <details className="account-menu" ref={menu}>
-    <summary role="button" aria-label="Account menu"><CircleUserRound size={18} /><span>{name}</span><ChevronDown size={16} /></summary>
+    <summary role="button" aria-label="Account menu"><CircleUserRound size={18} /><span>{name}</span><ChevronUp size={16} /></summary>
     <div className="account-menu-panel">
       <div className="account-menu-identity"><strong>{name}</strong><span>{role}</span></div>
       <a href="#settings" onClick={close}><CircleUserRound size={16} />My account</a>

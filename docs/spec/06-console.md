@@ -41,13 +41,16 @@ Saved S3 storage supports an explicit on-demand connection test.
 The sample preview returns in-memory data. Its successful storage forms are not
 evidence of real provider connectivity. Real registration/replacement runs provider
 checks before persistence. `readyz` and usage summaries are separate from those checks.
+Preview Activity records resource commands, successful resource mutations, profile
+name changes and sign-in/sign-out events in memory (up to 500 per stream). Restarting
+the preview clears these events; it does not reproduce every identity audit operation.
 The server-local `filegate status` probes all registered backends, but is not a
 remote per-storage command for Console/CLI/MCP.
 
 ## Target Navigation
 
 Overview, Storage, Clients, Admin/Root-only Accounts and Activity are linked in `App.tsx`.
-The header account menu links to My account, Security and Sign out.
+The bottom-right footer account menu opens upward and links to My account, Security and Sign out.
 The signed-out entry links to Initial setup / recovery.
 
 ### Resource Navigation

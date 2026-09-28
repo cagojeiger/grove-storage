@@ -5,6 +5,7 @@ import { resolve, sep } from "node:path";
 import { previewIdentity } from "./preview-identity.mjs";
 import { previewClients } from "./preview-clients.mjs";
 import { previewMetadata } from "./preview-metadata.mjs";
+import { previewHistory } from "./preview-history.mjs";
 import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
@@ -43,7 +44,8 @@ const storages = new Map([
     },
   ],
 ]);
-const identities = previewIdentity(json);
+const history = previewHistory();
+const identities = previewIdentity(json, history);
 const clients = previewClients(storages);
 
 function json(res, status, body) {
@@ -95,8 +97,25 @@ async function response(req, res) {
     }
     const { command, input } = JSON.parse(raw);
     const envelope = { protocol: 1, request_id: randomUUID() };
-    const success = (result) => json(res, 200, { ...envelope, command, result });
-    const failure = (status, code) => json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
+    const actor = identities.session();
+    const started = performance.now();
+    const invocation = (outcome, error_code = null) => history.record("invocations", actor, {
+      operation: command, outcome, error_code, duration_ms: Math.round(performance.now() - started),
+    }, envelope.request_id);
+    const success = (result) => {
+      invocation("succeeded");
+      if (/\.(create|replace|delete|register)$/.test(command)) {
+        history.record("audit", actor, {
+          action: command, resource_type: command.split(".")[0],
+          resource_id: input.id ?? input.client_id ?? "", metadata: {},
+        }, envelope.request_id);
+      }
+      json(res, 200, { ...envelope, command, result });
+    };
+    const failure = (status, code) => {
+      invocation("failed", code);
+      json(res, status, { ...envelope, error: { code, outcome: "not_applied" } });
+    };
     if (identities.session().role === "reader" && !["client.list", "client.show", "storage.list", "storage.show", "storage.test", "usage.clients", "usage.storages", "usage.history", "storage.metadata.show", "client.metadata.show"].includes(command)) return failure(403, "forbidden");
     if (command === "usage.history") return success([]);
     if (clients.handle(command, input, success, failure)) return;
