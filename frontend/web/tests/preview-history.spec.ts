@@ -41,3 +41,36 @@ test("preview records actions without logging secrets and shows them in Activity
   await expect(page.getByRole("contentinfo").getByRole("button", { name: "Account menu" })).toBeVisible();
   expect((await command("client.delete", { id })).ok()).toBeTruthy();
 });
+
+test("preview audits identify each S3 key and omit repeated deletions", async ({ request }) => {
+  await request.post(`${identity}/session`, { data: { username: "owner", password: "a private phrase for preview" } });
+  const id = `keys-${Date.now()}`;
+  const command = (command: string, input: object) => request.post(`${root}/api/admin/console-commands/v1`, { data: { command, input } });
+  expect((await command("client.create", { id, storage_id: "home-archive" })).ok()).toBeTruthy();
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const result = await (await command("credential.create", { client_id: id })).json() as { result: { access_key_id: string } };
+      keys.push(result.result.access_key_id);
+    }
+    const requests: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const response = await command("credential.delete", { client_id: id, access_key_id: keys[0] });
+      expect(response.ok()).toBeTruthy();
+      requests.push((await response.json() as { request_id: string }).request_id);
+    }
+    const audit = await (await request.get(`${identity}/history/audit`)).json() as Page<Audit>;
+    for (const key of keys) {
+      expect(audit.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ action: "credential.create", resource_type: "s3_credential", resource_id: key, metadata: { client_id: id } }),
+      ]));
+    }
+    expect(audit.items.filter(row => requests.includes(row.context.request_id))).toEqual([
+      expect.objectContaining({ action: "credential.delete", resource_type: "s3_credential", resource_id: keys[0], metadata: { client_id: id } }),
+    ]);
+    const invocations = await (await request.get(`${identity}/history/invocations`)).json() as Page<Invocation>;
+    expect(invocations.items.filter(row => requests.includes(row.context.request_id))).toHaveLength(2);
+  } finally {
+    await command("client.delete", { id });
+  }
+});

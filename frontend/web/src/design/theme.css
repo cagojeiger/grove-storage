@@ -42,6 +42,7 @@
 body {
   margin: 0;
 }
+html { scroll-padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 #root { min-height: 100dvh; display: flex; flex-direction: column; }
 .console-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; margin-top: auto; padding: 4px 20px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
 .console-footer > span { color: var(--muted); font-size: 12px; }

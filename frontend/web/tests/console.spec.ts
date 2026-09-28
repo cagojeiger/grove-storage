@@ -147,6 +147,25 @@ test("token browser sessions cannot open password settings", async ({ page }) =>
   await expect(page.getByRole("link", { name: "Security" })).toHaveCount(0);
 });
 
+test("keyboard focus stays above the sticky footer on a short mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await mock(page, true, true);
+  await page.goto(`${root}#settings`);
+  const link = page.getByRole("link", { name: "Change password" });
+  await expect(link).toBeVisible();
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press("Tab");
+    if (await link.evaluate(element => element === document.activeElement)) break;
+  }
+  await expect(link).toBeFocused();
+  await expect.poll(() => link.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const footer = document.querySelector("footer")!.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= footer.top &&
+      element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  })).toBe(true);
+});
+
 for (const width of [320, 1440]) {
   for (const theme of ["light", "dark"])
     test(`password settings ${width}px ${theme}`, async ({ page }) => {

@@ -40,7 +40,7 @@ export function previewClients(storages) {
         else {
           const client = { id, storage_id: input.storage_id };
           clients.set(id, client);
-          success(client);
+          success(client, { resource_type: "client", resource_id: id, metadata: { client_id: id, storage_id: input.storage_id } });
         }
         return true;
       }
@@ -58,7 +58,7 @@ export function previewClients(storages) {
             clients.delete(id);
             native.delete(id);
             s3.delete(id);
-            success({ resource: "client", id });
+            success({ resource: "client", id }, { resource_type: "client", resource_id: id, metadata: { client_id: id } });
           }
           break;
         case "client-key.list":
@@ -69,9 +69,10 @@ export function previewClients(storages) {
           break;
         case "client-key.register": {
           const keys = native.get(id) ?? new Set();
+          const changed = !keys.has(input.key_hash);
           keys.add(input.key_hash);
           native.set(id, keys);
-          success({ client_id: id, key_hash: input.key_hash });
+          success({ client_id: id, key_hash: input.key_hash }, changed ? { resource_type: "client_key", resource_id: id, metadata: { client_id: id } } : null);
           break;
         }
         case "credential.create": {
@@ -82,25 +83,27 @@ export function previewClients(storages) {
           success({
             access_key_id,
             secret_key: randomBytes(32).toString("hex"),
-          });
+          }, { resource_type: "s3_credential", resource_id: access_key_id, metadata: { client_id: id } });
           break;
         }
-        case "client-key.delete":
-          native.get(id)?.delete(input.key_hash);
+        case "client-key.delete": {
+          const changed = native.get(id)?.delete(input.key_hash);
           success({
             resource: "client-key",
             id: input.key_hash,
             client_id: id,
-          });
+          }, changed ? { resource_type: "client_key", resource_id: id, metadata: { client_id: id } } : null);
           break;
-        case "credential.delete":
-          s3.get(id)?.delete(input.access_key_id);
+        }
+        case "credential.delete": {
+          const changed = s3.get(id)?.delete(input.access_key_id);
           success({
             resource: "credential",
             id: input.access_key_id,
             client_id: id,
-          });
+          }, changed ? { resource_type: "s3_credential", resource_id: input.access_key_id, metadata: { client_id: id } } : null);
           break;
+        }
         default:
           failure(400, "unknown_command");
       }

@@ -12,6 +12,8 @@ export function previewMetadata(command, input, row, success, failure) {
     if (Buffer.byteLength(json) > 8192) { failure(400, "invalid_input"); return true; }
     row.metadata = value;
   }
-  success({ id: input.id, metadata: row.metadata ?? {} });
+  success({ id: input.id, metadata: row.metadata ?? {} }, command.endsWith(".replace")
+    ? { resource_type: command.split(".")[0], resource_id: input.id, metadata: {} }
+    : null);
   return true;
 }

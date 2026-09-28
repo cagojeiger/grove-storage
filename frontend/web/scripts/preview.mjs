@@ -102,14 +102,9 @@ async function response(req, res) {
     const invocation = (outcome, error_code = null) => history.record("invocations", actor, {
       operation: command, outcome, error_code, duration_ms: Math.round(performance.now() - started),
     }, envelope.request_id);
-    const success = (result) => {
+    const success = (result, audit = null) => {
       invocation("succeeded");
-      if (/\.(create|replace|delete|register)$/.test(command)) {
-        history.record("audit", actor, {
-          action: command, resource_type: command.split(".")[0],
-          resource_id: input.id ?? input.client_id ?? "", metadata: {},
-        }, envelope.request_id);
-      }
+      if (audit) history.record("audit", actor, { ...audit, action: command }, envelope.request_id);
       json(res, 200, { ...envelope, command, result });
     };
     const failure = (status, code) => {
@@ -132,7 +127,7 @@ async function response(req, res) {
       if (!storages.has(storageId)) return failure(404, "not_found");
       if (storageId === "home-archive" || clients.references(storageId)) return failure(409, "conflict");
       storages.delete(storageId);
-      return success({ resource: "storage", id: storageId });
+      return success({ resource: "storage", id: storageId }, { resource_type: "storage", resource_id: storageId, metadata: {} });
     }
     if (!["storage.create", "storage.replace"].includes(command)) return failure(400, "unknown_command");
     if (command === "storage.create" && storages.has(storageId)) return failure(409, "conflict");
@@ -153,7 +148,7 @@ async function response(req, res) {
       capacity_bytes: body.capacity_bytes,
     };
     storages.set(storageId, saved);
-    return success(saved);
+    return success(saved, { resource_type: "storage", resource_id: storageId, metadata: {} });
   }
   if (!path.startsWith(base)) return json(res, 404, {});
   const relative = path.slice(base.length) || "index.html";
