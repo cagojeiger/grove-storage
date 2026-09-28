@@ -58,6 +58,24 @@ python3 -B -u scripts/e2e-notegate.py --notegate-dir ../notegate
 
 배포 환경은 `FILEGATE_S3_CORS_ALLOWED_ORIGINS`에 실제 NoteGate 브라우저 origin을 설정한다.
 
+### CI 소비자 계약
+
+| 항목 | 계약 |
+|---|---|
+| CI job | `NoteGate file transfer contract`; main push와 PR에서 실행 |
+| NoteGate 기준 | 공개 main commit `dab7fe552b3e6ac742465ea40ddd02b2253631fe` |
+| 실행 | 양쪽 저장소의 고정 toolchain·lockfile로 먼저 빌드한 뒤 `e2e-notegate.py` 실행 |
+| 서비스 | fixture가 만든 PostgreSQL·MinIO·Grove만 사용; 운영 환경변수·데이터와 분리 |
+| 검증 | 실제 REST/MCP 파일 업로드 테스트, 테스트 0개·DB skip은 실패 |
+| 릴리스 | 이 job을 포함한 CI 성공이 Grove 자동 릴리스의 선행 조건 |
+| 기준 갱신 | CI checkout SHA를 별도 변경으로 갱신하고 같은 계약을 재검증 |
+
+2026-09-29 로컬에서 위 고정 revision의 REST/MCP 테스트 27개가 실제 Grove·MinIO를
+상대로 통과했다(실패·무시 0개). NoteGate 작업 diff는 비어 있었고 fixture 서비스는
+종료 후 정리했다. GitHub Actions 실행 결과와 운영 endpoint 검증은 별도다.
+
+브라우저 전체 경로는 아래 스크립트로 별도 검증한다. 이 CI job의 핸들러 검증과 구분한다.
+
 ### 브라우저 전체 경로
 
 ```sh

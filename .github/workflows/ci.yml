@@ -129,6 +129,47 @@ jobs:
           npx playwright install --with-deps chromium
           /tmp/grove-s3-sdk/bin/python -B -u ../../scripts/e2e-console.py --with-minio
 
+  notegate:
+    name: NoteGate file transfer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Grove
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned NoteGate consumer
+        uses: actions/checkout@v6
+        with:
+          repository: cagojeiger/notegate
+          ref: dab7fe552b3e6ac742465ea40ddd02b2253631fe
+          path: .compat/notegate
+          persist-credentials: false
+
+      - name: Cache both Rust workspaces
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            .compat/notegate -> target
+
+      - name: Build Grove
+        run: cargo build --bin filegate --bin gscli --locked
+
+      - name: Build NoteGate upload contracts
+        working-directory: .compat/notegate
+        run: |
+          cargo test -p notegate-api rest::file_upload_tests:: --locked --no-run
+
+      - name: Run actual NoteGate handlers against Grove and MinIO
+        run: |
+          python3 -m venv /tmp/grove-notegate-sdk
+          /tmp/grove-notegate-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-notegate-sdk/bin/python -B -u scripts/e2e-notegate.py --notegate-dir .compat/notegate
+
   audit:
     name: Audit
     runs-on: ubuntu-latest
