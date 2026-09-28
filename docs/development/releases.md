@@ -5,9 +5,10 @@
 | 대상 | 계약 |
 |---|---|
 | CLI 패키지·실행 파일 | `gscli` (Grove Storage CLI) |
-| 서버·이미지·저장소 | `filegate` 유지 |
+| 서버 실행 파일·환경변수 | `filegate`·`FILEGATE_*` 유지 |
+| 이미지 | `ghcr.io/cagojeiger/grove-storage` |
 | CLI 연결 | `GROVE_ENDPOINT`, `GROVE_TOKEN`, `--token-file` |
-| 배포 채널 | `cagojeiger/filegate` GitHub Releases의 독립 실행 파일 |
+| 배포 채널 | `cagojeiger/grove-storage` GitHub Releases의 독립 실행 파일 |
 | 패키지 버전 | 서버·CLI가 workspace의 `MAJOR.MINOR.PATCH`를 공유 |
 | 버전 정합성 | `VERSION` = `Cargo.toml` workspace = 내부 패키지 `Cargo.lock` |
 | API 호환성 | `/api/admin/commands/v1` protocol 1과 User 인증 지원 필요; 서버·CLI 버전 숫자의 일치와 별개, 이전 서버에는 이전 CLI 사용 |
@@ -23,8 +24,8 @@
 
 NoteGate CLI의 workspace 버전·GitHub Release 바이너리 패턴을 따른다.
 첫 배포에 수동 업데이트를 포함한다. 프로필·키체인은 후속 범위다.
-첫 CLI 자산은 `v0.4.0`에서 발행한다. 현재 개발 버전은 `v0.4.1`이다.
-기존 `v0.3.10`에는 CLI 자산이 없다.
+현재 개발 버전은 `v0.4.1`이다. FileGate의 기존 태그·자산과 Grove의 릴리스 채널은
+독립적이다. 아래 설치 명령은 Grove 채널에 해당 버전의 자산이 발행된 뒤 사용한다.
 
 ## 설치
 
@@ -43,7 +44,7 @@ Ubuntu 22.04·macOS 15 네이티브 러너를 사용한다.
 ```sh
 version=X.Y.Z
 curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
-  "https://github.com/cagojeiger/filegate/releases/download/v${version}/gscli-installer.sh" \
+  "https://github.com/cagojeiger/grove-storage/releases/download/v${version}/gscli-installer.sh" \
   --output gscli-installer.sh
 sh gscli-installer.sh --version "$version"
 ~/.local/bin/gscli --version
@@ -63,6 +64,14 @@ sh gscli-installer.sh --version "$version"
 
 소스 설치는 `cargo install --path backend/crates/cli --locked`로 수행한다.
 해당 방식의 기본 설치 위치는 Cargo의 bin 디렉터리이므로 실행 시 `command -v gscli`로 경로를 확인한다.
+
+### FileGate 설치본에서 전환
+
+기존 FileGate `gscli update`는 FileGate 릴리스 채널을 계속 사용한다. Grove로 전환할 때는
+위 Grove installer로 원하는 버전을 명시적으로 설치한다. installer가 바이너리와
+설치 기록의 `repository`를 함께 교체한 뒤 Grove `gscli update`를 사용할 수 있다.
+바이너리만 수동 교체해 FileGate 설치 기록이 남으면 `unmanaged_install`로 거부한다.
+서버 연결·토큰은 그대로 두며, 연결할 서버의 관리 API 호환성은 별도로 확인한다.
 
 ## 업데이트
 
@@ -124,7 +133,7 @@ flowchart LR
 
 1. `VERSION`과 workspace 버전을 함께 갱신하고 `cargo check --workspace`로 lock을 반영한다.
 2. `python3 deploy/ci/check-version.py`와 CI를 통과한다.
-3. Release는 CI가 성공한 main push의 SHA를 checkout한다. 기존 태그는 보존한다.
+3. Release는 Grove 저장소에서 CI가 성공한 main push의 SHA를 checkout한다. 기존 태그는 보존한다.
 4. 네 플랫폼 바이너리·SHA-256, `gscli-manifest.json`, `gscli-installer.sh`를 발행한다.
 
 버전 형식은 정수 3자리 SemVer다. 기능 추가는 minor, 호환되는 수정은 patch,

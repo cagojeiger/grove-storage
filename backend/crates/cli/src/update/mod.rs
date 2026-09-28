@@ -13,9 +13,9 @@ use tokio::io::AsyncReadExt;
 
 use crate::error::Error;
 
-const REPOSITORY: &str = "cagojeiger/filegate";
+const REPOSITORY: &str = "cagojeiger/grove-storage";
 const LATEST: &str =
-    "https://github.com/cagojeiger/filegate/releases/latest/download/gscli-manifest.json";
+    "https://github.com/cagojeiger/grove-storage/releases/latest/download/gscli-manifest.json";
 const MAX_MANIFEST: usize = 256 * 1024;
 const MAX_BINARY: usize = 100 * 1024 * 1024;
 

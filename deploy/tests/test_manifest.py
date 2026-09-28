@@ -24,6 +24,7 @@ class ManifestTests(unittest.TestCase):
         result = manifest.build_manifest(self.root, '1.2.3')
         self.assertEqual(result['schema_version'], 1)
         self.assertEqual(result['version'], '1.2.3')
+        self.assertEqual(result['repository'], 'cagojeiger/grove-storage')
         self.assertEqual(len(result['assets']), 4)
         for target, asset in result['assets'].items():
             self.assertEqual(asset['size'], len(target))

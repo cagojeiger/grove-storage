@@ -22,7 +22,7 @@ jobs:
   version:
     name: Resolve version
     if: >-
-      github.repository == 'cagojeiger/filegate' &&
+      github.repository == 'cagojeiger/grove-storage' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
