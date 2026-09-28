@@ -5,6 +5,30 @@ import { audit, context, maintenanceMock } from "./maintenance-fixture";
 const tokenId = "44444444-4444-4444-4444-444444444444";
 const filtered = `/api/admin/console/#activity?account_id=${owner.id}&credential_id=${tokenId}`;
 
+test("activity uses a compact filter toolbar and a tab underline", async ({ page }) => {
+  await maintenanceMock(page);
+  await page.goto("/api/admin/console/#activity");
+  await expect(page.getByLabel("Actor account ID")).toBeHidden();
+  const tab = page.getByRole("link", { name: "Audit log" });
+  await expect(tab).toHaveCSS("border-left-width", "0px");
+  await expect(tab).toHaveCSS("border-bottom-width", "2px");
+  await page.getByRole("button", { name: "Filters" }).click();
+  await expect(page.getByLabel("Actor account ID")).toBeVisible();
+  await page.getByRole("button", { name: "Filters" }).click();
+  await expect(page.getByLabel("Actor account ID")).toBeHidden();
+});
+
+test("activity distinguishes no history from no filtered results", async ({ page }) => {
+  await maintenanceMock(page);
+  await page.route("**/identity/v1/history/*", route => route.fulfill({ json: { items: [], next_before: null } }));
+  await page.goto("/api/admin/console/#activity");
+  await expect(page.getByText("No activity recorded yet.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filters" })).toHaveCount(0);
+  await page.goto(filtered);
+  await expect(page.getByText("No activity matches these filters.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Clear filters" })).toBeVisible();
+});
+
 test("account and revoked token links select their actor filters", async ({ page }) => {
   await accessMock(page);
   await maintenanceMock(page);

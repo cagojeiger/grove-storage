@@ -1,6 +1,6 @@
 # spec 06: 관리 콘솔
 
-- 상태: Storage·Clients·Accounts·Activity·Settings 로컬 구현, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
+- 상태: Storage·Clients·Accounts·Activity·My account 로컬 구현, 미릴리스·미배포. 현재 샘플 미리보기는 `frontend/web/scripts/preview.mjs`이며 `output/`은 이전 시안이다.
 - 선행 계약: [관리자 인증](05-admin-auth.md), [CLI](04-cli.md), [등록부](01-registry.md).
 - 결정: 기존 관리 API를 공유하고 PostgreSQL을 정본으로 사용한다.
 - 브라우저 배포·인증 완료 조건: [보안 경계](07-browser-security.md).
@@ -46,14 +46,15 @@ remote per-storage command for Console/CLI/MCP.
 
 ## Target Navigation
 
-Overview, Storage, Clients, Admin/Root-only Accounts, Activity and Settings are linked in `App.tsx`.
+Overview, Storage, Clients, Admin/Root-only Accounts and Activity are linked in `App.tsx`.
+The header account menu links to My account, Security and Sign out.
 The signed-out entry links to Initial setup / recovery.
 
 ### Resource Navigation
 
 | Surface | Current UI contract |
 |---|---|
-| Sidebar | Overview, Resources (Storage / Clients), Management (existing Accounts / Activity / Settings); management behavior unchanged |
+| Sidebar | Overview, Resources (Storage / Clients), Management (Accounts / Activity) |
 | Overview | Clients on the left, Grove in the center, Storage on the right; stacked on narrow screens |
 | Relationships | Individual curved branches join Clients, Grove and Storage. Selecting a Client resolves its registered Storage and highlights both branches; curves represent configured routing, not observed traffic |
 | Overview bounds | Each side shows all entries through six; seven or more shows five entries plus a remaining-count group. Natural ID order is stable; selected Client and Storage stay visible |
@@ -89,10 +90,13 @@ Grove Storage
 │   ├── Audit     committed management changes
 │   ├── Command history  Console / CLI / MCP management invocations
 │   └── Security  authentication / authorization events
-└── Settings      current account / role / own login sessions
+Header account menu
+├── My account    current account / role / own tokens and sessions
+├── Security      change password
+└── Sign out
 
 Entry screens    Account token sign-in / Root setup / recovery
-Header           theme / sign out
+Header           theme / account menu
 ```
 
 User identifies the management account; credential_id identifies each token. Client identifies a runtime consumer;
@@ -103,7 +107,7 @@ its Native/S3 keys and file access logs remain separate from management tokens/a
 | Clients | App identity, assigned storage, file ownership, usage and service keys; Logs is runtime file history |
 | Accounts | Protected Root, Users, roles, management token issuance/revocation; separate from future Storage Node agents |
 | Activity | Audit / Calls / Security under existing actor/owner scopes; classify by operation, not transport |
-| Settings | Current account and role, cursor-paged own browser sessions, explicit revocation; current-session revocation signs out |
+| My account | Current account and role, cursor-paged own browser sessions, explicit revocation; current-session revocation signs out |
 
 Client detail can link to Activity filtered by Client ID, reusing the same management
 audit records. Server-side Client filtering is pending; filtering one fetched page
@@ -154,7 +158,7 @@ Neither screen writes deployment environment variables.
 | 1 (Implemented) | Root setup/recovery and Accounts | A new installation can issue its first User token; Admin can create User tokens; last-Admin and one-time-secret safeguards |
 | 2 (Implemented) | Clients and service keys | Same lifecycle as CLI/MCP; reference-conflict protection, one-time S3 secret and unknown-outcome handling |
 | 3 (Implemented, saved settings) | Shared connection test | Saved S3 probe via API, Console, CLI and MCP; failure, permission, timeout and concurrent setting/revocation tests |
-| 4 (Implemented) | Activity and Settings | Scoped queries, cursor paging, event details, own-session revocation; server-side Client/date filtering remains follow-up |
+| 4 (Implemented) | Activity and My account | Scoped queries, cursor paging, event details, own-session revocation; server-side Client/date filtering remains follow-up |
 | 5 | Client Logs | Defined observation/retention contract, scoped server queries and paging; URL issuance distinguished from transfer completion |
 
 Frontend command typing is supporting work within these slices. Existing backend

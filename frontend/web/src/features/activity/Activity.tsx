@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight, ListFilter, RefreshCw } from "lucide-react";
 import { field, identityPage } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { Dialog } from "../../design/Dialog";
@@ -27,6 +27,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         : "audit";
   const denied = stream === "security" && !admin;
   const [selected, setSelected] = useState<Event | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(params.size > 0 || !valid);
   const cache = useQueryClient();
   const query = useInfiniteQuery({
     queryKey: ["activity", stream, admin, params.toString()],
@@ -93,8 +94,15 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           </a>
         )}
       </nav>
+      {!denied && (rows.length > 0 || params.size > 0 || query.isPending || query.isError) &&
+        <div className="activity-toolbar">
+          <button type="button" aria-expanded={filtersOpen} aria-controls="activity-filters" onClick={() => setFiltersOpen(!filtersOpen)}>
+            <ListFilter size={16} />Filters{params.size > 0 ? ` (${params.size})` : ""}
+          </button>
+          {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}
+        </div>}
       {!denied && (
-        <form className="activity-filters" onSubmit={(event) => {
+        <form id="activity-filters" className="activity-filters" hidden={!filtersOpen} onSubmit={(event) => {
           event.preventDefault();
           const data = new FormData(event.currentTarget);
           const next = new URLSearchParams();
@@ -111,7 +119,6 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
             <input name="credential_id" defaultValue={params.get("credential_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
           </label>
           <button type="submit">Apply</button>
-          {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}
         </form>
       )}
       {denied ? (
@@ -146,7 +153,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
               </button>
             ))}
           </div>
-          {!rows.length && <p className="empty">No activity recorded.</p>}
+          {!rows.length && <p className="empty">{params.size > 0 ? "No activity matches these filters." : "No activity recorded yet."}</p>}
           {query.hasNextPage && (
             <button
               disabled={query.isFetching}

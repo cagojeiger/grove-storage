@@ -89,6 +89,7 @@ test("login clears token; logout removes overview", async ({ page }) => {
       JSON.stringify({ ...localStorage, ...sessionStorage }),
     ),
   ).not.toContain("test-token");
+  await page.locator('summary[aria-label="Account menu"]').click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
@@ -101,8 +102,8 @@ test("password change validates confirmation and signs out", async ({ page }) =>
     submitted = route.request().postDataJSON();
     await route.fulfill({ status: 204 });
   });
-  await page.goto(`${root}#settings`);
-  await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
+  await page.goto(`${root}#settings/security`);
+  await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
   await page.getByLabel("Current password").fill("old-private-password");
   await page.getByLabel("New password", { exact: true }).fill("new-private-password");
   await page.getByLabel("Confirm new password").fill("different-password");
@@ -119,12 +120,39 @@ test("password change validates confirmation and signs out", async ({ page }) =>
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("private-password");
 });
 
+test("account menu separates profile and security", async ({ page }) => {
+  await mock(page, true, true);
+  await page.goto(root);
+  const menu = page.getByRole("button", { name: "Account menu" });
+  await expect(menu).toContainText("Owner");
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "My account" })).toHaveCount(0);
+  await menu.click();
+  await page.getByRole("link", { name: "My account" }).click();
+  await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
+  await expect(page.getByLabel("Current password")).toHaveCount(0);
+  await menu.click();
+  await page.getByRole("link", { name: "Security" }).click();
+  await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
+  await expect(page.getByLabel("Current password")).toBeVisible();
+  await menu.click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
+});
+
+test("token browser sessions cannot open password settings", async ({ page }) => {
+  await mock(page);
+  await page.goto(`${root}#settings/security`);
+  await expect(page.getByRole("alert")).toHaveText("Password sign-in required.");
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await expect(page.getByRole("link", { name: "Security" })).toHaveCount(0);
+});
+
 for (const width of [320, 1440]) {
   for (const theme of ["light", "dark"])
     test(`password settings ${width}px ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await mock(page, true, true);
-      await page.goto(`${root}#settings`);
+      await page.goto(`${root}#settings/security`);
       await page.getByLabel("Theme").selectOption(theme);
       await expect(page.getByLabel("Current password")).toBeVisible();
       await expect(page.getByRole("button", { name: "Change password" })).toBeVisible();
@@ -212,6 +240,7 @@ test("empty, API failure, retry, and logout failure", async ({ page }) => {
   await page.route("**/session", (route) =>
     route.fulfill({ status: 500, json: {} }),
   );
+  await page.locator('summary[aria-label="Account menu"]').click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(

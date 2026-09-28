@@ -14,7 +14,6 @@ import { clearSession } from "../../auth/session";
 import { Dialog } from "../../design/Dialog";
 import { useAction } from "../access/useAction";
 import { time } from "../../design/format";
-import { PasswordChange } from "./PasswordChange";
 import { PersonalTokens } from "./PersonalTokens";
 
 type LoginSession = {
@@ -91,7 +90,9 @@ export function Sessions({ session }: { session: Session }) {
       </dl>
       {editing && profile.data && <EditProfile account={profile.data} onClose={() => setEditing(false)}
         onSaved={async () => { await cache.invalidateQueries({ queryKey: ["me", "profile"] }); }} />}
-      {passwordSession && <PasswordChange />}
+      {passwordSession && <section className="storage-section" aria-label="Security">
+        <div className="section-heading"><h2>Security</h2><a href="#settings/security">Change password</a></div>
+      </section>}
       {passwordSession && <PersonalTokens session={session} />}
       <section className="storage-section" aria-label="My sessions">
         <h2>My sessions</h2>

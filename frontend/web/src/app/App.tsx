@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
+import { ChevronDown, CircleUserRound, LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
+import { identityRequest, isAccount } from "../api/identity";
 import { Login } from "../auth/Login";
 import { SetPassword } from "../auth/SetPassword";
 import { ThemePicker } from "../design/Theme";
@@ -13,6 +14,7 @@ import { Access } from "../features/access/Access";
 import { Clients } from "../features/clients/Clients";
 import { Activity } from "../features/activity/Activity";
 import { Sessions } from "../features/settings/Sessions";
+import { Security } from "../features/settings/Security";
 import { UsageHistory } from "../features/overview/UsageHistory";
 
 export function App() {
@@ -23,7 +25,7 @@ export function App() {
   const accessPage = route === "accounts" || route.startsWith("accounts/") || route === "access" || route.startsWith("access/");
   const clientPage = route === "clients" || route.startsWith("clients/");
   const activityPage = route === "activity" || route.startsWith("activity/");
-  const settingsPage = route === "settings";
+  const settingsPage = route === "settings" || route === "settings/security";
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const session = useQuery({
@@ -42,6 +44,11 @@ export function App() {
       }
     },
     retry: false,
+  });
+  const profile = useQuery({
+    queryKey: ["me", "profile", session.data?.user_id],
+    enabled: Boolean(session.data && session.data.credential_id === null),
+    queryFn: ({ signal }) => identityRequest("/me", isAccount, { signal }),
   });
   async function logout() {
     setLoggingOut(true);
@@ -72,15 +79,13 @@ export function App() {
         <div className="header-actions">
           <ThemePicker />
           {session.data && (
-            <button
-              className="icon-button"
-              title="Sign out"
-              aria-label="Sign out"
-              onClick={() => void logout()}
-              disabled={loggingOut}
-            >
-              <LogOut size={18} />
-            </button>
+            <AccountMenu
+              name={profile.data?.display_name ?? "Account"}
+              role={session.data.role}
+              passwordSession={session.data.credential_id === null}
+              loggingOut={loggingOut}
+              onLogout={() => void logout()}
+            />
           )}
         </div>
       </header>
@@ -126,7 +131,6 @@ export function App() {
                 </a>
               )}
               <a href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></a>
-              <a href="#settings" aria-current={settingsPage ? "page" : undefined}><Settings size={18} /><span>My account</span></a>
             </nav>
             <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
           </aside>
@@ -145,7 +149,11 @@ export function App() {
             ) : activityPage ? (
               <Activity key={`${fullRoute}:${session.data.role}:${session.data.session_id}`} route={fullRoute} admin={session.data.role === "admin"} />
             ) : settingsPage ? (
-              <Sessions key={session.data.session_id} session={session.data} />
+              route === "settings/security"
+                ? session.data.credential_id === null
+                  ? <Security />
+                  : <main className="connection"><p role="alert">Password sign-in required.</p></main>
+                : <Sessions key={session.data.session_id} session={session.data} />
             ) : clientPage ? (
               <Clients key={`${route}:${session.data.role}`} route={route} canWrite={session.data.role !== "reader"} />
             ) : storagePage ? (
@@ -167,4 +175,41 @@ export function App() {
       )}
     </>
   );
+}
+
+function AccountMenu({ name, role, passwordSession, loggingOut, onLogout }: {
+  name: string;
+  role: string;
+  passwordSession: boolean;
+  loggingOut: boolean;
+  onLogout: () => void;
+}) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: MouseEvent) => {
+      if (!menu.current?.contains(event.target as Node)) menu.current?.removeAttribute("open");
+    };
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menu.current?.open) {
+        menu.current.open = false;
+        menu.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeEscape);
+    };
+  }, []);
+  const close = () => { if (menu.current) menu.current.open = false; };
+  return <details className="account-menu" ref={menu}>
+    <summary role="button" aria-label="Account menu"><CircleUserRound size={18} /><span>{name}</span><ChevronDown size={16} /></summary>
+    <div className="account-menu-panel">
+      <div className="account-menu-identity"><strong>{name}</strong><span>{role}</span></div>
+      <a href="#settings" onClick={close}><CircleUserRound size={16} />My account</a>
+      {passwordSession && <a href="#settings/security" onClick={close}><Settings size={16} />Security</a>}
+      <button type="button" onClick={() => { close(); onLogout(); }} disabled={loggingOut}><LogOut size={16} />Sign out</button>
+    </div>
+  </details>;
 }

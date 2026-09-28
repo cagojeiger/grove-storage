@@ -12,6 +12,7 @@ async function signIn(page: import("@playwright/test").Page) {
   await page.getByLabel("Username").fill("owner");
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.locator('summary[aria-label="Account menu"]').click();
   await page.getByRole("link", { name: "My account" }).click();
   await expect(page.getByRole("heading", { name: "My API tokens" })).toBeVisible();
 }

@@ -58,6 +58,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
       return response.status;
     });
     assert.equal(blocked, 403);
+    await page.locator('summary[aria-label="Account menu"]').click();
     await page.getByRole("button", { name: "Sign out" }).click();
     await loginWithPassword(page, "console-writer", writerPassword);
     await expect(page.getByText("Reader · Read-only")).toBeVisible();

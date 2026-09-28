@@ -49,7 +49,8 @@ Console
 |   Accounts       |                         [<] 1 / ... [>]         |
 |   Activity       |                                               |
 +------------------+-----------------------------------------------+
-| Account menu --> My account: Profile | Password | Tokens | Sessions|
+| Header account menu --> My account: Profile | Tokens | Sessions   |
+|                     --> Security: Change password                |
 +------------------------------------------------------------------+
 ```
 
