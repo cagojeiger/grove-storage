@@ -170,6 +170,47 @@ jobs:
           /tmp/grove-notegate-sdk/bin/pip install boto3==1.43.99
           /tmp/grove-notegate-sdk/bin/python -B -u scripts/e2e-notegate.py --notegate-dir .compat/notegate
 
+  migration:
+    name: Offline FileGate migration rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Grove
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout released FileGate v0.4.1
+        uses: actions/checkout@v6
+        with:
+          repository: cagojeiger/filegate
+          ref: af685807e5561885616e00918f0207e25188fb3a
+          path: .compat/filegate
+          persist-credentials: false
+
+      - name: Cache both Rust workspaces
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            .compat/filegate -> target
+
+      - name: Build Grove
+        run: cargo build --bin filegate --locked
+
+      - name: Build released FileGate
+        working-directory: .compat/filegate
+        run: cargo build --bin filegate --locked
+
+      - name: Rehearse stopped-writer upgrade and backup restore
+        run: |
+          python3 -m venv /tmp/grove-migration-sdk
+          /tmp/grove-migration-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-migration-sdk/bin/python -B -m unittest discover -s scripts/tests -v
+          /tmp/grove-migration-sdk/bin/python -B -u scripts/e2e-migration.py --filegate-dir .compat/filegate
+
   audit:
     name: Audit
     runs-on: ubuntu-latest

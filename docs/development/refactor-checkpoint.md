@@ -69,7 +69,7 @@ NoteGate 업로드 직후 사용량 표시 캐시 지연은 별도 UI 이슈로 
 |---|---|
 | 리소스 코드 구조 | 현 범위 마감; S3 multipart 조율 일부는 API에 유지 |
 | Management | [준비 계획](management-review.md) 순서로 계약 점검·측정 후 최소 변경 |
-| 운영 이관 | 중단형 migration 스크립트·실제 데이터 리허설·검증·롤백 절차 필요 |
+| 운영 이관 | [격리 업그레이드·복원 리허설](migration-rehearsal.md) 추가; 운영 DB·외부 객체의 실제 복원 검증은 별도 |
 | 운영 연결 | AWS/R2·실제 OIDC·Ingress/TLS·운영 endpoint 별도 검증 |
 | 추가 장애 | 쓰기 진행 중 종료·DB COMMIT 응답 유실 별도 검증 |
 | 미래 기능 | 자동 배치·S3 간 이동·독립 filesystem Node/Agent 조인 별도 설계 |
