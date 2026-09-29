@@ -10,6 +10,13 @@
 | 운영 | 배포·데이터 이관 없음 |
 | 호환성 의미 | spec 03의 지원 subset, AWS 전체 API 동등성을 뜻하지 않음 |
 
+MinIO fixture는 `scripts/fixtures/minio/Dockerfile`로 공식 소스 commit
+`07c3a429bfed433e49018cb0f78a52145d4bedeb`(위 release)을 직접 빌드한다.
+Go 빌더 이미지도 digest로 고정하며, 첫 실행에는 소스·의존성 다운로드가 필요하다.
+이후 실행은 Docker 빌드 캐시를 사용한다. 이 이미지는 loopback 테스트 전용이며
+Grove 릴리스 이미지에 포함하거나 운영용으로 배포하지 않는다.
+기존 Quay/Docker Hub MinIO 이미지 다운로드는 2026-09-29에 인증 오류로 실패했다.
+
 ## 결과
 
 | 경계 | 근거 | 결과 |
