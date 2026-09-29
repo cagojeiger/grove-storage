@@ -132,6 +132,8 @@ try {
   await page.getByLabel("Username").fill("owner");
   await page.getByLabel("Password", { exact: true }).fill(replacement);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("heading", { name: "Security", exact: true }).waitFor();
+  await page.getByRole("main").getByRole("link", { name: "My account", exact: true }).click();
   await page.getByRole("heading", { name: "My account", exact: true }).waitFor();
   await page.getByRole("button", { name: "Edit my name" }).click();
   await page.getByRole("dialog").getByLabel("Name").fill("Console owner updated");
