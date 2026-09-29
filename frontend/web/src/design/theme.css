@@ -8,6 +8,8 @@
     sans-serif;
   letter-spacing: 0;
   color-scheme: light;
+  --console-header-height: 68px;
+  --console-footer-height: calc(32px + env(safe-area-inset-bottom));
   --bg: #fafafb;
   --surface: #fff;
   --text: #23252b;
@@ -42,9 +44,9 @@
 body {
   margin: 0;
 }
-html { scroll-padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+html { scroll-padding-top: calc(var(--console-header-height) + 8px); scroll-padding-bottom: calc(var(--console-footer-height) + 8px); }
 #root { min-height: 100dvh; display: flex; flex-direction: column; }
-.console-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; margin-top: auto; padding: 4px 20px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
+.console-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; gap: 16px; min-height: var(--console-footer-height); margin-top: auto; padding: 4px 20px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
 .console-footer > span { color: var(--muted); font-size: 12px; }
 button,
 input,
@@ -106,7 +108,11 @@ dt,
   font-size: 12px;
 }
 header {
-  height: 68px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--console-header-height);
+  flex-shrink: 0;
   padding: 0 28px;
   border-bottom: 1px solid var(--line);
   display: flex;
@@ -136,10 +142,12 @@ header {
   gap: 12px;
 }
 .account-menu { position: relative; }
-.account-menu summary { display: flex; align-items: center; gap: 8px; max-width: 220px; padding: 8px; cursor: pointer; list-style: none; font-size: 13px; }
+.sidebar-account { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); min-width: 0; }
+.account-menu summary { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px; cursor: pointer; list-style: none; font-size: 13px; }
+.account-menu summary svg { flex-shrink: 0; }
 .account-menu summary::-webkit-details-marker { display: none; }
-.account-menu summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-menu-panel { position: absolute; z-index: 20; bottom: calc(100% + 8px); right: 0; width: 210px; max-height: calc(100dvh - 80px); overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: 0 8px 24px #0002; }
+.account-menu summary span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu-panel { position: absolute; z-index: 20; bottom: calc(100% + 8px); left: 0; width: 210px; max-width: calc(100vw - 36px); max-height: calc(100dvh - var(--console-header-height) - var(--console-footer-height) - 96px); overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); box-shadow: 0 8px 24px #0002; }
 .account-menu-identity { display: grid; gap: 2px; padding: 10px; border-bottom: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
 .account-menu-identity span { color: var(--muted); text-transform: capitalize; font-size: 12px; }
 .account-menu-panel a, .account-menu-panel button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 4px; color: var(--text); background: transparent; text-align: left; text-decoration: none; font-size: 13px; }
@@ -173,6 +181,12 @@ header {
   min-height: 0;
 }
 aside {
+  position: sticky;
+  top: var(--console-header-height);
+  align-self: start;
+  height: calc(100dvh - var(--console-header-height) - var(--console-footer-height));
+  z-index: 15;
+  background: var(--bg);
   border-right: 1px solid var(--line);
   padding: 28px 16px;
   display: flex;
@@ -180,6 +194,8 @@ aside {
   gap: 24px;
 }
 aside nav {
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
   gap: 6px;
 }
@@ -199,10 +215,10 @@ aside nav a[aria-current="page"] {
   color: var(--accent);
 }
 .admin-label {
+  display: block;
   color: var(--muted);
   font-size: 12px;
-  margin-top: auto;
-  padding: 0 16px;
+  padding: 0 8px;
 }
 .nav-group { margin: 20px 14px 4px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
 .resource-toolbar { flex-wrap: wrap; }
@@ -822,6 +838,7 @@ dialog::backdrop {
   }
 }
 @media (max-width: 767px) {
+  :root { --console-header-height: 64px; }
   header {
     height: 64px;
     padding: 0 16px;
@@ -837,8 +854,8 @@ dialog::backdrop {
   .header-actions {
     gap: 6px;
   }
-  .account-menu summary { width: 44px; height: 44px; justify-content: center; }
-  .account-menu summary span, .account-menu summary svg:last-child { display: none; }
+  .sidebar-account { width: 100%; margin-top: 0; padding-top: 8px; }
+  .account-menu-panel { top: calc(100% + 8px); bottom: auto; max-height: 40dvh; }
   .theme {
     gap: 3px;
   }
@@ -858,6 +875,9 @@ dialog::backdrop {
     min-height: 0;
   }
   aside {
+    position: relative;
+    top: auto;
+    height: auto;
     padding: 8px 18px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -876,10 +896,6 @@ dialog::backdrop {
     padding: 10px 14px;
     border-left: 0;
     border-bottom: 2px solid transparent;
-  }
-  .admin-label {
-    margin: 0 0 0 auto;
-    padding: 4px 0;
   }
   .storages .page-heading {
     flex-wrap: wrap;

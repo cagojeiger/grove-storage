@@ -124,6 +124,8 @@ test("account menu separates profile and security", async ({ page }) => {
   await mock(page, true, true);
   await page.goto(root);
   const menu = page.getByRole("button", { name: "Account menu" });
+  await expect(page.getByRole("complementary", { name: "Workspace sidebar" }).getByRole("button", { name: "Account menu" })).toBeVisible();
+  await expect(page.getByRole("contentinfo").getByRole("button", { name: "Account menu" })).toHaveCount(0);
   await expect(menu).toContainText("Owner");
   await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "My account" })).toHaveCount(0);
   await menu.click();
@@ -138,6 +140,37 @@ test("account menu separates profile and security", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
 });
+
+for (const width of [320, 768, 1440]) {
+  for (const theme of ["light", "dark"]) {
+    test(`sidebar account menu stays usable ${width}px ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 600 });
+      await mock(page, true, true);
+      await page.goto(`${root}#settings`);
+      await page.getByLabel("Theme").selectOption(theme);
+      const menu = page.getByRole("button", { name: "Account menu" });
+      if (width >= 768) {
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        const rect = await menu.boundingBox();
+        const footer = await page.getByRole("contentinfo").boundingBox();
+        expect(rect!.x).toBeLessThan(196);
+        expect(rect!.y).toBeGreaterThan(400);
+        expect(rect!.y + rect!.height).toBeLessThanOrEqual(footer!.y);
+      }
+      await menu.click();
+      const panel = await page.locator(".account-menu-panel").boundingBox();
+      expect(panel!.x).toBeGreaterThanOrEqual(0);
+      expect(panel!.x + panel!.width).toBeLessThanOrEqual(width);
+      expect(panel!.y).toBeGreaterThanOrEqual(64);
+      expect(panel!.y + panel!.height).toBeLessThanOrEqual(600);
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+      await page.screenshot({ path: `test-results/sidebar-account-${width}-${theme}.png` });
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeFocused();
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
+    });
+  }
+}
 
 test("token browser sessions cannot open password settings", async ({ page }) => {
   await mock(page);

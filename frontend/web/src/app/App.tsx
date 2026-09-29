@@ -93,7 +93,7 @@ export function App() {
         </main>
       ) : session.data ? (
         <div className="workspace">
-          <aside>
+          <aside aria-label="Workspace sidebar">
             <nav aria-label="Main navigation">
               <a
                 href="#"
@@ -123,7 +123,16 @@ export function App() {
               )}
               <a href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></a>
             </nav>
-            <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
+            <div className="sidebar-account">
+              <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
+              <AccountMenu
+                name={profile.data?.display_name ?? "Account"}
+                role={session.data.role}
+                passwordSession={session.data.credential_id === null}
+                loggingOut={loggingOut}
+                onLogout={() => void logout()}
+              />
+            </div>
           </aside>
           <div className="content">
             {logoutError && (
@@ -166,15 +175,6 @@ export function App() {
       )}
       <footer className="console-footer">
         <span>Grove Storage</span>
-        {session.data && (
-          <AccountMenu
-            name={profile.data?.display_name ?? "Account"}
-            role={session.data.role}
-            passwordSession={session.data.credential_id === null}
-            loggingOut={loggingOut}
-            onLogout={() => void logout()}
-          />
-        )}
       </footer>
     </>
   );

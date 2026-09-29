@@ -38,7 +38,7 @@ test("preview records actions without logging secrets and shows them in Activity
   }
   await page.goto(`${root}/api/admin/console/#activity`);
   await expect(page.getByRole("button").filter({ hasText: `client: ${id}` }).first()).toBeVisible();
-  await expect(page.getByRole("contentinfo").getByRole("button", { name: "Account menu" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Workspace sidebar" }).getByRole("button", { name: "Account menu" })).toBeVisible();
   expect((await command("client.delete", { id })).ok()).toBeTruthy();
 });
 
