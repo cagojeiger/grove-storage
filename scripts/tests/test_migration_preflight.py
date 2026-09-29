@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 rehearsal = runpy.run_path(str(ROOT / "scripts/e2e-migration.py"))
+import migration_fixture
 
 
 class MigrationPreflightTests(unittest.TestCase):
@@ -47,6 +48,32 @@ class MigrationPreflightTests(unittest.TestCase):
             output.side_effect = [revision, dirty]
             with self.assertRaisesRegex(RuntimeError, "clean checkout"):
                 rehearsal["legacy_binary"](ROOT)
+
+    @patch("migration_fixture.subprocess.run")
+    @patch("migration_fixture.docker", side_effect=["container-id", "127.0.0.1:54321"])
+    def test_database_readiness_requires_tcp_not_initialization_socket(self, docker, run):
+        run.return_value.returncode = 0
+        with migration_fixture.rehearsal() as fixture:
+            command = run.call_args.args[0]
+            self.assertEqual(command, ["docker", "exec", fixture.container,
+                                      "pg_isready", "-h", "127.0.0.1", "-U", "filegate"])
+        self.assertEqual(run.call_args.args[0][:4], ["docker", "rm", "-f", "-v"])
+
+    @patch("migration_fixture.subprocess.Popen")
+    def test_startup_failure_includes_diagnostic_and_reaps_process(self, popen):
+        process = Mock()
+        process.poll.return_value = 1
+
+        def start(*args, **kwargs):
+            kwargs["stderr"].write(b"fixture startup diagnostic")
+            return process
+
+        popen.side_effect = start
+        fixture = migration_fixture.Rehearsal("unused", ROOT, "54321")
+        with self.assertRaisesRegex(RuntimeError, "fixture startup diagnostic"):
+            with fixture.server(Path("unused")):
+                self.fail("a failed server must not become ready")
+        process.wait.assert_called_once_with(timeout=10)
 
 
 if __name__ == "__main__":

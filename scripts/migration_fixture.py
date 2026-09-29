@@ -92,7 +92,10 @@ class Rehearsal:
                 deadline = time.monotonic() + 30
                 while True:
                     if process.poll() is not None:
-                        raise RuntimeError("rehearsal server exited before readiness")
+                        log.seek(0, os.SEEK_END)
+                        log.seek(max(log.tell() - 8192, 0))
+                        details = log.read().decode(errors="replace")
+                        raise RuntimeError(f"rehearsal server exited before readiness:\n{details}")
                     try:
                         if self.request("GET", "/readyz") == {"status": "ready"}:
                             break
@@ -136,7 +139,8 @@ def rehearsal():
                "-e", "POSTGRES_USER=filegate", "-e", "POSTGRES_PASSWORD=filegate",
                "-e", "POSTGRES_DB=filegate", "postgres:17-alpine")
         deadline = time.monotonic() + 30
-        while subprocess.run(["docker", "exec", name, "pg_isready", "-U", "filegate"],
+        # The initialization-only PostgreSQL server accepts Unix sockets, not TCP.
+        while subprocess.run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
             if time.monotonic() >= deadline:
                 raise RuntimeError("rehearsal PostgreSQL readiness timeout")
