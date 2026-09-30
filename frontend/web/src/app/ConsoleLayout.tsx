@@ -35,7 +35,6 @@ import {
 import type { Session } from "../api/http";
 import { ThemePicker } from "../design/Theme";
 
-const headerHeight = 56;
 const drawerWidth = 240;
 
 export function ConsoleLayout({
@@ -100,12 +99,12 @@ export function ConsoleLayout({
   return (
     <>
       <AppBar
-        position="sticky"
+        position="fixed"
         color="inherit"
         elevation={0}
-        sx={{ borderBottom: 1, borderColor: "divider" }}
+        sx={{ zIndex: desktop ? theme.zIndex.drawer + 1 : theme.zIndex.appBar }}
       >
-        <Toolbar variant="dense" sx={{ gap: 1.5, minHeight: headerHeight }}>
+        <Toolbar sx={{ gap: 1.5 }}>
           {!desktop && session && (
             <Tooltip title="Open navigation">
               <IconButton
@@ -134,11 +133,7 @@ export function ConsoleLayout({
               alt=""
               sx={{ width: 32, height: 32 }}
             />
-            <Typography
-              component="span"
-              variant="subtitle1"
-              sx={{ fontWeight: 600 }}
-            >
+            <Typography component="span" variant="subtitle1">
               Grove Storage
             </Typography>
           </Stack>
@@ -158,25 +153,22 @@ export function ConsoleLayout({
               paper: {
                 sx: {
                   width: drawerWidth,
-                  top: desktop ? headerHeight : 0,
-                  height: desktop
-                    ? `calc(100dvh - ${headerHeight}px)`
-                    : "100dvh",
                 },
               },
             }}
           >
+            {desktop && <Toolbar />}
             <Stack
               component="aside"
               aria-label="Workspace sidebar"
-              sx={{ p: 2, height: "100%", minHeight: 0 }}
+              sx={{ p: 2, flex: 1, minHeight: 0 }}
             >
               {!desktop && (
                 <Stack
                   direction="row"
                   sx={{ alignItems: "center", justifyContent: "space-between" }}
                 >
-                  <Typography sx={{ fontWeight: 600 }}>Navigation</Typography>
+                  <Typography variant="subtitle1">Navigation</Typography>
                   <Tooltip title="Close navigation">
                     <IconButton aria-label="Close navigation" onClick={close}>
                       <X size={18} />
@@ -193,11 +185,7 @@ export function ConsoleLayout({
                   ({ group, label, href, icon: Icon, selected }) => (
                     <Box key={href}>
                       {group && (
-                        <ListSubheader
-                          component="div"
-                          disableSticky
-                          sx={{ bgcolor: "transparent", mt: 1 }}
-                        >
+                        <ListSubheader component="div" disableSticky>
                           {group}
                         </ListSubheader>
                       )}
@@ -208,7 +196,7 @@ export function ConsoleLayout({
                         aria-current={selected ? "page" : undefined}
                         onClick={close}
                       >
-                        <ListItemIcon sx={{ minWidth: 32 }}>
+                        <ListItemIcon>
                           <Icon size={18} />
                         </ListItemIcon>
                         <ListItemText primary={label} />
@@ -245,7 +233,10 @@ export function ConsoleLayout({
             </Stack>
           </Drawer>
         )}
-        <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Toolbar />
+          {children}
+        </Box>
       </Box>
     </>
   );
@@ -285,8 +276,13 @@ function AccountMenu({
         onClick={(event) => setAnchor(event.currentTarget)}
         sx={{ width: "100%" }}
       >
-        <ListItemIcon><CircleUserRound size={18} /></ListItemIcon>
-        <ListItemText primary={name} slotProps={{ primary: { noWrap: true, variant: "body2" } }} />
+        <ListItemIcon>
+          <CircleUserRound size={18} />
+        </ListItemIcon>
+        <ListItemText
+          primary={name}
+          slotProps={{ primary: { noWrap: true, variant: "body2" } }}
+        />
         <ChevronUp size={16} />
       </ListItemButton>
       <Menu

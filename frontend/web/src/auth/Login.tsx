@@ -1,4 +1,12 @@
-import { TextField, Button } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Container,
+  Stack,
+  Typography,
+  TextField,
+  Button,
+} from "@mui/material";
 
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
@@ -46,54 +54,62 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
     }
   }
   return (
-    <main className="login">
-      <img
-        className="login-logo"
-        src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
-        alt=""
-      />
-      <h1>Grove Storage</h1>
-      <h2>Sign in</h2>
-      <form
-        onSubmit={(event) => {
-          void submit(event);
-        }}
-      >
-        <TextField
-          label="Username"
-          id="username"
-          autoComplete="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          required
-          disabled={pending}
-          slotProps={{ htmlInput: { spellCheck: false } }}
+    <Container component="main" maxWidth="xs" sx={{ py: 6 }}>
+      <Stack spacing={3}>
+        <Box
+          component="img"
+          sx={{ width: 64, height: 64, objectFit: "contain" }}
+          src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
+          alt=""
         />
-        <TextField
-          label="Password"
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          disabled={pending}
-          slotProps={{ htmlInput: { spellCheck: false } }}
-        />
-        {error && <p role="alert">{error}</p>}
-        <Button
-          variant="contained"
-          className="primary"
-          type="submit"
-          disabled={pending || !username.trim() || !password || wait > 0}
+        <Typography component="h1" variant="h5">
+          Grove Storage
+        </Typography>
+        <Typography component="h2" variant="h6">
+          Sign in
+        </Typography>
+        <Stack
+          component="form"
+          spacing={3}
+          onSubmit={(event) => {
+            void submit(event);
+          }}
         >
-          {pending ? "Signing in" : wait ? `Retry in ${wait}s` : "Sign in"}
-          <ArrowRight size={16} aria-hidden="true" />
-        </Button>
-      </form>
-      <p className="muted">
-        Lost access? Contact the server operator for account recovery.
-      </p>
-    </main>
+          <TextField
+            label="Username"
+            id="username"
+            autoComplete="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            required
+            disabled={pending}
+            slotProps={{ htmlInput: { spellCheck: false } }}
+          />
+          <TextField
+            label="Password"
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            disabled={pending}
+            slotProps={{ htmlInput: { spellCheck: false } }}
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+          <Button
+            variant="contained"
+            type="submit"
+            endIcon={<ArrowRight size={16} />}
+            disabled={pending || !username.trim() || !password || wait > 0}
+          >
+            {pending ? "Signing in" : wait ? `Retry in ${wait}s` : "Sign in"}
+          </Button>
+        </Stack>
+        <Typography variant="body2" color="text.secondary">
+          Lost access? Contact the server operator for account recovery.
+        </Typography>
+      </Stack>
+    </Container>
   );
 }

@@ -7,6 +7,12 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  Alert,
+  Container,
+  Stack,
+  TableContainer,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 
 import { FormEvent, useState } from "react";
@@ -48,100 +54,133 @@ export function UsageHistory() {
     else setDays(value);
   }
   return (
-    <main className="overview usage-history">
-      <a className="back-link" href="#">
-        <ArrowLeft size={16} />
-        Overview
-      </a>
-      <div className="page-heading">
-        <div>
-          <h1>Usage history</h1>
-        </div>
-        <IconButton
-          type="submit"
-          className="icon-button"
-          title="Refresh usage history"
-          aria-label="Refresh usage history"
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
+    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+      <Stack spacing={3}>
+        <Button
+          href="#"
+          startIcon={<ArrowLeft size={16} />}
+          sx={{ alignSelf: "flex-start" }}
         >
-          <RefreshCw size={18} />
-        </IconButton>
-      </div>
-      <form className="usage-range" onSubmit={apply}>
-        <TextField
-          name="days"
-          type="number"
-          required
-          defaultValue={90}
-          label={"Days"}
-          slotProps={{ htmlInput: { min: "1", max: "3650", step: "1" } }}
-        />
-        <Button type="submit" disabled={query.isFetching}>
-          Apply
+          Overview
         </Button>
-      </form>
-      {query.isPending ? (
-        <p role="status">Loading usage history...</p>
-      ) : query.isError ? (
-        <p role="alert">{message(query.error)}</p>
-      ) : !rows.length ? (
-        <p className="empty">No snapshots recorded for this period.</p>
-      ) : (
-        <>
-          <div
-            className="usage-table"
-            role="region"
-            aria-label="Daily snapshots"
-            tabIndex={0}
-          >
-            <Table>
-              <caption>Daily snapshots (UTC)</caption>
-              <TableHead>
-                <TableRow>
-                  <TableCell scope="col">Date</TableCell>
-                  <TableCell scope="col">Storage</TableCell>
-                  <TableCell scope="col">Client</TableCell>
-                  <TableCell scope="col">Active files</TableCell>
-                  <TableCell scope="col">Active data</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.slice(0, visible).map((row) => (
-                  <TableRow
-                    key={JSON.stringify([
-                      row.day,
-                      row.storage_id,
-                      row.client_id,
-                    ])}
-                  >
-                    <TableCell>
-                      <time dateTime={row.day}>{row.day}</time>
-                    </TableCell>
-                    <TableCell>{row.storage_id}</TableCell>
-                    <TableCell>{row.client_id}</TableCell>
-                    <TableCell>
-                      {row.active_files.toLocaleString("en-US")}
-                    </TableCell>
-                    <TableCell>{bytes(row.active_bytes)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="usage-count">
-            <span className="muted">
-              {Math.min(visible, rows.length).toLocaleString("en-US")} of{" "}
-              {rows.length.toLocaleString("en-US")} snapshots
+        <Stack
+          direction="row"
+          sx={{ alignItems: "center", justifyContent: "space-between" }}
+        >
+          <Typography component="h1" variant="h5">
+            Usage history
+          </Typography>
+          <Tooltip title="Refresh usage history">
+            <span>
+              <IconButton
+                aria-label="Refresh usage history"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                <RefreshCw size={18} />
+              </IconButton>
             </span>
-            {visible < rows.length && (
-              <Button type="submit" onClick={() => setVisible(visible + 100)}>
-                Show more
-              </Button>
-            )}
-          </div>
-        </>
-      )}
-    </main>
+          </Tooltip>
+        </Stack>
+        <Stack
+          component="form"
+          direction="row"
+          spacing={2}
+          onSubmit={apply}
+          sx={{ alignItems: "center" }}
+        >
+          <TextField
+            sx={{ maxWidth: 160 }}
+            name="days"
+            type="number"
+            required
+            defaultValue={90}
+            label={"Days"}
+            slotProps={{ htmlInput: { min: "1", max: "3650", step: "1" } }}
+          />
+          <Button type="submit" disabled={query.isFetching}>
+            Apply
+          </Button>
+        </Stack>
+        {query.isPending ? (
+          <Typography role="status">Loading usage history...</Typography>
+        ) : query.isError ? (
+          <Alert severity="error">{message(query.error)}</Alert>
+        ) : !rows.length ? (
+          <Typography color="text.secondary">
+            No snapshots recorded for this period.
+          </Typography>
+        ) : (
+          <>
+            <TableContainer
+              role="region"
+              aria-label="Daily snapshots"
+              tabIndex={0}
+            >
+              <Table
+                size="small"
+                sx={{
+                  minWidth: 620,
+                  overflowWrap: "anywhere",
+                  tableLayout: "fixed",
+                }}
+              >
+                <caption>Daily snapshots (UTC)</caption>
+                <TableHead>
+                  <TableRow>
+                    <TableCell scope="col">Date</TableCell>
+                    <TableCell scope="col">Storage</TableCell>
+                    <TableCell scope="col">Client</TableCell>
+                    <TableCell scope="col">Active files</TableCell>
+                    <TableCell scope="col">Active data</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rows.slice(0, visible).map((row) => (
+                    <TableRow
+                      key={JSON.stringify([
+                        row.day,
+                        row.storage_id,
+                        row.client_id,
+                      ])}
+                    >
+                      <TableCell>
+                        <time dateTime={row.day}>{row.day}</time>
+                      </TableCell>
+                      <TableCell>{row.storage_id}</TableCell>
+                      <TableCell>{row.client_id}</TableCell>
+                      <TableCell>
+                        {row.active_files.toLocaleString("en-US")}
+                      </TableCell>
+                      <TableCell>{bytes(row.active_bytes)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              sx={{
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {Math.min(visible, rows.length).toLocaleString("en-US")} of{" "}
+                {rows.length.toLocaleString("en-US")} snapshots
+              </Typography>
+              {visible < rows.length && (
+                <Button type="submit" onClick={() => setVisible(visible + 100)}>
+                  Show more
+                </Button>
+              )}
+            </Stack>
+          </>
+        )}
+      </Stack>
+    </Container>
   );
 }

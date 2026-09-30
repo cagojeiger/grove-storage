@@ -1,4 +1,13 @@
-import { TextField, Button } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Container,
+  Link,
+  Stack,
+  Typography,
+  TextField,
+  Button,
+} from "@mui/material";
 
 import { FormEvent, useEffect, useState } from "react";
 import { identity, ApiError, message, request } from "../api/http";
@@ -98,73 +107,79 @@ export function SetPassword() {
   }
 
   return (
-    <main className="login">
-      <img
-        className="login-logo"
-        src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
-        alt=""
-      />
-      <h1>Grove Storage</h1>
-      <h2>Set password</h2>
-      {status === "loading" && <p role="status">Checking setup link...</p>}
-      {status === "unavailable" && (
-        <p role="alert">
-          This setup link is unavailable or expired. Ask an admin for a new
-          link.
-        </p>
-      )}
-      {status === "complete" && (
-        <p role="status">
-          Password set. Sign in with your username and password.
-        </p>
-      )}
-      {status === "ready" && info && (
-        <form
-          onSubmit={(event) => {
-            void submit(event);
-          }}
-        >
-          <TextField
-            label="Username"
-            id="setup-username"
-            value={info.username}
-            autoComplete="username"
-            slotProps={{ input: { readOnly: true } }}
-          />
-          <TextField
-            label="New password"
-            id="setup-password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            disabled={pending}
-            slotProps={{ htmlInput: { minLength: 15, maxLength: 128 } }}
-          />
-          <TextField
-            label="Confirm password"
-            id="setup-confirmation"
-            name="confirmation"
-            type="password"
-            autoComplete="new-password"
-            required
-            disabled={pending}
-            slotProps={{ htmlInput: { minLength: 15, maxLength: 128 } }}
-          />
-          {error && <p role="alert">{error}</p>}
-          <Button
-            variant="contained"
-            className="primary"
-            type="submit"
-            disabled={pending}
+    <Container component="main" maxWidth="xs" sx={{ py: 6 }}>
+      <Stack spacing={3}>
+        <Box
+          component="img"
+          sx={{ width: 64, height: 64, objectFit: "contain" }}
+          src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
+          alt=""
+        />
+        <Typography component="h1" variant="h5">
+          Grove Storage
+        </Typography>
+        <Typography component="h2" variant="h6">
+          Set password
+        </Typography>
+        {status === "loading" && (
+          <Typography role="status">Checking setup link...</Typography>
+        )}
+        {status === "unavailable" && (
+          <Alert severity="error">
+            This setup link is unavailable or expired. Ask an admin for a new
+            link.
+          </Alert>
+        )}
+        {status === "complete" && (
+          <Alert severity="success" role="status">
+            Password set. Sign in with your username and password.
+          </Alert>
+        )}
+        {status === "ready" && info && (
+          <Stack
+            component="form"
+            spacing={3}
+            onSubmit={(event) => {
+              void submit(event);
+            }}
           >
-            {pending ? "Setting password" : "Set password"}
-          </Button>
-        </form>
-      )}
-      {(status === "complete" || status === "unavailable") && (
-        <a href="#">Sign in</a>
-      )}
-    </main>
+            <TextField
+              label="Username"
+              id="setup-username"
+              value={info.username}
+              autoComplete="username"
+              slotProps={{ input: { readOnly: true } }}
+            />
+            <TextField
+              label="New password"
+              id="setup-password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              disabled={pending}
+              slotProps={{ htmlInput: { minLength: 15, maxLength: 128 } }}
+            />
+            <TextField
+              label="Confirm password"
+              id="setup-confirmation"
+              name="confirmation"
+              type="password"
+              autoComplete="new-password"
+              required
+              disabled={pending}
+              slotProps={{ htmlInput: { minLength: 15, maxLength: 128 } }}
+            />
+            {error && <Alert severity="error">{error}</Alert>}
+            <Button variant="contained" type="submit" disabled={pending}>
+              {pending ? "Setting password" : "Set password"}
+            </Button>
+          </Stack>
+        )}
+        {(status === "complete" || status === "unavailable") && (
+          <Link href="#">Sign in</Link>
+        )}
+      </Stack>
+    </Container>
   );
 }

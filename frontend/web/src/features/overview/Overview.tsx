@@ -1,4 +1,18 @@
-import { Box, IconButton, Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  CircularProgress,
+  IconButton,
+  Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import "./overview.css";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, History } from "lucide-react";
 import { message, request, Usage } from "../../api/http";
@@ -38,14 +52,17 @@ export function Overview() {
     <main className="overview topology-overview">
       <div className="page-heading">
         <div>
-          <h1>Overview</h1>
+          <Typography component="h1" variant="h5">
+            Overview
+          </Typography>
         </div>
         <div className="page-actions">
           <a className="back-link" href="#usage">
             <History size={16} />
             Usage history
           </a>
-          <IconButton type="submit"
+          <IconButton
+            type="submit"
             className="icon-button"
             title="Refresh"
             aria-label="Refresh"
@@ -55,36 +72,70 @@ export function Overview() {
               void cache.invalidateQueries({ queryKey: ["clients"] });
             }}
           >
-            <RefreshCw size={18} className={query.isFetching ? "spin" : ""} />
+            {query.isFetching ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : (
+              <RefreshCw size={18} />
+            )}
           </IconButton>
         </div>
       </div>
       {query.isPending ? (
-        <p role="status">Loading...</p>
+        <Typography role="status">Loading...</Typography>
       ) : query.isError ? (
-        <p role="alert">{message(query.error)}</p>
+        <Alert severity="error">{message(query.error)}</Alert>
       ) : (
         data && (
           <>
             <dl className="metrics">
               <div>
-                <dt>Clients</dt>
+                <Typography
+                  component="dt"
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Clients
+                </Typography>
                 <dd>{data.clients.length}</dd>
               </div>
               <div>
-                <dt>Storage</dt>
+                <Typography
+                  component="dt"
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Storage
+                </Typography>
                 <dd>{data.usage.length}</dd>
               </div>
               <div>
-                <dt>Total files</dt>
+                <Typography
+                  component="dt"
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Total files
+                </Typography>
                 <dd>{sum("active_files").toLocaleString("en-US")}</dd>
               </div>
               <div>
-                <dt>Total stored</dt>
+                <Typography
+                  component="dt"
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Total stored
+                </Typography>
                 <dd>{bytes(sum("active_bytes"))}</dd>
               </div>
               <div>
-                <dt>Configured capacity</dt>
+                <Typography
+                  component="dt"
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Configured capacity
+                </Typography>
                 <dd>{bytes(sum("capacity_bytes"))}</dd>
               </div>
             </dl>
@@ -99,20 +150,77 @@ export function Overview() {
               ready={data.ready}
             />
             <Box component="section" sx={{ mt: 4 }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2 }}>
-                <Typography component="h2" variant="h6">Storage usage</Typography>
-                <Link href="#storages" variant="body2">View all storage</Link>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  mb: 2,
+                }}
+              >
+                <Typography component="h2" variant="h6">
+                  Storage usage
+                </Typography>
+                <Link href="#storages" variant="body2">
+                  View all storage
+                </Link>
               </Box>
               <TableContainer>
-                <Table size="small" aria-label="Storage usage" sx={{ minWidth: 640 }}>
-                  <TableHead><TableRow><TableCell>Storage</TableCell><TableCell align="right">Files</TableCell><TableCell align="right">Stored</TableCell><TableCell align="right">Reserved</TableCell><TableCell align="right">Pending deletion</TableCell><TableCell align="right">Configured capacity</TableCell></TableRow></TableHead>
-                  <TableBody>{[...data.usage].sort((a, b) => a.storage_id.localeCompare(b.storage_id)).slice(0, 5).map((row) => <TableRow key={row.storage_id} hover>
-                    <TableCell><Link href={storageLink(row.storage_id)}>{row.storage_id}</Link></TableCell>
-                    <TableCell align="right">{row.active_files.toLocaleString("en-US")}</TableCell><TableCell align="right">{bytes(row.active_bytes)}</TableCell><TableCell align="right">{bytes(row.reserved_bytes)}</TableCell><TableCell align="right">{bytes(row.purge_pending_bytes)}</TableCell><TableCell align="right">{bytes(row.capacity_bytes)}</TableCell>
-                  </TableRow>)}</TableBody>
+                <Table
+                  size="small"
+                  aria-label="Storage usage"
+                  sx={{ minWidth: 640 }}
+                >
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Storage</TableCell>
+                      <TableCell align="right">Files</TableCell>
+                      <TableCell align="right">Stored</TableCell>
+                      <TableCell align="right">Reserved</TableCell>
+                      <TableCell align="right">Pending deletion</TableCell>
+                      <TableCell align="right">Configured capacity</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[...data.usage]
+                      .sort((a, b) => a.storage_id.localeCompare(b.storage_id))
+                      .slice(0, 5)
+                      .map((row) => (
+                        <TableRow key={row.storage_id} hover>
+                          <TableCell>
+                            <Link href={storageLink(row.storage_id)}>
+                              {row.storage_id}
+                            </Link>
+                          </TableCell>
+                          <TableCell align="right">
+                            {row.active_files.toLocaleString("en-US")}
+                          </TableCell>
+                          <TableCell align="right">
+                            {bytes(row.active_bytes)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {bytes(row.reserved_bytes)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {bytes(row.purge_pending_bytes)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {bytes(row.capacity_bytes)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
                 </Table>
               </TableContainer>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Grove-managed usage and configured allocation limits, not provider free space.</Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 1.5 }}
+              >
+                Grove-managed usage and configured allocation limits, not
+                provider free space.
+              </Typography>
             </Box>
           </>
         )

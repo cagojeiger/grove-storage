@@ -3,6 +3,7 @@ import {
   Checkbox,
   FormControlLabel,
   Box,
+  Container,
   Button,
   Typography,
   Alert,
@@ -85,7 +86,7 @@ export function StorageEditor({
     }
   }
   return (
-    <Box sx={{ maxWidth: 760 }}>
+    <Container maxWidth="md" disableGutters>
       <Button
         variant="text"
         disabled={busy}
@@ -218,7 +219,7 @@ export function StorageEditor({
               name="unit"
               defaultValue="B"
               select
-              sx={{ width: 112, flexShrink: 0 }}
+              fullWidth={false}
               slotProps={{
                 htmlInput: { "aria-label": "Capacity unit" },
                 select: { native: true },
@@ -264,6 +265,6 @@ export function StorageEditor({
           {busy ? "Saving..." : "Save"}
         </Button>
       </Box>
-    </Box>
+    </Container>
   );
 }

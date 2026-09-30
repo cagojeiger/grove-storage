@@ -1,4 +1,4 @@
-import { Button } from "@mui/material";
+import { Alert, Button, Container, Stack, Typography } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -87,23 +87,21 @@ export function App() {
       {route === "set-password" ? (
         <SetPassword key={fullRoute} />
       ) : session.isPending ? (
-        <main className="connection" role="status">
-          Checking session...
-        </main>
+        <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
+          <Typography role="status">Checking session...</Typography>
+        </Container>
       ) : session.isError ? (
-        <main className="connection">
-          <p role="alert">{message(session.error)}</p>
-          <Button type="submit" onClick={() => void session.refetch()}>
-            Reconnect
-          </Button>
-        </main>
+        <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
+          <Stack spacing={2}>
+            <Alert severity="error">{message(session.error)}</Alert>
+            <Button type="submit" onClick={() => void session.refetch()}>
+              Reconnect
+            </Button>
+          </Stack>
+        </Container>
       ) : session.data ? (
         <>
-          {logoutError && (
-            <p className="logout-error" role="alert">
-              {logoutError}
-            </p>
-          )}
+          {logoutError && <Alert severity="error">{logoutError}</Alert>}
           {accessPage ? (
             session.data.role === "admin" ? (
               <Access
@@ -112,9 +110,9 @@ export function App() {
                 currentUserId={session.data.user_id}
               />
             ) : (
-              <main className="connection">
-                <p role="alert">Admin access required.</p>
-              </main>
+              <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
+                <Alert severity="error">Admin access required.</Alert>
+              </Container>
             )
           ) : activityPage ? (
             <Activity
@@ -127,9 +125,9 @@ export function App() {
               session.data.credential_id === null ? (
                 <Security />
               ) : (
-                <main className="connection">
-                  <p role="alert">Password sign-in required.</p>
-                </main>
+                <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
+                  <Alert severity="error">Password sign-in required.</Alert>
+                </Container>
               )
             ) : (
               <Sessions key={session.data.session_id} session={session.data} />

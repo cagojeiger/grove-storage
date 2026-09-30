@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Container,
+  CircularProgress,
   IconButton,
   Button,
   Link,
@@ -146,7 +147,11 @@ export function Storages({
                   disabled={refreshing}
                   onClick={() => void refreshStorages(cache)}
                 >
-                  <RefreshCw size={17} className={refreshing ? "spin" : ""} />
+                  {refreshing ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <RefreshCw size={18} />
+                  )}
                 </IconButton>
               </span>
             </Tooltip>

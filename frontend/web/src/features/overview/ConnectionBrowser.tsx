@@ -3,6 +3,7 @@ import {
   TextField,
   ButtonBase,
   IconButton,
+  Typography,
 } from "@mui/material";
 
 import { useState } from "react";
@@ -91,9 +92,9 @@ export function ConnectionBrowser({
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([label, members]) => (
               <section key={label}>
-                <h3>
+                <Typography component="h3" variant="subtitle1">
                   {label} <span className="muted">({members.length})</span>
-                </h3>
+                </Typography>
                 {members.map((id) => {
                   const summary = sumClients([id], totals);
                   const row = storages.find((row) => row.storage_id === id);

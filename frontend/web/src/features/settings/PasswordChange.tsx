@@ -1,4 +1,4 @@
-import { TextField, Button } from "@mui/material";
+import { Alert, Stack, Typography, TextField, Button } from "@mui/material";
 
 import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,10 +53,13 @@ export function PasswordChange() {
   }
 
   return (
-    <section className="storage-section" aria-labelledby="password-heading">
-      <h2 id="password-heading">Password</h2>
-      <form
-        className="account-password-form"
+    <Stack component="section" spacing={3} aria-labelledby="password-heading">
+      <Typography component="h2" variant="h6" id="password-heading">
+        Password
+      </Typography>
+      <Stack
+        component="form"
+        spacing={3}
         onSubmit={(event) => {
           void submit(event);
         }}
@@ -96,11 +99,16 @@ export function PasswordChange() {
             formHelperText: { role: confirmationError ? "alert" : undefined },
           }}
         />
-        {error && <p role="alert">{error}</p>}
-        <Button variant="contained" type="submit" disabled={pending} startIcon={<KeyRound size={16} />}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <Button
+          variant="contained"
+          type="submit"
+          disabled={pending}
+          startIcon={<KeyRound size={16} />}
+        >
           {pending ? "Changing password" : "Change password"}
         </Button>
-      </form>
-    </section>
+      </Stack>
+    </Stack>
   );
 }

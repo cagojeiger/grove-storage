@@ -63,7 +63,6 @@ export function Dialog({
           <span>
             <IconButton
               type="button"
-              className="icon-button"
               aria-label="Close"
               title="Close"
               disabled={busy || closeDisabled}

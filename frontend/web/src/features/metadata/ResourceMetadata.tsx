@@ -42,14 +42,18 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
       className="resource-metadata"
       sx={{ gridColumn: "1 / -1", minWidth: 0 }}
     >
-      <Stack
+      <Typography
         component="dt"
-        direction="row"
-        sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1,
+        }}
       >
-        <Typography component="span" variant="body2" color="text.secondary">
-          Metadata
-        </Typography>
+        Metadata
         <Stack direction="row" spacing={0.5}>
           <Tooltip title="Refresh metadata">
             <span>
@@ -78,7 +82,7 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
             </Tooltip>
           )}
         </Stack>
-      </Stack>
+      </Typography>
       <Box component="dd" sx={{ m: 0, mt: 0.5 }}>
         {query.isPending ? (
           <Typography role="status" variant="body2">

@@ -76,7 +76,7 @@ export async function accessChecks(
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "Recovery admin", exact: true })).toBeVisible();
-  const userId = await page.locator(".detail-fields dd").first().innerText();
+  const userId = await page.locator('dl[aria-label="Account details"] dd').first().innerText();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Recovery fixture");
   await page.getByRole("button", { name: "Issue", exact: true }).click();

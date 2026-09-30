@@ -1,12 +1,7 @@
-import { ButtonBase } from "@mui/material";
+import { ButtonBase, Typography } from "@mui/material";
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowRight,
-  HardDrive,
-  AppWindow,
-  Layers,
-} from "lucide-react";
+import { ArrowRight, HardDrive, AppWindow, Layers } from "lucide-react";
 import { command } from "../../api/commands";
 import { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
@@ -86,7 +81,9 @@ export function Connections({
   return (
     <>
       <div className="connections-heading">
-        <h2>Connections</h2>
+        <Typography component="h2" variant="h6">
+          Connections
+        </Typography>
         <span className="muted">Configured routes</span>
       </div>
       <section
@@ -97,7 +94,9 @@ export function Connections({
         <ConnectionPaths container={graph} revision={revision} />
         <div className="connection-column">
           <div className="section-heading">
-            <h2>Clients</h2>
+            <Typography component="h2" variant="h6">
+              Clients
+            </Typography>
             <span className="muted">{clients.length}</span>
           </div>
           <div
@@ -115,7 +114,9 @@ export function Connections({
                   data-side="client"
                   data-selected={selectedClient === id}
                 >
-                  <ButtonBase component="a" href={clientLink(id)}
+                  <ButtonBase
+                    component="a"
+                    href={clientLink(id)}
                     className="connection-select"
                     aria-label={`Open client ${id}`}
                     onMouseEnter={() => chooseClient(id)}
@@ -140,7 +141,8 @@ export function Connections({
               );
             })}
             {clientRows.hidden.length > 0 && (
-              <ButtonBase type="submit"
+              <ButtonBase
+                type="submit"
                 className="connection-item connection-more"
                 data-connection="client:more"
                 data-side="client"
@@ -170,7 +172,9 @@ export function Connections({
               src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
               alt=""
             />
-            <h2>Grove Storage</h2>
+            <Typography component="h2" variant="h6">
+              Grove Storage
+            </Typography>
             <span className="muted">S3 gateway</span>
             <p>
               <span className={`dot ${ready ? "online" : ""}`} />
@@ -180,7 +184,9 @@ export function Connections({
         </div>
         <div className="connection-column">
           <div className="section-heading">
-            <h2>Storage</h2>
+            <Typography component="h2" variant="h6">
+              Storage
+            </Typography>
             <span className="muted">{storages.length}</span>
           </div>
           <div
@@ -197,7 +203,9 @@ export function Connections({
                 data-selected={row.storage_id === activeStorage}
               >
                 <div className="connection-storage-heading">
-                  <ButtonBase component="a" href={storageLink(row.storage_id)}
+                  <ButtonBase
+                    component="a"
+                    href={storageLink(row.storage_id)}
                     className="connection-select connection-title"
                     aria-label={`Open storage ${row.storage_id}`}
                     onMouseEnter={() => chooseStorage(row.storage_id)}
@@ -207,13 +215,12 @@ export function Connections({
                     <strong>{row.storage_id}</strong>
                   </ButtonBase>
                 </div>
-                <p className="muted">
-                  {row.kind.toUpperCase()} · Configured
-                </p>
+                <p className="muted">{row.kind.toUpperCase()} · Configured</p>
               </article>
             ))}
             {storageRows.hidden.length > 0 && (
-              <ButtonBase type="submit"
+              <ButtonBase
+                type="submit"
                 className="connection-item connection-more"
                 data-connection="storage:more"
                 data-side="storage"

@@ -24,6 +24,10 @@ for (const mode of ["light", "dark"]) {
           .locator("[class*='account-toolbar'], .pagination, .overview"),
       ).toHaveCount(0);
       await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Create user" })).toHaveCSS(
+        "background-color",
+        mode === "dark" ? "rgb(156, 219, 121)" : "rgb(23, 107, 61)",
+      );
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -31,6 +35,7 @@ for (const mode of ["light", "dark"]) {
       ).toBe(true);
       await page.screenshot({
         path: `test-results/accounts-mui-list-${width}-${mode}.png`,
+        animations: "disabled",
         fullPage: true,
       });
       await page.getByRole("link", { name, exact: true }).click();
@@ -69,6 +74,7 @@ for (const mode of ["light", "dark"]) {
       ).toBe(true);
       await page.screenshot({
         path: `test-results/accounts-mui-detail-${width}-${mode}.png`,
+        animations: "disabled",
         fullPage: true,
       });
     });
@@ -127,6 +133,7 @@ for (const mode of ["light", "dark"]) {
       await expect(dialog.locator("..")).toHaveCSS("opacity", "1");
       await page.screenshot({
         path: `test-results/accounts-mui-${kind.replace(" ", "-")}-${mode}.png`,
+        animations: "disabled",
       });
       await saved.check();
       await done.click();

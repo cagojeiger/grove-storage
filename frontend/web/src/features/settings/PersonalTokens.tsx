@@ -6,6 +6,13 @@ import {
   FormControlLabel,
   Button,
   IconButton,
+  Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 
 import { FormEvent, useState } from "react";
@@ -49,9 +56,15 @@ export function PersonalTokens({
   });
   const rows = query.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <section className="storage-section" aria-label="My API tokens">
-      <div className="section-heading">
-        <h2>My API tokens</h2>
+    <Stack component="section" aria-label="My API tokens" spacing={2}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+      >
+        <Typography component="h2" variant="h6">
+          My API tokens
+        </Typography>
         <Button
           type="submit"
           startIcon={<KeyRound size={16} />}
@@ -60,48 +73,68 @@ export function PersonalTokens({
         >
           Issue token
         </Button>
-      </div>
+      </Stack>
       {query.isPending ? (
-        <p role="status">Loading tokens...</p>
+        <Typography role="status">Loading tokens...</Typography>
       ) : query.isError ? (
-        <p role="alert">
+        <Alert severity="error">
           {message(query.error)}{" "}
           <Button type="submit" onClick={() => void query.refetch()}>
             Retry
           </Button>
-        </p>
+        </Alert>
       ) : (
         <>
-          {rows.map((token) => (
-            <div className="token-row" key={token.id}>
-              <div>
-                <strong>{token.label}</strong>
-                <p className="muted">{token.token_prefix}</p>
-                <p className="muted">{token.id}</p>
-              </div>
-              <div>
-                <span>
-                  {token.revoked_at
-                    ? "Revoked"
-                    : Date.parse(token.expires_at) <= Date.now()
-                      ? "Expired"
-                      : "Active"}
-                </span>
-                <p className="muted">Expires {time(token.expires_at)}</p>
-              </div>
-              <IconButton
-                type="submit"
-                className="icon-button"
-                title={`Revoke ${token.label}`}
-                aria-label={`Revoke ${token.label}`}
-                disabled={Boolean(token.revoked_at)}
-                onClick={() => setTarget(token)}
+          <List disablePadding aria-label="My API tokens">
+            {rows.map((token) => (
+              <ListItem
+                key={token.id}
+                divider
+                disableGutters
+                secondaryAction={
+                  <Tooltip title={`Revoke ${token.label}`}>
+                    <span>
+                      <IconButton
+                        edge="end"
+                        aria-label={`Revoke ${token.label}`}
+                        disabled={Boolean(token.revoked_at)}
+                        onClick={() => setTarget(token)}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                }
               >
-                <Trash2 size={16} />
-              </IconButton>
-            </div>
-          ))}
-          {!rows.length && <p className="empty">No API tokens.</p>}
+                <ListItemText
+                  primary={token.label}
+                  sx={{ overflowWrap: "anywhere" }}
+                  slotProps={{ secondary: { component: "div" } }}
+                  secondary={
+                    <Stack spacing={0.5}>
+                      <Typography variant="body2">
+                        {token.token_prefix}
+                      </Typography>
+                      <Typography variant="body2">{token.id}</Typography>
+                      <Typography variant="body2">
+                        {token.revoked_at
+                          ? "Revoked"
+                          : Date.parse(token.expires_at) <= Date.now()
+                            ? "Expired"
+                            : "Active"}
+                      </Typography>
+                      <Typography variant="body2">
+                        Expires {time(token.expires_at)}
+                      </Typography>
+                    </Stack>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
+          {!rows.length && (
+            <Typography color="text.secondary">No API tokens.</Typography>
+          )}
           {query.hasNextPage && (
             <Button
               type="submit"
@@ -125,7 +158,7 @@ export function PersonalTokens({
           }}
         />
       )}
-    </section>
+    </Stack>
   );
 }
 
@@ -211,7 +244,7 @@ function PersonalTokenDialog({
       onClose={onClose}
     >
       {issued ? (
-          <IssuedToken value={issued} onDone={onClose} />
+        <IssuedToken value={issued} onDone={onClose} />
       ) : (
         <form
           onSubmit={(event) => {
@@ -219,17 +252,19 @@ function PersonalTokenDialog({
           }}
         >
           <DialogContent>
-            <fieldset className="storage-form" disabled={busy || unknown}>
+            <Stack spacing={3}>
               {target === "issue" ? (
                 <>
                   <TextField
                     name="label"
+                    disabled={busy || unknown}
                     required
                     label={"Label"}
                     slotProps={{ htmlInput: { maxLength: 80 } }}
                   />
                   <TextField
                     name="days"
+                    disabled={busy || unknown}
                     type="number"
                     defaultValue={90}
                     required
@@ -242,12 +277,12 @@ function PersonalTokenDialog({
                     autoComplete="current-password"
                     required
                     label={"Current password"}
-                    className="full-field"
+                    disabled={busy || unknown}
                   />
                 </>
               ) : (
                 <FormControlLabel
-                  className="check-field full-field"
+                  disabled={busy || unknown}
                   control={
                     <Checkbox
                       checked={confirmed}
@@ -257,12 +292,8 @@ function PersonalTokenDialog({
                   label={<>Revoke {target.label}</>}
                 />
               )}
-            </fieldset>
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
+              {error && <Alert severity="error">{error}</Alert>}
+            </Stack>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={busy} onClick={onClose}>
@@ -272,7 +303,6 @@ function PersonalTokenDialog({
               type="submit"
               variant="contained"
               color={target === "issue" ? "primary" : "error"}
-              className="primary"
               disabled={busy || unknown || (target !== "issue" && !confirmed)}
             >
               {busy ? "Saving..." : target === "issue" ? "Issue" : "Revoke"}
