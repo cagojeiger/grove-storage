@@ -211,9 +211,7 @@ function PersonalTokenDialog({
       onClose={onClose}
     >
       {issued ? (
-        <DialogContent>
           <IssuedToken value={issued} onDone={onClose} />
-        </DialogContent>
       ) : (
         <form
           onSubmit={(event) => {

@@ -5,6 +5,9 @@ import {
   Checkbox,
   FormControlLabel,
   Button,
+  Alert,
+  Stack,
+  Typography,
 } from "@mui/material";
 
 import { FormEvent, useState } from "react";
@@ -39,20 +42,25 @@ export function isIssuedSetup(
 export function PasswordSetupIssue({ account }: { account: Account }) {
   const [open, setOpen] = useState(false);
   return (
-    <section className="storage-section" aria-label="Password setup">
-      <div className="section-heading">
-        <h2>Password setup</h2>
+    <Stack component="section" aria-label="Password setup" spacing={2}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+      >
+        <Typography component="h2" variant="h6">
+          Password setup
+        </Typography>
         <Button
-          type="submit"
           startIcon={<Link2 size={16} />}
           disabled={!account.is_active || Boolean(account.deleted_at)}
           onClick={() => setOpen(true)}
         >
           Issue setup link
         </Button>
-      </div>
+      </Stack>
       {open && <SetupDialog account={account} onClose={() => setOpen(false)} />}
-    </section>
+    </Stack>
   );
 }
 
@@ -70,64 +78,63 @@ export function IssuedSetupLink({
     window.location.origin,
   ).toString();
   return (
-    <div className="storage-form">
-      <p>
-        Share this link privately with {issued.username}. It is shown once and
-        expires in 24 hours.
-      </p>
-      <TextField
-        value={link}
-        label="Setup link"
-        className="full-field"
-        slotProps={{
-          htmlInput: {
-            "aria-label": "Setup link",
-            onFocus: (event: React.FocusEvent<HTMLInputElement>) =>
-              event.currentTarget.select(),
-          },
-          input: { readOnly: true },
-        }}
-      />
-      <Button
-        type="button"
-        startIcon={<Copy size={16} />}
-        onClick={() => {
-          if (!navigator.clipboard) {
-            setCopyError("Copy unavailable. Select the link manually.");
-            return;
-          }
-          void navigator.clipboard
-            .writeText(link)
-            .catch(() =>
-              setCopyError("Copy failed. Select the link manually."),
-            );
-        }}
-      >
-        Copy link
-      </Button>
-      {copyError && <p role="alert">{copyError}</p>}
-      <FormControlLabel
-        className="check-field full-field"
-        control={
-          <Checkbox
-            checked={acknowledged}
-            onChange={(event) => setAcknowledged(event.target.checked)}
+    <>
+      <DialogContent>
+        <Stack spacing={3}>
+          <Typography>
+            Share this link privately with {issued.username}. It is shown once
+            and expires in 24 hours.
+          </Typography>
+          <TextField
+            value={link}
+            label="Setup link"
+            slotProps={{
+              htmlInput: {
+                "aria-label": "Setup link",
+                onFocus: (event: React.FocusEvent<HTMLInputElement>) =>
+                  event.currentTarget.select(),
+              },
+              input: { readOnly: true },
+            }}
           />
-        }
-        label={"I have saved this setup link."}
-      />
-      <div className="dialog-actions">
-        <Button
-          type="submit"
-          variant="contained"
-          className="primary"
-          disabled={!acknowledged}
-          onClick={onDone}
-        >
+          <Button
+            type="button"
+            startIcon={<Copy size={16} />}
+            onClick={() => {
+              if (!navigator.clipboard) {
+                setCopyError("Copy unavailable. Select the link manually.");
+                return;
+              }
+              void navigator.clipboard
+                .writeText(link)
+                .catch(() =>
+                  setCopyError("Copy failed. Select the link manually."),
+                );
+            }}
+          >
+            Copy link
+          </Button>
+          {copyError && <Alert severity="error">{copyError}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions
+        sx={{ flexDirection: "column", alignItems: "stretch" }}
+        disableSpacing
+      >
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={acknowledged}
+              onChange={(event) => setAcknowledged(event.target.checked)}
+            />
+          }
+          label={"I have saved this setup link."}
+        />
+        <Button variant="contained" disabled={!acknowledged} onClick={onDone}>
           Done
         </Button>
-      </div>
-    </div>
+      </DialogActions>
+    </>
   );
 }
 
@@ -198,9 +205,7 @@ function SetupDialog({
       onClose={onClose}
     >
       {issued ? (
-        <DialogContent>
-          <IssuedSetupLink issued={issued} onDone={onClose} />
-        </DialogContent>
+        <IssuedSetupLink issued={issued} onDone={onClose} />
       ) : (
         <form
           onSubmit={(event) => {
@@ -208,9 +213,10 @@ function SetupDialog({
           }}
         >
           <DialogContent>
-            <fieldset className="storage-form" disabled={pending || unknown}>
+            <Stack spacing={3}>
               <TextField
                 name="username"
+                disabled={pending || unknown}
                 autoComplete="off"
                 required
                 label={"Username"}
@@ -224,17 +230,14 @@ function SetupDialog({
               />
               <TextField
                 name="current_password"
+                disabled={pending || unknown}
                 type="password"
                 autoComplete="current-password"
                 required
                 label={"Current password"}
               />
-            </fieldset>
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
+              {error && <Alert severity="error">{error}</Alert>}
+            </Stack>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={pending} onClick={onClose}>
@@ -243,7 +246,6 @@ function SetupDialog({
             <Button
               type="submit"
               variant="contained"
-              className="primary"
               disabled={pending || unknown}
             >
               {pending ? "Issuing..." : "Issue link"}

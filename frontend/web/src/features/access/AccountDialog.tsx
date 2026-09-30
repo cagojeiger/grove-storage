@@ -5,6 +5,9 @@ import {
   Checkbox,
   FormControlLabel,
   Button,
+  Alert,
+  Stack,
+  Typography,
 } from "@mui/material";
 
 import { FormEvent, useState } from "react";
@@ -92,10 +95,7 @@ export function AccountDialog({
     <Dialog title={title} busy={state.busy} onClose={onClose}>
       <form onSubmit={(e) => void submit(e)}>
         <DialogContent>
-          <fieldset
-            className="storage-form"
-            disabled={state.busy || state.unknown}
-          >
+          <Stack spacing={3}>
             {action === "name" ? (
               <TextField
                 name="display_name"
@@ -103,11 +103,13 @@ export function AccountDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 label={"Name"}
-                className="full-field"
+                disabled={state.busy || state.unknown}
                 slotProps={{ htmlInput: { maxLength: 80 } }}
               />
             ) : (
-              <p className="full-field">{account?.display_name}</p>
+              <Typography sx={{ overflowWrap: "anywhere" }}>
+                {account?.display_name}
+              </Typography>
             )}
             {action === "role" && (
               <TextField
@@ -118,6 +120,7 @@ export function AccountDialog({
                   setAcknowledged(false);
                 }}
                 label={"Role"}
+                disabled={state.busy || state.unknown}
                 select
                 slotProps={{
                   htmlInput: { "aria-label": "Role" },
@@ -130,25 +133,25 @@ export function AccountDialog({
               </TextField>
             )}
             {action === "delete" && (
-              <p className="full-field danger">
+              <Typography color="error">
                 All tokens and sessions belonging to this User will be revoked.
                 Storage, clients, and files are preserved.
-              </p>
+              </Typography>
             )}
             {action === "role" && (
-              <p className="full-field">
+              <Typography>
                 The selected role applies to existing tokens and sessions.
-              </p>
+              </Typography>
             )}
             {action === "active" && !account?.is_active && (
-              <p className="full-field">
+              <Typography>
                 Unexpired, unrevoked tokens become usable again. Previous
                 sessions remain revoked.
-              </p>
+              </Typography>
             )}
             {selfImpact && (
               <FormControlLabel
-                className="full-field check-field account-confirmation"
+                disabled={state.busy || state.unknown}
                 control={
                   <Checkbox
                     checked={acknowledged}
@@ -163,10 +166,10 @@ export function AccountDialog({
               />
             )}
             {action === "active" && account?.is_active && (
-              <p className="full-field danger">
+              <Typography color="error">
                 Access is suspended for all of this User's tokens. Existing
                 sessions are revoked.
-              </p>
+              </Typography>
             )}
             {dangerous && (
               <TextField
@@ -175,15 +178,11 @@ export function AccountDialog({
                 autoComplete="off"
                 required
                 label={"Confirm account name"}
-                className="full-field"
+                disabled={state.busy || state.unknown}
               />
             )}
-          </fieldset>
-          {state.error && (
-            <p role="alert" className="form-error">
-              {state.error}
-            </p>
-          )}
+            {state.error && <Alert severity="error">{state.error}</Alert>}
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button type="button" disabled={state.busy} onClick={onClose}>
@@ -193,7 +192,6 @@ export function AccountDialog({
             type="submit"
             variant="contained"
             color={dangerous ? "error" : "primary"}
-            className="primary"
             disabled={
               state.busy ||
               state.unknown ||

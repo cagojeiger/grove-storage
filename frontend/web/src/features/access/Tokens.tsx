@@ -6,6 +6,14 @@ import {
   FormControlLabel,
   Button,
   IconButton,
+  Alert,
+  Link,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 
 import { useState } from "react";
@@ -45,11 +53,16 @@ export function Tokens({ account }: { account: Account }) {
     getNextPageParam: (page) => page.next_before ?? undefined,
   });
   return (
-    <section className="storage-section" aria-label="Management tokens">
-      <div className="section-heading">
-        <h2>Management tokens</h2>
+    <Stack component="section" aria-label="Management tokens" spacing={2}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+      >
+        <Typography component="h2" variant="h6">
+          Management tokens
+        </Typography>
         <Button
-          type="submit"
           startIcon={<KeyRound size={16} />}
           disabled={
             !account.is_active || Boolean(account.deleted_at) || query.isError
@@ -58,56 +71,73 @@ export function Tokens({ account }: { account: Account }) {
         >
           Issue token
         </Button>
-      </div>
+      </Stack>
       {query.isPending ? (
-        <p role="status">Loading tokens...</p>
+        <Typography role="status">Loading tokens...</Typography>
       ) : query.isError ? (
-        <p role="alert">
+        <Alert severity="error">
           {message(query.error)}{" "}
           <Button type="submit" onClick={() => void query.refetch()}>
             Retry
           </Button>
-        </p>
+        </Alert>
       ) : (
         <>
-          {query.data.pages
-            .flatMap((p) => p.items)
-            .map((token) => (
-              <div className="token-row" key={token.id}>
-                <div>
-                  <strong>{token.label}</strong>
-                  <p className="muted">{token.token_prefix}</p>
-                  <p className="muted">{token.id}</p>
-                  <a href={activityLink(account.id, token.id)}>
-                    View token actions
-                  </a>
-                </div>
-                <div>
-                  <span>
-                    {token.revoked_at
-                      ? "Revoked"
-                      : Date.parse(token.expires_at) <= Date.now()
-                        ? "Expired"
-                        : "Active"}
-                  </span>
-                  <p className="muted">
-                    Expires {new Date(token.expires_at).toLocaleString("en-US")}
-                  </p>
-                </div>
-                <IconButton
-                  type="submit"
-                  className="icon-button"
-                  title={`Revoke ${token.label}`}
-                  aria-label={`Revoke ${token.label}`}
-                  disabled={Boolean(token.revoked_at)}
-                  onClick={() => setDialog(token)}
+          <List disablePadding aria-label="Management tokens">
+            {query.data.pages
+              .flatMap((p) => p.items)
+              .map((token) => (
+                <ListItem
+                  key={token.id}
+                  divider
+                  disableGutters
+                  secondaryAction={
+                    <Tooltip title={`Revoke ${token.label}`}>
+                      <span>
+                        <IconButton
+                          edge="end"
+                          aria-label={`Revoke ${token.label}`}
+                          disabled={Boolean(token.revoked_at)}
+                          onClick={() => setDialog(token)}
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  }
                 >
-                  <Trash2 size={16} />
-                </IconButton>
-              </div>
-            ))}
+                  <ListItemText
+                    primary={token.label}
+                    sx={{ overflowWrap: "anywhere" }}
+                    slotProps={{ secondary: { component: "div" } }}
+                    secondary={
+                      <Stack spacing={0.5}>
+                        <Typography variant="body2">
+                          {token.token_prefix}
+                        </Typography>
+                        <Typography variant="body2">{token.id}</Typography>
+                        <Link href={activityLink(account.id, token.id)}>
+                          View token actions
+                        </Link>
+                        <Typography variant="body2">
+                          {token.revoked_at
+                            ? "Revoked"
+                            : Date.parse(token.expires_at) <= Date.now()
+                              ? "Expired"
+                              : "Active"}
+                        </Typography>
+                        <Typography variant="body2">
+                          Expires{" "}
+                          {new Date(token.expires_at).toLocaleString("en-US")}
+                        </Typography>
+                      </Stack>
+                    }
+                  />
+                </ListItem>
+              ))}
+          </List>
           {!query.data.pages.some((p) => p.items.length) && (
-            <p className="empty">No tokens.</p>
+            <Typography color="text.secondary">No tokens.</Typography>
           )}
           {query.hasNextPage && (
             <Button
@@ -133,7 +163,7 @@ export function Tokens({ account }: { account: Account }) {
           }}
         />
       )}
-    </section>
+    </Stack>
   );
 }
 
@@ -165,9 +195,7 @@ function TokenDialog({
       onClose={onClose}
     >
       {issued ? (
-        <DialogContent>
-          <IssuedToken value={issued} onDone={onClose} />
-        </DialogContent>
+        <IssuedToken value={issued} onDone={onClose} />
       ) : (
         <form
           onSubmit={(e) => {
@@ -203,20 +231,19 @@ function TokenDialog({
           }}
         >
           <DialogContent>
-            <fieldset
-              className="storage-form"
-              disabled={state.busy || state.unknown}
-            >
+            <Stack spacing={3}>
               {target === "issue" ? (
                 <>
                   <TextField
                     name="label"
+                    disabled={state.busy || state.unknown}
                     required
                     label={"Label"}
                     slotProps={{ htmlInput: { maxLength: 80 } }}
                   />
                   <TextField
                     name="days"
+                    disabled={state.busy || state.unknown}
                     type="number"
                     defaultValue={90}
                     required
@@ -226,7 +253,7 @@ function TokenDialog({
                 </>
               ) : (
                 <FormControlLabel
-                  className="check-field full-field"
+                  disabled={state.busy || state.unknown}
                   control={
                     <Checkbox
                       checked={confirmed}
@@ -236,12 +263,8 @@ function TokenDialog({
                   label={<>Revoke {target.label} and its sessions</>}
                 />
               )}
-            </fieldset>
-            {state.error && (
-              <p role="alert" className="form-error">
-                {state.error}
-              </p>
-            )}
+              {state.error && <Alert severity="error">{state.error}</Alert>}
+            </Stack>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={state.busy} onClick={onClose}>
@@ -251,7 +274,6 @@ function TokenDialog({
               type="submit"
               variant="contained"
               color={target === "issue" ? "primary" : "error"}
-              className="primary"
               disabled={
                 state.busy ||
                 state.unknown ||

@@ -1,4 +1,11 @@
-import { DialogContent, DialogActions, TextField, Button } from "@mui/material";
+import {
+  Alert,
+  Stack,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+} from "@mui/material";
 
 import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -81,15 +88,13 @@ export function CreateUserDialog({
       onClose={onClose}
     >
       {issued ? (
-        <DialogContent>
-          <IssuedSetupLink
-            issued={issued}
-            onDone={() => {
-              onClose();
-              void onCreated(issued.account_id);
-            }}
-          />
-        </DialogContent>
+        <IssuedSetupLink
+          issued={issued}
+          onDone={() => {
+            onClose();
+            void onCreated(issued.account_id);
+          }}
+        />
       ) : (
         <form
           onSubmit={(event) => {
@@ -97,16 +102,17 @@ export function CreateUserDialog({
           }}
         >
           <DialogContent>
-            <fieldset className="storage-form" disabled={pending || unknown}>
+            <Stack spacing={3}>
               <TextField
                 name="display_name"
                 required
                 label={"Name"}
-                className="full-field"
+                disabled={pending || unknown}
                 slotProps={{ htmlInput: { maxLength: 80 } }}
               />
               <TextField
                 name="username"
+                disabled={pending || unknown}
                 autoComplete="off"
                 required
                 label={"Username"}
@@ -120,6 +126,7 @@ export function CreateUserDialog({
               />
               <TextField
                 name="role"
+                disabled={pending || unknown}
                 defaultValue="reader"
                 label={"Role"}
                 select
@@ -138,14 +145,10 @@ export function CreateUserDialog({
                 autoComplete="current-password"
                 required
                 label={"Your current password"}
-                className="full-field"
+                disabled={pending || unknown}
               />
-            </fieldset>
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
+              {error && <Alert severity="error">{error}</Alert>}
+            </Stack>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={pending} onClick={onClose}>
@@ -154,7 +157,6 @@ export function CreateUserDialog({
             <Button
               type="submit"
               variant="contained"
-              className="primary"
               disabled={pending || unknown}
             >
               {pending ? "Creating..." : "Create user"}

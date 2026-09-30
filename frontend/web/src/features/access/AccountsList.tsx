@@ -1,6 +1,10 @@
 import {
   TextField,
-  Box,
+  Alert,
+  Grid,
+  Stack,
+  Tooltip,
+  Typography,
   IconButton,
   Button,
   Link,
@@ -40,148 +44,161 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
   const data = query.data;
   return (
     <>
-      <div className="list-toolbar resource-toolbar account-toolbar">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const value = new FormData(event.currentTarget).get("search");
-            listing.update({
-              q: typeof value === "string" ? value.trim() : "",
-            });
-          }}
-        >
-          <TextField
-            label="Search accounts"
-            key={listing.search}
-            name="search"
-            type="search"
-            defaultValue={listing.search}
-            slotProps={{
-              htmlInput: { "aria-label": "Search accounts", maxLength: 80 },
+      <Grid container spacing={2} sx={{ alignItems: "center" }}>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Stack
+            component="form"
+            direction="row"
+            spacing={1}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = new FormData(event.currentTarget).get("search");
+              listing.update({
+                q: typeof value === "string" ? value.trim() : "",
+              });
             }}
-          />
-          <IconButton
-            type="submit"
-            className="icon-button"
-            title="Search"
-            aria-label="Search"
           >
-            <Search size={18} />
-          </IconButton>
-        </form>
-        <TextField
-          value={listing.role}
-          onChange={(e) =>
-            listing.update({
-              role: e.target.value === "all" ? null : e.target.value,
-            })
-          }
-          label={"Role"}
-          select
-          slotProps={{
-            htmlInput: { "aria-label": "Account role" },
-            select: { native: true },
-          }}
-        >
-          <option value="all">All roles</option>
-          <option value="admin">Admin</option>
-          <option value="writer">Writer</option>
-          <option value="reader">Reader</option>
-        </TextField>
-        <TextField
-          value={listing.status}
-          onChange={(e) => listing.update({ status: e.target.value })}
-          label={"Status"}
-          select
-          slotProps={{
-            htmlInput: { "aria-label": "Account status" },
-            select: { native: true },
-          }}
-        >
-          <option value="current">Current</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
-          <option value="deleted">Deleted</option>
-          <option value="all">All statuses</option>
-        </TextField>
-        <Button
-          type="submit"
-          variant="contained"
-          startIcon={<Plus size={16} />}
-          disabled={!data || query.isError}
-          onClick={onCreate}
-        >
-          Create user
-        </Button>
-      </div>
-      <div className="account-list">
-        {query.isPending ? (
-          <p role="status">Loading accounts...</p>
-        ) : query.isError ? (
-          <p role="alert">
-            {message(query.error)}{" "}
-            <Button type="submit" onClick={() => void query.refetch()}>
-              Retry
-            </Button>
-          </p>
-        ) : (
-          <>
-            <TableContainer>
-              <Table
-                size="small"
-                aria-label="Accounts"
-                sx={{ minWidth: 280, tableLayout: "fixed" }}
-              >
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ width: "50%" }}>Account</TableCell>
-                    <TableCell>Role</TableCell>
-                    <TableCell>Status</TableCell>
+            <TextField
+              label="Search accounts"
+              key={listing.search}
+              name="search"
+              type="search"
+              defaultValue={listing.search}
+              slotProps={{
+                htmlInput: { "aria-label": "Search accounts", maxLength: 80 },
+              }}
+            />
+            <Tooltip title="Search">
+              <IconButton type="submit" aria-label="Search">
+                <Search size={18} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Grid>
+        <Grid size={{ xs: 6, md: 2 }}>
+          <TextField
+            value={listing.role}
+            onChange={(e) =>
+              listing.update({
+                role: e.target.value === "all" ? null : e.target.value,
+              })
+            }
+            label={"Role"}
+            select
+            slotProps={{
+              htmlInput: { "aria-label": "Account role" },
+              select: { native: true },
+            }}
+          >
+            <option value="all">All roles</option>
+            <option value="admin">Admin</option>
+            <option value="writer">Writer</option>
+            <option value="reader">Reader</option>
+          </TextField>
+        </Grid>
+        <Grid size={{ xs: 6, md: 2 }}>
+          <TextField
+            value={listing.status}
+            onChange={(e) => listing.update({ status: e.target.value })}
+            label={"Status"}
+            select
+            slotProps={{
+              htmlInput: { "aria-label": "Account status" },
+              select: { native: true },
+            }}
+          >
+            <option value="current">Current</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+            <option value="deleted">Deleted</option>
+            <option value="all">All statuses</option>
+          </TextField>
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Button
+            variant="contained"
+            startIcon={<Plus size={16} />}
+            disabled={!data || query.isError}
+            onClick={onCreate}
+          >
+            Create user
+          </Button>
+        </Grid>
+      </Grid>
+      {query.isPending ? (
+        <Typography role="status">Loading accounts...</Typography>
+      ) : query.isError ? (
+        <Alert severity="error">
+          {message(query.error)}{" "}
+          <Button type="submit" onClick={() => void query.refetch()}>
+            Retry
+          </Button>
+        </Alert>
+      ) : (
+        <>
+          <TableContainer>
+            <Table
+              size="small"
+              aria-label="Accounts"
+              sx={{ minWidth: 280, tableLayout: "fixed" }}
+            >
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: "50%" }}>Account</TableCell>
+                  <TableCell>Role</TableCell>
+                  <TableCell>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data?.items.map((row) => (
+                  <TableRow key={row.id} hover>
+                    <TableCell sx={{ overflowWrap: "anywhere" }}>
+                      <Link
+                        href={listing.href(
+                          `#accounts/${encodeURIComponent(row.id)}`,
+                        )}
+                      >
+                        {row.display_name}
+                      </Link>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ display: { xs: "none", sm: "block" } }}
+                      >
+                        {row.id}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textTransform: "capitalize" }}>
+                      {row.role}
+                    </TableCell>
+                    <TableCell>
+                      {row.deleted_at
+                        ? "Deleted"
+                        : !row.is_active
+                          ? "Disabled"
+                          : row.password_ready
+                            ? "Active"
+                            : "Pending setup"}
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {data?.items.map((row) => (
-                    <TableRow key={row.id} hover>
-                      <TableCell sx={{ overflowWrap: "anywhere" }}>
-                        <Link
-                          href={listing.href(
-                            `#accounts/${encodeURIComponent(row.id)}`,
-                          )}
-                        >
-                          {row.display_name}
-                        </Link>
-                        <Box
-                          className="muted"
-                          sx={{ display: { xs: "none", sm: "block" } }}
-                        >
-                          {row.id}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ textTransform: "capitalize" }}>
-                        {row.role}
-                      </TableCell>
-                      <TableCell>
-                        {row.deleted_at
-                          ? "Deleted"
-                          : !row.is_active
-                            ? "Disabled"
-                            : row.password_ready
-                              ? "Active"
-                              : "Pending setup"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {!data?.items.length && (
-              <p className="empty">No matching accounts.</p>
-            )}
-          </>
-        )}
-      </div>
-      <div className="pagination">
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {!data?.items.length && (
+            <Typography color="text.secondary">
+              No matching accounts.
+            </Typography>
+          )}
+        </>
+      )}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        sx={{ alignItems: { sm: "center" } }}
+      >
         <TextField
+          sx={{ width: { sm: 120 } }}
           value={listing.limit}
           onChange={(e) => listing.update({ limit: e.target.value })}
           label={"Rows"}
@@ -196,39 +213,43 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
           ))}
         </TextField>
         {data && !query.isError && (
-          <span className="muted">
+          <Typography variant="body2" color="text.secondary">
             {data.items.length} accounts on this page
-          </span>
+          </Typography>
         )}
-        <nav aria-label="Account pagination">
-          <IconButton
-            type="submit"
-            className="icon-button"
-            aria-label="Previous page"
-            title="Previous page"
-            disabled={
-              query.isFetching || query.isError || !data?.previous_after
-            }
-            onClick={() =>
-              listing.update({ after: data?.previous_after ?? null })
-            }
-          >
-            <ChevronLeft size={16} />
-          </IconButton>
-          <IconButton
-            type="submit"
-            className="icon-button"
-            aria-label="Next page"
-            title="Next page"
-            disabled={query.isFetching || query.isError || !data?.next_before}
-            onClick={() =>
-              listing.update({ before: data?.next_before ?? null })
-            }
-          >
-            <ChevronRight size={16} />
-          </IconButton>
-        </nav>
-      </div>
+        <Stack component="nav" direction="row" aria-label="Account pagination">
+          <Tooltip title="Previous page">
+            <span>
+              <IconButton
+                aria-label="Previous page"
+                disabled={
+                  query.isFetching || query.isError || !data?.previous_after
+                }
+                onClick={() =>
+                  listing.update({ after: data?.previous_after ?? null })
+                }
+              >
+                <ChevronLeft size={16} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Next page">
+            <span>
+              <IconButton
+                aria-label="Next page"
+                disabled={
+                  query.isFetching || query.isError || !data?.next_before
+                }
+                onClick={() =>
+                  listing.update({ before: data?.next_before ?? null })
+                }
+              >
+                <ChevronRight size={16} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      </Stack>
     </>
   );
 }
