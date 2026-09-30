@@ -7,11 +7,11 @@ for (const theme of ["light", "dark"]) {
     await accessMock(page);
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
-    const rows = page.locator(".account-row");
+    const rows = page.getByRole("table", { name: "Accounts", exact: true }).locator("tbody tr");
     await expect(rows).toHaveCount(2);
     for (const row of await rows.all()) {
       await expect(row).toHaveCSS("font-family", /^Inter,/);
-      await expect(row.locator("strong")).toHaveCSS("font-family", /^Inter,/);
+      await expect(row.locator("a")).toHaveCSS("font-family", /^Inter,/);
     }
     await expect(page.getByRole("button", { name: "Create user", exact: true })).toHaveCSS("font-family", /^Inter,/);
   });

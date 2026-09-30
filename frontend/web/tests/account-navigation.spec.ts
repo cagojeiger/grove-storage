@@ -17,11 +17,11 @@ test("details survive reload and history without reading the account list", asyn
   await expect(page.getByRole("heading", { name: owner.display_name })).toBeVisible();
   expect(lists).toBe(0);
   await page.getByRole("button", { name: "Accounts", exact: true }).click();
-  await expect(page.getByRole("button", { name: /Writer.*Active/ })).toBeVisible();
-  await page.getByRole("button", { name: /Writer.*Active/ }).click();
+  await expect(page.getByRole("link", { name: "Writer", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Writer", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(otherUser.id));
   await page.goBack();
-  await expect(page.getByRole("button", { name: /Writer.*Active/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Writer", exact: true })).toBeVisible();
   await page.goForward();
   await expect(page.getByRole("heading", { name: "Writer", exact: true })).toBeVisible();
 });

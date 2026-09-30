@@ -24,5 +24,7 @@ test("demotion while editing refreshes role and discards the form", async ({ pag
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Reader · Read-only")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByLabel("Secret key (re-enter)")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveText("Write access required.");
   await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
 });

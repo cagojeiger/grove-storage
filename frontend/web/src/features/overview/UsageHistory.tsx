@@ -46,7 +46,6 @@ export function UsageHistory() {
       </a>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">USAGE</p>
           <h1>Usage history</h1>
         </div>
         <IconButton type="submit"

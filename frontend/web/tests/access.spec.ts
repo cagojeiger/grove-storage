@@ -35,7 +35,7 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
   const { writes } = await accessMock(page);
   await page.goto(root);
   await page
-    .getByRole("button", { name: /Home administrator.*Active/ })
+    .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("CLI automation");
@@ -79,7 +79,7 @@ test("last Admin conflict remains visible; destructive change requires name", as
   await accessMock(page);
   await page.goto(root);
   await page
-    .getByRole("button", { name: /Home administrator.*Active/ })
+    .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Delete account", exact: true })
@@ -113,7 +113,7 @@ for (const failure of ["lost", "unknown", "malformed"])
     });
     await page.goto(root);
     await page
-      .getByRole("button", { name: /Home administrator.*Active/ })
+      .getByRole("link", { name: "Home administrator", exact: true })
       .click();
     await page
       .getByRole("button", { name: "Issue token", exact: true })
@@ -158,10 +158,10 @@ test("account paging can return to earlier Users", async ({ page }) => {
   await page.goto(root);
   await page.getByRole("button", { name: "Next page" }).click();
   await expect(
-    page.getByRole("button", { name: /Home administrator.*Active/ }),
+    page.getByRole("link", { name: "Home administrator", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Previous page" }).click();
   await expect(
-    page.getByRole("button", { name: /Writer.*Active/ }),
+    page.getByRole("link", { name: "Writer", exact: true }),
   ).toBeVisible();
 });

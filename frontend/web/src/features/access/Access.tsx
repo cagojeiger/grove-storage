@@ -53,7 +53,6 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
     <main className="overview storages access">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">ADMINISTRATION</p>
           <h1>Accounts</h1>
         </div>
         <IconButton type="submit"

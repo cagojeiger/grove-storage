@@ -1,12 +1,11 @@
-import { Button } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import { Input, Select } from "../../design/Fields";
 import { FormEvent, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { ApiError } from "../../api/http";
 import { command } from "../../api/commands";
 import { clearSession } from "../../auth/session";
-import { Dialog } from "../../design/Dialog";
 import {
   Storage,
   idPattern,
@@ -73,22 +72,12 @@ export function StorageEditor({
     }
   }
   return (
-    <Dialog
-      title={storage ? "Edit storage" : "Register storage"}
-      busy={busy}
-      onClose={onClose}
-      actions={<>
-        <Button type="button" disabled={busy} onClick={onClose}>
-          {unknown ? "Close and review" : "Cancel"}
-        </Button>
-        <Button variant="contained" type="submit" form={formId} disabled={busy || unknown}>
-          <Save size={16} />
-          {busy ? "Saving..." : "Save"}
-        </Button>
-      </>}
-    >
+    <Box sx={{ maxWidth: 760 }}>
+      <Button variant="text" disabled={busy} startIcon={<ArrowLeft size={16} />} onClick={onClose} sx={{ mb: 2 }}>Storage</Button>
+      <Typography variant="h1" sx={{ mb: 3 }}>{storage ? "Edit storage" : "Register storage"}</Typography>
       <form id={formId} onSubmit={(event) => void save(event)} autoComplete="off">
         <fieldset disabled={busy || unknown} className="storage-form">
+          <Typography component="h2" variant="h2" className="full-field">Connection</Typography>
           <label>
             Storage ID
             <Input
@@ -139,6 +128,7 @@ export function StorageEditor({
               spellCheck={false}
             />
           </label>
+          <Typography component="h2" variant="h2" className="full-field">Credentials</Typography>
           <label className="full-field">
             Access key
             <Input
@@ -157,6 +147,7 @@ export function StorageEditor({
               autoComplete="new-password"
             />
           </label>
+          <Typography component="h2" variant="h2" className="full-field">Transfer and allocation</Typography>
           <label className="check-field">
             <Input
               name="force_path_style"
@@ -197,6 +188,10 @@ export function StorageEditor({
           </p>
         )}
       </form>
-    </Dialog>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, py: 2, mt: 3, borderTop: 1, borderColor: "divider", position: "sticky", bottom: 0, bgcolor: "background.default", zIndex: 1 }}>
+        <Button type="button" disabled={busy} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</Button>
+        <Button variant="contained" type="submit" form={formId} disabled={busy || unknown}><Save size={16} />{busy ? "Saving..." : "Save"}</Button>
+      </Box>
+    </Box>
   );
 }

@@ -37,11 +37,11 @@ for (const width of [320, 768, 1440])
       await page.goto("/api/admin/console/#");
       await page.getByLabel("Theme").selectOption(theme);
       await page
-        .getByRole("button", {
-          name: "Select client client-long-name-0",
+        .getByRole("link", {
+          name: "Open client client-long-name-0",
           exact: true,
         })
-        .click();
+        .focus();
       await expect(
         page.locator(".connection-item.selected .connection-title"),
       ).toContainText("home-storage-long-name-6");
@@ -70,15 +70,16 @@ for (const width of [320, 768, 1440])
         }
       }
       await page.getByRole("link", { name: "View all storage" }).click();
-      await expect(page.locator("a.registry-row")).toHaveCount(7);
+      await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(7);
       await capture("storage-list");
+      if (width < 900) await page.getByRole("button", { name: "Open navigation" }).click();
       await page
         .getByRole("navigation", { name: "Main navigation" })
         .getByRole("link", { name: "Clients", exact: true })
         .click();
-      await expect(page.locator("a.client-row")).toHaveCount(20);
+      await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a")).toHaveCount(20);
       await page.getByRole("button", { name: "Next page" }).click();
-      await expect(page.locator("a.client-row")).toHaveCount(4);
+      await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a")).toHaveCount(4);
       await capture("client-list");
       async function capture(view: string) {
         expect(

@@ -21,7 +21,7 @@ test("rename trims the label while preserving account identity", async ({ page }
   await page.reload();
   await expect(page.getByRole("heading", { name: "New administrator", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Accounts", exact: true }).click();
-  await expect(page.getByRole("button", { name: /New administrator.*Active/ })).toBeVisible();
+  await expect(page.getByRole("row").filter({ has: page.getByRole("link", { name: "New administrator", exact: true }) }).filter({ hasText: "Active" })).toBeVisible();
 });
 
 test("self demotion requires acknowledgement and refreshes permissions", async ({ page }) => {

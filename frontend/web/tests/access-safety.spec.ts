@@ -32,7 +32,7 @@ test("expired Access session removes account data", async ({ page }) => {
   await accessMock(page);
   await page.goto(root);
   await expect(
-    page.getByRole("button", { name: /Home administrator.*Active/ }),
+    page.getByRole("link", { name: "Home administrator", exact: true }),
   ).toBeVisible();
   await page.route("**/v1/accounts?*", (route) =>
     route.fulfill({ status: 401, json: { error: "unauthenticated" } }),
@@ -69,7 +69,7 @@ test("pending issuance cannot double-submit and clears the secret after close", 
   });
   await page.goto(root);
   await page
-    .getByRole("button", { name: /Home administrator.*Active/ })
+    .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("One request");
@@ -113,7 +113,7 @@ test("wrong-account issued tokens are rejected as unknown", async ({
   );
   await page.goto(root);
   await page
-    .getByRole("button", { name: /Home administrator.*Active/ })
+    .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("Wrong account");

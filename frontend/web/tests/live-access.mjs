@@ -58,7 +58,7 @@ export async function accessChecks(
 ) {
   await page.getByRole("link", { name: "Accounts", exact: true }).click();
   await page
-    .getByRole("button", { name: /Console test owner.*Active/ })
+    .getByRole("link", { name: "Console test owner", exact: true })
     .click();
   await page.getByRole("button", { name: "Disable", exact: true }).click();
   await page.getByLabel("Confirm account name").fill("Console test owner");

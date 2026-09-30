@@ -1,7 +1,7 @@
-import { Button, ListItemButton, Popover, Divider } from "@mui/material";
+import { AppBar, Box, Button, Drawer, IconButton, ListItemButton, Popover, Divider, Toolbar, useMediaQuery } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronUp, CircleUserRound, LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
+import { ChevronUp, CircleUserRound, LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings, Menu, X } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
 import { identityRequest, isAccount } from "../api/identity";
 import { Login } from "../auth/Login";
@@ -29,6 +29,8 @@ export function App() {
   const settingsPage = route === "settings" || route === "settings/security";
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const desktop = useMediaQuery("(min-width:900px)");
+  const [navigationOpen, setNavigationOpen] = useState(false);
   const session = useQuery({
     queryKey: ["session"],
     queryFn: async ({ signal }) => {
@@ -69,7 +71,9 @@ export function App() {
   }
   return (
     <>
-      <header>
+      <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Toolbar sx={{ gap: 1.5, minHeight: "56px !important" }}>
+        {!desktop && session.data && route !== "set-password" && <IconButton aria-label="Open navigation" onClick={() => setNavigationOpen(true)}><Menu size={20} /></IconButton>}
         <a className="brand" href={import.meta.env.BASE_URL}>
           <img
             src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
@@ -80,7 +84,8 @@ export function App() {
         <div className="header-actions">
           <ThemePicker />
         </div>
-      </header>
+        </Toolbar>
+      </AppBar>
       {route === "set-password" ? (
         <SetPassword key={fullRoute} />
       ) : session.isPending ? (
@@ -93,9 +98,11 @@ export function App() {
           <Button type="submit" onClick={() => void session.refetch()}>Reconnect</Button>
         </main>
       ) : session.data ? (
-        <div className="workspace">
-          <aside aria-label="Workspace sidebar">
-            <nav aria-label="Main navigation">
+        <Box className="workspace" sx={{ display: "flex", flex: 1 }}>
+          <Drawer variant={desktop ? "permanent" : "temporary"} open={desktop || navigationOpen} onClose={() => setNavigationOpen(false)} sx={{ width: desktop ? 240 : 0, flexShrink: 0, "& .MuiDrawer-paper": { width: 240, top: desktop ? 56 : 0, height: desktop ? "calc(100dvh - 56px)" : "100dvh", boxSizing: "border-box" } }}>
+          <Box component="aside" aria-label="Workspace sidebar" sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2, height: "100%", minHeight: 0 }}>
+            {!desktop && <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><strong>Navigation</strong><IconButton aria-label="Close navigation" onClick={() => setNavigationOpen(false)}><X size={18} /></IconButton></Box>}
+            <nav aria-label="Main navigation" onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setNavigationOpen(false); }}>
               <ListItemButton component="a"
                 href="#"
                 aria-current={!storagePage && !accessPage && !clientPage && !activityPage && !settingsPage ? "page" : undefined}
@@ -132,9 +139,11 @@ export function App() {
                 passwordSession={session.data.credential_id === null}
                 loggingOut={loggingOut}
                 onLogout={() => void logout()}
+                onNavigate={() => setNavigationOpen(false)}
               />
             </div>
-          </aside>
+          </Box>
+          </Drawer>
           <div className="content">
             {logoutError && (
               <p className="logout-error" role="alert">
@@ -165,7 +174,7 @@ export function App() {
               <Overview />
             )}
           </div>
-        </div>
+        </Box>
       ) : (
         <Login
           onLogin={(value) => {
@@ -174,19 +183,17 @@ export function App() {
           }}
         />
       )}
-      <footer className="console-footer">
-        <span>Grove Storage</span>
-      </footer>
     </>
   );
 }
 
-function AccountMenu({ name, role, passwordSession, loggingOut, onLogout }: {
+function AccountMenu({ name, role, passwordSession, loggingOut, onLogout, onNavigate }: {
   name: string;
   role: string;
   passwordSession: boolean;
   loggingOut: boolean;
   onLogout: () => void;
+  onNavigate: () => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const close = () => setAnchor(null);
@@ -195,9 +202,9 @@ function AccountMenu({ name, role, passwordSession, loggingOut, onLogout }: {
     <Popover open={Boolean(anchor)} anchorEl={anchor} onClose={close} anchorOrigin={{ vertical: "top", horizontal: "left" }} transformOrigin={{ vertical: "bottom", horizontal: "left" }} slotProps={{ paper: { className: "account-menu-panel", role: "dialog", "aria-label": "Account menu" } }}>
       <div className="account-menu-identity"><strong>{name}</strong><span>{role}</span></div>
       <Divider />
-      <ListItemButton component="a" href="#settings" onClick={close}><CircleUserRound size={16} />My account</ListItemButton>
-      {passwordSession && <ListItemButton component="a" href="#settings/security" onClick={close}><Settings size={16} />Security</ListItemButton>}
-      <ListItemButton component="button" onClick={() => { close(); onLogout(); }} disabled={loggingOut}><LogOut size={16} />Sign out</ListItemButton>
+      <ListItemButton component="a" href="#settings" onClick={() => { close(); onNavigate(); }}><CircleUserRound size={16} />My account</ListItemButton>
+      {passwordSession && <ListItemButton component="a" href="#settings/security" onClick={() => { close(); onNavigate(); }}><Settings size={16} />Security</ListItemButton>}
+      <ListItemButton component="button" onClick={() => { close(); onNavigate(); onLogout(); }} disabled={loggingOut}><LogOut size={16} />Sign out</ListItemButton>
     </Popover>
   </div>;
 }

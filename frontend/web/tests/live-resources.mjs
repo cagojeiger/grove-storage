@@ -4,8 +4,8 @@ export async function resourceChecks(page, { origin }) {
   await page.goto(`${origin}/api/admin/console/#`);
   await expect(page.locator(".connection-paths path").first()).toBeAttached();
   await page
-    .getByRole("button", { name: "Select client console-client", exact: true })
-    .click();
+    .getByRole("link", { name: "Open client console-client", exact: true })
+    .focus();
   await expect(page.getByRole("status")).toContainText(
     "console-client → console-live",
   );
@@ -16,11 +16,11 @@ export async function resourceChecks(page, { origin }) {
     .getByRole("link", { name: "View all clients", exact: true })
     .click();
   await expect(
-    page.locator("a.client-row").filter({ hasText: "console-client" }),
+    page.getByRole("table", { name: "Clients", exact: true }).locator("tbody tr").filter({ hasText: "console-client" }),
   ).toContainText("console-live");
   await page.getByLabel("Rows per page").selectOption("50");
   await page
-    .locator("a.client-row")
+    .locator("table[aria-label=Clients] tbody a")
     .filter({ hasText: "console-client" })
     .click();
   await expect(

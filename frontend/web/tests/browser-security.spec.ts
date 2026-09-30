@@ -25,6 +25,10 @@ test("built console loads with restrictive browser headers", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Storage", exact: true }).click();
   await page.getByRole("button", { name: "Register", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Register storage", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("link", { name: "home-archive", exact: true }).click();
+  await page.getByRole("button", { name: "Edit metadata", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator(".MuiDialog-paper")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   expect(errors).toEqual([]);

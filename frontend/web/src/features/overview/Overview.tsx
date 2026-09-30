@@ -1,10 +1,11 @@
-import { IconButton } from "@mui/material";
+import { Box, IconButton, Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, History } from "lucide-react";
 import { message, request, Usage } from "../../api/http";
 import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
 import { Connections } from "./Connections";
+import { storageLink } from "../../app/navigation";
 
 export function Overview() {
   const cache = useQueryClient();
@@ -37,7 +38,6 @@ export function Overview() {
     <main className="overview topology-overview">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">WORKSPACE</p>
           <h1>Overview</h1>
         </div>
         <div className="page-actions">
@@ -84,20 +84,36 @@ export function Overview() {
                 <dd>{bytes(sum("active_bytes"))}</dd>
               </div>
               <div>
-                <dt>Registered capacity</dt>
+                <dt>Configured capacity</dt>
                 <dd>{bytes(sum("capacity_bytes"))}</dd>
               </div>
             </dl>
             <div className="overview-accounting muted">
               <span>Reserved {bytes(sum("reserved_bytes"))}</span>
               <span>Pending deletion {bytes(sum("purge_pending_bytes"))}</span>
-              <span>Remaining {bytes(sum("remaining_bytes"))}</span>
+              <span>Available allocation {bytes(sum("remaining_bytes"))}</span>
             </div>
             <Connections
               clients={data.clients}
               storages={data.usage}
               ready={data.ready}
             />
+            <Box component="section" sx={{ mt: 4 }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                <Typography variant="h2">Storage usage</Typography>
+                <Link href="#storages" variant="body2">View all storage</Link>
+              </Box>
+              <TableContainer>
+                <Table size="small" aria-label="Storage usage" sx={{ minWidth: 640 }}>
+                  <TableHead><TableRow><TableCell>Storage</TableCell><TableCell align="right">Files</TableCell><TableCell align="right">Stored</TableCell><TableCell align="right">Reserved</TableCell><TableCell align="right">Pending deletion</TableCell><TableCell align="right">Configured capacity</TableCell></TableRow></TableHead>
+                  <TableBody>{[...data.usage].sort((a, b) => a.storage_id.localeCompare(b.storage_id)).slice(0, 5).map((row) => <TableRow key={row.storage_id} hover>
+                    <TableCell><Link href={storageLink(row.storage_id)}>{row.storage_id}</Link></TableCell>
+                    <TableCell align="right">{row.active_files.toLocaleString("en-US")}</TableCell><TableCell align="right">{bytes(row.active_bytes)}</TableCell><TableCell align="right">{bytes(row.reserved_bytes)}</TableCell><TableCell align="right">{bytes(row.purge_pending_bytes)}</TableCell><TableCell align="right">{bytes(row.capacity_bytes)}</TableCell>
+                  </TableRow>)}</TableBody>
+                </Table>
+              </TableContainer>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Grove-managed usage and configured allocation limits, not provider free space.</Typography>
+            </Box>
           </>
         )
       )}

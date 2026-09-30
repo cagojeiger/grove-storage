@@ -12,7 +12,7 @@ test.describe("English default", () => {
     await page.getByLabel("Username").fill("owner");
     await page.getByLabel("Password").fill("fixture-token");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByText("Active files: 1,240", { exact: false })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Storage usage" }).getByRole("cell", { name: "1,240", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
     expect(await page.locator("body").innerText()).not.toMatch(/[\uAC00-\uD7A3]/);
   });
@@ -80,7 +80,7 @@ for (const theme of ["light", "dark"]) {
     await mock(page);
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
-    await expect(page.getByRole("button", { name: "Select client notegate" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open client notegate" })).toBeVisible();
     const controls = page.locator(".connection-select");
     await expect(controls).toHaveCount(2);
     for (const control of await controls.all()) {
@@ -164,13 +164,13 @@ for (const width of [320, 768, 1440]) {
       await page.goto(`${root}#settings`);
       await page.getByLabel("Theme").selectOption(theme);
       const menu = page.getByRole("button", { name: "Account menu" });
-      if (width >= 768) {
+      if (width < 900) await page.getByRole("button", { name: "Open navigation" }).click();
+      if (width >= 900) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         const rect = await menu.boundingBox();
-        const footer = await page.getByRole("contentinfo").boundingBox();
         expect(rect!.x).toBeLessThan(196);
         expect(rect!.y).toBeGreaterThan(400);
-        expect(rect!.y + rect!.height).toBeLessThanOrEqual(footer!.y);
+        expect(rect!.y + rect!.height).toBeLessThanOrEqual(600);
       }
       await menu.click();
       const panel = await page.locator(".account-menu-panel").boundingBox();
@@ -196,7 +196,7 @@ test("token browser sessions cannot open password settings", async ({ page }) =>
   await expect(page.getByRole("link", { name: "Security" })).toHaveCount(0);
 });
 
-test("keyboard focus stays above the sticky footer on a short mobile viewport", async ({ page }) => {
+test("keyboard focus stays visible on a short mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 600 });
   await mock(page, true, true);
   await page.goto(`${root}#settings`);
@@ -209,8 +209,7 @@ test("keyboard focus stays above the sticky footer on a short mobile viewport", 
   await expect(link).toBeFocused();
   await expect.poll(() => link.evaluate(element => {
     const rect = element.getBoundingClientRect();
-    const footer = document.querySelector("footer")!.getBoundingClientRect();
-    return rect.top >= 0 && rect.bottom <= footer.top &&
+    return rect.top >= 56 && rect.bottom <= innerHeight &&
       element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
   })).toBe(true);
 });
@@ -283,7 +282,7 @@ test("429 clears input and honors Retry-After", async ({ page }) => {
 test("overview 401 removes cached private data", async ({ page }) => {
   await mock(page);
   await page.goto(root);
-  await expect(page.getByText("home-storage-long-identifier")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open storage home-storage-long-identifier", exact: true })).toBeVisible();
   await intercept(page, "usage.storages", (route) =>
     route.fulfill({ status: 401, json: failure(401) }),
   );
@@ -324,9 +323,13 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await page.goto(root);
       await page.getByLabel("Theme").selectOption(theme);
       await expect(
-        page.getByText("home-storage-long-identifier"),
+        page.getByRole("link", { name: "Open storage home-storage-long-identifier", exact: true }),
       ).toBeVisible();
-      await expect(page.getByText("Admin · Management")).toBeVisible();
+      if (width < 900) {
+        await page.getByRole("button", { name: "Open navigation" }).click();
+        await expect(page.getByText("Admin · Management")).toBeVisible();
+        await page.getByRole("button", { name: "Close navigation" }).click();
+      } else await expect(page.getByText("Admin · Management")).toBeVisible();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

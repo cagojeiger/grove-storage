@@ -3,7 +3,6 @@ import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  ArrowUpRight,
   HardDrive,
   AppWindow,
   Layers,
@@ -116,13 +115,11 @@ export function Connections({
                   data-side="client"
                   data-selected={selectedClient === id}
                 >
-                  <ButtonBase type="submit"
+                  <ButtonBase component="a" href={clientLink(id)}
                     className="connection-select"
-                    aria-pressed={selectedClient === id}
-                    aria-label={`Select client ${id}`}
-                    onClick={() =>
-                      chooseClient(selectedClient === id ? "" : id)
-                    }
+                    aria-label={`Open client ${id}`}
+                    onMouseEnter={() => chooseClient(id)}
+                    onFocus={() => chooseClient(id)}
                   >
                     <AppWindow size={18} />
                     <strong>{id}</strong>
@@ -139,9 +136,6 @@ export function Connections({
                       <span className="muted">Usage unavailable</span>
                     )}
                   </p>
-                  <a className="connection-open" href={clientLink(id)}>
-                    Open client <ArrowUpRight size={14} />
-                  </a>
                 </article>
               );
             })}
@@ -203,58 +197,19 @@ export function Connections({
                 data-selected={row.storage_id === activeStorage}
               >
                 <div className="connection-storage-heading">
-                  <ButtonBase type="submit"
+                  <ButtonBase component="a" href={storageLink(row.storage_id)}
                     className="connection-select connection-title"
-                    aria-label={`Select storage ${row.storage_id}`}
-                    aria-pressed={row.storage_id === activeStorage}
-                    onClick={() =>
-                      chooseStorage(
-                        selectedStorage === row.storage_id
-                          ? ""
-                          : row.storage_id,
-                      )
-                    }
+                    aria-label={`Open storage ${row.storage_id}`}
+                    onMouseEnter={() => chooseStorage(row.storage_id)}
+                    onFocus={() => chooseStorage(row.storage_id)}
                   >
                     <HardDrive size={18} />
                     <strong>{row.storage_id}</strong>
                   </ButtonBase>
-                  <a
-                    className="connection-open"
-                    href={storageLink(row.storage_id)}
-                    title={`Open storage ${row.storage_id}`}
-                    aria-label={`Open storage ${row.storage_id}`}
-                  >
-                    <ArrowUpRight size={16} />
-                  </a>
                 </div>
                 <p className="muted">
-                  {row.kind.toUpperCase()} · Active files:{" "}
-                  {row.active_files.toLocaleString("en-US")}
+                  {row.kind.toUpperCase()} · Configured
                 </p>
-                <div className="connection-usage">
-                  <strong>
-                    {bytes(
-                      row.active_bytes +
-                        row.reserved_bytes +
-                        row.purge_pending_bytes,
-                    )}
-                  </strong>
-                  <span>/ {bytes(row.capacity_bytes)}</span>
-                </div>
-                <progress
-                  aria-label={`${row.storage_id} usage`}
-                  max={Math.max(1, row.capacity_bytes)}
-                  value={Math.max(
-                    0,
-                    row.active_bytes +
-                      row.reserved_bytes +
-                      row.purge_pending_bytes,
-                  )}
-                />
-                <div className="capacity-breakdown">
-                  <span>Remaining {bytes(row.remaining_bytes)}</span>
-                  <span>Registered capacity</span>
-                </div>
               </article>
             ))}
             {storageRows.hidden.length > 0 && (
@@ -278,9 +233,6 @@ export function Connections({
             )}
           </div>
           {!storages.length && <p className="empty">No storage registered.</p>}
-          <a className="connection-all" href="#storages">
-            View all storage <ArrowRight size={16} />
-          </a>
         </div>
       </section>
       <div className="connection-selection" role="status">

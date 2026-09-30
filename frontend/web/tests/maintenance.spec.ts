@@ -69,7 +69,7 @@ for (const role of ["reader", "writer"])
     ).toHaveCount(0);
     expect(requests).toBe(0);
     await page.getByRole("tab", { name: "Audit log" }).click();
-    await expect(page.getByText("MY ACTIVITY", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My activity", exact: true })).toBeVisible();
   });
 
 test("demotion and forbidden history responses remove installation event details", async ({

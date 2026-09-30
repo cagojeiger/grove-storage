@@ -167,6 +167,12 @@ export function ConsoleTheme({ children }: { children: ReactNode }) {
             defaultProps: { size: "small" },
             styleOverrides: { root: { padding: 6 } },
           },
+          MuiTableCell: {
+            styleOverrides: {
+              root: { padding: "14px 16px", fontSize: "0.8125rem" },
+              head: { color: resolved === "dark" ? "#b0b1ba" : "#686b75", fontWeight: 500, backgroundColor: resolved === "dark" ? "#202126" : "#f3f4f6" },
+            },
+          },
           MuiDialog: {
             defaultProps: { fullWidth: true, maxWidth: "sm" },
             styleOverrides: {

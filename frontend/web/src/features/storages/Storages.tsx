@@ -1,10 +1,8 @@
-import { IconButton, Button, ButtonBase } from "@mui/material";
+import { IconButton, Button, Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  ChevronRight,
-  HardDrive,
   Pencil,
   Plus,
   RefreshCw,
@@ -30,17 +28,19 @@ export function Storages({
   canWrite: boolean;
 }) {
   const cache = useQueryClient();
-  const [dialog, setDialog] = useState<"edit" | "delete" | null>(null);
+  const [dialog, setDialog] = useState<"delete" | null>(null);
   const listing = useResourceList();
+  const creating = route === "storages/create/new";
+  const editing = creating || /^storages\/[^/]+\/edit$/.test(route);
   let id = "";
   try {
-    id = decodeURIComponent(route.slice("storages/".length));
+    id = creating ? "" : decodeURIComponent(route.slice("storages/".length).replace(/\/edit$/, ""));
   } catch {
     id = "";
   }
   const list = useQuery({
     queryKey: ["storages", "list"],
-    enabled: !id,
+    enabled: !id && !creating,
     queryFn: ({ signal }) => command<Storage[]>("storage.list", {}, signal),
   });
   const detail = useQuery({
@@ -67,6 +67,16 @@ export function Storages({
     close();
     window.location.hash = listing.href("#storages");
   }
+  if (editing) {
+    const returnTo = listing.href(id ? storageLink(id) : "#storages");
+    return <main className="overview storages">
+      {!canWrite ? <p role="alert">Write access required.</p>
+        : !creating && detail.isPending ? <p role="status">Loading storage...</p>
+        : !creating && detail.isError ? <p role="alert">{message(detail.error)}</p>
+        : !creating && detail.data?.kind !== "s3" ? <p role="alert">Only S3 storage can be edited.</p>
+        : <StorageEditor storage={creating ? undefined : detail.data} onClose={() => { window.location.hash = returnTo; }} onSaved={(saved) => { window.location.hash = listing.href(storageLink(saved)); }} />}
+    </main>;
+  }
   return (
     <main className="overview storages">
       {id && (
@@ -77,7 +87,6 @@ export function Storages({
       )}
       <div className="page-heading">
         <div>
-          <p className="eyebrow">REGISTRY</p>
           <h1>{id || "Storage"}</h1>
         </div>
         <div className="page-actions">
@@ -100,7 +109,7 @@ export function Storages({
                   disabled={
                     !detail.data || detail.data.kind !== "s3" || current.isError
                   }
-                  onClick={() => setDialog("edit")}
+                  onClick={() => { window.location.hash = listing.href(`${storageLink(id)}/edit`); }}
                 >
                   <Pencil size={17} />
                 </IconButton>
@@ -118,7 +127,7 @@ export function Storages({
             ) : (
               <Button type="submit" variant="contained"
                 className="primary action-button"
-                onClick={() => setDialog("edit")}
+                onClick={() => { window.location.hash = listing.href("#storages/create/new"); }}
               >
                 <Plus size={17} />
                 Register
@@ -165,98 +174,48 @@ export function Storages({
           {usage.isError && (
             <p role="alert">Usage unavailable. {message(usage.error)}</p>
           )}
-          <div className="registry-list capacity-registry">
-            <div className="registry-labels" aria-hidden="true">
-              <span>Storage</span>
-              <span>Address</span>
-              <span>Grove usage / Registered capacity</span>
-              <span />
-            </div>
+          <TableContainer><Table size="small" aria-label="Storage" sx={{ minWidth: 620 }}>
+            <TableHead><TableRow><TableCell>Storage</TableCell><TableCell>Endpoint / Bucket</TableCell><TableCell align="right">Grove usage</TableCell><TableCell align="right">Configured capacity</TableCell></TableRow></TableHead>
+            <TableBody>
             {page.rows.map((storage) => {
               const used = usage.isSuccess
                 ? usage.data.find((row) => row.storage_id === storage.id)
                 : undefined;
               return (
-                <ButtonBase component="a"
-                  className="registry-row"
-                  key={storage.id}
-                  href={listing.href(storageLink(storage.id))}
-                >
-                  <div className="storage-name">
-                    <HardDrive size={18} />
-                    <div>
-                      <h2>{storage.id}</h2>
-                      <span className="muted">
-                        {storage.kind === "fs" ? "Filesystem" : "S3"}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="storage-address">
+                <TableRow hover key={storage.id}>
+                  <TableCell><Link href={listing.href(storageLink(storage.id))}>{storage.id}</Link></TableCell>
+                  <TableCell>
                     {storage.kind === "fs"
                       ? storage.root_path
                       : storage.endpoint}
                     {storage.kind === "s3" && (
-                      <span className="muted">{storage.bucket}</span>
+                      <div className="muted">{storage.bucket}</div>
                     )}
-                  </span>
-                  <span className="storage-size">
-                    <strong>
+                  </TableCell>
+                  <TableCell align="right">
                       {used
                         ? bytes(
                             used.active_bytes +
                               used.reserved_bytes +
                               used.purge_pending_bytes,
                           )
-                        : "Unavailable"}{" "}
-                      / {bytes(storage.capacity_bytes)}
-                    </strong>
-                    {used && (
-                      <>
-                        <progress
-                          aria-label={`${storage.id} usage`}
-                          max={Math.max(1, storage.capacity_bytes)}
-                          value={Math.max(
-                            0,
-                            used.active_bytes +
-                              used.reserved_bytes +
-                              used.purge_pending_bytes,
-                          )}
-                        />
-                        <span className="capacity-breakdown">
-                          <span>Active {bytes(used.active_bytes)}</span>
-                          <span>Reserved {bytes(used.reserved_bytes)}</span>
-                          <span>
-                            Pending deletion {bytes(used.purge_pending_bytes)}
-                          </span>
-                          <span>Remaining {bytes(used.remaining_bytes)}</span>
-                        </span>
-                      </>
-                    )}
-                  </span>
-                  <ChevronRight size={16} />
-                </ButtonBase>
+                        : "Unavailable"}
+                  </TableCell>
+                  <TableCell align="right">{bytes(storage.capacity_bytes)}</TableCell>
+                </TableRow>
               );
             })}
-            {page.total === 0 && (
+            </TableBody>
+          </Table></TableContainer>
+          {page.total === 0 && (
               <p className="empty">
                 {listing.search
                   ? "No matching storage."
                   : "No storage registered."}
               </p>
             )}
-          </div>
           <Pagination state={listing} {...page} />
         </>
-      )}
-      {canWrite && dialog === "edit" && (!id || detail.data?.kind === "s3") && (
-        <StorageEditor
-          storage={id ? detail.data : undefined}
-          onClose={close}
-          onSaved={(saved) => {
-            close();
-            window.location.hash = listing.href(storageLink(saved));
-          }}
-        />
       )}
       {canWrite && dialog === "delete" && (
         <DeleteStorage id={id} onClose={close} onReturnToList={showList} />

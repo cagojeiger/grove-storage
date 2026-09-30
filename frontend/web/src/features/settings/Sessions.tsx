@@ -60,7 +60,6 @@ export function Sessions({ session }: { session: Session }) {
     <main className="overview settings">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">MY ACCOUNT</p>
           <h1>My account</h1>
         </div>
         <IconButton type="submit"

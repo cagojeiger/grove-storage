@@ -1,6 +1,5 @@
 import { useQueries } from "@tanstack/react-query";
-import { ButtonBase } from "@mui/material";
-import { ChevronRight } from "lucide-react";
+import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
 import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
 import { Client, ClientUsage, clientLink, totals } from "./model";
@@ -22,39 +21,31 @@ export function ClientRows({
     })),
   });
   return (
-    <div className="client-registry">
-      <div className="client-columns" aria-hidden="true">
-        <span>Client</span>
-        <span>Storage</span>
-        <span>Active files</span>
-        <span>Active data</span>
-        <span />
-      </div>
+    <TableContainer><Table size="small" aria-label="Clients" sx={{ minWidth: 520 }}>
+      <TableHead><TableRow><TableCell>Client</TableCell><TableCell>Storage</TableCell><TableCell align="right">Active files</TableCell><TableCell align="right">Active data</TableCell></TableRow></TableHead>
+      <TableBody>
       {ids.map((id, i) => {
         const summary = usage ? totals(usage, id) : undefined;
         return (
-          <ButtonBase component="a" className="client-row" key={id} href={href(clientLink(id))}>
-            <strong>{id}</strong>
-            <span>
-              <span className="mobile-label">Storage</span>
+          <TableRow hover key={id}>
+            <TableCell><Link href={href(clientLink(id))}>{id}</Link></TableCell>
+            <TableCell>
               {details[i].isError
                 ? "Unavailable"
                 : (details[i].data?.storage_id ?? "Loading...")}
-            </span>
-            <span>
-              <span className="mobile-label">Active files</span>
+            </TableCell>
+            <TableCell align="right">
               {summary
                 ? `${summary.files.toLocaleString("en-US")} files`
                 : "Unavailable"}
-            </span>
-            <span>
-              <span className="mobile-label">Active data</span>
+            </TableCell>
+            <TableCell align="right">
               {summary ? bytes(summary.bytes) : "Unavailable"}
-            </span>
-            <ChevronRight size={16} />
-          </ButtonBase>
+            </TableCell>
+          </TableRow>
         );
       })}
-    </div>
+      </TableBody>
+    </Table></TableContainer>
   );
 }

@@ -29,7 +29,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await page
     .getByRole("tab", { name: "Security events", exact: true })
     .click();
-  await expect(page.locator(".event-row").first()).toBeVisible();
+  await expect(page.getByRole("table", { name: "Activity", exact: true }).locator("tbody tr").first()).toBeVisible();
 
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {

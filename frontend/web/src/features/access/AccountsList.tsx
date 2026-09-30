@@ -1,4 +1,4 @@
-import { IconButton, Button, ButtonBase } from "@mui/material";
+import { Box, IconButton, Button, Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
 import { Input, Select } from "../../design/Fields";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
@@ -45,10 +45,13 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
     <div className="account-list">
       {query.isPending ? <p role="status">Loading accounts...</p> : query.isError ?
         <p role="alert">{message(query.error)} <Button type="submit" onClick={() => void query.refetch()}>Retry</Button></p> : <>
-          {data?.items.map(row => <ButtonBase type="submit" className="account-row" key={row.id} onClick={() => { window.location.hash = listing.href(`#accounts/${encodeURIComponent(row.id)}`); }}>
-            <span><strong>{row.display_name}</strong><span className="muted">{row.id}</span></span>
-            <span>{row.role}</span><span>{row.deleted_at ? "Deleted" : !row.is_active ? "Disabled" : row.password_ready ? "Active" : "Pending setup"}</span><ChevronRight size={16} />
-          </ButtonBase>)}
+          <TableContainer><Table size="small" aria-label="Accounts" sx={{ minWidth: 280, tableLayout: "fixed" }}>
+            <TableHead><TableRow><TableCell sx={{ width: "50%" }}>Account</TableCell><TableCell>Role</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
+            <TableBody>{data?.items.map(row => <TableRow key={row.id} hover>
+              <TableCell sx={{ overflowWrap: "anywhere" }}><Link href={listing.href(`#accounts/${encodeURIComponent(row.id)}`)}>{row.display_name}</Link><Box className="muted" sx={{ display: { xs: "none", sm: "block" } }}>{row.id}</Box></TableCell>
+              <TableCell sx={{ textTransform: "capitalize" }}>{row.role}</TableCell><TableCell>{row.deleted_at ? "Deleted" : !row.is_active ? "Disabled" : row.password_ready ? "Active" : "Pending setup"}</TableCell>
+            </TableRow>)}</TableBody>
+          </Table></TableContainer>
           {!data?.items.length && <p className="empty">No matching accounts.</p>}
         </>}
     </div>

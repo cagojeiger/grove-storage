@@ -1,8 +1,8 @@
-import { IconButton, Button, ButtonBase, Tabs, Tab } from "@mui/material";
+import { IconButton, Button, Link, Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
 import { Input } from "../../design/Fields";
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ListFilter, RefreshCw } from "lucide-react";
+import { ListFilter, RefreshCw } from "lucide-react";
 import { field, identityPage } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { Dialog } from "../../design/Dialog";
@@ -58,8 +58,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
     <main className="overview activity">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{admin ? "INSTALLATION" : "MY ACTIVITY"}</p>
-          <h1>Activity</h1>
+          <h1>{admin ? "Activity" : "My activity"}</h1>
         </div>
         <IconButton type="submit"
           className="icon-button"
@@ -116,28 +115,23 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         <p role="alert">{message(query.error)}</p>
       ) : (
         <>
-          <div className="event-list">
+          <TableContainer><Table size="small" aria-label="Activity" sx={{ minWidth: 640 }}>
+            <TableHead><TableRow><TableCell>Time</TableCell><TableCell>Event</TableCell><TableCell>{stream === "audit" ? "Resource" : stream === "security" ? "Reason" : "Result"}</TableCell><TableCell>Actor / Source</TableCell></TableRow></TableHead>
+            <TableBody>
             {rows.map((event) => (
-              <ButtonBase type="submit"
-                className="event-row"
-                key={event.context.id}
-                onClick={() => setSelected(event)}
-              >
+              <TableRow key={event.context.id} hover>
+                <TableCell sx={{ whiteSpace: "nowrap" }}>
                 <time dateTime={event.context.created_at}>
                   {time(event.context.created_at)}
                 </time>
-                <span>
-                  <strong>{eventName(event)}</strong>
-                  <span className="muted">{eventResult(event)}</span>
-                </span>
-                <span>
-                  <span>{actor(event.context)}</span>
-                  <span className="muted">{event.context.surface}</span>
-                </span>
-                <ChevronRight size={16} />
-              </ButtonBase>
+                </TableCell>
+                <TableCell><Link component="button" onClick={() => setSelected(event)} sx={{ textAlign: "left" }}>{eventName(event)}</Link></TableCell>
+                <TableCell>{eventResult(event)}</TableCell>
+                <TableCell>{actor(event.context)}<div className="muted">{event.context.surface}</div></TableCell>
+              </TableRow>
             ))}
-          </div>
+            </TableBody>
+          </Table></TableContainer>
           {!rows.length && <p className="empty">{params.size > 0 ? "No activity matches these filters." : "No activity recorded yet."}</p>}
           {query.hasNextPage && (
             <Button type="submit"

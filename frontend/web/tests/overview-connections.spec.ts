@@ -85,7 +85,7 @@ for (const count of [0, 1, 6, 7]) {
       page.getByRole("heading", { name: "Connections", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".metrics dt")).toHaveText([
-      "Clients", "Storage", "Total files", "Total stored", "Registered capacity",
+      "Clients", "Storage", "Total files", "Total stored", "Configured capacity",
     ]);
     await expect(page.locator(".metrics > div").nth(1).locator("dd")).toHaveText(String(count));
     await expect(page.locator('[data-side="client"]')).toHaveCount(
@@ -112,8 +112,8 @@ for (const count of [0, 1, 6, 7]) {
         .click();
       await expect(dialog).toHaveCount(0);
       await expect(
-        page.getByRole("button", { name: "Select storage store-6" }),
-      ).toHaveAttribute("aria-pressed", "true");
+        page.locator('[data-connection="storage:store-6"]'),
+      ).toHaveAttribute("data-selected", "true");
       await expect(page.locator(".connection-paths path.selected")).toHaveCount(
         1,
       );
@@ -145,8 +145,8 @@ test("hidden clients are searched, paged and grouped from bounded authoritative 
     .click();
   await expect(dialog).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Select client client-44", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.locator('[data-connection="client:client-44"]'),
+  ).toHaveAttribute("data-selected", "true");
   await expect(page.locator(".connection-selection")).toHaveText(
     "client-44 → store-44",
   );
@@ -198,8 +198,8 @@ test("refresh totals include hidden storage and assignment failures clear highli
       .filter({ has: page.getByText("Total stored", { exact: true }) }),
   ).toContainText("8 GiB");
   await page
-    .getByRole("button", { name: "Select client client-0", exact: true })
-    .click();
+    .getByRole("link", { name: "Open client client-0", exact: true })
+    .focus();
   await expect(page.locator(".connection-paths path.selected")).toHaveCount(2);
   await intercept(page, "client.show", (r) =>
     r.fulfill({ status: 404, json: failure(404) }),

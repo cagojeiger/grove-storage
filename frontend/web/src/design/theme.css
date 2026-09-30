@@ -1,7 +1,6 @@
 :root {
   letter-spacing: 0;
   --console-header-height: 56px;
-  --console-footer-height: calc(32px + env(safe-area-inset-bottom));
   background: var(--bg);
   color: var(--text);
 }
@@ -11,10 +10,8 @@
 body {
   margin: 0;
 }
-html { scroll-padding-top: calc(var(--console-header-height) + 8px); scroll-padding-bottom: calc(var(--console-footer-height) + 8px); }
+html { scroll-padding-top: calc(var(--console-header-height) + 8px); scroll-padding-bottom: 16px; }
 #root { min-height: 100dvh; display: flex; flex-direction: column; }
-.console-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; gap: 16px; min-height: var(--console-footer-height); margin-top: auto; padding: 4px 20px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
-.console-footer > span { color: var(--muted); font-size: 12px; }
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
@@ -32,20 +29,6 @@ dt,
   color: var(--muted);
   font-size: 12px;
 }
-header {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  height: var(--console-header-height);
-  flex-shrink: 0;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--surface);
-}
 .brand {
   display: flex;
   align-items: center;
@@ -62,6 +45,7 @@ header {
   object-fit: contain;
 }
 .header-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -72,9 +56,7 @@ header {
 .account-menu-trigger > svg { flex-shrink: 0; }
 .account-menu-panel.MuiPaper-root { width: 240px; max-width: calc(100vw - 32px); padding: 6px; }
 .account-menu-panel .MuiListItemButton-root { width: 100%; color: var(--text); }
-.MuiButtonBase-root.event-row, .MuiButtonBase-root.account-row, .MuiButtonBase-root.connection-browser-row, .MuiButtonBase-root.client-row, .MuiButtonBase-root.registry-row { display: grid; text-align: left; }
-.MuiButtonBase-root:is(.event-row, .account-row, .client-row, .registry-row) { padding: 16px 12px; border-bottom: 1px solid var(--line); border-radius: 0; }
-.MuiButtonBase-root.event-row:hover, .MuiButtonBase-root.account-row:hover { background: var(--selected); }
+.MuiButtonBase-root.connection-browser-row { display: grid; text-align: left; }
 .MuiInputBase-root { min-width: 0; }
 .MuiInputBase-root input, .MuiInputBase-root select, .MuiInputBase-root textarea { font: inherit; }
 .MuiNativeSelect-select { min-width: 0; }
@@ -91,24 +73,10 @@ header {
   color: var(--muted);
 }
 .workspace {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
-aside {
-  position: sticky;
-  top: var(--console-header-height);
-  align-self: start;
-  height: calc(100dvh - var(--console-header-height) - var(--console-footer-height));
-  z-index: 15;
-  background: var(--bg);
-  border-right: 1px solid var(--line);
-  padding: 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
+.content { flex: 1; min-width: 0; }
 aside nav {
   min-height: 0;
   overflow-y: auto;
@@ -142,17 +110,7 @@ aside nav a[aria-current="page"] {
 .pagination nav { margin-left: auto; flex-wrap: wrap; }
 .page-number button { min-width: 36px; padding: 8px; }
 .page-number button[aria-current="page"] { background: var(--selected); color: var(--accent); border-color: var(--accent); }
-.capacity-registry .registry-row, .capacity-registry .registry-labels { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.8fr) 16px; }
-.capacity-registry .storage-size { min-width: 0; }
-.capacity-registry .storage-size strong { font-size: 13px; }
-.capacity-registry progress, .connection-item progress { width: 100%; display: block; margin: 12px 0; }
 .capacity-breakdown { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--muted); }
-.client-row, .client-columns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 16px; gap: 16px; padding: 18px 10px; align-items: center; border-bottom: 1px solid var(--line); }
-.client-row { text-decoration: none; color: var(--text); }
-.client-row:hover { background: var(--selected); }
-.client-row > * { min-width: 0; overflow-wrap: anywhere; }
-.client-columns { font-size: 12px; color: var(--muted); }
-.mobile-label { display: none; }
 .topology-overview { max-width: 1600px; }
 .topology-overview .page-actions { flex-wrap: wrap; }
 .overview-accounting { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 14px; font-size: 12px; }
@@ -167,7 +125,7 @@ aside nav a[aria-current="page"] {
 .connection-search input { width: 100%; min-width: 0; }
 .connection-items { display: flex; flex-direction: column; justify-content: space-around; gap: 12px; flex: 1; }
 .connection-item { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-.connection-item.selected { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.connection-item.selected { border-color: var(--accent); }
 .connection-item p { margin: 6px 0; font-size: 12px; }
 .connection-item strong, .connection-item h3, .connection-selection { overflow-wrap: anywhere; }
 .connection-select.MuiButtonBase-root { display: flex; align-items: center; justify-content: flex-start; min-height: 36px; gap: 10px; padding: 0; border: 0; border-radius: 0; background: transparent; width: 100%; text-align: left; }
@@ -175,13 +133,11 @@ aside nav a[aria-current="page"] {
 .connection-select svg, .connection-title svg { flex-shrink: 0; }
 .connection-title { color: var(--text); }
 .connection-storage-heading { display: flex; gap: 8px; align-items: center; }
-.connection-storage-heading > .connection-open { flex: 0 0 24px; min-height: 24px; justify-content: center; }
 .connection-usage { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12px; }
 .connection-usage > span { color: var(--muted); }
-.connection-open, .connection-all { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 12px; text-decoration: none; }
+.connection-all { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 12px; text-decoration: none; }
 .connection-all { margin-top: 18px; }
 .connection-item > .muted { display: block; margin-top: 6px; font-size: 11px; }
-.connection-item progress { margin: 8px 0; }
 .connection-more.MuiButtonBase-root { display: block; text-align: left; border-style: dashed; color: var(--accent); width: 100%; }
 .connection-more > strong { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .connection-more > span { display: block; margin-top: 7px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
@@ -205,21 +161,13 @@ aside nav a[aria-current="page"] {
   .connection-paths path { transition: none; }
 }
 @media (max-width: 900px) {
-  .connections { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-  .connection-column { margin: 0 12px; }
+  .connections { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .connection-paths { display: none; }
+  .connection-column { margin: 0; }
   .grove-hub { padding: 12px 0; }
 }
 @media (max-width: 600px) {
   .nav-group { display: none; }
-  .capacity-registry .registry-labels, .client-columns { display: none; }
-  .capacity-registry .registry-row { grid-template-columns: minmax(0, 1fr) 16px; }
-  .capacity-registry .registry-row > .storage-address, .capacity-registry .registry-row > .storage-size { grid-column: 1; }
-  .capacity-registry .registry-row > svg { grid-column: 2; grid-row: 1 / span 3; }
-  .client-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 16px; gap: 12px; }
-  .client-row > strong { grid-column: 1 / 3; }
-  .client-row > span:nth-child(2) { grid-column: 1 / 3; }
-  .client-row > svg { grid-column: 3; grid-row: 1 / span 3; }
-  .mobile-label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
   .pagination { gap: 12px; }
   .pagination nav { width: 100%; margin: 0; }
 }
@@ -237,11 +185,6 @@ aside nav a[aria-current="page"] {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-}
-.eyebrow {
-  font-size: 10px;
-  color: var(--muted);
-  margin-bottom: 6px;
 }
 .status-line {
   display: flex;
@@ -268,8 +211,9 @@ aside nav a[aria-current="page"] {
   grid-template-columns: 1fr 1fr 1.3fr 1.5fr;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  margin-bottom: 38px;
-  padding: 24px 0;
+  margin-top: 24px;
+  margin-bottom: 16px;
+  padding: 20px 0;
   gap: 20px;
 }
 .metrics dd {
@@ -296,19 +240,6 @@ aside nav a[aria-current="page"] {
   grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr);
   gap: 16px 24px;
 }
-.storage-name {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.storage-name svg {
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.storage-name .muted {
-  display: block;
-  margin-top: 6px;
-}
 .storage-values {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -326,7 +257,7 @@ aside nav a[aria-current="page"] {
   gap: 16px;
   align-items: center;
 }
-.capacity progress, .capacity-registry progress, .connection-item progress {
+.capacity progress {
   appearance: none;
   flex: 1;
   min-width: 0;
@@ -450,45 +381,6 @@ progress::-webkit-progress-value {
 .list-toolbar label {
   width: min(300px, 80%);
 }
-.registry-labels,
-.registry-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(
-      90px,
-      0.5fr
-    ) 16px;
-  gap: 20px;
-  align-items: center;
-  padding: 20px 12px;
-  border-bottom: 1px solid var(--line);
-}
-.registry-labels {
-  color: var(--muted);
-  font-size: 12px;
-  border-top: 1px solid var(--line);
-  padding-block: 12px;
-}
-.registry-row {
-  color: var(--text);
-  text-decoration: none;
-  font-size: 13px;
-}
-.registry-row:hover {
-  background: var(--selected);
-}
-.registry-row h2 {
-  font-size: 14px;
-}
-.storage-address {
-  overflow-wrap: anywhere;
-}
-.storage-address .muted {
-  display: block;
-  margin-top: 6px;
-}
-.storage-size {
-  font-variant-numeric: tabular-nums;
-}
 .storage-section {
   margin-top: 32px;
 }
@@ -581,9 +473,7 @@ progress::-webkit-progress-value {
 .account-toolbar form { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; min-width: 0; }
 .account-toolbar form label { flex: 1; min-width: 0; }
 .account-toolbar > label { width: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-.account-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(65px, 1fr) minmax(65px, 1fr) 16px; width: 100%; gap: 12px; align-items: center; padding: 18px 8px; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; font-size: 13px; }
-.account-row .muted { display: block; margin-top: 6px; }
-.account-row span, .token-row div { min-width: 0; overflow-wrap: anywhere; }
+.token-row div { min-width: 0; overflow-wrap: anywhere; }
 .token-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
 .token-row p { margin-top: 6px; }
 .issued-token { display: grid; gap: 16px; min-width: 0; }
@@ -607,25 +497,20 @@ progress::-webkit-progress-value {
 .usage-table th { color: var(--muted); font-size: 12px; }
 .usage-table td:nth-last-child(-n+2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .usage-count { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
-.event-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1.5fr) 16px; gap: 16px; text-align: left; padding: 18px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
-.event-row span, .session-row span, .session-row code { display: block; }
-.event-row > *, .session-row > * { min-width: 0; overflow-wrap: anywhere; }
-.event-row .muted, .session-row .muted { font-size: 12px; margin-top: 6px; }
+.session-row span, .session-row code { display: block; }
+.session-row > * { min-width: 0; overflow-wrap: anywhere; }
+.session-row .muted { font-size: 12px; margin-top: 6px; }
 .event-details dd, .settings dd { overflow-wrap: anywhere; }
 .event-metadata { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: var(--surface); max-height: 320px; overflow: auto; }
 .session-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 40px; gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--line); align-items: center; }
 @media (max-width: 600px) {
-  .event-row { grid-template-columns: minmax(0, 1fr) 16px; gap: 10px; }
-  .event-row > time, .event-row > span { grid-column: 1; }
-  .event-row > svg { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
   .session-row { grid-template-columns: minmax(0, 1fr) 40px; gap: 12px; }
   .session-row > div { grid-column: 1; }
   .session-row > button { grid-column: 2; grid-row: 1 / span 2; }
 }
 .clients h1, .clients h2 { overflow-wrap: anywhere; }
 .service-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
-.service-key-row code, .key-value, .clients .account-row strong { overflow-wrap: anywhere; min-width: 0; }
-.clients .account-row { color: var(--text); text-decoration: none; }
+.service-key-row code, .key-value { overflow-wrap: anywhere; min-width: 0; }
 .issued-token label { display: grid; gap: 8px; font-size: 13px; }
 .issued-token dd { font-size: 13px; overflow-wrap: anywhere; margin: 6px 0 14px; }
 .issued-token .check-field { display: flex; gap: 10px; align-items: flex-start; }
@@ -642,9 +527,6 @@ progress::-webkit-progress-value {
   }
 }
 @media (max-width: 1000px) {
-  .workspace {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
   .overview {
     padding: 28px 24px;
   }
@@ -659,11 +541,6 @@ progress::-webkit-progress-value {
   }
 }
 @media (max-width: 767px) {
-  :root { --console-header-height: 64px; }
-  header {
-    height: 64px;
-    padding: 0 16px;
-  }
   .brand {
     font-size: 15px;
     gap: 6px;
@@ -675,55 +552,14 @@ progress::-webkit-progress-value {
   .header-actions {
     gap: 6px;
   }
-  .sidebar-account { width: 100%; margin-top: 0; padding-top: 8px; }
   .theme {
     gap: 3px;
   }
   .theme > svg {
     display: none;
   }
-  .workspace {
-    display: block;
-    min-height: 0;
-  }
-  aside {
-    position: relative;
-    top: auto;
-    height: auto;
-    padding: 8px 18px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  aside nav {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  aside nav a {
-    min-height: 44px;
-    border-bottom: 2px solid transparent;
-  }
   .storages .page-heading {
     flex-wrap: wrap;
-  }
-  .registry-labels {
-    display: none;
-  }
-  .registry-row {
-    grid-template-columns: minmax(0, 1fr) auto 16px;
-    gap: 14px;
-    padding-inline: 0;
-  }
-  .registry-row .storage-address {
-    grid-column: 1/-1;
-    grid-row: 2;
-  }
-  .registry-list {
-    border-top: 1px solid var(--line);
   }
   .detail-fields {
     grid-template-columns: 1fr;
@@ -738,8 +574,6 @@ progress::-webkit-progress-value {
   .overview {
     padding: 24px 18px;
   }
-  .account-row { grid-template-columns: minmax(0, 1fr) auto 16px; }
-  .account-row > span:first-child { grid-column: 1/-1; }
   .token-row { grid-template-columns: minmax(0, 1fr) 44px; }
   .token-row > div:nth-child(2) { grid-row: 2; }
   .token-row > button { grid-column: 2; grid-row: 1/3; }

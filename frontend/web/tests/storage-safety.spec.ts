@@ -70,9 +70,9 @@ test("lost response blocks resubmission and refreshes instead of retrying", asyn
     page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
   expect(posts).toBe(1);
-  expect(reads.list).toBeGreaterThan(1);
   await page.getByRole("button", { name: "Close and review" }).click();
   await expect(page.getByRole("link", { name: /new-s3/ })).toBeVisible();
+  expect(reads.list).toBeGreaterThan(1);
 });
 
 test("storage read 401 returns to login without cached detail", async ({
@@ -123,7 +123,7 @@ for (const method of ["POST", "PUT", "DELETE"]) {
   });
 }
 
-test("pending write clears secret, prevents double submit and holds dialog", async ({
+test("pending write clears secret, prevents double submit and disables cancel", async ({
   page,
 }) => {
   await storageMock(page);
@@ -144,7 +144,8 @@ test("pending write clears secret, prevents double submit and holds dialog", asy
   await expect(page.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Register storage" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
   expect(posts).toBe(1);
   release();
   await expect(page.getByRole("alert")).toContainText("storage access");

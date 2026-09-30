@@ -14,18 +14,18 @@ const rows = Array.from({ length: 55 }, (_, i) => ({
 test("search finds an unloaded account and survives detail navigation and reload", async ({ page }) => {
   await accessMock(page, rows);
   await page.goto(base);
-  await expect(page.getByRole("button", { name: /Unloaded needle/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Unloaded needle", exact: true })).toHaveCount(0);
   await page.getByRole("searchbox", { name: "Search accounts" }).fill("needle");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByRole("button", { name: /Unloaded needle/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Unloaded needle", exact: true })).toBeVisible();
   await page.getByLabel("Account role").selectOption("writer");
-  await page.getByRole("button", { name: /Unloaded needle/ }).click();
+  await page.getByRole("link", { name: "Unloaded needle", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Unloaded needle" })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Accounts", exact: true }).click();
   await expect(page.getByRole("searchbox", { name: "Search accounts" })).toHaveValue("needle");
   await expect(page.getByLabel("Account role")).toHaveValue("writer");
-  await expect(page.getByRole("button", { name: /Unloaded needle/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Unloaded needle", exact: true })).toBeVisible();
 });
 
 test("previous and next cursors survive reload and reset on filter changes", async ({ page }) => {
@@ -33,18 +33,18 @@ test("previous and next cursors survive reload and reset on filter changes", asy
   await page.goto(base);
   await expect(page.getByRole("button", { name: "Previous page" })).toBeDisabled();
   await page.getByRole("button", { name: "Next page" }).click();
-  await expect(page.getByRole("button", { name: /Unloaded needle/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Unloaded needle", exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Previous page" }).click();
-  await expect(page.getByRole("button", { name: /Account 54/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Account 54", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Previous page" })).toBeDisabled();
   await page.getByRole("button", { name: "Next page" }).click();
   await page.getByLabel("Account status").selectOption("disabled");
-  await expect(page.getByRole("button", { name: /Account 1 .*Disabled/ })).toBeVisible();
+  await expect(page.getByRole("row").filter({ has: page.getByRole("link", { name: "Account 1", exact: true }) }).filter({ hasText: "Disabled" })).toBeVisible();
   expect(page.url()).not.toMatch(/before=|after=/);
   await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
   await page.getByLabel("Account status").selectOption("deleted");
-  await page.getByRole("button", { name: /Account 2 .*Deleted/ }).click();
+  await page.getByRole("row").filter({ hasText: "Deleted" }).getByRole("link", { name: "Account 2", exact: true }).click();
   await expect(page.getByRole("button", { name: "Delete account" })).toBeDisabled();
 });
 
@@ -69,7 +69,7 @@ for (const width of [320, 768, 1440]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 960 });
     await page.goto(base);
     await page.getByLabel("Theme").selectOption(theme);
-    await expect(page.getByRole("button", { name: /Account 54/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Account 54", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/account-list-${width}-${theme}.png` });
     await page.getByRole("navigation", { name: "Account pagination" }).scrollIntoViewIfNeeded();

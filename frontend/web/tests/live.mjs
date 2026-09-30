@@ -68,7 +68,7 @@ try {
   );
   async function login() {
     await loginWithPassword(page, "owner", ownerPassword);
-    await page.getByRole("button", { name: "Select storage console-live", exact: true }).waitFor();
+    await page.getByRole("link", { name: "Open storage console-live", exact: true }).waitFor();
   }
   await login();
   execFileSync(
@@ -91,7 +91,7 @@ try {
   await page.getByRole("button", { name: "Refresh" }).click();
   await page.getByLabel("Password", { exact: true }).waitFor();
   assert.equal(
-    await page.getByRole("button", { name: "Select storage console-live", exact: true }).count(),
+    await page.getByRole("link", { name: "Open storage console-live", exact: true }).count(),
     0,
   );
   await login();

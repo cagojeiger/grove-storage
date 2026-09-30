@@ -33,7 +33,7 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
     })),
   );
   await page.goto("/api/admin/console/#storages");
-  await expect(page.locator("a.registry-row")).toHaveCount(20);
+  await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(20);
   await page.getByRole("button", { name: "Page 3", exact: true }).click();
   await page.getByRole("link", { name: /store-41/ }).click();
   await expect(
@@ -56,14 +56,14 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
   await expect(
     page.getByRole("button", { name: "Page 2", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.locator("a.registry-row")).toHaveCount(20);
+  await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(20);
   await page.getByLabel("Sort", { exact: true }).selectOption("desc");
-  await expect(page.locator("a.registry-row").first()).toContainText(
+  await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a").first()).toContainText(
     "store-40",
   );
   await page.getByLabel("Search storage").fill("store-3");
-  await expect(page.locator("a.registry-row")).toHaveCount(10);
-  await page.locator("a.registry-row").first().click();
+  await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(10);
+  await page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a").first().click();
   await page
     .locator("main")
     .getByRole("link", { name: "Storage", exact: true })
@@ -72,7 +72,7 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
   await expect(page.getByLabel("Sort", { exact: true })).toHaveValue("desc");
   await page.getByLabel("Search storage").fill("");
   await page.getByLabel("Rows per page").selectOption("50");
-  await expect(page.locator("a.registry-row")).toHaveCount(40);
+  await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(40);
 });
 
 test("Client rows resolve assigned storage only for the visible page, including empty clients", async ({
@@ -101,16 +101,16 @@ test("Client rows resolve assigned storage only for the visible page, including 
     });
   });
   await page.goto("/api/admin/console/#clients");
-  await expect(page.locator("a.client-row")).toHaveCount(20);
-  await expect(page.locator("a.client-row").first()).toContainText(
+  await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a")).toHaveCount(20);
+  await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody tr").first()).toContainText(
     "home-archive",
   );
   expect([...requested].every((id) => ids.slice(0, 20).includes(id))).toBe(
     true,
   );
   await page.getByRole("button", { name: "Next page" }).click();
-  await expect(page.locator("a.client-row").first()).toContainText("client-21");
-  await page.locator("a.client-row").first().click();
+  await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a").first()).toContainText("client-21");
+  await page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a").first().click();
   await expect(page.getByText("S3 bucket", { exact: true })).toBeVisible();
   await page
     .locator("main")
@@ -147,7 +147,7 @@ test("Overview highlights the registered assignment outside its first five stora
   );
   await page.goto("/api/admin/console/#");
   await expect(page.locator(".connection-title")).toHaveCount(5);
-  await page.getByRole("button", { name: "Select client notegate" }).click();
+  await page.getByRole("link", { name: "Open client notegate" }).focus();
   await expect(
     page.locator(".connection-item.selected .connection-title"),
   ).toContainText("storage-7");

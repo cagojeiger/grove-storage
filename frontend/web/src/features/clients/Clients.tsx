@@ -64,7 +64,6 @@ export function Clients({
       )}
       <div className="page-heading">
         <div>
-          <p className="eyebrow">REGISTRY</p>
           <h1>{id || "Clients"}</h1>
         </div>
         <div className="page-actions">

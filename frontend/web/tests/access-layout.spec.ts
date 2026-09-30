@@ -14,7 +14,7 @@ for (const width of [320, 390, 768, 1024, 1440])
       await page.goto(root);
       await page.getByLabel("Theme").selectOption(theme);
       await page
-        .getByRole("button", { name: /Home-administrator.*Active/ })
+        .getByRole("link", { name: /^Home-administrator/ })
         .click();
       await expect(
         page.getByRole("heading", { name: "Management tokens" }),
