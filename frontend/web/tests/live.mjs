@@ -11,6 +11,8 @@ import { usageChecks } from "./live-usage.mjs";
 import { resourceChecks } from "./live-resources.mjs";
 import { metadataChecks } from "./live-metadata.mjs";
 import { loginWithPassword } from "./live-auth.mjs";
+import { transferChecks } from "./live-transfer.mjs";
+import { captureConsole } from "./live-screenshots.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -26,7 +28,8 @@ try {
   assert.equal(accountId, ownerId);
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await page.getByText("No storage registered.").waitFor();
-  await storageChecks(page, fixture);
+  const clientKey = await storageChecks(page, fixture);
+  await transferChecks(page, fixture, clientKey);
   await clientChecks(page, fixture);
   await resourceChecks(page, fixture);
   await metadataChecks(page, fixture);
@@ -149,7 +152,7 @@ try {
   await page.getByLabel(/^Name\s*\*?$/).fill("Setup recipient");
   await page.getByLabel(/^Username\s*\*?$/).fill("recipient");
   await page.getByLabel(/^Role\s*\*?$/).selectOption("reader");
-  await page.getByLabel("Current password").fill(replacement);
+  await page.getByLabel("Your current password").fill(replacement);
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   const setupLink = await page.getByRole("textbox", { name: "Setup link", exact: true }).inputValue();
   assert.match(setupLink, /#set-password\/gsps_[a-f0-9]{64}$/);
@@ -246,6 +249,10 @@ try {
     "PASS real storage overview, session expiry, token revocation, and private cache removal",
   );
   assert.deepEqual(errors, []);
+  if (process.env.GROVE_E2E_SCREENSHOTS) {
+    await captureConsole(page, origin, process.env.GROVE_E2E_SCREENSHOTS);
+    assert.deepEqual(errors, []);
+  }
 } finally {
   await browser.close();
 }

@@ -63,7 +63,7 @@ export async function storageChecks(
   await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
   await page.getByLabel(/^Registered capacity\s*\*?$/).fill("2147483648");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "console-live", exact: true })).toBeVisible();
   assert.equal(
     (await command("storage.show", { id: "console-live" })).body.capacity_bytes,
     2147483648,
@@ -148,7 +148,7 @@ export async function storageChecks(
     await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
     await page.getByLabel(/^Registered capacity\s*\*?$/).fill("2147483648");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "console-minio", exact: true })).toBeVisible();
     assert.equal(
       (await command("storage.show", { id: "console-minio" })).body.capacity_bytes,
       2147483648,
@@ -174,6 +174,7 @@ export async function storageChecks(
     .getByRole("link", { name: "Overview", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "console-live", exact: true }),
+    page.getByRole("link", { name: "Open storage console-live", exact: true }),
   ).toBeVisible();
+  return raw;
 }

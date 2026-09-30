@@ -49,6 +49,10 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await page.reload();
+    await expect(page.getByRole("alert")).toHaveText("Write access required.");
+    await expect(page.getByLabel("Secret key (re-enter)")).toHaveCount(0);
+    await page.getByRole("navigation").getByRole("link", { name: "Storage", exact: true }).click();
+    await page.getByRole("link", { name: "console-live", exact: true }).click();
     await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
     const blocked = await page.evaluate(async () => {
       const response = await fetch("/api/admin/console-commands/v1", {
@@ -68,7 +72,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     assert(events.length > 0 && events.every((e) => e.context.surface === "console"));
     assert(!JSON.stringify(audit).includes(credential.token));
     await page.goto(`${origin}/api/admin/console/#activity`);
-    await expect(page.getByText("MY ACTIVITY", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My activity", exact: true })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Security events", exact: true })).toHaveCount(0);
     const scoped = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/audit?limit=100")).json()));
     assert(scoped.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
