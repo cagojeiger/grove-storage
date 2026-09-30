@@ -75,6 +75,10 @@ const theme = createTheme({
         h1: theme.typography.h1,
         h2: theme.typography.h2,
         h3: theme.typography.h3,
+        dt: {
+          ...theme.typography.body2,
+          color: theme.vars.palette.text.secondary,
+        },
         ".detail-fields": {
           gap: theme.spacing(2, 3),
           paddingTop: theme.spacing(2),
@@ -94,6 +98,12 @@ const theme = createTheme({
           { opacity: 0.6 },
       }),
     },
+    MuiButtonBase: {
+      styleOverrides: { root: { fontFamily: "inherit" } },
+    },
+    MuiInputBase: { styleOverrides: { root: { minWidth: 0 } } },
+    MuiNativeSelect: { styleOverrides: { select: { minWidth: 0 } } },
+    MuiDialogContent: { styleOverrides: { root: { minWidth: 0 } } },
     MuiButton: {
       defaultProps: { disableElevation: true, size: "small" },
       styleOverrides: {

@@ -1,3 +1,5 @@
+import { Box, Divider, Stack, Typography } from "@mui/material";
+import type { ReactNode } from "react";
 import { Storage } from "./model";
 import { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
@@ -12,7 +14,7 @@ export function StorageDetail({
   usage?: Usage;
   canWrite: boolean;
 }) {
-  const fields =
+  const fields: [string, ReactNode][] =
     storage.kind === "fs"
       ? [["Root path", storage.root_path]]
       : [
@@ -25,66 +27,133 @@ export function StorageDetail({
           ["Relay", storage.force_relay ? "Enabled" : "Disabled"],
         ];
   return (
-    <>
-      <section className="storage-section" aria-label="Storage settings">
-        <h2>Settings</h2>
-        <dl className="detail-fields">
-          <div>
-            <dt>Type</dt>
-            <dd>{storage.kind === "fs" ? "Filesystem" : "S3"}</dd>
-          </div>
-          <div>
-            <dt>Registered capacity</dt>
-            <dd>
+    <Stack spacing={3} divider={<Divider />}>
+      <Stack component="section" aria-label="Storage settings" spacing={2}>
+        <Typography variant="h2">Settings</Typography>
+        <Box
+          component="dl"
+          sx={{
+            m: 0,
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "minmax(0, 1fr)",
+              sm: "repeat(2, minmax(0, 1fr))",
+            },
+            gap: 2.5,
+          }}
+        >
+          <Stack spacing={0.5}>
+            <Typography component="dt" variant="body2" color="text.secondary">
+              Type
+            </Typography>
+            <Typography component="dd" sx={{ m: 0 }}>
+              {storage.kind === "fs" ? "Filesystem" : "S3"}
+            </Typography>
+          </Stack>
+          <Stack spacing={0.5}>
+            <Typography component="dt" variant="body2" color="text.secondary">
+              Registered capacity
+            </Typography>
+            <Typography component="dd" sx={{ m: 0, overflowWrap: "anywhere" }}>
               {bytes(storage.capacity_bytes)}{" "}
-              <span className="muted">
+              <Typography
+                component="span"
+                variant="body2"
+                color="text.secondary"
+              >
                 ({storage.capacity_bytes.toLocaleString("en-US")} bytes)
-              </span>
-            </dd>
-          </div>
+              </Typography>
+            </Typography>
+          </Stack>
           {fields.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value || "-"}</dd>
-            </div>
+            <Stack key={label} spacing={0.5} sx={{ minWidth: 0 }}>
+              <Typography component="dt" variant="body2" color="text.secondary">
+                {label}
+              </Typography>
+              <Typography
+                component="dd"
+                sx={{ m: 0, overflowWrap: "anywhere" }}
+              >
+                {value || "-"}
+              </Typography>
+            </Stack>
           ))}
-          <ResourceMetadata key={storage.id} resource="storage" id={storage.id} canWrite={canWrite} />
-        </dl>
-      </section>
-      <section className="storage-section" aria-label="Storage usage">
-        <h2>Usage</h2>
+          <ResourceMetadata
+            key={storage.id}
+            resource="storage"
+            id={storage.id}
+            canWrite={canWrite}
+          />
+        </Box>
+      </Stack>
+      <Stack component="section" aria-label="Storage usage" spacing={2}>
+        <Typography variant="h2">Usage</Typography>
         {usage ? (
-          <dl className="usage-fields">
-            <div>
-              <dt>Active</dt>
-              <dd>{bytes(usage.active_bytes)}</dd>
-              <dd className="muted">
-                Files: {usage.active_files.toLocaleString("en-US")}
-              </dd>
-            </div>
-            <div>
-              <dt>Reserved</dt>
-              <dd>{bytes(usage.reserved_bytes)}</dd>
-              <dd className="muted">
-                Files: {usage.reserved_files.toLocaleString("en-US")}
-              </dd>
-            </div>
-            <div>
-              <dt>Pending deletion</dt>
-              <dd>{bytes(usage.purge_pending_bytes)}</dd>
-              <dd className="muted">
-                Files: {usage.purge_pending_files.toLocaleString("en-US")}
-              </dd>
-            </div>
-            <div>
-              <dt>Remaining</dt>
-              <dd>{bytes(usage.remaining_bytes)}</dd>
-            </div>
-          </dl>
+          <Box
+            component="dl"
+            sx={{
+              m: 0,
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "repeat(2, minmax(0, 1fr))",
+                md: "repeat(4, minmax(0, 1fr))",
+              },
+              gap: 2.5,
+            }}
+          >
+            {[
+              {
+                label: "Active",
+                bytes: usage.active_bytes,
+                files: usage.active_files,
+              },
+              {
+                label: "Reserved",
+                bytes: usage.reserved_bytes,
+                files: usage.reserved_files,
+              },
+              {
+                label: "Pending deletion",
+                bytes: usage.purge_pending_bytes,
+                files: usage.purge_pending_files,
+              },
+              { label: "Remaining", bytes: usage.remaining_bytes },
+            ].map((counter) => (
+              <Stack key={counter.label} spacing={0.5} sx={{ minWidth: 0 }}>
+                <Typography
+                  component="dt"
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  {counter.label}
+                </Typography>
+                <Typography
+                  component="dd"
+                  sx={{
+                    m: 0,
+                    fontVariantNumeric: "tabular-nums",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {bytes(counter.bytes)}
+                </Typography>
+                {counter.files !== undefined && (
+                  <Typography
+                    component="dd"
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ m: 0 }}
+                  >
+                    Files: {counter.files.toLocaleString("en-US")}
+                  </Typography>
+                )}
+              </Stack>
+            ))}
+          </Box>
         ) : (
-          <p className="muted">Usage is unavailable.</p>
+          <Typography color="text.secondary">Usage is unavailable.</Typography>
         )}
-      </section>
-    </>
+      </Stack>
+    </Stack>
   );
 }

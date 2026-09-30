@@ -1,4 +1,11 @@
-import { DialogContent, DialogActions, TextField, Button } from "@mui/material";
+import {
+  Alert,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Typography,
+} from "@mui/material";
 
 import { FormEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,22 +62,21 @@ export function DeleteStorage({
     <Dialog title="Delete storage" busy={busy} onClose={onClose}>
       <form onSubmit={(event) => void remove(event)}>
         <DialogContent>
-          <p className="delete-summary">
+          <Typography sx={{ mb: 3, overflowWrap: "anywhere" }}>
             Remove <strong>{id}</strong> from the registry. The S3 bucket is
             retained.
-          </p>
+          </Typography>
           <TextField
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
             disabled={busy || unknown}
             autoComplete="off"
             label={"Storage ID to delete"}
-            className="confirmation"
           />
           {error && (
-            <p role="alert" className="form-error">
+            <Alert severity="error" sx={{ mt: 2 }}>
               {error}
-            </p>
+            </Alert>
           )}
         </DialogContent>
         <DialogActions>
@@ -85,10 +91,9 @@ export function DeleteStorage({
             color="error"
             variant="contained"
             type="submit"
-            className="danger action-button"
+            startIcon={<Trash2 size={16} />}
             disabled={busy || unknown || confirmation !== id}
           >
-            <Trash2 size={16} />
             {busy ? "Deleting..." : "Confirm delete"}
           </Button>
         </DialogActions>

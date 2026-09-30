@@ -4,6 +4,11 @@ import {
   TextField,
   IconButton,
   Button,
+  Alert,
+  Box,
+  Stack,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 
 import { FormEvent, useState } from "react";
@@ -33,43 +38,68 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
       command<MetadataResult>(`${resource}.metadata.show`, { id }, signal),
   });
   return (
-    <div className="resource-metadata">
-      <dt className="metadata-heading">
-        <span>Metadata</span>
-        <div className="page-actions">
-          <IconButton
-            type="submit"
-            className="icon-button"
-            title="Refresh metadata"
-            aria-label="Refresh metadata"
-            disabled={query.isFetching}
-            onClick={() => void query.refetch()}
-          >
-            <RefreshCw size={18} />
-          </IconButton>
+    <Box
+      className="resource-metadata"
+      sx={{ gridColumn: "1 / -1", minWidth: 0 }}
+    >
+      <Stack
+        component="dt"
+        direction="row"
+        sx={{ alignItems: "center", justifyContent: "space-between", gap: 1 }}
+      >
+        <Typography component="span" variant="body2" color="text.secondary">
+          Metadata
+        </Typography>
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title="Refresh metadata">
+            <span>
+              <IconButton
+                type="button"
+                aria-label="Refresh metadata"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                <RefreshCw size={18} />
+              </IconButton>
+            </span>
+          </Tooltip>
           {canWrite && (
-            <IconButton
-              type="submit"
-              className="icon-button"
-              title="Edit metadata"
-              aria-label="Edit metadata"
-              disabled={!query.data || query.isError || query.isFetching}
-              onClick={() => setEditing(true)}
-            >
-              <Pencil size={18} />
-            </IconButton>
+            <Tooltip title="Edit metadata">
+              <span>
+                <IconButton
+                  type="button"
+                  aria-label="Edit metadata"
+                  disabled={!query.data || query.isError || query.isFetching}
+                  onClick={() => setEditing(true)}
+                >
+                  <Pencil size={18} />
+                </IconButton>
+              </span>
+            </Tooltip>
           )}
-        </div>
-      </dt>
-      <dd>
+        </Stack>
+      </Stack>
+      <Box component="dd" sx={{ m: 0, mt: 0.5 }}>
         {query.isPending ? (
-          <p role="status">Loading metadata...</p>
+          <Typography role="status" variant="body2">
+            Loading metadata...
+          </Typography>
         ) : query.isError ? (
-          <p role="alert">{message(query.error)}</p>
+          <Alert severity="error">{message(query.error)}</Alert>
         ) : (
-          <pre className="metadata-json">
+          <Box
+            component="pre"
+            className="metadata-json"
+            sx={{
+              m: 0,
+              typography: "body2",
+              fontFamily: "monospace",
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+            }}
+          >
             {JSON.stringify(query.data.metadata, null, 2)}
-          </pre>
+          </Box>
         )}
         {editing && canWrite && query.data && (
           <MetadataEditor
@@ -82,8 +112,8 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
             }}
           />
         )}
-      </dd>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -143,7 +173,11 @@ function MetadataEditor({
               formHelperText: { role: validation ? "alert" : undefined },
             }}
           />
-          {state.error && <p role="alert">{state.error}</p>}
+          {state.error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {state.error}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button type="button" disabled={state.busy} onClick={onClose}>
@@ -151,11 +185,10 @@ function MetadataEditor({
           </Button>
           <Button
             variant="contained"
-            className="primary"
+            startIcon={<Save size={16} />}
             type="submit"
             disabled={state.busy || state.unknown}
           >
-            <Save size={16} />
             {state.busy ? "Saving..." : "Save"}
           </Button>
         </DialogActions>

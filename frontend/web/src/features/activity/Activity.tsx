@@ -104,14 +104,14 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           value="audit"
           href={`#activity${suffix}`}
           label="Audit log"
-          wrapped
+          wrapped={compact}
         />
         <Tab
           component="a"
           value="invocations"
           href={`#activity/invocations${suffix}`}
           label="Command history"
-          wrapped
+          wrapped={compact}
         />
         {admin && (
           <Tab
@@ -119,7 +119,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
             value="security"
             href={`#activity/security${suffix}`}
             label="Security events"
-            wrapped
+            wrapped={compact}
           />
         )}
       </Tabs>

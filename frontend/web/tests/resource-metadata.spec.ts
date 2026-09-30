@@ -29,7 +29,7 @@ for (const resource of ["storage", "client"] as const) {
       await route.fulfill({ json: envelope(`${resource}.metadata.replace`, { id, metadata }) });
     });
     await page.goto(`/api/admin/console/#${resource === "client" ? "clients" : "storages"}/${id}`);
-    await expect(page.locator(".detail-fields > .resource-metadata")).toHaveCount(1);
+    await expect(page.locator("dl > .resource-metadata")).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Metadata", exact: true })).toHaveCount(0);
     if (resource === "storage") {
       await expect(page.getByRole("region", { name: "Storage settings" }).locator(".resource-metadata")).toHaveCount(1);

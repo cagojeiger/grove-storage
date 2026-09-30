@@ -108,6 +108,7 @@ test("legacy filesystem storage remains visible but cannot be edited", async ({ 
   }]);
   await page.goto(root);
   await page.getByRole("link", { name: /legacy-files/ }).click();
+  await expect(page.getByRole("heading", { name: "legacy-files", level: 1 })).toBeVisible();
   await expect(page.getByText("/legacy/objects", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit storage" })).toBeDisabled();
   expect(writes).toEqual([]);

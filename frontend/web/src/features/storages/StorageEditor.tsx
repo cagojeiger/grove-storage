@@ -5,6 +5,9 @@ import {
   Box,
   Button,
   Typography,
+  Alert,
+  Divider,
+  Stack,
 } from "@mui/material";
 
 import { FormEvent, useId, useRef, useState } from "react";
@@ -100,8 +103,13 @@ export function StorageEditor({
         onSubmit={(event) => void save(event)}
         autoComplete="off"
       >
-        <fieldset disabled={busy || unknown} className="storage-form">
-          <Typography component="h2" variant="h2" className="full-field">
+        <Stack
+          component="fieldset"
+          disabled={busy || unknown}
+          spacing={3}
+          sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+        >
+          <Typography component="h2" variant="h2">
             Connection
           </Typography>
           <TextField
@@ -126,7 +134,6 @@ export function StorageEditor({
             defaultValue={storage?.endpoint ?? ""}
             placeholder="https://s3.example.com"
             label={"Endpoint"}
-            className="full-field"
             slotProps={{ htmlInput: { spellCheck: false } }}
           />
           <TextField
@@ -134,23 +141,25 @@ export function StorageEditor({
             type="url"
             defaultValue={storage?.public_endpoint ?? ""}
             label={"Public endpoint (optional)"}
-            className="full-field"
             slotProps={{ htmlInput: { spellCheck: false } }}
           />
-          <TextField
-            name="region"
-            required
-            defaultValue={storage?.region ?? "us-east-1"}
-            label={"Region"}
-          />
-          <TextField
-            name="bucket"
-            required
-            defaultValue={storage?.bucket ?? ""}
-            label={"Bucket"}
-            slotProps={{ htmlInput: { spellCheck: false } }}
-          />
-          <Typography component="h2" variant="h2" className="full-field">
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField
+              name="region"
+              required
+              defaultValue={storage?.region ?? "us-east-1"}
+              label={"Region"}
+            />
+            <TextField
+              name="bucket"
+              required
+              defaultValue={storage?.bucket ?? ""}
+              label={"Bucket"}
+              slotProps={{ htmlInput: { spellCheck: false } }}
+            />
+          </Stack>
+          <Divider />
+          <Typography component="h2" variant="h2">
             Credentials
           </Typography>
           <TextField
@@ -158,7 +167,6 @@ export function StorageEditor({
             required
             defaultValue={storage?.access_key ?? ""}
             label={"Access key"}
-            className="full-field"
             slotProps={{ htmlInput: { spellCheck: false } }}
           />
           <TextField
@@ -167,32 +175,32 @@ export function StorageEditor({
             required
             autoComplete="new-password"
             label={storage ? "Secret key (re-enter)" : "Secret key"}
-            className="full-field"
           />
-          <Typography component="h2" variant="h2" className="full-field">
+          <Divider />
+          <Typography component="h2" variant="h2">
             Transfer and allocation
           </Typography>
-          <FormControlLabel
-            className="check-field"
-            control={
-              <Checkbox
-                name="force_path_style"
-                defaultChecked={storage?.force_path_style}
-              />
-            }
-            label={"Path-style"}
-          />
-          <FormControlLabel
-            className="check-field"
-            control={
-              <Checkbox
-                name="force_relay"
-                defaultChecked={storage?.force_relay}
-              />
-            }
-            label={"Use relay"}
-          />
-          <div className="full-field capacity-input">
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="force_path_style"
+                  defaultChecked={storage?.force_path_style}
+                />
+              }
+              label={"Path-style"}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="force_relay"
+                  defaultChecked={storage?.force_relay}
+                />
+              }
+              label={"Use relay"}
+            />
+          </Stack>
+          <Stack direction="row" spacing={2}>
             <TextField
               label="Registered capacity"
               name="capacity"
@@ -210,6 +218,7 @@ export function StorageEditor({
               name="unit"
               defaultValue="B"
               select
+              sx={{ width: 112, flexShrink: 0 }}
               slotProps={{
                 htmlInput: { "aria-label": "Capacity unit" },
                 select: { native: true },
@@ -219,12 +228,12 @@ export function StorageEditor({
               <option>GiB</option>
               <option>TiB</option>
             </TextField>
-          </div>
-        </fieldset>
+          </Stack>
+        </Stack>
         {error && (
-          <p role="alert" className="form-error">
+          <Alert severity="error" sx={{ mt: 2 }}>
             {error}
-          </p>
+          </Alert>
         )}
       </form>
       <Box
@@ -249,9 +258,9 @@ export function StorageEditor({
           variant="contained"
           type="submit"
           form={formId}
+          startIcon={<Save size={16} />}
           disabled={busy || unknown}
         >
-          <Save size={16} />
           {busy ? "Saving..." : "Save"}
         </Button>
       </Box>
