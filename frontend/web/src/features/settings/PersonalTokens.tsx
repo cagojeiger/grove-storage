@@ -13,9 +13,13 @@ import {
   Stack,
   Tooltip,
   Typography,
+  Dialog,
+  DialogTitle,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useId } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Trash2 } from "lucide-react";
 import { ApiError, Session, identity, message, request } from "../../api/http";
@@ -29,7 +33,7 @@ import {
   isChanged,
   identityRequest,
 } from "../../api/identity";
-import { Dialog } from "../../design/Dialog";
+
 import { time } from "../../design/format";
 import { IssuedToken } from "../access/IssuedToken";
 
@@ -173,6 +177,9 @@ function PersonalTokenDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const [busy, setBusy] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const [error, setError] = useState("");
@@ -232,68 +239,76 @@ function PersonalTokenDialog({
 
   return (
     <Dialog
-      title={
-        issued
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !busy && !issued) onClose();
+      }}
+    >
+      <DialogTitle id={titleId}>
+        {issued
           ? "Save token"
           : target === "issue"
             ? "Issue API token"
-            : "Revoke API token"
-      }
-      busy={busy}
-      closeDisabled={Boolean(issued)}
-      onClose={onClose}
-    >
+            : "Revoke API token"}
+      </DialogTitle>
       {issued ? (
         <IssuedToken value={issued} onDone={onClose} />
       ) : (
-        <form
-          onSubmit={(event) => {
-            void submit(event);
-          }}
-        >
-          <DialogContent>
-            <Stack spacing={3}>
-              {target === "issue" ? (
-                <>
-                  <TextField
-                    name="label"
-                    disabled={busy || unknown}
-                    required
-                    label={"Label"}
-                    slotProps={{ htmlInput: { maxLength: 80 } }}
-                  />
-                  <TextField
-                    name="days"
-                    disabled={busy || unknown}
-                    type="number"
-                    defaultValue={90}
-                    required
-                    label={"Expires in days"}
-                    slotProps={{ htmlInput: { min: 1, max: 90 } }}
-                  />
-                  <TextField
-                    name="current_password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    label={"Current password"}
-                    disabled={busy || unknown}
-                  />
-                </>
-              ) : (
-                <FormControlLabel
-                  disabled={busy || unknown}
-                  control={
-                    <Checkbox
-                      checked={confirmed}
-                      onChange={(event) => setConfirmed(event.target.checked)}
+        <>
+          <DialogContent dividers>
+            <form
+              id={`${titleId}-form`}
+              onSubmit={(event) => {
+                void submit(event);
+              }}
+            >
+              <Stack spacing={3}>
+                {target === "issue" ? (
+                  <>
+                    <TextField
+                      name="label"
+                      disabled={busy || unknown}
+                      required
+                      label={"Label"}
+                      slotProps={{ htmlInput: { maxLength: 80 } }}
                     />
-                  }
-                  label={<>Revoke {target.label}</>}
-                />
-              )}
-              {error && <Alert severity="error">{error}</Alert>}
-            </Stack>
+                    <TextField
+                      name="days"
+                      disabled={busy || unknown}
+                      type="number"
+                      defaultValue={90}
+                      required
+                      label={"Expires in days"}
+                      slotProps={{ htmlInput: { min: 1, max: 90 } }}
+                    />
+                    <TextField
+                      name="current_password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      label={"Current password"}
+                      disabled={busy || unknown}
+                    />
+                  </>
+                ) : (
+                  <FormControlLabel
+                    disabled={busy || unknown}
+                    control={
+                      <Checkbox
+                        checked={confirmed}
+                        onChange={(event) => setConfirmed(event.target.checked)}
+                      />
+                    }
+                    label={<>Revoke {target.label}</>}
+                  />
+                )}
+                {error && <Alert severity="error">{error}</Alert>}
+              </Stack>
+            </form>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={busy} onClick={onClose}>
@@ -301,6 +316,7 @@ function PersonalTokenDialog({
             </Button>
             <Button
               type="submit"
+              form={`${titleId}-form`}
               variant="contained"
               color={target === "issue" ? "primary" : "error"}
               disabled={busy || unknown || (target !== "issue" && !confirmed)}
@@ -308,7 +324,7 @@ function PersonalTokenDialog({
               {busy ? "Saving..." : target === "issue" ? "Issue" : "Revoke"}
             </Button>
           </DialogActions>
-        </form>
+        </>
       )}
     </Dialog>
   );

@@ -1,7 +1,16 @@
-import { Box, Divider, Stack, Typography } from "@mui/material";
-import type { ReactNode } from "react";
-import { Storage } from "./model";
-import { Usage } from "../../api/http";
+import {
+  Card,
+  CardContent,
+  Divider,
+  Grid,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  Typography,
+} from "@mui/material";
+import type { Storage } from "./model";
+import type { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
 import { ResourceMetadata } from "../metadata/ResourceMetadata";
 
@@ -14,93 +23,72 @@ export function StorageDetail({
   usage?: Usage;
   canWrite: boolean;
 }) {
-  const fields: [string, ReactNode][] =
-    storage.kind === "fs"
+  const fields = [
+    ["Type", storage.kind === "fs" ? "Filesystem" : "S3"],
+    [
+      "Registered capacity",
+      `${bytes(storage.capacity_bytes)} (${storage.capacity_bytes.toLocaleString("en-US")} bytes)`,
+    ],
+    ...(storage.kind === "fs"
       ? [["Root path", storage.root_path]]
       : [
           ["Endpoint", storage.endpoint],
-          ["Public endpoint", storage.public_endpoint],
+          ["Public endpoint", storage.public_endpoint || "-"],
           ["Region", storage.region],
           ["Bucket", storage.bucket],
           ["Access key", storage.access_key],
           ["Path-style", storage.force_path_style ? "Enabled" : "Disabled"],
           ["Relay", storage.force_relay ? "Enabled" : "Disabled"],
-        ];
+        ]),
+  ];
   return (
     <Stack spacing={3} divider={<Divider />}>
       <Stack component="section" aria-label="Storage settings" spacing={2}>
-        <Typography component="h2" variant="h6">Settings</Typography>
-        <Box
-          component="dl"
-          sx={{
-            m: 0,
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "minmax(0, 1fr)",
-              sm: "repeat(2, minmax(0, 1fr))",
-            },
-            gap: 2.5,
-          }}
+        <Typography component="h2" variant="h6">
+          Settings
+        </Typography>
+        <Grid
+          container
+          component={List}
+          disablePadding
+          spacing={2}
+          aria-label="Storage properties"
         >
-          <Stack spacing={0.5}>
-            <Typography component="dt" variant="body2" color="text.secondary">
-              Type
-            </Typography>
-            <Typography component="dd" sx={{ m: 0 }}>
-              {storage.kind === "fs" ? "Filesystem" : "S3"}
-            </Typography>
-          </Stack>
-          <Stack spacing={0.5}>
-            <Typography component="dt" variant="body2" color="text.secondary">
-              Registered capacity
-            </Typography>
-            <Typography component="dd" sx={{ m: 0, overflowWrap: "anywhere" }}>
-              {bytes(storage.capacity_bytes)}{" "}
-              <Typography
-                component="span"
-                variant="body2"
-                color="text.secondary"
-              >
-                ({storage.capacity_bytes.toLocaleString("en-US")} bytes)
-              </Typography>
-            </Typography>
-          </Stack>
           {fields.map(([label, value]) => (
-            <Stack key={label} spacing={0.5} sx={{ minWidth: 0 }}>
-              <Typography component="dt" variant="body2" color="text.secondary">
-                {label}
-              </Typography>
-              <Typography
-                component="dd"
-                sx={{ m: 0, overflowWrap: "anywhere" }}
-              >
-                {value || "-"}
-              </Typography>
-            </Stack>
+            <Grid
+              key={label}
+              component={ListItem}
+              disablePadding
+              size={{ xs: 12, sm: 6 }}
+            >
+              <ListItemText
+                primary={label}
+                secondary={value || "-"}
+                slotProps={{
+                  primary: { variant: "body2", color: "text.secondary" },
+                  secondary: {
+                    variant: "body1",
+                    color: "text.primary",
+                    sx: { overflowWrap: "anywhere" },
+                  },
+                }}
+              />
+            </Grid>
           ))}
-          <ResourceMetadata
-            key={storage.id}
-            resource="storage"
-            id={storage.id}
-            canWrite={canWrite}
-          />
-        </Box>
+        </Grid>
+        <ResourceMetadata
+          key={storage.id}
+          resource="storage"
+          id={storage.id}
+          canWrite={canWrite}
+        />
       </Stack>
       <Stack component="section" aria-label="Storage usage" spacing={2}>
-        <Typography component="h2" variant="h6">Usage</Typography>
+        <Typography component="h2" variant="h6">
+          Usage
+        </Typography>
         {usage ? (
-          <Box
-            component="dl"
-            sx={{
-              m: 0,
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "repeat(2, minmax(0, 1fr))",
-                md: "repeat(4, minmax(0, 1fr))",
-              },
-              gap: 2.5,
-            }}
-          >
+          <Grid container spacing={2}>
             {[
               {
                 label: "Active",
@@ -119,37 +107,25 @@ export function StorageDetail({
               },
               { label: "Remaining", bytes: usage.remaining_bytes },
             ].map((counter) => (
-              <Stack key={counter.label} spacing={0.5} sx={{ minWidth: 0 }}>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  {counter.label}
-                </Typography>
-                <Typography
-                  component="dd"
-                  sx={{
-                    m: 0,
-                    fontVariantNumeric: "tabular-nums",
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {bytes(counter.bytes)}
-                </Typography>
-                {counter.files !== undefined && (
-                  <Typography
-                    component="dd"
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ m: 0 }}
-                  >
-                    Files: {counter.files.toLocaleString("en-US")}
-                  </Typography>
-                )}
-              </Stack>
+              <Grid key={counter.label} size={{ xs: 12, sm: 6, lg: 3 }}>
+                <Card variant="outlined" sx={{ height: "100%" }}>
+                  <CardContent>
+                    <Typography color="text.secondary" variant="body2">
+                      {counter.label}
+                    </Typography>
+                    <Typography variant="h5" component="p" sx={{ my: 1 }}>
+                      {bytes(counter.bytes)}
+                    </Typography>
+                    {counter.files !== undefined && (
+                      <Typography variant="body2" color="text.secondary">
+                        Files: {counter.files.toLocaleString("en-US")}
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
             ))}
-          </Box>
+          </Grid>
         ) : (
           <Typography color="text.secondary">Usage is unavailable.</Typography>
         )}

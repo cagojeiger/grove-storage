@@ -13,27 +13,46 @@ for (const mode of ["light", "dark"]) {
       await page.getByLabel("Theme").selectOption(mode);
       const settings = page.getByRole("region", { name: "Storage settings" });
       const usage = page.getByRole("region", { name: "Storage usage" });
-      for (const region of [settings, usage]) {
-        const label = region.locator("dt").first();
+      const properties = settings.getByRole("list", {
+        name: "Storage properties",
+      });
+      await expect(properties.getByRole("listitem")).toHaveCount(9);
+      for (const label of [
+        properties.getByText("Type", { exact: true }),
+        usage.getByText("Active", { exact: true }),
+      ]) {
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
-        await expect(label).toHaveCSS("line-height", "20.02px");
-        await expect(region.locator("dd").first()).toHaveCSS(
-          "font-size",
-          "16px",
-        );
-        await expect(region.getByRole("heading", { level: 2 })).toHaveCSS(
-          "font-size",
-          "20px",
-        );
       }
-      await expect(settings.locator("pre")).toHaveCSS(
-        "font-family",
-        /monospace/,
+      await expect(properties.getByText("S3", { exact: true })).toHaveCSS(
+        "font-size",
+        "16px",
       );
-      await expect(settings.locator("pre")).toHaveText("{}");
-      const labels = await settings.locator("dt").allTextContents();
-      expect(labels.at(-1)).toBe("Metadata");
+      await expect(usage.getByText("0 B", { exact: true }).first()).toHaveCSS(
+        "font-size",
+        "24px",
+      );
+      await expect(settings.getByRole("heading", { level: 2 })).toHaveCSS(
+        "font-size",
+        "20px",
+      );
+      await expect(
+        settings.getByLabel("Saved metadata", { exact: true }),
+      ).toHaveCSS("font-family", /monospace/);
+      await expect(
+        settings.getByLabel("Saved metadata", { exact: true }),
+      ).toHaveText("{}");
+      expect(
+        await settings
+          .getByRole("region", { name: "Metadata", exact: true })
+          .evaluate((el) =>
+            Boolean(
+              el.compareDocumentPosition(
+                document.querySelector('[aria-label="Storage usage"]')!,
+              ) & Node.DOCUMENT_POSITION_FOLLOWING,
+            ),
+          ),
+      ).toBe(true);
       await page.screenshot({
         path: `test-results/storage-mui-detail-${width}-${mode}.png`,
         fullPage: true,
@@ -49,7 +68,10 @@ for (const mode of ["light", "dark"]) {
       expect(
         await table.evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
-      if (width >= 600) await expect(table.getByRole("gridcell", { name: "1 TiB", exact: true })).toBeVisible();
+      if (width >= 600)
+        await expect(
+          table.getByRole("gridcell", { name: "1 TiB", exact: true }),
+        ).toBeVisible();
       await page.screenshot({
         path: `test-results/storage-mui-list-${width}-${mode}.png`,
         fullPage: true,

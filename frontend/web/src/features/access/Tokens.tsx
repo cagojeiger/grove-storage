@@ -14,9 +14,13 @@ import {
   Stack,
   Tooltip,
   Typography,
+  Dialog,
+  DialogTitle,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Trash2 } from "lucide-react";
 import {
@@ -30,7 +34,7 @@ import {
   isCredential,
   isIssued,
 } from "../../api/identity";
-import { Dialog } from "../../design/Dialog";
+
 import { message } from "../../api/http";
 import { IssuedToken } from "./IssuedToken";
 import { useAction } from "./useAction";
@@ -178,93 +182,104 @@ function TokenDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const state = useAction();
   const [issued, setIssued] = useState<Issued | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   return (
     <Dialog
-      title={
-        issued
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !state.busy && !issued) onClose();
+      }}
+    >
+      <DialogTitle id={titleId}>
+        {issued
           ? "Save token"
           : target === "issue"
             ? "Issue management token"
-            : "Revoke token"
-      }
-      busy={state.busy}
-      closeDisabled={Boolean(issued)}
-      onClose={onClose}
-    >
+            : "Revoke token"}
+      </DialogTitle>
       {issued ? (
         <IssuedToken value={issued} onDone={onClose} />
       ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const data = new FormData(e.currentTarget);
-            void state.run(async () => {
-              if (target === "issue") {
-                const result = await identityRequest(
-                  `/accounts/${encodeURIComponent(account.id)}/credentials`,
-                  isIssued,
-                  {
-                    method: "POST",
-                    body: JSON.stringify({
-                      label: field(data, "label").trim(),
-                      expires_in_days: Number(data.get("days")),
-                    }),
-                  },
-                );
-                if (result.account_id !== account.id)
-                  throw new Error("Mismatched issued account");
-                setIssued(result);
-              } else {
-                if (!confirmed) return;
-                await identityRequest(
-                  `/credentials/${encodeURIComponent(target.id)}`,
-                  isChanged,
-                  { method: "DELETE" },
-                );
-                onClose();
-              }
-              await onSaved();
-            });
-          }}
-        >
-          <DialogContent>
-            <Stack spacing={3}>
-              {target === "issue" ? (
-                <>
-                  <TextField
-                    name="label"
-                    disabled={state.busy || state.unknown}
-                    required
-                    label={"Label"}
-                    slotProps={{ htmlInput: { maxLength: 80 } }}
-                  />
-                  <TextField
-                    name="days"
-                    disabled={state.busy || state.unknown}
-                    type="number"
-                    defaultValue={90}
-                    required
-                    label={"Expires in days"}
-                    slotProps={{ htmlInput: { min: 1, max: 90 } }}
-                  />
-                </>
-              ) : (
-                <FormControlLabel
-                  disabled={state.busy || state.unknown}
-                  control={
-                    <Checkbox
-                      checked={confirmed}
-                      onChange={(e) => setConfirmed(e.target.checked)}
-                    />
+        <>
+          <DialogContent dividers>
+            <form
+              id={`${titleId}-form`}
+              onSubmit={(e) => {
+                e.preventDefault();
+                const data = new FormData(e.currentTarget);
+                void state.run(async () => {
+                  if (target === "issue") {
+                    const result = await identityRequest(
+                      `/accounts/${encodeURIComponent(account.id)}/credentials`,
+                      isIssued,
+                      {
+                        method: "POST",
+                        body: JSON.stringify({
+                          label: field(data, "label").trim(),
+                          expires_in_days: Number(data.get("days")),
+                        }),
+                      },
+                    );
+                    if (result.account_id !== account.id)
+                      throw new Error("Mismatched issued account");
+                    setIssued(result);
+                  } else {
+                    if (!confirmed) return;
+                    await identityRequest(
+                      `/credentials/${encodeURIComponent(target.id)}`,
+                      isChanged,
+                      { method: "DELETE" },
+                    );
+                    onClose();
                   }
-                  label={<>Revoke {target.label} and its sessions</>}
-                />
-              )}
-              {state.error && <Alert severity="error">{state.error}</Alert>}
-            </Stack>
+                  await onSaved();
+                });
+              }}
+            >
+              <Stack spacing={3}>
+                {target === "issue" ? (
+                  <>
+                    <TextField
+                      name="label"
+                      disabled={state.busy || state.unknown}
+                      required
+                      label={"Label"}
+                      slotProps={{ htmlInput: { maxLength: 80 } }}
+                    />
+                    <TextField
+                      name="days"
+                      disabled={state.busy || state.unknown}
+                      type="number"
+                      defaultValue={90}
+                      required
+                      label={"Expires in days"}
+                      slotProps={{ htmlInput: { min: 1, max: 90 } }}
+                    />
+                  </>
+                ) : (
+                  <FormControlLabel
+                    disabled={state.busy || state.unknown}
+                    control={
+                      <Checkbox
+                        checked={confirmed}
+                        onChange={(e) => setConfirmed(e.target.checked)}
+                      />
+                    }
+                    label={<>Revoke {target.label} and its sessions</>}
+                  />
+                )}
+                {state.error && <Alert severity="error">{state.error}</Alert>}
+              </Stack>
+            </form>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={state.busy} onClick={onClose}>
@@ -272,6 +287,7 @@ function TokenDialog({
             </Button>
             <Button
               type="submit"
+              form={`${titleId}-form`}
               variant="contained"
               color={target === "issue" ? "primary" : "error"}
               disabled={
@@ -287,7 +303,7 @@ function TokenDialog({
                   : "Revoke"}
             </Button>
           </DialogActions>
-        </form>
+        </>
       )}
     </Dialog>
   );

@@ -15,9 +15,13 @@ import {
   Stack,
   Tooltip,
   Typography,
+  Dialog,
+  DialogTitle,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import {
   useInfiniteQuery,
   useQuery,
@@ -34,7 +38,7 @@ import {
   isObject,
 } from "../../api/identity";
 import { clearSession } from "../../auth/session";
-import { Dialog } from "../../design/Dialog";
+
 import { useAction } from "../access/useAction";
 import { time } from "../../design/format";
 import { PersonalTokens } from "./PersonalTokens";
@@ -301,35 +305,51 @@ function EditProfile({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const action = useAction();
   const [name, setName] = useState(account.display_name);
   return (
-    <Dialog title="Edit my name" busy={action.busy} onClose={onClose}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void action.run(async () => {
-            await identityRequest("/me", isChanged, {
-              method: "PATCH",
-              body: JSON.stringify({ display_name: name.trim() }),
-            });
-            onClose();
-            await onSaved();
-          });
-        }}
-      >
-        <DialogContent>
-          <Stack spacing={3}>
-            <TextField
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-              label={"Name"}
-              disabled={action.busy || action.unknown}
-              slotProps={{ htmlInput: { maxLength: 80 } }}
-            />
-            {action.error && <Alert severity="error">{action.error}</Alert>}
-          </Stack>
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !action.busy) onClose();
+      }}
+    >
+      <DialogTitle id={titleId}>{"Edit my name"}</DialogTitle>
+      <>
+        <DialogContent dividers>
+          <form
+            id={`${titleId}-form`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void action.run(async () => {
+                await identityRequest("/me", isChanged, {
+                  method: "PATCH",
+                  body: JSON.stringify({ display_name: name.trim() }),
+                });
+                onClose();
+                await onSaved();
+              });
+            }}
+          >
+            <Stack spacing={3}>
+              <TextField
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+                label={"Name"}
+                disabled={action.busy || action.unknown}
+                slotProps={{ htmlInput: { maxLength: 80 } }}
+              />
+              {action.error && <Alert severity="error">{action.error}</Alert>}
+            </Stack>
+          </form>
         </DialogContent>
         <DialogActions>
           <Button type="button" disabled={action.busy} onClick={onClose}>
@@ -337,6 +357,7 @@ function EditProfile({
           </Button>
           <Button
             type="submit"
+            form={`${titleId}-form`}
             variant="contained"
             disabled={
               action.busy ||
@@ -348,7 +369,7 @@ function EditProfile({
             Save
           </Button>
         </DialogActions>
-      </form>
+      </>
     </Dialog>
   );
 }
@@ -363,13 +384,26 @@ function RevokeSession({
   onClose: () => void;
   onRevoked: () => Promise<void>;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const action = useAction((error) =>
     error instanceof ApiError && error.outcome === "not_applied"
       ? message(error)
       : "The outcome is unknown. Close and refresh the session list before trying again.",
   );
   return (
-    <Dialog title="Revoke session" busy={action.busy} onClose={onClose}>
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !action.busy) onClose();
+      }}
+    >
+      <DialogTitle id={titleId}>{"Revoke session"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           <Typography>

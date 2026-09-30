@@ -8,11 +8,15 @@ import {
   Alert,
   Stack,
   Typography,
+  Dialog,
+  DialogTitle,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useId } from "react";
 import { Account, identityRequest, isChanged } from "../../api/identity";
-import { Dialog } from "../../design/Dialog";
+
 import { useAction } from "./useAction";
 
 export type AccountAction = "name" | "role" | "active" | "delete";
@@ -29,6 +33,9 @@ export function AccountDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const state = useAction();
   const [confirmation, setConfirmation] = useState("");
   const [name, setName] = useState(
@@ -92,97 +99,109 @@ export function AccountDialog({
     });
   }
   return (
-    <Dialog title={title} busy={state.busy} onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)}>
-        <DialogContent>
-          <Stack spacing={3}>
-            {action === "name" ? (
-              <TextField
-                name="display_name"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                label={"Name"}
-                disabled={state.busy || state.unknown}
-                slotProps={{ htmlInput: { maxLength: 80 } }}
-              />
-            ) : (
-              <Typography sx={{ overflowWrap: "anywhere" }}>
-                {account?.display_name}
-              </Typography>
-            )}
-            {action === "role" && (
-              <TextField
-                name="role"
-                value={role}
-                onChange={(e) => {
-                  setRole(e.target.value as Account["role"]);
-                  setAcknowledged(false);
-                }}
-                label={"Role"}
-                disabled={state.busy || state.unknown}
-                select
-                slotProps={{
-                  htmlInput: { "aria-label": "Role" },
-                  select: { native: true },
-                }}
-              >
-                <option value="reader">Reader</option>
-                <option value="writer">Writer</option>
-                <option value="admin">Admin</option>
-              </TextField>
-            )}
-            {action === "delete" && (
-              <Typography color="error">
-                All tokens and sessions belonging to this User will be revoked.
-                Storage, clients, and files are preserved.
-              </Typography>
-            )}
-            {action === "role" && (
-              <Typography>
-                The selected role applies to existing tokens and sessions.
-              </Typography>
-            )}
-            {action === "active" && !account?.is_active && (
-              <Typography>
-                Unexpired, unrevoked tokens become usable again. Previous
-                sessions remain revoked.
-              </Typography>
-            )}
-            {selfImpact && (
-              <FormControlLabel
-                disabled={state.busy || state.unknown}
-                control={
-                  <Checkbox
-                    checked={acknowledged}
-                    onChange={(e) => setAcknowledged(e.target.checked)}
-                  />
-                }
-                label={
-                  selfDemotion
-                    ? "I understand I will lose access to Accounts."
-                    : "I understand my current session will end."
-                }
-              />
-            )}
-            {action === "active" && account?.is_active && (
-              <Typography color="error">
-                Access is suspended for all of this User's tokens. Existing
-                sessions are revoked.
-              </Typography>
-            )}
-            {dangerous && (
-              <TextField
-                value={confirmation}
-                onChange={(e) => setConfirmation(e.target.value)}
-                autoComplete="off"
-                required
-                label={"Confirm account name"}
-                disabled={state.busy || state.unknown}
-              />
-            )}
-            {state.error && <Alert severity="error">{state.error}</Alert>}
-          </Stack>
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !state.busy) onClose();
+      }}
+    >
+      <DialogTitle id={titleId}>{title}</DialogTitle>
+      <>
+        <DialogContent dividers>
+          <form id={`${titleId}-form`} onSubmit={(e) => void submit(e)}>
+            <Stack spacing={3}>
+              {action === "name" ? (
+                <TextField
+                  name="display_name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  label={"Name"}
+                  disabled={state.busy || state.unknown}
+                  slotProps={{ htmlInput: { maxLength: 80 } }}
+                />
+              ) : (
+                <Typography sx={{ overflowWrap: "anywhere" }}>
+                  {account?.display_name}
+                </Typography>
+              )}
+              {action === "role" && (
+                <TextField
+                  name="role"
+                  value={role}
+                  onChange={(e) => {
+                    setRole(e.target.value as Account["role"]);
+                    setAcknowledged(false);
+                  }}
+                  label={"Role"}
+                  disabled={state.busy || state.unknown}
+                  select
+                  slotProps={{
+                    htmlInput: { "aria-label": "Role" },
+                    select: { native: true },
+                  }}
+                >
+                  <option value="reader">Reader</option>
+                  <option value="writer">Writer</option>
+                  <option value="admin">Admin</option>
+                </TextField>
+              )}
+              {action === "delete" && (
+                <Typography color="error">
+                  All tokens and sessions belonging to this User will be
+                  revoked. Storage, clients, and files are preserved.
+                </Typography>
+              )}
+              {action === "role" && (
+                <Typography>
+                  The selected role applies to existing tokens and sessions.
+                </Typography>
+              )}
+              {action === "active" && !account?.is_active && (
+                <Typography>
+                  Unexpired, unrevoked tokens become usable again. Previous
+                  sessions remain revoked.
+                </Typography>
+              )}
+              {selfImpact && (
+                <FormControlLabel
+                  disabled={state.busy || state.unknown}
+                  control={
+                    <Checkbox
+                      checked={acknowledged}
+                      onChange={(e) => setAcknowledged(e.target.checked)}
+                    />
+                  }
+                  label={
+                    selfDemotion
+                      ? "I understand I will lose access to Accounts."
+                      : "I understand my current session will end."
+                  }
+                />
+              )}
+              {action === "active" && account?.is_active && (
+                <Typography color="error">
+                  Access is suspended for all of this User's tokens. Existing
+                  sessions are revoked.
+                </Typography>
+              )}
+              {dangerous && (
+                <TextField
+                  value={confirmation}
+                  onChange={(e) => setConfirmation(e.target.value)}
+                  autoComplete="off"
+                  required
+                  label={"Confirm account name"}
+                  disabled={state.busy || state.unknown}
+                />
+              )}
+              {state.error && <Alert severity="error">{state.error}</Alert>}
+            </Stack>
+          </form>
         </DialogContent>
         <DialogActions>
           <Button type="button" disabled={state.busy} onClick={onClose}>
@@ -190,6 +209,7 @@ export function AccountDialog({
           </Button>
           <Button
             type="submit"
+            form={`${titleId}-form`}
             variant="contained"
             color={dangerous ? "error" : "primary"}
             disabled={
@@ -203,7 +223,7 @@ export function AccountDialog({
             {state.busy ? "Saving..." : action === "name" ? "Save name" : title}
           </Button>
         </DialogActions>
-      </form>
+      </>
     </Dialog>
   );
 }

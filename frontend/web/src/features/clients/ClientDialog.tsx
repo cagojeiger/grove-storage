@@ -1,16 +1,19 @@
 import {
   Alert,
+  Dialog,
+  DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
   Button,
   Stack,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Dialog } from "../../design/Dialog";
 import { command } from "../../api/commands";
 import { message } from "../../api/http";
 import { field } from "../../api/identity";
@@ -29,6 +32,8 @@ export function ClientDialog({
 }) {
   const state = useAction(clientMessage);
   const cache = useQueryClient();
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
   const [confirmation, setConfirmation] = useState("");
   const storages = useQuery({
     queryKey: ["storages", "list"],
@@ -55,12 +60,20 @@ export function ClientDialog({
   }
   return (
     <Dialog
-      title={id ? "Delete client" : "Create client"}
-      busy={state.busy}
-      onClose={onClose}
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !state.busy) onClose();
+      }}
     >
-      <form onSubmit={(e) => void submit(e)}>
-        <DialogContent>
+      <DialogTitle id={titleId}>
+        {id ? "Delete client" : "Create client"}
+      </DialogTitle>
+      <DialogContent dividers>
+        <form id={`${titleId}-form`} onSubmit={(e) => void submit(e)}>
           <Stack
             component="fieldset"
             spacing={3}
@@ -141,25 +154,26 @@ export function ClientDialog({
               {state.error}
             </Alert>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button type="button" disabled={state.busy} onClick={onClose}>
-            {state.unknown ? "Close and review" : "Cancel"}
-          </Button>
-          <Button
-            type="submit"
-            variant={id ? "outlined" : "contained"}
-            color={id ? "error" : "primary"}
-            disabled={
-              state.busy ||
-              state.unknown ||
-              (id ? confirmation !== id : !options.length || storages.isError)
-            }
-          >
-            {state.busy ? "Saving..." : id ? "Confirm delete" : "Create"}
-          </Button>
-        </DialogActions>
-      </form>
+        </form>
+      </DialogContent>
+      <DialogActions>
+        <Button type="button" disabled={state.busy} onClick={onClose}>
+          {state.unknown ? "Close and review" : "Cancel"}
+        </Button>
+        <Button
+          type="submit"
+          form={`${titleId}-form`}
+          variant={id ? "outlined" : "contained"}
+          color={id ? "error" : "primary"}
+          disabled={
+            state.busy ||
+            state.unknown ||
+            (id ? confirmation !== id : !options.length || storages.isError)
+          }
+        >
+          {state.busy ? "Saving..." : id ? "Confirm delete" : "Create"}
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 }

@@ -1,10 +1,7 @@
 import {
   Alert,
-  Box,
   IconButton,
   Button,
-  Link,
-  Stack,
   Tooltip,
   Typography,
   TextField,
@@ -15,8 +12,6 @@ import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Page } from "../../app/Page";
 import { command } from "../../api/commands";
 import { message } from "../../api/http";
-import { bytes } from "../../design/format";
-import { storageLink } from "../../app/navigation";
 import {
   Client,
   ClientUsage,
@@ -27,7 +22,7 @@ import {
 import { ClientDialog } from "./ClientDialog";
 import { ClientKeys } from "./ClientKeys";
 import { ClientGrid } from "./ClientGrid";
-import { ResourceMetadata } from "../metadata/ResourceMetadata";
+import { ClientDetail } from "./ClientDetail";
 import { paginate, useResourceList } from "../../app/resourceList";
 
 export function Clients({
@@ -121,70 +116,11 @@ export function Clients({
           <Alert severity="error">{message(current.error)}</Alert>
         ) : id && detail.data ? (
           <>
-            <Box
-              component="dl"
-              aria-label="Client details"
-              sx={{
-                m: 0,
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "minmax(0, 1fr)",
-                  sm: "repeat(2, minmax(0, 1fr))",
-                },
-                gap: 2.5,
-              }}
-            >
-              {[
-                { label: "Client ID", value: id },
-                { label: "S3 bucket", value: id },
-                {
-                  label: "Storage",
-                  value: (
-                    <Link href={storageLink(detail.data.storage_id)}>
-                      {detail.data.storage_id}
-                    </Link>
-                  ),
-                },
-                {
-                  label: "Active files",
-                  value:
-                    usage.isError || !used
-                      ? "Unavailable"
-                      : used.files.toLocaleString("en-US"),
-                },
-                {
-                  label: "Active data",
-                  value:
-                    usage.isError || !used ? "Unavailable" : bytes(used.bytes),
-                },
-              ].map(({ label, value }) => (
-                <Stack key={label} spacing={0.5} sx={{ minWidth: 0 }}>
-                  <Typography
-                    component="dt"
-                    variant="body2"
-                    color="text.secondary"
-                  >
-                    {label}
-                  </Typography>
-                  <Typography
-                    component="dd"
-                    sx={{
-                      m: 0,
-                      overflowWrap: "anywhere",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {value}
-                  </Typography>
-                </Stack>
-              ))}
-              <ResourceMetadata
-                key={`metadata:${id}`}
-                resource="client"
-                id={id}
-                canWrite={canWrite}
-              />
-            </Box>
+            <ClientDetail
+              client={detail.data}
+              usage={usage.isError ? undefined : used}
+              canWrite={canWrite}
+            />
             {canWrite && <ClientKeys key={id} clientId={id} />}
           </>
         ) : (

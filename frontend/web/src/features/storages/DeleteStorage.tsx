@@ -1,19 +1,22 @@
 import {
   Alert,
+  Dialog,
+  DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
   Button,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { ApiError } from "../../api/http";
 import { command } from "../../api/commands";
 import { clearSession } from "../../auth/session";
-import { Dialog } from "../../design/Dialog";
 import { mutationMessage, refreshStorages, uncertain } from "./model";
 
 export function DeleteStorage({
@@ -26,6 +29,8 @@ export function DeleteStorage({
   onReturnToList: () => void;
 }) {
   const cache = useQueryClient();
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
   const pending = useRef(false);
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,9 +64,19 @@ export function DeleteStorage({
     }
   }
   return (
-    <Dialog title="Delete storage" busy={busy} onClose={onClose}>
-      <form onSubmit={(event) => void remove(event)}>
-        <DialogContent>
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !busy) onClose();
+      }}
+    >
+      <DialogTitle id={titleId}>Delete storage</DialogTitle>
+      <DialogContent dividers>
+        <form id={`${titleId}-form`} onSubmit={(event) => void remove(event)}>
           <Typography sx={{ mb: 3, overflowWrap: "anywhere" }}>
             Remove <strong>{id}</strong> from the registry. The S3 bucket is
             retained.
@@ -78,26 +93,27 @@ export function DeleteStorage({
               {error}
             </Alert>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            type="button"
-            onClick={unknown ? onReturnToList : onClose}
-            disabled={busy}
-          >
-            {unknown ? "Review list" : "Cancel"}
-          </Button>
-          <Button
-            color="error"
-            variant="contained"
-            type="submit"
-            startIcon={<Trash2 size={16} />}
-            disabled={busy || unknown || confirmation !== id}
-          >
-            {busy ? "Deleting..." : "Confirm delete"}
-          </Button>
-        </DialogActions>
-      </form>
+        </form>
+      </DialogContent>
+      <DialogActions>
+        <Button
+          type="button"
+          onClick={unknown ? onReturnToList : onClose}
+          disabled={busy}
+        >
+          {unknown ? "Review list" : "Cancel"}
+        </Button>
+        <Button
+          color="error"
+          variant="contained"
+          type="submit"
+          form={`${titleId}-form`}
+          startIcon={<Trash2 size={16} />}
+          disabled={busy || unknown || confirmation !== id}
+        >
+          {busy ? "Deleting..." : "Confirm delete"}
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 }

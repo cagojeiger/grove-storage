@@ -31,17 +31,21 @@ for (const theme of ["light", "dark"]) {
       const row = table
         .getByRole("row")
         .filter({ has: page.getByRole("link", { name: id, exact: true }) });
-      if (width >= 600) await expect(row.getByRole("gridcell", { name: "0", exact: true })).toBeVisible();
+      if (width >= 600)
+        await expect(
+          row.getByRole("gridcell", { name: "0", exact: true }),
+        ).toBeVisible();
       await expect(
         row.getByRole("gridcell", { name: "0 B", exact: true }),
       ).toBeVisible();
-      if (width >= 900) await expect(
-        row
-          .getByText("storage-with-a-long-identifier-for-responsive-layout", {
-            exact: true,
-          })
-          .filter({ visible: true }),
-      ).toBeVisible();
+      if (width >= 900)
+        await expect(
+          row
+            .getByText("storage-with-a-long-identifier-for-responsive-layout", {
+              exact: true,
+            })
+            .filter({ visible: true }),
+        ).toBeVisible();
       await page.screenshot({
         path: `test-results/clients-mui-list-${width}-${theme}.png`,
         fullPage: true,
@@ -50,16 +54,20 @@ for (const theme of ["light", "dark"]) {
       await expect(
         page.getByRole("heading", { name: id, level: 1 }),
       ).toBeVisible();
-      const details = page.locator('dl[aria-label="Client details"]');
-      await expect(details.locator("dt")).toHaveCount(6);
-      for (const label of await details.locator("dt").all()) {
+      const details = page.getByRole("region", { name: "Client details" });
+      const properties = details.getByRole("list", {
+        name: "Client properties",
+      });
+      await expect(properties.getByRole("listitem")).toHaveCount(3);
+      for (const name of ["Client ID", "S3 bucket", "Storage"]) {
+        const label = properties.getByText(name, { exact: true });
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
-        await expect(label).toHaveCSS("line-height", "20.02px");
       }
-      await expect(details.locator("dd").first()).toHaveCSS(
+      await expect(properties.getByRole("link")).toHaveCSS("font-size", "16px");
+      await expect(details.getByText("0 B", { exact: true })).toHaveCSS(
         "font-size",
-        "16px",
+        "24px",
       );
       const keys = page.getByRole("region", { name: "S3 credentials" });
       await expect(keys.locator("code")).toHaveCount(2);
@@ -97,7 +105,7 @@ for (const theme of ["light", "dark"]) {
     await expect(saved).toBeInViewport();
     await expect(done).toBeDisabled();
     await expect(
-      dialog.getByRole("button", { name: "Close", exact: true }),
+      dialog.getByRole("button", { name: "Done", exact: true }),
     ).toBeDisabled();
     await page.keyboard.press("Escape");
     await expect(dialog).toBeVisible();

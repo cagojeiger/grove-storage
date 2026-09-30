@@ -4,14 +4,20 @@ import {
   ButtonBase,
   IconButton,
   Typography,
+  Dialog,
+  DialogTitle,
+  useMediaQuery,
+  useTheme,
+  DialogActions,
+  Button,
 } from "@mui/material";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, AppWindow, HardDrive } from "lucide-react";
 import { command } from "../../api/commands";
 import { Usage } from "../../api/http";
-import { Dialog } from "../../design/Dialog";
+
 import { bytes } from "../../design/format";
 import { Client } from "../clients/model";
 import { ClientTotals, sumClients } from "./connectionsModel";
@@ -31,6 +37,9 @@ export function ConnectionBrowser({
   onSelect: (id: string) => void;
   onClose: () => void;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const ids = (
@@ -62,10 +71,18 @@ export function ConnectionBrowser({
   });
   return (
     <Dialog
-      title={kind === "client" ? "More clients" : "More storage"}
-      busy={false}
-      onClose={onClose}
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown") onClose();
+      }}
     >
+      <DialogTitle id={titleId}>
+        {kind === "client" ? "More clients" : "More storage"}
+      </DialogTitle>
       <DialogContent>
         <div className="connection-browser">
           <TextField
@@ -159,6 +176,9 @@ export function ConnectionBrowser({
           </div>
         </div>
       </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
     </Dialog>
   );
 }

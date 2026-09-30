@@ -1,5 +1,7 @@
 import {
   DialogContent,
+  Dialog,
+  DialogTitle,
   DialogActions,
   TextField,
   Checkbox,
@@ -10,19 +12,19 @@ import {
   Tooltip,
   Alert,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 import { command } from "../../api/commands";
-import { Dialog } from "../../design/Dialog";
 import { useAction } from "../access/useAction";
 import { clientMessage } from "./model";
 
 export type KeyAction =
-  | { kind: "s3-create" }
-  | { kind: "s3-delete"; key: string };
+  { kind: "s3-create" } | { kind: "s3-delete"; key: string };
 type IssuedKey = { name: string; value: string }[];
 export function KeyDialog({
   clientId,
@@ -35,6 +37,8 @@ export function KeyDialog({
 }) {
   const state = useAction(clientMessage);
   const cache = useQueryClient();
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
   const [issued, setIssued] = useState<IssuedKey | null>(null);
   const [saved, setSaved] = useState(false);
   const [confirmation, setConfirmation] = useState("");
@@ -71,14 +75,20 @@ export function KeyDialog({
   }
   return (
     <Dialog
-      title={title}
-      busy={state.busy}
-      closeDisabled={Boolean(issued) && !saved}
-      onClose={onClose}
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !state.busy && (!issued || saved))
+          onClose();
+      }}
     >
+      <DialogTitle id={titleId}>{title}</DialogTitle>
       {issued ? (
         <>
-          <DialogContent>
+          <DialogContent dividers>
             <Stack spacing={3}>
               {issued.map((item) => (
                 <Stack
@@ -146,41 +156,43 @@ export function KeyDialog({
           </DialogActions>
         </>
       ) : (
-        <form onSubmit={(e) => void submit(e)}>
-          <DialogContent>
-            <Stack
-              component="fieldset"
-              spacing={3}
-              sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
-              disabled={state.busy || state.unknown}
-            >
-              <Typography sx={{ overflowWrap: "anywhere" }}>
-                Client: <strong>{clientId}</strong>
-              </Typography>
-              {deleting && (
-                <>
-                  <Typography
-                    component="code"
-                    variant="body2"
-                    sx={{ fontFamily: "monospace", overflowWrap: "anywhere" }}
-                  >
-                    {action.key}
-                  </Typography>
-                  <TextField
-                    autoComplete="off"
-                    required
-                    value={confirmation}
-                    onChange={(e) => setConfirmation(e.target.value)}
-                    label={"Client ID to confirm"}
-                  />
-                </>
+        <>
+          <DialogContent dividers>
+            <form id={`${titleId}-form`} onSubmit={(e) => void submit(e)}>
+              <Stack
+                component="fieldset"
+                spacing={3}
+                sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+                disabled={state.busy || state.unknown}
+              >
+                <Typography sx={{ overflowWrap: "anywhere" }}>
+                  Client: <strong>{clientId}</strong>
+                </Typography>
+                {deleting && (
+                  <>
+                    <Typography
+                      component="code"
+                      variant="body2"
+                      sx={{ fontFamily: "monospace", overflowWrap: "anywhere" }}
+                    >
+                      {action.key}
+                    </Typography>
+                    <TextField
+                      autoComplete="off"
+                      required
+                      value={confirmation}
+                      onChange={(e) => setConfirmation(e.target.value)}
+                      label={"Client ID to confirm"}
+                    />
+                  </>
+                )}
+              </Stack>
+              {state.error && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  {state.error}
+                </Alert>
               )}
-            </Stack>
-            {state.error && (
-              <Alert severity="error" sx={{ mt: 2 }}>
-                {state.error}
-              </Alert>
-            )}
+            </form>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={state.busy} onClick={onClose}>
@@ -188,6 +200,7 @@ export function KeyDialog({
             </Button>
             <Button
               type="submit"
+              form={`${titleId}-form`}
               variant="contained"
               color={deleting ? "error" : "primary"}
               disabled={
@@ -199,7 +212,7 @@ export function KeyDialog({
               {state.busy ? "Saving..." : "Confirm"}
             </Button>
           </DialogActions>
-        </form>
+        </>
       )}
     </Dialog>
   );

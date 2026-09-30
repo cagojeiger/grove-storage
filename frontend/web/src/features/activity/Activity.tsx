@@ -21,14 +21,17 @@ import {
   Grid,
   Stack,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogActions,
 } from "@mui/material";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilter, RefreshCw } from "lucide-react";
 import { field, identityPage } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
-import { Dialog } from "../../design/Dialog";
+
 import {
   Event,
   Stream,
@@ -41,6 +44,8 @@ import { time } from "../../design/format";
 import { activityFilters, uuidPattern } from "./filters";
 
 export function Activity({ route, admin }: { route: string; admin: boolean }) {
+  const titleId = useId();
+
   const compact = useMediaQuery(useTheme().breakpoints.down("sm"));
   const path = route.split("?")[0];
   const { params, valid } = activityFilters(route);
@@ -308,10 +313,16 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         )}
         {!denied && selected && !query.isError && (
           <Dialog
-            title="Event details"
-            busy={false}
-            onClose={() => setSelected(null)}
+            open
+            fullWidth
+            maxWidth="sm"
+            fullScreen={compact}
+            aria-labelledby={titleId}
+            onClose={(_event, reason) => {
+              if (reason === "escapeKeyDown") setSelected(null);
+            }}
           >
+            <DialogTitle id={titleId}>{"Event details"}</DialogTitle>
             <DialogContent>
               <Grid container component="dl" spacing={3}>
                 {Object.entries({
@@ -360,6 +371,9 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                 </Box>
               )}
             </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelected(null)}>Close</Button>
+            </DialogActions>
           </Dialog>
         )}
       </Stack>

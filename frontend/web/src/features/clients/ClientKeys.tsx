@@ -1,10 +1,13 @@
 import {
   Alert,
-  Box,
   Button,
   IconButton,
-  List,
-  ListItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Stack,
   Tooltip,
   Typography,
@@ -38,7 +41,9 @@ export function ClientKeys({ clientId }: { clientId: string }) {
           justifyContent: "space-between",
         }}
       >
-        <Typography component="h2" variant="h6">S3 Credentials</Typography>
+        <Typography component="h2" variant="h6">
+          S3 Credentials
+        </Typography>
         <Button
           type="button"
           variant="outlined"
@@ -60,41 +65,57 @@ export function ClientKeys({ clientId }: { clientId: string }) {
           </Button>
         </Alert>
       ) : (
-        <Box>
-          <List disablePadding aria-label="Issued S3 credentials">
-            {query.data.map((key) => (
-              <ListItem disableGutters key={key} sx={{ gap: 2, py: 1 }}>
-                <Typography
-                  component="code"
-                  variant="body2"
-                  sx={{
-                    fontFamily: "monospace",
-                    overflowWrap: "anywhere",
-                    minWidth: 0,
-                    flex: 1,
-                  }}
-                >
-                  {key}
-                </Typography>
-                <Tooltip title={`Revoke ${key}`}>
-                  <IconButton
-                    type="button"
-                    color="error"
-                    aria-label={`Revoke ${key}`}
-                    onClick={() => setAction({ kind: "s3-delete", key })}
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
-                </Tooltip>
-              </ListItem>
-            ))}
-          </List>
-          {!query.data.length && (
-            <Typography color="text.secondary" sx={{ py: 3 }}>
-              No credentials issued.
-            </Typography>
-          )}
-        </Box>
+        <TableContainer>
+          <Table
+            size="small"
+            aria-label="Issued S3 credentials"
+            sx={{ tableLayout: "fixed" }}
+          >
+            <TableHead>
+              <TableRow>
+                <TableCell>Access key ID</TableCell>
+                <TableCell align="right" sx={{ width: 80 }}>
+                  Actions
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {query.data.map((key) => (
+                <TableRow key={key} hover>
+                  <TableCell>
+                    <Typography
+                      component="code"
+                      variant="body2"
+                      sx={{
+                        fontFamily: "monospace",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {key}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={`Revoke ${key}`}>
+                      <IconButton
+                        type="button"
+                        color="error"
+                        aria-label={`Revoke ${key}`}
+                        onClick={() => setAction({ kind: "s3-delete", key })}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!query.data.length && (
+                <TableRow>
+                  <TableCell colSpan={2}>No credentials issued.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
       {action && (
         <KeyDialog

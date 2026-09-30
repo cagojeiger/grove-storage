@@ -124,7 +124,7 @@ for (const mode of ["light", "dark"]) {
       await expect(done).toBeDisabled();
       await expect(
         dialog.getByRole("button", { name: "Close", exact: true }),
-      ).toBeDisabled();
+      ).toHaveCount(0);
       await page.keyboard.press("Escape");
       await expect(dialog).toBeVisible();
       expect(

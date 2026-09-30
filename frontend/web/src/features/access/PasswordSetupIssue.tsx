@@ -8,13 +8,16 @@ import {
   Alert,
   Stack,
   Typography,
+  Dialog,
+  DialogTitle,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useId } from "react";
 import { Copy, Link2 } from "lucide-react";
 import { identity, ApiError, message, request } from "../../api/http";
 import { field, Account } from "../../api/identity";
-import { Dialog } from "../../design/Dialog";
 
 export type IssuedSetup = {
   account_id: string;
@@ -145,6 +148,9 @@ function SetupDialog({
   account: Account;
   onClose: () => void;
 }) {
+  const titleId = useId();
+  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+
   const [pending, setPending] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const [error, setError] = useState("");
@@ -199,45 +205,55 @@ function SetupDialog({
 
   return (
     <Dialog
-      title={issued ? "Save setup link" : "Issue setup link"}
-      busy={pending}
-      closeDisabled={Boolean(issued)}
-      onClose={onClose}
+      open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
+      aria-labelledby={titleId}
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !pending && !issued) onClose();
+      }}
     >
+      <DialogTitle id={titleId}>
+        {issued ? "Save setup link" : "Issue setup link"}
+      </DialogTitle>
       {issued ? (
         <IssuedSetupLink issued={issued} onDone={onClose} />
       ) : (
-        <form
-          onSubmit={(event) => {
-            void submit(event);
-          }}
-        >
-          <DialogContent>
-            <Stack spacing={3}>
-              <TextField
-                name="username"
-                disabled={pending || unknown}
-                autoComplete="off"
-                required
-                label={"Username"}
-                slotProps={{
-                  htmlInput: {
-                    minLength: 3,
-                    maxLength: 64,
-                    pattern: "[A-Za-z0-9][A-Za-z0-9._-]{2,63}",
-                  },
-                }}
-              />
-              <TextField
-                name="current_password"
-                disabled={pending || unknown}
-                type="password"
-                autoComplete="current-password"
-                required
-                label={"Current password"}
-              />
-              {error && <Alert severity="error">{error}</Alert>}
-            </Stack>
+        <>
+          <DialogContent dividers>
+            <form
+              id={`${titleId}-form`}
+              onSubmit={(event) => {
+                void submit(event);
+              }}
+            >
+              <Stack spacing={3}>
+                <TextField
+                  name="username"
+                  disabled={pending || unknown}
+                  autoComplete="off"
+                  required
+                  label={"Username"}
+                  slotProps={{
+                    htmlInput: {
+                      minLength: 3,
+                      maxLength: 64,
+                      pattern: "[A-Za-z0-9][A-Za-z0-9._-]{2,63}",
+                    },
+                  }}
+                />
+                <TextField
+                  name="current_password"
+                  disabled={pending || unknown}
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  label={"Current password"}
+                />
+                {error && <Alert severity="error">{error}</Alert>}
+              </Stack>
+            </form>
           </DialogContent>
           <DialogActions>
             <Button type="button" disabled={pending} onClick={onClose}>
@@ -245,13 +261,14 @@ function SetupDialog({
             </Button>
             <Button
               type="submit"
+              form={`${titleId}-form`}
               variant="contained"
               disabled={pending || unknown}
             >
               {pending ? "Issuing..." : "Issue link"}
             </Button>
           </DialogActions>
-        </form>
+        </>
       )}
     </Dialog>
   );
