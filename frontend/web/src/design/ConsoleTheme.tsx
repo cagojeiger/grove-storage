@@ -89,13 +89,14 @@ export function ConsoleTheme({ children }: { children: ReactNode }) {
           MuiButtonBase: {
             defaultProps: { disableRipple: true },
             styleOverrides: {
-              root: {
+              root: ({ theme }) => ({
+                fontFamily: theme.typography.fontFamily,
                 "&.Mui-focusVisible": {
                   outline: "2px solid",
                   outlineColor: resolved === "dark" ? "#9cdb79" : "#176b3d",
                   outlineOffset: 2,
                 },
-              },
+              }),
             },
           },
           MuiCssBaseline: {

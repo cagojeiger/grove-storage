@@ -75,6 +75,21 @@ async function mock(page: Page, signedIn = true, passwordSession = false) {
   });
 }
 
+for (const theme of ["light", "dark"]) {
+  test(`Overview controls use the shared font in ${theme} mode`, async ({ page }) => {
+    await mock(page);
+    await page.goto(root);
+    await page.getByLabel("Theme").selectOption(theme);
+    await expect(page.getByRole("button", { name: "Select client notegate" })).toBeVisible();
+    const controls = page.locator(".connection-select");
+    await expect(controls).toHaveCount(2);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveCSS("font-family", /^Inter,/);
+      await expect(control.locator("strong")).toHaveCSS("font-family", /^Inter,/);
+    }
+  });
+}
+
 test("login clears token; logout removes overview", async ({ page }) => {
   await mock(page, false);
   await page.goto(root);
