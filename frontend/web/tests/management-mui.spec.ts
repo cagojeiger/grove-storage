@@ -44,7 +44,7 @@ for (const mode of ["light", "dark"]) {
         });
         await expect(heading).toHaveCSS("font-size", "24px");
         await expect(heading).toHaveCSS("font-weight", "400");
-        await expect(heading).toHaveCSS("font-family", /^Inter,/);
+        await expect(heading).toHaveCSS("font-family", /^-apple-system,/);
         await expect(page.getByRole("main")).not.toHaveClass(
           /overview|settings|activity/,
         );
@@ -60,7 +60,7 @@ for (const mode of ["light", "dark"]) {
         });
       }
       const current = page.getByLabel("Current password");
-      await expect(current).toHaveCSS("font-family", /^Inter,/);
+      await expect(current).toHaveCSS("font-family", /^-apple-system,/);
       await expect(current).toHaveCSS("font-size", "16px");
       await expect(
         page.getByRole("button", { name: "Change password" }),

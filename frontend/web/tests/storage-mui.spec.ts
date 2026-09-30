@@ -15,7 +15,7 @@ for (const mode of ["light", "dark"]) {
       const usage = page.getByRole("region", { name: "Storage usage" });
       for (const region of [settings, usage]) {
         const label = region.locator("dt").first();
-        await expect(label).toHaveCSS("font-family", /^Inter,/);
+        await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
         await expect(label).toHaveCSS("line-height", "20.02px");
         await expect(region.locator("dd").first()).toHaveCSS(
@@ -68,7 +68,7 @@ for (const mode of ["light", "dark"]) {
     await page.goto("/api/admin/console/#activity");
     await page.getByLabel("Theme").selectOption(mode);
     for (const tab of await page.getByRole("tab").all()) {
-      await expect(tab).toHaveCSS("font-family", /^Inter,/);
+      await expect(tab).toHaveCSS("font-family", /^-apple-system,/);
       await expect(tab).toHaveCSS("font-size", "14px");
     }
   });

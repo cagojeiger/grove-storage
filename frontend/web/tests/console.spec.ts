@@ -84,8 +84,8 @@ for (const theme of ["light", "dark"]) {
     const controls = page.locator(".connection-select");
     await expect(controls).toHaveCount(2);
     for (const control of await controls.all()) {
-      await expect(control).toHaveCSS("font-family", /^Inter,/);
-      await expect(control.locator("strong")).toHaveCSS("font-family", /^Inter,/);
+      await expect(control).toHaveCSS("font-family", /^-apple-system,/);
+      await expect(control.locator("strong")).toHaveCSS("font-family", /^-apple-system,/);
     }
   });
 }

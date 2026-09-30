@@ -8,7 +8,7 @@ formatting. The UI language is independent of the browser locale.
 | Responsibility | Implementation |
 |---|---|
 | Color, type scale, density, light/dark mode | MUI theme in `src/design/ConsoleTheme.tsx` |
-| Font | Self-hosted Inter, bundled from `@fontsource/inter` |
+| Font | System font stack; no web font downloads |
 | Controls, dialogs, navigation, Activity tabs | MUI; existing Lucide icons |
 | Native form constraints and FormData | `src/design/Fields.tsx` forwards attributes to the actual input |
 | Responsive page grids and Overview topology | `src/design/theme.css` |
@@ -127,7 +127,7 @@ For each HTML response, generate a cryptographically random nonce, replace
 only the MUI/Emotion style elements for that response; `style-src-attr 'none'`,
 script restrictions and `Cache-Control: no-store` remain in force. A plain static
 file server without this HTML/header integration is not a production console host.
-Serve bundled `.woff2`/`.woff` files with their font MIME types from the same origin.
+Typography uses locally installed system fonts; no font assets are bundled.
 The built sample preview implements this response contract. Vite development adds
 inline scripts/styles and websockets for React refresh and HMR; use the default
 policy for release hosting. Configure HSTS at the production TLS terminator.

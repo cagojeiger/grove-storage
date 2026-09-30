@@ -17,7 +17,7 @@ for (const mode of ["light", "dark"]) {
       });
       await expect(heading).toHaveCSS("font-size", "24px");
       await expect(heading).toHaveCSS("font-weight", "400");
-      await expect(heading).toHaveCSS("font-family", /^Inter,/);
+      await expect(heading).toHaveCSS("font-family", /^-apple-system,/);
       await expect(
         page
           .getByRole("main")

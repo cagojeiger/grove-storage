@@ -55,7 +55,7 @@ for (const theme of ["light", "dark"]) {
       const details = page.locator('dl[aria-label="Client details"]');
       await expect(details.locator("dt")).toHaveCount(6);
       for (const label of await details.locator("dt").all()) {
-        await expect(label).toHaveCSS("font-family", /^Inter,/);
+        await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
         await expect(label).toHaveCSS("line-height", "20.02px");
       }

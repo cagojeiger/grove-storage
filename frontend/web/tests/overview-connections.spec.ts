@@ -81,12 +81,12 @@ for (const theme of ["light", "dark"]) {
     await fixture(page, 7);
     await page.getByLabel("Theme").selectOption(theme);
     const more = page.getByRole("button", { name: "Show 2 more clients" });
-    await expect(more).toHaveCSS("font-family", /^Inter,/);
-    await expect(more.locator("strong")).toHaveCSS("font-family", /^Inter,/);
+    await expect(more).toHaveCSS("font-family", /^-apple-system,/);
+    await expect(more.locator("strong")).toHaveCSS("font-family", /^-apple-system,/);
     await more.click();
     const row = page.getByRole("dialog").getByRole("button", { name: "Show client client-6 on map" });
-    await expect(row).toHaveCSS("font-family", /^Inter,/);
-    await expect(row.locator("strong")).toHaveCSS("font-family", /^Inter,/);
+    await expect(row).toHaveCSS("font-family", /^-apple-system,/);
+    await expect(row.locator("strong")).toHaveCSS("font-family", /^-apple-system,/);
   });
 }
 

@@ -10,10 +10,10 @@ for (const theme of ["light", "dark"]) {
     const rows = page.getByRole("table", { name: "Accounts", exact: true }).locator("tbody tr");
     await expect(rows).toHaveCount(2);
     for (const row of await rows.all()) {
-      await expect(row).toHaveCSS("font-family", /^Inter,/);
-      await expect(row.locator("a")).toHaveCSS("font-family", /^Inter,/);
+      await expect(row).toHaveCSS("font-family", /^-apple-system,/);
+      await expect(row.locator("a")).toHaveCSS("font-family", /^-apple-system,/);
     }
-    await expect(page.getByRole("button", { name: "Create user", exact: true })).toHaveCSS("font-family", /^Inter,/);
+    await expect(page.getByRole("button", { name: "Create user", exact: true })).toHaveCSS("font-family", /^-apple-system,/);
   });
 
   test(`JSON keeps its monospace font in ${theme} mode`, async ({ page }) => {
@@ -23,6 +23,6 @@ for (const theme of ["light", "dark"]) {
     await expect(page.locator(".metadata-json")).toHaveCSS("font-family", /monospace/);
     await page.getByRole("button", { name: "Edit metadata", exact: true }).click();
     await expect(page.getByLabel("Metadata JSON")).toHaveCSS("font-family", /monospace/);
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCSS("font-family", /^Inter,/);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCSS("font-family", /^-apple-system,/);
   });
 }

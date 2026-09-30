@@ -24,7 +24,7 @@ for (const theme of ["light", "dark"]) {
         await expect(row).toHaveCSS("padding-top", "6px");
         await expect(row).toHaveCSS("padding-bottom", "6px");
         await expect(row).toHaveCSS("border-bottom-width", "1px");
-        await expect(row).toHaveCSS("font-family", /^Inter,/);
+        await expect(row).toHaveCSS("font-family", /^-apple-system,/);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         if (width === 1280 && theme === "light") {
           await page.screenshot({ path: `test-results/review-${list.route}.png`, animations: "disabled" });

@@ -34,7 +34,7 @@ test("built console loads with restrictive browser headers", async ({ page }) =>
   expect(errors).toEqual([]);
 });
 
-test("built MUI styles use a fresh nonce and fonts stay same-origin", async ({ page, request }) => {
+test("built MUI styles use a fresh nonce without web font downloads", async ({ page, request }) => {
   const response = await page.goto(root);
   const nonce = await page.locator('meta[name="csp-nonce"]').getAttribute("content");
   expect(nonce).toMatch(/^[A-Za-z0-9+/]{32}$/);
@@ -45,10 +45,9 @@ test("built MUI styles use a fresh nonce and fonts stay same-origin", async ({ p
   expect(nonces.length).toBeGreaterThan(0);
   expect(nonces.every(value => value === nonce)).toBe(true);
   await page.evaluate(() => document.fonts.ready);
-  expect(await page.evaluate(() => [...document.fonts].some(font => font.family === "Inter" && font.status === "loaded"))).toBe(true);
+  await expect(page.locator("body")).toHaveCSS("font-family", /^-apple-system, (?:BlinkMacSystemFont|"?system-ui"?), "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif$/);
   const fonts = await page.evaluate(() => performance.getEntriesByType("resource").filter(entry => /\.woff2?$/.test(entry.name)).map(entry => entry.name));
-  expect(fonts.length).toBeGreaterThan(0);
-  for (const font of fonts) expect(new URL(font).origin).toBe(new URL(root).origin);
+  expect(fonts).toEqual([]);
   const second = await request.get(root);
   expect(second.headers()["content-security-policy"]).not.toContain(`nonce-${nonce}`);
 });

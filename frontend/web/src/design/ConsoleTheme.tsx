@@ -2,10 +2,6 @@ import type { ReactNode } from "react";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
-import "@fontsource/inter/latin-400.css";
-import "@fontsource/inter/latin-500.css";
-import "@fontsource/inter/latin-600.css";
-import "@fontsource/inter/latin-700.css";
 
 const nonce = document.querySelector<HTMLMetaElement>(
   'meta[name="csp-nonce"]',
@@ -30,8 +26,15 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily:
-      'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: [
+      "-apple-system",
+      "BlinkMacSystemFont",
+      '"Segoe UI"',
+      "Roboto",
+      '"Helvetica Neue"',
+      "Arial",
+      "sans-serif",
+    ].join(","),
     allVariants: { letterSpacing: 0 },
   },
   components: {
