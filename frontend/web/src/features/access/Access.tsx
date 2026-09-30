@@ -76,8 +76,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
       ) : selected ? (
         account ? (
           <>
-            <Button type="button" variant="text" className="back-link" onClick={() => { window.location.hash = listing.href("#accounts"); }}>
-              <ArrowLeft size={16} />
+            <Button type="button" variant="text" startIcon={<ArrowLeft size={16} />} onClick={() => { window.location.hash = listing.href("#accounts"); }}>
               Accounts
             </Button>
             <div className="section-heading">
@@ -96,11 +95,10 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                   <Pencil size={16} />
                 </IconButton>
                 <Button type="submit"
-                  className="action-button"
+                  startIcon={<Shield size={16} />}
                   disabled={Boolean(account.deleted_at)}
                   onClick={() => setAction("role")}
                 >
-                  <Shield size={16} />
                   Change role
                 </Button>
                 <Button type="submit"

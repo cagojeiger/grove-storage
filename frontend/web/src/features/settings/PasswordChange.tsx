@@ -97,8 +97,7 @@ export function PasswordChange() {
           }}
         />
         {error && <p role="alert">{error}</p>}
-        <Button variant="contained" type="submit" disabled={pending}>
-          <KeyRound size={16} aria-hidden="true" />
+        <Button variant="contained" type="submit" disabled={pending} startIcon={<KeyRound size={16} />}>
           {pending ? "Changing password" : "Change password"}
         </Button>
       </form>

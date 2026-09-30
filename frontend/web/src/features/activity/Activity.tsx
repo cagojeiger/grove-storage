@@ -132,10 +132,10 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
             <Button
               type="button"
               aria-expanded={filtersOpen}
+              startIcon={<ListFilter size={16} />}
               aria-controls="activity-filters"
               onClick={() => setFiltersOpen(!filtersOpen)}
             >
-              <ListFilter size={16} />
               Filters{params.size > 0 ? ` (${params.size})` : ""}
             </Button>
             {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}

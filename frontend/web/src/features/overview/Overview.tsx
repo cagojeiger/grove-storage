@@ -100,7 +100,7 @@ export function Overview() {
             />
             <Box component="section" sx={{ mt: 4 }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2 }}>
-                <Typography variant="h2">Storage usage</Typography>
+                <Typography component="h2" variant="h6">Storage usage</Typography>
                 <Link href="#storages" variant="body2">View all storage</Link>
               </Box>
               <TableContainer>

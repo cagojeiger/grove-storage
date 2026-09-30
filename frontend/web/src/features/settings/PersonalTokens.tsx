@@ -54,11 +54,10 @@ export function PersonalTokens({
         <h2>My API tokens</h2>
         <Button
           type="submit"
-          className="action-button"
+          startIcon={<KeyRound size={16} />}
           disabled={query.isError}
           onClick={() => setTarget("issue")}
         >
-          <KeyRound size={16} />
           Issue token
         </Button>
       </div>

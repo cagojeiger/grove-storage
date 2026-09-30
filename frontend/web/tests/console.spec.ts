@@ -394,8 +394,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
     const colors = theme === "dark"
-      ? { text: "rgb(240, 240, 243)", surface: "rgb(32, 33, 38)" }
-      : { text: "rgb(35, 37, 43)", surface: "rgb(255, 255, 255)" };
+      ? { text: "rgb(255, 255, 255)", surface: "rgb(18, 18, 18)" }
+      : { text: "rgba(0, 0, 0, 0.87)", surface: "rgb(255, 255, 255)" };
     await expect(page.getByLabel("Theme")).toHaveCSS("color-scheme", theme);
     for (const option of await page.getByLabel("Theme").locator("option").all()) {
       await expect(option).toHaveCSS("color", colors.text);

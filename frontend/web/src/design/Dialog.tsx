@@ -4,6 +4,8 @@ import {
   DialogTitle,
   IconButton,
   Tooltip,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { X } from "lucide-react";
 
@@ -21,9 +23,14 @@ export function Dialog({
   closeDisabled?: boolean;
 }) {
   const label = useId();
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
   return (
     <MuiDialog
       open
+      fullWidth
+      maxWidth="sm"
+      fullScreen={fullScreen}
       aria-labelledby={label}
       slotProps={{
         paper: {
@@ -33,6 +40,7 @@ export function Dialog({
               flexDirection: "column",
               overflow: "hidden",
               minHeight: 0,
+              flex: 1,
             },
           },
         },

@@ -131,7 +131,8 @@ export function Storages({
           }}
         >
           <Typography
-            variant="h1"
+            component="h1"
+            variant="h5"
             sx={{ minWidth: 0, overflowWrap: "anywhere", flex: "1 1 180px" }}
           >
             {id || "Storage"}

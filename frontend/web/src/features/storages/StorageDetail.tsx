@@ -29,7 +29,7 @@ export function StorageDetail({
   return (
     <Stack spacing={3} divider={<Divider />}>
       <Stack component="section" aria-label="Storage settings" spacing={2}>
-        <Typography variant="h2">Settings</Typography>
+        <Typography component="h2" variant="h6">Settings</Typography>
         <Box
           component="dl"
           sx={{
@@ -87,7 +87,7 @@ export function StorageDetail({
         </Box>
       </Stack>
       <Stack component="section" aria-label="Storage usage" spacing={2}>
-        <Typography variant="h2">Usage</Typography>
+        <Typography component="h2" variant="h6">Usage</Typography>
         {usage ? (
           <Box
             component="dl"

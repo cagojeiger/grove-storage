@@ -56,12 +56,12 @@ for (const theme of ["light", "dark"]) {
       await expect(details.locator("dt")).toHaveCount(6);
       for (const label of await details.locator("dt").all()) {
         await expect(label).toHaveCSS("font-family", /^Inter,/);
-        await expect(label).toHaveCSS("font-size", "13px");
-        await expect(label).toHaveCSS("line-height", "19.5px");
+        await expect(label).toHaveCSS("font-size", "14px");
+        await expect(label).toHaveCSS("line-height", "20.02px");
       }
       await expect(details.locator("dd").first()).toHaveCSS(
         "font-size",
-        "14px",
+        "16px",
       );
       const keys = page.getByRole("region", { name: "S3 credentials" });
       await expect(keys.locator("code")).toHaveCount(2);

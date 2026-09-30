@@ -38,7 +38,7 @@ export function ClientKeys({ clientId }: { clientId: string }) {
           justifyContent: "space-between",
         }}
       >
-        <Typography variant="h2">S3 Credentials</Typography>
+        <Typography component="h2" variant="h6">S3 Credentials</Typography>
         <Button
           type="button"
           variant="outlined"

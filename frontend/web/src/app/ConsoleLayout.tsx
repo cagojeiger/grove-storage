@@ -2,7 +2,6 @@ import { useId, useState, type ReactNode } from "react";
 import {
   AppBar,
   Box,
-  Button,
   Divider,
   Drawer,
   IconButton,
@@ -276,32 +275,20 @@ function AccountMenu({
   };
   return (
     <>
-      <Button
+      <ListItemButton
+        component="button"
         id={id}
-        fullWidth
-        variant="text"
         aria-label="Account menu"
         aria-haspopup="menu"
         aria-controls={anchor ? `${id}-menu` : undefined}
         aria-expanded={Boolean(anchor)}
         onClick={(event) => setAnchor(event.currentTarget)}
-        startIcon={<CircleUserRound size={18} />}
-        endIcon={<ChevronUp size={16} />}
-        sx={{
-          justifyContent: "flex-start",
-          color: "text.primary",
-          minHeight: 44,
-        }}
+        sx={{ width: "100%" }}
       >
-        <Typography
-          component="span"
-          variant="body2"
-          noWrap
-          sx={{ flex: 1, textAlign: "left" }}
-        >
-          {name}
-        </Typography>
-      </Button>
+        <ListItemIcon><CircleUserRound size={18} /></ListItemIcon>
+        <ListItemText primary={name} slotProps={{ primary: { noWrap: true, variant: "body2" } }} />
+        <ChevronUp size={16} />
+      </ListItemButton>
       <Menu
         anchorEl={anchor}
         open={Boolean(anchor)}

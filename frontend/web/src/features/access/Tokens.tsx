@@ -50,13 +50,12 @@ export function Tokens({ account }: { account: Account }) {
         <h2>Management tokens</h2>
         <Button
           type="submit"
-          className="action-button"
+          startIcon={<KeyRound size={16} />}
           disabled={
             !account.is_active || Boolean(account.deleted_at) || query.isError
           }
           onClick={() => setDialog("issue")}
         >
-          <KeyRound size={16} />
           Issue token
         </Button>
       </div>

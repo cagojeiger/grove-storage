@@ -181,7 +181,6 @@ export function Sessions({ session }: { session: Session }) {
                   </div>
                   <IconButton
                     type="submit"
-                    className="icon-button danger"
                     color="error"
                     title={
                       current
@@ -335,7 +334,6 @@ function RevokeSession({
           type="button"
           variant="contained"
           color="error"
-          className="danger"
           disabled={action.busy || action.unknown}
           onClick={() =>
             void action.run(async () => {

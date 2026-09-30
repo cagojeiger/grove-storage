@@ -27,7 +27,7 @@ export function IssuedToken({
       />
       <Button
         type="button"
-        className="action-button"
+        startIcon={<Copy size={16} />}
         onClick={() => {
           void navigator.clipboard.writeText(value.token).then(
             () => setNotice("Copied"),
@@ -36,7 +36,6 @@ export function IssuedToken({
           );
         }}
       >
-        <Copy size={16} />
         Copy token
       </Button>
       <p role="status">{notice}</p>

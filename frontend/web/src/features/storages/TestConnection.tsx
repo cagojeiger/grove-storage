@@ -42,7 +42,7 @@ export function TestConnection({
           justifyContent: "space-between",
         }}
       >
-        <Typography variant="h2">Connection</Typography>
+        <Typography component="h2" variant="h6">Connection</Typography>
         <Button
           type="button"
           variant="outlined"

@@ -44,11 +44,10 @@ export function PasswordSetupIssue({ account }: { account: Account }) {
         <h2>Password setup</h2>
         <Button
           type="submit"
-          className="action-button"
+          startIcon={<Link2 size={16} />}
           disabled={!account.is_active || Boolean(account.deleted_at)}
           onClick={() => setOpen(true)}
         >
-          <Link2 size={16} aria-hidden="true" />
           Issue setup link
         </Button>
       </div>
@@ -91,6 +90,7 @@ export function IssuedSetupLink({
       />
       <Button
         type="button"
+        startIcon={<Copy size={16} />}
         onClick={() => {
           if (!navigator.clipboard) {
             setCopyError("Copy unavailable. Select the link manually.");
@@ -103,7 +103,6 @@ export function IssuedSetupLink({
             );
         }}
       >
-        <Copy size={16} aria-hidden="true" />
         Copy link
       </Button>
       {copyError && <p role="alert">{copyError}</p>}

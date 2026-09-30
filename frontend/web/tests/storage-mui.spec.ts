@@ -16,15 +16,15 @@ for (const mode of ["light", "dark"]) {
       for (const region of [settings, usage]) {
         const label = region.locator("dt").first();
         await expect(label).toHaveCSS("font-family", /^Inter,/);
-        await expect(label).toHaveCSS("font-size", "13px");
-        await expect(label).toHaveCSS("line-height", "19.5px");
+        await expect(label).toHaveCSS("font-size", "14px");
+        await expect(label).toHaveCSS("line-height", "20.02px");
         await expect(region.locator("dd").first()).toHaveCSS(
           "font-size",
-          "14px",
+          "16px",
         );
         await expect(region.getByRole("heading", { level: 2 })).toHaveCSS(
           "font-size",
-          "16px",
+          "20px",
         );
       }
       await expect(settings.locator("pre")).toHaveCSS(

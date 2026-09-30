@@ -107,11 +107,10 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
         <Button
           type="submit"
           variant="contained"
-          className="primary"
+          startIcon={<Plus size={16} />}
           disabled={!data || query.isError}
           onClick={onCreate}
         >
-          <Plus size={16} />
           Create user
         </Button>
       </div>

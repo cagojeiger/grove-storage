@@ -21,34 +21,18 @@ const theme = createTheme({
     light: {
       palette: {
         primary: { main: "#176b3d" },
-        background: { default: "#fafafb", paper: "#ffffff" },
-        text: { primary: "#23252b", secondary: "#686b75" },
-        divider: "#e2e3e8",
-        error: { main: "#b3233e" },
       },
     },
     dark: {
       palette: {
         primary: { main: "#9cdb79" },
-        background: { default: "#18191c", paper: "#202126" },
-        text: { primary: "#f0f0f3", secondary: "#b0b1ba" },
-        divider: "#393b43",
-        error: { main: "#ff9aad" },
       },
     },
   },
-  shape: { borderRadius: 6 },
   typography: {
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    fontSize: 14,
     allVariants: { letterSpacing: 0 },
-    h1: { fontSize: "1.5rem", fontWeight: 600, lineHeight: 1.4 },
-    h2: { fontSize: "1rem", fontWeight: 600, lineHeight: 1.5 },
-    h3: { fontSize: "0.875rem", fontWeight: 600 },
-    body1: { fontSize: "0.875rem", lineHeight: 1.6 },
-    body2: { fontSize: "0.8125rem", lineHeight: 1.5 },
-    button: { textTransform: "none", fontWeight: 500 },
   },
   components: {
     MuiCssBaseline: {
@@ -72,9 +56,10 @@ const theme = createTheme({
           "--green": "#7ed5a9",
           "--connection-line": "#718779",
         },
-        h1: theme.typography.h1,
-        h2: theme.typography.h2,
-        h3: theme.typography.h3,
+        // Legacy semantic headings use the same stock scale as Typography.
+        h1: theme.typography.h5,
+        h2: theme.typography.h6,
+        h3: theme.typography.subtitle1,
         dt: {
           ...theme.typography.body2,
           color: theme.vars.palette.text.secondary,
@@ -94,60 +79,11 @@ const theme = createTheme({
         },
         a: { color: theme.vars.palette.primary.main },
         "button, input, select, textarea": { letterSpacing: 0 },
-        "fieldset:disabled .MuiInputBase-root, fieldset:disabled .MuiButtonBase-root":
-          { opacity: 0.6 },
       }),
     },
-    MuiButtonBase: {
-      styleOverrides: { root: { fontFamily: "inherit" } },
-    },
-    MuiInputBase: { styleOverrides: { root: { minWidth: 0 } } },
-    MuiNativeSelect: { styleOverrides: { select: { minWidth: 0 } } },
-    MuiDialogContent: { styleOverrides: { root: { minWidth: 0 } } },
-    MuiButton: {
-      defaultProps: { disableElevation: true, size: "small" },
-      styleOverrides: {
-        root: {
-          gap: 8,
-          minHeight: 36,
-          "@media (pointer: coarse)": { minHeight: 44 },
-        },
-      },
-    },
-    MuiIconButton: {
-      defaultProps: { size: "small" },
-      styleOverrides: {
-        root: {
-          width: 36,
-          height: 36,
-          "@media (pointer: coarse)": { width: 44, height: 44 },
-        },
-      },
-    },
     MuiTextField: {
-      defaultProps: { fullWidth: true, size: "small", variant: "outlined" },
+      defaultProps: { fullWidth: true },
     },
-    MuiFormControl: { defaultProps: { size: "small" } },
-    MuiCheckbox: { defaultProps: { size: "small" } },
-    MuiFormControlLabel: {
-      styleOverrides: { root: { marginLeft: 0, marginRight: 0 } },
-    },
-    MuiDialog: {
-      defaultProps: { fullWidth: true, maxWidth: "sm" },
-      styleOverrides: {
-        paper: {
-          margin: 16,
-          width: "calc(100% - 32px)",
-          maxHeight: "calc(100dvh - 32px)",
-        },
-      },
-    },
-    MuiDialogTitle: {
-      styleOverrides: { root: { fontSize: "1rem", fontWeight: 600 } },
-    },
-    MuiDialogActions: { styleOverrides: { root: { padding: "16px 24px" } } },
-    MuiTableCell: { styleOverrides: { head: { fontWeight: 600 } } },
-    MuiListItemButton: { styleOverrides: { root: { borderRadius: 6 } } },
   },
 });
 

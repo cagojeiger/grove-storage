@@ -47,7 +47,7 @@ for (const theme of ["light", "dark"]) {
       await expect(dialog.getByText(context.request_id, { exact: true })).toBeVisible();
       await expect(dialog.getByText(context.credential_id, { exact: true })).toBeVisible();
       const actorLabel = dialog.locator("dt").filter({ hasText: /^Actor$/ });
-      await expect(actorLabel).toHaveCSS("font-size", "13px");
+      await expect(actorLabel).toHaveCSS("font-size", "14px");
     });
   }
 }

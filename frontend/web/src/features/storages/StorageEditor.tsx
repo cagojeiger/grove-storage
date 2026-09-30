@@ -95,7 +95,7 @@ export function StorageEditor({
       >
         Storage
       </Button>
-      <Typography variant="h1" sx={{ mb: 3 }}>
+      <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
         {storage ? "Edit storage" : "Register storage"}
       </Typography>
       <form
@@ -109,7 +109,7 @@ export function StorageEditor({
           spacing={3}
           sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
         >
-          <Typography component="h2" variant="h2">
+          <Typography component="h2" variant="h6">
             Connection
           </Typography>
           <TextField
@@ -159,7 +159,7 @@ export function StorageEditor({
             />
           </Stack>
           <Divider />
-          <Typography component="h2" variant="h2">
+          <Typography component="h2" variant="h6">
             Credentials
           </Typography>
           <TextField
@@ -177,7 +177,7 @@ export function StorageEditor({
             label={storage ? "Secret key (re-enter)" : "Secret key"}
           />
           <Divider />
-          <Typography component="h2" variant="h2">
+          <Typography component="h2" variant="h6">
             Transfer and allocation
           </Typography>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
