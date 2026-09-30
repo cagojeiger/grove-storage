@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { envelope, intercept } from "./command-fixture";
 
 const root = "http://127.0.0.1:5180/api/admin/console/";
 
@@ -38,6 +39,7 @@ test("built console loads with restrictive browser headers", async ({
     page.getByRole("heading", { name: "Overview", exact: true }),
   ).toBeVisible();
   expect(assets.some((url) => url.includes("mui-x-grid"))).toBe(false);
+  expect(assets.some((url) => url.includes("mui-x-charts"))).toBe(false);
   await page.getByRole("link", { name: "Storage", exact: true }).click();
   await expect(
     page.getByRole("grid", { name: "Storage", exact: true }),
@@ -74,6 +76,33 @@ test("built console loads with restrictive browser headers", async ({
     );
   expect(gridStyles.length).toBeGreaterThan(0);
   expect(gridStyles.every((value) => value === nonce)).toBe(true);
+  await intercept(page, "usage.history", (r) =>
+    r.fulfill({
+      json: envelope("usage.history", [
+        {
+          day: "2026-09-24",
+          storage_id: "home-archive",
+          client_id: "notegate",
+          active_files: 1,
+          active_bytes: 1024,
+        },
+        {
+          day: "2026-09-25",
+          storage_id: "home-archive",
+          client_id: "notegate",
+          active_files: 2,
+          active_bytes: 2048,
+        },
+      ]),
+    }),
+  );
+  await page.goto(`${root}#usage`);
+  await expect(
+    page
+      .getByLabel("Active data by day", { exact: true })
+      .locator(".MuiLineChart-line"),
+  ).toHaveAttribute("d", /^M/);
+  expect(assets.some((url) => url.includes("mui-x-charts"))).toBe(true);
   expect(errors).toEqual([]);
 });
 

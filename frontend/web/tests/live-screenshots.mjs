@@ -11,6 +11,7 @@ export async function captureConsole(page, origin, directory) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
     for (const [name, route, title] of [
       ["overview", "", "Overview"],
+      ["usage", "usage", "Usage history"],
       ["storage", "storages/console-live", "console-live"],
       ["client", "clients/console-client", "console-client"],
       ["accounts", "accounts", "Accounts"],
@@ -30,6 +31,16 @@ export async function captureConsole(page, origin, directory) {
         await expect(
           page.locator(".connection-paths path").first(),
         ).toHaveAttribute("d", /^M/);
+      } else if (name === "usage") {
+        await expect(
+          page
+            .getByLabel("Active data by day", { exact: true })
+            .locator(".MuiLineChart-mark")
+            .first(),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("region", { name: "Daily snapshots" }),
+        ).toContainText("1 GiB");
       } else if (name === "storage") {
         await page
           .getByRole("button", { name: "Test connection", exact: true })

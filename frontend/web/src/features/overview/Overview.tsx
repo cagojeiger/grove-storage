@@ -1,7 +1,12 @@
 import {
   Alert,
   Box,
+  Button,
+  Card,
+  CardContent,
   CircularProgress,
+  Container,
+  Grid,
   IconButton,
   Link,
   Table,
@@ -10,9 +15,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import "./overview.css";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, History } from "lucide-react";
 import { message, request, Usage } from "../../api/http";
@@ -49,182 +55,187 @@ export function Overview() {
       | "purge_pending_bytes",
   ) => data?.usage.reduce((total, row) => total + row[key], 0) ?? 0;
   return (
-    <main className="overview topology-overview">
-      <div className="page-heading">
-        <div>
+    <Container component="main" maxWidth="xl" sx={{ py: 3 }}>
+      <Stack spacing={3}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+        >
           <Typography component="h1" variant="h5">
             Overview
           </Typography>
-        </div>
-        <div className="page-actions">
-          <a className="back-link" href="#usage">
-            <History size={16} />
-            Usage history
-          </a>
-          <IconButton
-            type="submit"
-            className="icon-button"
-            title="Refresh"
-            aria-label="Refresh"
-            disabled={query.isFetching}
-            onClick={() => {
-              void query.refetch();
-              void cache.invalidateQueries({ queryKey: ["clients"] });
-            }}
-          >
-            {query.isFetching ? (
-              <CircularProgress size={18} color="inherit" />
-            ) : (
-              <RefreshCw size={18} />
-            )}
-          </IconButton>
-        </div>
-      </div>
-      {query.isPending ? (
-        <Typography role="status">Loading...</Typography>
-      ) : query.isError ? (
-        <Alert severity="error">{message(query.error)}</Alert>
-      ) : (
-        data && (
-          <>
-            <dl className="metrics">
-              <div>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Button href="#usage" startIcon={<History size={16} />}>
+              Usage history
+            </Button>
+            <Tooltip title="Refresh">
+              <span>
+                <IconButton
+                  aria-label="Refresh"
+                  disabled={query.isFetching}
+                  onClick={() => {
+                    void query.refetch();
+                    void cache.invalidateQueries({ queryKey: ["clients"] });
+                  }}
                 >
-                  Clients
-                </Typography>
-                <dd>{data.clients.length}</dd>
-              </div>
-              <div>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Storage
-                </Typography>
-                <dd>{data.usage.length}</dd>
-              </div>
-              <div>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Total files
-                </Typography>
-                <dd>{sum("active_files").toLocaleString("en-US")}</dd>
-              </div>
-              <div>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Total stored
-                </Typography>
-                <dd>{bytes(sum("active_bytes"))}</dd>
-              </div>
-              <div>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Configured capacity
-                </Typography>
-                <dd>{bytes(sum("capacity_bytes"))}</dd>
-              </div>
-            </dl>
-            <div className="overview-accounting muted">
-              <span>Reserved {bytes(sum("reserved_bytes"))}</span>
-              <span>Pending deletion {bytes(sum("purge_pending_bytes"))}</span>
-              <span>Available allocation {bytes(sum("remaining_bytes"))}</span>
-            </div>
-            <Connections
-              clients={data.clients}
-              storages={data.usage}
-              ready={data.ready}
-            />
-            <Box component="section" sx={{ mt: 4 }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 2,
-                  mb: 2,
-                }}
+                  {query.isFetching ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <RefreshCw size={18} />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        </Stack>
+        {query.isPending ? (
+          <Typography role="status">Loading...</Typography>
+        ) : query.isError ? (
+          <Alert severity="error">{message(query.error)}</Alert>
+        ) : (
+          data && (
+            <>
+              <Grid
+                container
+                spacing={2}
+                columns={{ xs: 2, sm: 6, lg: 5 }}
+                aria-label="Usage summary"
               >
-                <Typography component="h2" variant="h6">
-                  Storage usage
+                {[
+                  ["Clients", data.clients.length.toLocaleString("en-US")],
+                  ["Storage", data.usage.length.toLocaleString("en-US")],
+                  ["Total files", sum("active_files").toLocaleString("en-US")],
+                  ["Total stored", bytes(sum("active_bytes"))],
+                  ["Configured capacity", bytes(sum("capacity_bytes"))],
+                ].map(([label, value]) => (
+                  <Grid key={label} size={{ xs: 1, sm: 2, lg: 1 }}>
+                    <Card
+                      component="section"
+                      aria-label={label}
+                      variant="outlined"
+                      sx={{ height: "100%" }}
+                    >
+                      <CardContent>
+                        <Typography
+                          component="h2"
+                          variant="body2"
+                          color="text.secondary"
+                        >
+                          {label}
+                        </Typography>
+                        <Typography
+                          component="p"
+                          variant="h5"
+                          sx={{ mt: 1, overflowWrap: "anywhere" }}
+                        >
+                          {value}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+              <Stack
+                direction="row"
+                spacing={3}
+                useFlexGap
+                sx={{ flexWrap: "wrap" }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Reserved {bytes(sum("reserved_bytes"))}
                 </Typography>
-                <Link href="#storages" variant="body2">
-                  View all storage
-                </Link>
+                <Typography variant="body2" color="text.secondary">
+                  Pending deletion {bytes(sum("purge_pending_bytes"))}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Available allocation {bytes(sum("remaining_bytes"))}
+                </Typography>
+              </Stack>
+              <Connections
+                clients={data.clients}
+                storages={data.usage}
+                ready={data.ready}
+              />
+              <Box component="section">
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 2,
+                    mb: 2,
+                  }}
+                >
+                  <Typography component="h2" variant="h6">
+                    Storage usage
+                  </Typography>
+                  <Link href="#storages" variant="body2">
+                    View all storage
+                  </Link>
+                </Box>
+                <TableContainer>
+                  <Table
+                    size="small"
+                    aria-label="Storage usage"
+                    sx={{ minWidth: 640 }}
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Storage</TableCell>
+                        <TableCell align="right">Files</TableCell>
+                        <TableCell align="right">Stored</TableCell>
+                        <TableCell align="right">Reserved</TableCell>
+                        <TableCell align="right">Pending deletion</TableCell>
+                        <TableCell align="right">Configured capacity</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[...data.usage]
+                        .sort((a, b) =>
+                          a.storage_id.localeCompare(b.storage_id),
+                        )
+                        .slice(0, 5)
+                        .map((row) => (
+                          <TableRow key={row.storage_id} hover>
+                            <TableCell>
+                              <Link href={storageLink(row.storage_id)}>
+                                {row.storage_id}
+                              </Link>
+                            </TableCell>
+                            <TableCell align="right">
+                              {row.active_files.toLocaleString("en-US")}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.active_bytes)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.reserved_bytes)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.purge_pending_bytes)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.capacity_bytes)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1.5 }}
+                >
+                  Grove-managed usage and configured allocation limits, not
+                  provider free space.
+                </Typography>
               </Box>
-              <TableContainer>
-                <Table
-                  size="small"
-                  aria-label="Storage usage"
-                  sx={{ minWidth: 640 }}
-                >
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Storage</TableCell>
-                      <TableCell align="right">Files</TableCell>
-                      <TableCell align="right">Stored</TableCell>
-                      <TableCell align="right">Reserved</TableCell>
-                      <TableCell align="right">Pending deletion</TableCell>
-                      <TableCell align="right">Configured capacity</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {[...data.usage]
-                      .sort((a, b) => a.storage_id.localeCompare(b.storage_id))
-                      .slice(0, 5)
-                      .map((row) => (
-                        <TableRow key={row.storage_id} hover>
-                          <TableCell>
-                            <Link href={storageLink(row.storage_id)}>
-                              {row.storage_id}
-                            </Link>
-                          </TableCell>
-                          <TableCell align="right">
-                            {row.active_files.toLocaleString("en-US")}
-                          </TableCell>
-                          <TableCell align="right">
-                            {bytes(row.active_bytes)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {bytes(row.reserved_bytes)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {bytes(row.purge_pending_bytes)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {bytes(row.capacity_bytes)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 1.5 }}
-              >
-                Grove-managed usage and configured allocation limits, not
-                provider free space.
-              </Typography>
-            </Box>
-          </>
-        )
-      )}
-    </main>
+            </>
+          )
+        )}
+      </Stack>
+    </Container>
   );
 }

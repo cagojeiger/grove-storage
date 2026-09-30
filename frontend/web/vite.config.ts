@@ -17,10 +17,14 @@ export default defineConfig(() => {
         output: {
           manualChunks: (id) => {
             if (
-              /\/node_modules\/@mui\/x-(data-grid|internals|virtualizer)\//.test(
+              /\/node_modules\/@mui\/x-(charts|charts-vendor|internal-gestures)\//.test(
                 id,
               )
             )
+              return "mui-x-charts";
+            if (id.includes("/node_modules/@mui/x-internals/"))
+              return "mui-x-shared";
+            if (/\/node_modules\/@mui\/x-(data-grid|virtualizer)\//.test(id))
               return "mui-x-grid";
             if (id.includes("node_modules")) return "vendor";
           },

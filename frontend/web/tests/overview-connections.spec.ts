@@ -77,16 +77,26 @@ async function fixture(page: Page, count: number) {
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`folded Overview controls retain the shared font in ${theme}`, async ({ page }) => {
+  test(`folded Overview controls retain the shared font in ${theme}`, async ({
+    page,
+  }) => {
     await fixture(page, 7);
     await page.getByLabel("Theme").selectOption(theme);
     const more = page.getByRole("button", { name: "Show 2 more clients" });
-    await expect(more).toHaveCSS("font-family", /^-apple-system,/);
-    await expect(more.locator("strong")).toHaveCSS("font-family", /^-apple-system,/);
+    // Typography owns the visible text; CardActionArea itself has no text node.
+    await expect(more.getByText("+ 2 clients", { exact: true })).toHaveCSS(
+      "font-family",
+      /^-apple-system,/,
+    );
     await more.click();
-    const row = page.getByRole("dialog").getByRole("button", { name: "Show client client-6 on map" });
+    const row = page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Show client client-6 on map" });
     await expect(row).toHaveCSS("font-family", /^-apple-system,/);
-    await expect(row.locator("strong")).toHaveCSS("font-family", /^-apple-system,/);
+    await expect(row.getByText("client-6", { exact: true })).toHaveCSS(
+      "font-family",
+      /^-apple-system,/,
+    );
   });
 }
 
@@ -98,10 +108,20 @@ for (const count of [0, 1, 6, 7]) {
     await expect(
       page.getByRole("heading", { name: "Connections", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".metrics dt")).toHaveText([
-      "Clients", "Storage", "Total files", "Total stored", "Configured capacity",
+    await expect(
+      page.getByLabel("Usage summary").getByRole("heading"),
+    ).toHaveText([
+      "Clients",
+      "Storage",
+      "Total files",
+      "Total stored",
+      "Configured capacity",
     ]);
-    await expect(page.locator(".metrics > div").nth(1).locator("dd")).toHaveText(String(count));
+    await expect(
+      page
+        .getByRole("region", { name: "Storage", exact: true })
+        .getByText(String(count), { exact: true }),
+    ).toBeVisible();
     await expect(page.locator('[data-side="client"]')).toHaveCount(
       count > 6 ? 6 : count,
     );
@@ -111,9 +131,9 @@ for (const count of [0, 1, 6, 7]) {
     await expect(page.locator(".connection-paths path")).toHaveCount(
       (count > 6 ? 6 : count) * 2,
     );
-    await expect(page.locator(".connection-more")).toHaveCount(
-      count > 6 ? 2 : 0,
-    );
+    await expect(
+      page.getByRole("button", { name: /^Show \d+ more/ }),
+    ).toHaveCount(count > 6 ? 2 : 0);
     if (count > 6) {
       await expect(
         page.getByRole("button", { name: "Show 2 more clients" }),
@@ -150,7 +170,7 @@ test("hidden clients are searched, paged and grouped from bounded authoritative 
   ).toBeVisible();
   expect(new Set(reads).size).toBe(20);
   await expect(dialog.getByText("1–20 of 40")).toBeVisible();
-  await dialog.getByRole("button", { name: "Next page" }).click();
+  await dialog.getByRole("button", { name: "Go to next page" }).click();
   await expect(dialog.getByText("21–40 of 40")).toBeVisible();
   await dialog.getByLabel("Search hidden clients").fill("client-44");
   await expect(dialog.getByText("1–1 of 1")).toBeVisible();
@@ -161,11 +181,15 @@ test("hidden clients are searched, paged and grouped from bounded authoritative 
   await expect(
     page.locator('[data-connection="client:client-44"]'),
   ).toHaveAttribute("data-selected", "true");
-  await expect(page.locator(".connection-selection")).toHaveText(
-    "client-44 → store-44",
-  );
+  await expect(
+    page.getByRole("status", { name: "Selected connection" }),
+  ).toHaveText("client-44 → store-44");
   await expect(page.locator(".connection-paths path.selected")).toHaveCount(2);
-  await expect(page.locator(".connection-title")).toHaveCount(5);
+  await expect(
+    page
+      .getByRole("region", { name: "Registered storage connections" })
+      .getByRole("link"),
+  ).toHaveCount(5);
   await expect(
     page.getByRole("button", { name: "Show 40 more clients" }),
   ).toContainText("80 files · 40 GiB");
@@ -202,14 +226,10 @@ test("refresh totals include hidden storage and assignment failures clear highli
   );
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(
-    page
-      .locator(".metrics div")
-      .filter({ has: page.getByText("Total files", { exact: true }) }),
+    page.getByRole("region", { name: "Total files", exact: true }),
   ).toContainText("16");
   await expect(
-    page
-      .locator(".metrics div")
-      .filter({ has: page.getByText("Total stored", { exact: true }) }),
+    page.getByRole("region", { name: "Total stored", exact: true }),
   ).toContainText("8 GiB");
   await page
     .getByRole("link", { name: "Open client client-0", exact: true })
@@ -222,9 +242,9 @@ test("refresh totals include hidden storage and assignment failures clear highli
     r.fulfill({ status: 500, json: failure(500) }),
   );
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(page.locator(".connection-selection")).toHaveText(
-    "Storage assignment unavailable",
-  );
+  await expect(
+    page.getByRole("status", { name: "Selected connection" }),
+  ).toHaveText("Storage assignment unavailable");
   await expect(page.locator(".connection-paths path.selected")).toHaveCount(1);
   await expect(
     page.getByRole("button", { name: "Show 3 more clients" }),

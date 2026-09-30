@@ -19,7 +19,11 @@ import { Access } from "../features/access/Access";
 import { Activity } from "../features/activity/Activity";
 import { Sessions } from "../features/settings/Sessions";
 import { Security } from "../features/settings/Security";
-import { UsageHistory } from "../features/overview/UsageHistory";
+const UsageHistory = lazy(() =>
+  import("../features/overview/UsageHistory").then((module) => ({
+    default: module.UsageHistory,
+  })),
+);
 
 const Storages = lazy(() =>
   import("../features/storages/Storages").then((module) => ({

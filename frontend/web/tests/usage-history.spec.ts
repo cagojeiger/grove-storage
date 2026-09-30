@@ -102,7 +102,7 @@ for (const invalid of [
   });
 }
 
-test("large histories render progressively without pretending the API is paged", async ({
+test("large histories use bounded local pages without extra API requests", async ({
   page,
 }) => {
   const inputs = await mock(
@@ -113,13 +113,14 @@ test("large histories render progressively without pretending the API is paged",
     })),
   );
   await page.goto("/api/admin/console/#usage");
-  await expect(
-    page.getByText("100 of 101 snapshots", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(101);
+  await expect(page.getByText("1–50 of 101", { exact: true })).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(51);
   const count = inputs.length;
-  await page.getByRole("button", { name: "Show more" }).click();
-  await expect(page.getByRole("row")).toHaveCount(102);
+  await page.getByRole("button", { name: "Go to next page" }).click();
+  await expect(page.getByText("51–100 of 101", { exact: true })).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(51);
+  await page.getByRole("button", { name: "Go to next page" }).click();
+  await expect(page.getByRole("row")).toHaveCount(2);
   expect(inputs.length).toBe(count);
 });
 

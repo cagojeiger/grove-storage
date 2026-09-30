@@ -1,8 +1,13 @@
 import {
   DialogContent,
   TextField,
-  ButtonBase,
-  IconButton,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Stack,
+  TablePagination,
   Typography,
   Dialog,
   DialogTitle,
@@ -14,7 +19,7 @@ import {
 
 import { useState, useId } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, AppWindow, HardDrive } from "lucide-react";
+import { AppWindow, HardDrive } from "lucide-react";
 import { command } from "../../api/commands";
 import { Usage } from "../../api/http";
 
@@ -83,10 +88,9 @@ export function ConnectionBrowser({
       <DialogTitle id={titleId}>
         {kind === "client" ? "More clients" : "More storage"}
       </DialogTitle>
-      <DialogContent>
-        <div className="connection-browser">
+      <DialogContent dividers>
+        <Stack spacing={2}>
           <TextField
-            className="connection-search"
             label={
               kind === "client"
                 ? "Search hidden clients"
@@ -103,79 +107,73 @@ export function ConnectionBrowser({
             }}
           />
           {kind === "client" && (
-            <p className="muted">Assignments on this page</p>
+            <Typography variant="body2" color="text.secondary">
+              Assignments on this page
+            </Typography>
           )}
           {[...groups]
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([label, members]) => (
               <section key={label}>
-                <Typography component="h3" variant="subtitle1">
-                  {label} <span className="muted">({members.length})</span>
+                <Typography
+                  component="h3"
+                  variant="subtitle2"
+                  sx={{ overflowWrap: "anywhere" }}
+                >
+                  {label} ({members.length})
                 </Typography>
-                {members.map((id) => {
-                  const summary = sumClients([id], totals);
-                  const row = storages.find((row) => row.storage_id === id);
-                  return (
-                    <ButtonBase
-                      type="submit"
-                      className="connection-browser-row"
-                      key={id}
-                      onClick={() => onSelect(id)}
-                      aria-label={`Show ${kind} ${id} on map`}
-                    >
-                      {kind === "client" ? (
-                        <AppWindow size={16} />
-                      ) : (
-                        <HardDrive size={16} />
-                      )}
-                      <strong>{id}</strong>
-                      <span>
-                        {kind === "client"
-                          ? summary
-                            ? `${summary.files.toLocaleString("en-US")} files · ${bytes(summary.bytes)}`
-                            : "Usage unavailable"
-                          : row
-                            ? `${row.active_files.toLocaleString("en-US")} files · ${bytes(row.active_bytes)} / ${bytes(row.capacity_bytes)}`
-                            : "Usage unavailable"}
-                      </span>
-                    </ButtonBase>
-                  );
-                })}
+                <List disablePadding>
+                  {members.map((id) => {
+                    const summary = sumClients([id], totals);
+                    const row = storages.find((row) => row.storage_id === id);
+                    return (
+                      <ListItem key={id} disablePadding divider>
+                        <ListItemButton
+                          onClick={() => onSelect(id)}
+                          aria-label={`Show ${kind} ${id} on map`}
+                        >
+                          <ListItemIcon>
+                            {kind === "client" ? (
+                              <AppWindow size={16} />
+                            ) : (
+                              <HardDrive size={16} />
+                            )}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={id}
+                            sx={{ overflowWrap: "anywhere" }}
+                            secondary={
+                              kind === "client"
+                                ? summary
+                                  ? `${summary.files.toLocaleString("en-US")} files · ${bytes(summary.bytes)}`
+                                  : "Usage unavailable"
+                                : row
+                                  ? `${row.active_files.toLocaleString("en-US")} files · ${bytes(row.active_bytes)} / ${bytes(row.capacity_bytes)}`
+                                  : "Usage unavailable"
+                            }
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
+                </List>
               </section>
             ))}
           {!ids.length && (
-            <p className="empty">
+            <Typography color="text.secondary">
               No matching {kind === "client" ? "clients" : "storage"}.
-            </p>
+            </Typography>
           )}
-          <div className="connection-browser-pages">
-            <span role="status">
-              {ids.length ? (current - 1) * 20 + 1 : 0}–
-              {Math.min(current * 20, ids.length)} of {ids.length}
-            </span>
-            <IconButton
-              type="submit"
-              className="icon-button"
-              title="Previous page"
-              aria-label="Previous page"
-              disabled={current === 1}
-              onClick={() => setPage(current - 1)}
-            >
-              <ChevronLeft size={16} />
-            </IconButton>
-            <IconButton
-              type="submit"
-              className="icon-button"
-              title="Next page"
-              aria-label="Next page"
-              disabled={current === pages}
-              onClick={() => setPage(current + 1)}
-            >
-              <ChevronRight size={16} />
-            </IconButton>
-          </div>
-        </div>
+        </Stack>
       </DialogContent>
+      <TablePagination
+        component="div"
+        count={ids.length}
+        page={current - 1}
+        rowsPerPage={20}
+        rowsPerPageOptions={[20]}
+        onPageChange={(_event, next) => setPage(next + 1)}
+      />
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>

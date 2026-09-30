@@ -1,20 +1,36 @@
 import { test, expect, Page } from "@playwright/test";
-import { commandUrl, envelope, failure, intercept, session } from "./command-fixture";
+import {
+  commandUrl,
+  envelope,
+  failure,
+  intercept,
+  session,
+} from "./command-fixture";
 
 const root = "/api/admin/console/";
 
 test.describe("English default", () => {
   test.use({ locale: "de-DE" });
-  test("document, sign-in, labels and numbers stay English", async ({ page }) => {
+  test("document, sign-in, labels and numbers stay English", async ({
+    page,
+  }) => {
     await mock(page, false);
     await page.goto(root);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await page.getByLabel("Username").fill("owner");
     await page.getByLabel("Password").fill("fixture-token");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByRole("table", { name: "Storage usage" }).getByRole("cell", { name: "1,240", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
-    expect(await page.locator("body").innerText()).not.toMatch(/[\uAC00-\uD7A3]/);
+    await expect(
+      page
+        .getByRole("table", { name: "Storage usage" })
+        .getByRole("cell", { name: "1,240", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Overview", exact: true }),
+    ).toBeVisible();
+    expect(await page.locator("body").innerText()).not.toMatch(
+      /[\uAC00-\uD7A3]/,
+    );
   });
 });
 
@@ -22,7 +38,18 @@ async function mock(page: Page, signedIn = true, passwordSession = false) {
   let loggedIn = signedIn;
   if (passwordSession) {
     await page.route("**/api/admin/identity/v1/me", (route) =>
-      route.fulfill({ json: { id: "11111111-1111-1111-1111-111111111111", kind: "user", display_name: "Owner", role: "admin", is_active: true, deleted_at: null, username: "owner", password_ready: true } }),
+      route.fulfill({
+        json: {
+          id: "11111111-1111-1111-1111-111111111111",
+          kind: "user",
+          display_name: "Owner",
+          role: "admin",
+          is_active: true,
+          deleted_at: null,
+          username: "owner",
+          password_ready: true,
+        },
+      }),
     );
     await page.route("**/api/admin/identity/v1/me/sessions?*", (route) =>
       route.fulfill({ json: { items: [], next_before: null } }),
@@ -45,7 +72,11 @@ async function mock(page: Page, signedIn = true, passwordSession = false) {
       }
       await route.fulfill({
         status: loggedIn ? 200 : 401,
-        json: loggedIn ? passwordSession ? { ...session, credential_id: null } : session : {},
+        json: loggedIn
+          ? passwordSession
+            ? { ...session, credential_id: null }
+            : session
+          : {},
       });
     }
   });
@@ -54,7 +85,16 @@ async function mock(page: Page, signedIn = true, passwordSession = false) {
     if (command === "client.list")
       await route.fulfill({ json: envelope(command, ["notegate"]) });
     else if (command === "usage.clients")
-      await route.fulfill({ json: envelope(command, [{ client_id: "notegate", storage_id: "home-storage-long-identifier", active_files: 1240, active_bytes: 1024 ** 3 * 128 }]) });
+      await route.fulfill({
+        json: envelope(command, [
+          {
+            client_id: "notegate",
+            storage_id: "home-storage-long-identifier",
+            active_files: 1240,
+            active_bytes: 1024 ** 3 * 128,
+          },
+        ]),
+      });
     else
       await route.fulfill({
         json: envelope(command, [
@@ -76,16 +116,25 @@ async function mock(page: Page, signedIn = true, passwordSession = false) {
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`Overview controls use the shared font in ${theme} mode`, async ({ page }) => {
+  test(`Overview controls use the shared font in ${theme} mode`, async ({
+    page,
+  }) => {
     await mock(page);
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
-    await expect(page.getByRole("link", { name: "Open client notegate" })).toBeVisible();
-    const controls = page.locator(".connection-select");
+    await expect(
+      page.getByRole("link", { name: "Open client notegate" }),
+    ).toBeVisible();
+    const controls = page
+      .getByRole("region", { name: "Storage connections", exact: true })
+      .getByRole("link", { name: /^Open / });
     await expect(controls).toHaveCount(2);
     for (const control of await controls.all()) {
       await expect(control).toHaveCSS("font-family", /^-apple-system,/);
-      await expect(control.locator("strong")).toHaveCSS("font-family", /^-apple-system,/);
+      await expect(control.getByRole("heading")).toHaveCSS(
+        "font-family",
+        /^-apple-system,/,
+      );
     }
   });
 }
@@ -110,7 +159,9 @@ test("login clears token; logout removes overview", async ({ page }) => {
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
 
-test("password change validates confirmation and signs out", async ({ page }) => {
+test("password change validates confirmation and signs out", async ({
+  page,
+}) => {
   await mock(page, true, true);
   let submitted: unknown;
   await page.route("**/api/admin/identity/v1/me/password", async (route) => {
@@ -127,22 +178,40 @@ test("password change validates confirmation and signs out", async ({ page }) =>
   expect(submitted).toBeUndefined();
   await page.getByLabel("Confirm new password").fill("new-private-password");
   await page.getByRole("button", { name: "Change password" }).click();
-  await expect.poll(() => submitted).toEqual({
-    current_password: "old-private-password",
-    new_password: "new-private-password",
-  });
-  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("private-password");
+  await expect
+    .poll(() => submitted)
+    .toEqual({
+      current_password: "old-private-password",
+      new_password: "new-private-password",
+    });
+  await expect(
+    page.getByRole("button", { name: "Sign in", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      JSON.stringify({ ...localStorage, ...sessionStorage }),
+    ),
+  ).not.toContain("private-password");
 });
 
 test("account menu separates profile and security", async ({ page }) => {
   await mock(page, true, true);
   await page.goto(root);
   const menu = page.getByRole("button", { name: "Account menu" });
-  await expect(page.getByRole("complementary", { name: "Workspace sidebar" }).getByRole("button", { name: "Account menu" })).toBeVisible();
-  await expect(page.getByRole("contentinfo").getByRole("button", { name: "Account menu" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("complementary", { name: "Workspace sidebar" })
+      .getByRole("button", { name: "Account menu" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("contentinfo").getByRole("button", { name: "Account menu" }),
+  ).toHaveCount(0);
   await expect(menu).toContainText("Owner");
-  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "My account" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", { name: "My account" }),
+  ).toHaveCount(0);
   await menu.click();
   await page.getByRole("menuitem", { name: "My account" }).click();
   await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
@@ -158,58 +227,87 @@ test("account menu separates profile and security", async ({ page }) => {
 
 for (const width of [320, 768, 1440]) {
   for (const theme of ["light", "dark"]) {
-    test(`sidebar account menu stays usable ${width}px ${theme}`, async ({ page }) => {
+    test(`sidebar account menu stays usable ${width}px ${theme}`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width, height: 600 });
       await mock(page, true, true);
       await page.goto(`${root}#settings`);
       await page.getByLabel("Theme").selectOption(theme);
       const menu = page.getByRole("button", { name: "Account menu" });
-      if (width < 900) await page.getByRole("button", { name: "Open navigation" }).click();
+      if (width < 900)
+        await page.getByRole("button", { name: "Open navigation" }).click();
       if (width >= 900) {
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.evaluate(() =>
+          window.scrollTo(0, document.body.scrollHeight),
+        );
         const rect = await menu.boundingBox();
         expect(rect!.x).toBeLessThan(196);
         expect(rect!.y).toBeGreaterThan(400);
         expect(rect!.y + rect!.height).toBeLessThanOrEqual(600);
       }
       await menu.click();
-      const panel = await page.getByRole("menu", { name: "Account menu" }).boundingBox();
+      const panel = await page
+        .getByRole("menu", { name: "Account menu" })
+        .boundingBox();
       expect(panel!.x).toBeGreaterThanOrEqual(0);
       expect(panel!.x + panel!.width).toBeLessThanOrEqual(width);
       expect(panel!.y).toBeGreaterThanOrEqual(64);
       expect(panel!.y + panel!.height).toBeLessThanOrEqual(600);
-      await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
-      await expect(page.getByRole("menu", { name: "Account menu" })).toHaveCSS("opacity", "1");
-      await page.screenshot({ path: `test-results/sidebar-account-${width}-${theme}.png` });
+      await expect(
+        page.getByRole("menuitem", { name: "Sign out" }),
+      ).toBeVisible();
+      await expect(page.getByRole("menu", { name: "Account menu" })).toHaveCSS(
+        "opacity",
+        "1",
+      );
+      await page.screenshot({
+        path: `test-results/sidebar-account-${width}-${theme}.png`,
+      });
       await page.keyboard.press("Escape");
       await expect(menu).toBeFocused();
-      await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeHidden();
+      await expect(
+        page.getByRole("menuitem", { name: "Sign out" }),
+      ).toBeHidden();
     });
   }
 }
 
-test("token browser sessions cannot open password settings", async ({ page }) => {
+test("token browser sessions cannot open password settings", async ({
+  page,
+}) => {
   await mock(page);
   await page.goto(`${root}#settings/security`);
-  await expect(page.getByRole("alert")).toHaveText("Password sign-in required.");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Password sign-in required.",
+  );
   await page.getByRole("button", { name: "Account menu" }).click();
   await expect(page.getByRole("menuitem", { name: "Security" })).toHaveCount(0);
 });
 
-test("account menu supports arrow navigation and restores trigger focus", async ({ page }) => {
+test("account menu supports arrow navigation and restores trigger focus", async ({
+  page,
+}) => {
   await mock(page, true, true);
   await page.goto(root);
   const trigger = page.getByRole("button", { name: "Account menu" });
   await trigger.click();
   await expect(page.getByRole("menu", { name: "Account menu" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "My account", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("menuitem", { name: "My account", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("menuitem", { name: "Security", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("menuitem", { name: "Security", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
 });
 
-test("MUI synchronizes an explicit theme between tabs", async ({ page, context }) => {
+test("MUI synchronizes an explicit theme between tabs", async ({
+  page,
+  context,
+}) => {
   await mock(page);
   await page.goto(root);
   const other = await context.newPage();
@@ -222,7 +320,9 @@ test("MUI synchronizes an explicit theme between tabs", async ({ page, context }
   await other.close();
 });
 
-test("keyboard focus stays visible on a short mobile viewport", async ({ page }) => {
+test("keyboard focus stays visible on a short mobile viewport", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 600 });
   await mock(page, true, true);
   await page.goto(`${root}#settings`);
@@ -230,14 +330,27 @@ test("keyboard focus stays visible on a short mobile viewport", async ({ page })
   await expect(link).toBeVisible();
   for (let i = 0; i < 30; i++) {
     await page.keyboard.press("Tab");
-    if (await link.evaluate(element => element === document.activeElement)) break;
+    if (await link.evaluate((element) => element === document.activeElement))
+      break;
   }
   await expect(link).toBeFocused();
-  await expect.poll(() => link.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    return rect.top >= 56 && rect.bottom <= innerHeight &&
-      element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
-  })).toBe(true);
+  await expect
+    .poll(() =>
+      link.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.top >= 56 &&
+          rect.bottom <= innerHeight &&
+          element.contains(
+            document.elementFromPoint(
+              rect.x + rect.width / 2,
+              rect.y + rect.height / 2,
+            ),
+          )
+        );
+      }),
+    )
+    .toBe(true);
 });
 
 for (const width of [320, 1440]) {
@@ -248,14 +361,25 @@ for (const width of [320, 1440]) {
       await page.goto(`${root}#settings/security`);
       await page.getByLabel("Theme").selectOption(theme);
       await expect(page.getByLabel("Current password")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Change password" })).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.screenshot({ path: `test-results/password-${width}-${theme}.png`, fullPage: true });
+      await expect(
+        page.getByRole("button", { name: "Change password" }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: `test-results/password-${width}-${theme}.png`,
+        fullPage: true,
+      });
     });
 }
 
 for (const status of [307, 308]) {
-  test(`login rejects ${status} without forwarding its token`, async ({ page }) => {
+  test(`login rejects ${status} without forwarding its token`, async ({
+    page,
+  }) => {
     await mock(page, false);
     const forwarded: string[] = [];
     page.on("request", (request) => {
@@ -264,7 +388,10 @@ for (const status of [307, 308]) {
     });
     await page.route("**/api/admin/identity/v1/session", async (route) => {
       if (route.request().method() === "POST") {
-        await route.fulfill({ status, headers: { Location: "/redirect-target" } });
+        await route.fulfill({
+          status,
+          headers: { Location: "/redirect-target" },
+        });
       } else {
         await route.fallback();
       }
@@ -274,10 +401,14 @@ for (const status of [307, 308]) {
     await page.getByLabel("Password").fill("fixture-secret-not-for-redirect");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(
-      page.getByRole("alert").or(page.getByRole("heading", { name: "Overview", exact: true })),
+      page
+        .getByRole("alert")
+        .or(page.getByRole("heading", { name: "Overview", exact: true })),
     ).toBeVisible();
     expect(forwarded).toEqual([]);
-    await expect(page.getByRole("alert")).toContainText("Unable to connect to the server");
+    await expect(page.getByRole("alert")).toContainText(
+      "Unable to connect to the server",
+    );
     await expect(page.getByLabel("Password")).toHaveValue("");
   });
 }
@@ -298,17 +429,22 @@ test("429 clears input and honors Retry-After", async ({ page }) => {
   await page.getByLabel("Username").fill("owner");
   await page.getByLabel("Password").fill("do-not-persist");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Too many sign-in attempts");
+  await expect(page.getByRole("alert")).toContainText(
+    "Too many sign-in attempts",
+  );
   await expect(page.getByLabel("Password")).toHaveValue("");
-  await expect(
-    page.getByRole("button", { name: /Retry in/ }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Retry in/ })).toBeDisabled();
 });
 
 test("overview 401 removes cached private data", async ({ page }) => {
   await mock(page);
   await page.goto(root);
-  await expect(page.getByRole("link", { name: "Open storage home-storage-long-identifier", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "Open storage home-storage-long-identifier",
+      exact: true,
+    }),
+  ).toBeVisible();
   await intercept(page, "usage.storages", (route) =>
     route.fulfill({ status: 401, json: failure(401) }),
   );
@@ -319,7 +455,9 @@ test("overview 401 removes cached private data", async ({ page }) => {
 
 test("empty, API failure, retry, and logout failure", async ({ page }) => {
   await mock(page);
-  await intercept(page, "usage.storages", (route) => route.fulfill({ json: envelope("usage.storages", []) }));
+  await intercept(page, "usage.storages", (route) =>
+    route.fulfill({ json: envelope("usage.storages", []) }),
+  );
   await page.goto(root);
   await expect(page.getByText("No storage registered.")).toBeVisible();
   await intercept(page, "usage.storages", (route) =>
@@ -327,7 +465,9 @@ test("empty, API failure, retry, and logout failure", async ({ page }) => {
   );
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await intercept(page, "usage.storages", (route) => route.fulfill({ json: envelope("usage.storages", []) }));
+  await intercept(page, "usage.storages", (route) =>
+    route.fulfill({ json: envelope("usage.storages", []) }),
+  );
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByText("No storage registered.")).toBeVisible();
   await page.route("**/session", (route) =>
@@ -349,13 +489,21 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await page.goto(root);
       await page.getByLabel("Theme").selectOption(theme);
       await expect(
-        page.getByRole("link", { name: "Open storage home-storage-long-identifier", exact: true }),
+        page.getByRole("link", {
+          name: "Open storage home-storage-long-identifier",
+          exact: true,
+        }),
       ).toBeVisible();
       if (width < 900) {
         await page.getByRole("button", { name: "Open navigation" }).click();
-        await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("admin");
+        await expect(
+          page.getByRole("button", { name: "Account menu", exact: true }),
+        ).toContainText("admin");
         await page.getByRole("button", { name: "Close navigation" }).click();
-      } else await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("admin");
+      } else
+        await expect(
+          page.getByRole("button", { name: "Account menu", exact: true }),
+        ).toContainText("admin");
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -363,7 +511,8 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       ).toBe(true);
       expect(
         await page
-          .getByRole("link", { name: "Grove Storage", exact: true }).locator("img")
+          .getByRole("link", { name: "Grove Storage", exact: true })
+          .locator("img")
           .evaluate((img: HTMLImageElement) => img.naturalWidth > 0),
       ).toBe(true);
       await page.screenshot({
@@ -388,16 +537,24 @@ test("system theme follows OS and explicit selection persists", async ({
 });
 
 for (const theme of ["light", "dark"] as const) {
-  test(`${theme} select options have an explicit matching surface`, async ({ page }) => {
+  test(`${theme} select options have an explicit matching surface`, async ({
+    page,
+  }) => {
     await mock(page);
-    await page.emulateMedia({ colorScheme: theme === "dark" ? "light" : "dark" });
+    await page.emulateMedia({
+      colorScheme: theme === "dark" ? "light" : "dark",
+    });
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
-    const colors = theme === "dark"
-      ? { text: "rgb(255, 255, 255)", surface: "rgb(18, 18, 18)" }
-      : { text: "rgba(0, 0, 0, 0.87)", surface: "rgb(255, 255, 255)" };
+    const colors =
+      theme === "dark"
+        ? { text: "rgb(255, 255, 255)", surface: "rgb(18, 18, 18)" }
+        : { text: "rgba(0, 0, 0, 0.87)", surface: "rgb(255, 255, 255)" };
     await expect(page.getByLabel("Theme")).toHaveCSS("color-scheme", theme);
-    for (const option of await page.getByLabel("Theme").locator("option").all()) {
+    for (const option of await page
+      .getByLabel("Theme")
+      .locator("option")
+      .all()) {
       await expect(option).toHaveCSS("color", colors.text);
       await expect(option).toHaveCSS("background-color", colors.surface);
     }

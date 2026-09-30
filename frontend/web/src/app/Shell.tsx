@@ -66,7 +66,8 @@ export function Shell({
       : root === "access"
         ? sections[3]
         : sections.find((item) => item.path === root);
-  const label = section?.label ?? "My account";
+  const label =
+    root === "usage" ? "Usage history" : (section?.label ?? "My account");
   const brand = (
     <Stack
       component="a"

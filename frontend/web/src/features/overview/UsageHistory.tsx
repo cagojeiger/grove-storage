@@ -11,6 +11,7 @@ import {
   Container,
   Stack,
   TableContainer,
+  TablePagination,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -21,18 +22,13 @@ import { ArrowLeft, RefreshCw } from "lucide-react";
 import { command } from "../../api/commands";
 import { message } from "../../api/http";
 import { bytes } from "../../design/format";
-
-type Snapshot = {
-  day: string;
-  storage_id: string;
-  client_id: string;
-  active_files: number;
-  active_bytes: number;
-};
+import { Snapshot } from "./usageHistoryModel";
+import { UsageChart } from "./UsageChart";
 
 export function UsageHistory() {
   const [days, setDays] = useState(90);
-  const [visible, setVisible] = useState(100);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   const query = useQuery({
     queryKey: ["usage-history", days],
     queryFn: ({ signal }) =>
@@ -45,11 +41,15 @@ export function UsageHistory() {
       a.storage_id.localeCompare(b.storage_id) ||
       a.client_id.localeCompare(b.client_id),
   );
+  const currentPage = Math.min(
+    page,
+    Math.max(0, Math.ceil(rows.length / pageSize) - 1),
+  );
   function apply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = Number(new FormData(event.currentTarget).get("days"));
     if (!Number.isInteger(value) || value < 1 || value > 3650) return;
-    setVisible(100);
+    setPage(0);
     if (value === days) void query.refetch();
     else setDays(value);
   }
@@ -112,6 +112,7 @@ export function UsageHistory() {
           </Typography>
         ) : (
           <>
+            <UsageChart rows={query.data ?? []} />
             <TableContainer
               role="region"
               aria-label="Daily snapshots"
@@ -136,48 +137,43 @@ export function UsageHistory() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.slice(0, visible).map((row) => (
-                    <TableRow
-                      key={JSON.stringify([
-                        row.day,
-                        row.storage_id,
-                        row.client_id,
-                      ])}
-                    >
-                      <TableCell>
-                        <time dateTime={row.day}>{row.day}</time>
-                      </TableCell>
-                      <TableCell>{row.storage_id}</TableCell>
-                      <TableCell>{row.client_id}</TableCell>
-                      <TableCell>
-                        {row.active_files.toLocaleString("en-US")}
-                      </TableCell>
-                      <TableCell>{bytes(row.active_bytes)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {rows
+                    .slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+                    .map((row) => (
+                      <TableRow
+                        key={JSON.stringify([
+                          row.day,
+                          row.storage_id,
+                          row.client_id,
+                        ])}
+                      >
+                        <TableCell>
+                          <time dateTime={row.day}>{row.day}</time>
+                        </TableCell>
+                        <TableCell>{row.storage_id}</TableCell>
+                        <TableCell>{row.client_id}</TableCell>
+                        <TableCell>
+                          {row.active_files.toLocaleString("en-US")}
+                        </TableCell>
+                        <TableCell>{bytes(row.active_bytes)}</TableCell>
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
             </TableContainer>
-            <Stack
-              direction="row"
-              spacing={2}
-              useFlexGap
-              sx={{
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
+            <TablePagination
+              component="div"
+              slotProps={{ toolbar: { sx: { flexWrap: "wrap" } } }}
+              count={rows.length}
+              page={currentPage}
+              rowsPerPage={pageSize}
+              rowsPerPageOptions={[20, 50, 100]}
+              onPageChange={(_event, next) => setPage(next)}
+              onRowsPerPageChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(0);
               }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                {Math.min(visible, rows.length).toLocaleString("en-US")} of{" "}
-                {rows.length.toLocaleString("en-US")} snapshots
-              </Typography>
-              {visible < rows.length && (
-                <Button type="submit" onClick={() => setVisible(visible + 100)}>
-                  Show more
-                </Button>
-              )}
-            </Stack>
+            />
           </>
         )}
       </Stack>

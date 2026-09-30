@@ -1,7 +1,24 @@
-import { ButtonBase, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  CardContent,
+  Chip,
+  LinearProgress,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, HardDrive, AppWindow, Layers } from "lucide-react";
+import {
+  ArrowRight,
+  HardDrive,
+  AppWindow,
+  Layers,
+  CircleCheck,
+  CircleX,
+} from "lucide-react";
 import { command } from "../../api/commands";
 import { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
@@ -10,6 +27,7 @@ import { Client, ClientUsage, clientLink } from "../clients/model";
 import { clientTotals, foldConnections, sumClients } from "./connectionsModel";
 import { ConnectionPaths } from "./ConnectionPaths";
 import { ConnectionBrowser } from "./ConnectionBrowser";
+import "./connections.css";
 
 export function Connections({
   clients,
@@ -79,170 +97,307 @@ export function Connections({
     setSelectedStorage(id);
   }
   return (
-    <>
-      <div className="connections-heading">
+    <Stack spacing={2}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{ alignItems: "center", justifyContent: "space-between" }}
+      >
         <Typography component="h2" variant="h6">
           Connections
         </Typography>
-        <span className="muted">Configured routes</span>
-      </div>
-      <section
+        <Typography variant="body2" color="text.secondary">
+          Configured routes
+        </Typography>
+      </Stack>
+      <Box
+        component="section"
         className="connections"
         aria-label="Storage connections"
         ref={graph}
       >
         <ConnectionPaths container={graph} revision={revision} />
-        <div className="connection-column">
-          <div className="section-heading">
-            <Typography component="h2" variant="h6">
+        <Stack className="connection-column" spacing={2}>
+          <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+            <Typography component="h3" variant="subtitle1">
               Clients
             </Typography>
-            <span className="muted">{clients.length}</span>
-          </div>
-          <div
-            className="connection-items"
+            <Typography color="text.secondary">{clients.length}</Typography>
+          </Stack>
+          <Stack
+            spacing={2}
             role="region"
             aria-label="Client connections"
+            sx={{ flex: 1, justifyContent: "space-around" }}
           >
             {clientRows.visible.map((id) => {
               const summary = sumClients([id], totals);
               return (
-                <article
-                  className={`connection-item ${selectedClient === id ? "selected" : ""}`}
+                <Card
+                  component="article"
+                  variant="outlined"
                   key={id}
                   data-connection={`client:${id}`}
                   data-side="client"
                   data-selected={selectedClient === id}
+                  sx={{
+                    borderColor:
+                      selectedClient === id ? "primary.main" : "divider",
+                  }}
                 >
-                  <ButtonBase
+                  <CardActionArea
                     component="a"
                     href={clientLink(id)}
-                    className="connection-select"
                     aria-label={`Open client ${id}`}
                     onMouseEnter={() => chooseClient(id)}
                     onFocus={() => chooseClient(id)}
                   >
-                    <AppWindow size={18} />
-                    <strong>{id}</strong>
-                  </ButtonBase>
-                  <p className="connection-usage">
-                    {summary ? (
-                      <>
-                        <span>
-                          {summary.files.toLocaleString("en-US")} files
-                        </span>
-                        <strong>{bytes(summary.bytes)}</strong>
-                      </>
-                    ) : (
-                      <span className="muted">Usage unavailable</span>
-                    )}
-                  </p>
-                </article>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ alignItems: "center" }}
+                      >
+                        <AppWindow size={18} />
+                        <Typography
+                          component="h4"
+                          variant="subtitle2"
+                          sx={{ overflowWrap: "anywhere" }}
+                        >
+                          {id}
+                        </Typography>
+                      </Stack>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{
+                          mt: 1,
+                          flexWrap: "wrap",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">
+                          {summary
+                            ? `${summary.files.toLocaleString("en-US")} files`
+                            : "Usage unavailable"}
+                        </Typography>
+                        {summary && (
+                          <Typography variant="body2">
+                            {bytes(summary.bytes)}
+                          </Typography>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
               );
             })}
             {clientRows.hidden.length > 0 && (
-              <ButtonBase
-                type="submit"
-                className="connection-item connection-more"
+              <Card
+                variant="outlined"
                 data-connection="client:more"
                 data-side="client"
-                aria-label={`Show ${clientRows.hidden.length} more clients`}
-                aria-haspopup="dialog"
-                onClick={() => setBrowser("client")}
               >
-                <strong>
-                  <Layers size={16} /> + {clientRows.hidden.length} clients
-                </strong>
-                <span>
-                  {hiddenClients
-                    ? `${hiddenClients.files.toLocaleString("en-US")} files · ${bytes(hiddenClients.bytes)}`
-                    : "Usage unavailable"}
-                </span>
-              </ButtonBase>
+                <CardActionArea
+                  aria-label={`Show ${clientRows.hidden.length} more clients`}
+                  aria-haspopup="dialog"
+                  onClick={() => setBrowser("client")}
+                >
+                  <CardContent>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: "center" }}
+                    >
+                      <Layers size={18} />
+                      <Typography variant="subtitle2">
+                        + {clientRows.hidden.length} clients
+                      </Typography>
+                    </Stack>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 1 }}
+                    >
+                      {hiddenClients
+                        ? `${hiddenClients.files.toLocaleString("en-US")} files · ${bytes(hiddenClients.bytes)}`
+                        : "Usage unavailable"}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
             )}
-          </div>
-          {!clients.length && <p className="empty">No clients registered.</p>}
-          <a className="connection-all" href="#clients">
-            View all clients <ArrowRight size={16} />
-          </a>
-        </div>
-        <div className="grove-hub">
-          <div className="hub-label">
-            <img
+          </Stack>
+          {!clients.length && (
+            <Typography color="text.secondary">
+              No clients registered.
+            </Typography>
+          )}
+          <Button
+            href="#clients"
+            endIcon={<ArrowRight size={16} />}
+            sx={{ alignSelf: "flex-start" }}
+          >
+            View all clients
+          </Button>
+        </Stack>
+        <Box className="grove-hub">
+          <Stack
+            className="hub-label"
+            spacing={1}
+            sx={{ alignItems: "center", bgcolor: "background.default", py: 2 }}
+          >
+            <Box
+              component="img"
               src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
               alt=""
+              sx={{ width: 64, height: 64 }}
             />
-            <Typography component="h2" variant="h6">
+            <Typography component="h3" variant="h6">
               Grove Storage
             </Typography>
-            <span className="muted">S3 gateway</span>
-            <p>
-              <span className={`dot ${ready ? "online" : ""}`} />
-              API {ready ? "ready" : "unavailable"}
-            </p>
-          </div>
-        </div>
-        <div className="connection-column">
-          <div className="section-heading">
-            <Typography component="h2" variant="h6">
+            <Typography variant="body2" color="text.secondary">
+              S3 gateway
+            </Typography>
+            <Chip
+              size="small"
+              color={ready ? "success" : "error"}
+              variant="outlined"
+              icon={ready ? <CircleCheck size={16} /> : <CircleX size={16} />}
+              label={`API ${ready ? "ready" : "unavailable"}`}
+            />
+          </Stack>
+        </Box>
+        <Stack className="connection-column" spacing={2}>
+          <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+            <Typography component="h3" variant="subtitle1">
               Storage
             </Typography>
-            <span className="muted">{storages.length}</span>
-          </div>
-          <div
-            className="connection-items"
+            <Typography color="text.secondary">{storages.length}</Typography>
+          </Stack>
+          <Stack
+            spacing={2}
             role="region"
             aria-label="Registered storage connections"
+            sx={{ flex: 1, justifyContent: "space-around" }}
           >
             {storageRows.visible.map((row) => (
-              <article
-                className={`connection-item ${row.storage_id === activeStorage ? "selected" : ""}`}
+              <Card
+                component="article"
+                variant="outlined"
                 key={row.storage_id}
                 data-connection={`storage:${row.storage_id}`}
                 data-side="storage"
                 data-selected={row.storage_id === activeStorage}
+                sx={{
+                  borderColor:
+                    row.storage_id === activeStorage
+                      ? "primary.main"
+                      : "divider",
+                }}
               >
-                <div className="connection-storage-heading">
-                  <ButtonBase
-                    component="a"
-                    href={storageLink(row.storage_id)}
-                    className="connection-select connection-title"
-                    aria-label={`Open storage ${row.storage_id}`}
-                    onMouseEnter={() => chooseStorage(row.storage_id)}
-                    onFocus={() => chooseStorage(row.storage_id)}
-                  >
-                    <HardDrive size={18} />
-                    <strong>{row.storage_id}</strong>
-                  </ButtonBase>
-                </div>
-                <p className="muted">{row.kind.toUpperCase()} · Configured</p>
-              </article>
+                <CardActionArea
+                  component="a"
+                  href={storageLink(row.storage_id)}
+                  aria-label={`Open storage ${row.storage_id}`}
+                  onMouseEnter={() => chooseStorage(row.storage_id)}
+                  onFocus={() => chooseStorage(row.storage_id)}
+                >
+                  <CardContent>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: "center" }}
+                    >
+                      <HardDrive size={18} />
+                      <Typography
+                        component="h4"
+                        variant="subtitle2"
+                        sx={{ overflowWrap: "anywhere" }}
+                      >
+                        {row.storage_id}
+                      </Typography>
+                    </Stack>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ my: 1 }}
+                    >
+                      {row.kind.toUpperCase()} ·{" "}
+                      {row.active_files.toLocaleString("en-US")} files
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      {bytes(row.active_bytes)} / {bytes(row.capacity_bytes)}{" "}
+                      configured
+                    </Typography>
+                    <LinearProgress
+                      aria-label={`${row.storage_id} allocation used`}
+                      variant="determinate"
+                      value={
+                        row.capacity_bytes > 0
+                          ? Math.min(
+                              100,
+                              (row.active_bytes / row.capacity_bytes) * 100,
+                            )
+                          : 0
+                      }
+                    />
+                  </CardContent>
+                </CardActionArea>
+              </Card>
             ))}
             {storageRows.hidden.length > 0 && (
-              <ButtonBase
-                type="submit"
-                className="connection-item connection-more"
+              <Card
+                variant="outlined"
                 data-connection="storage:more"
                 data-side="storage"
-                aria-label={`Show ${storageRows.hidden.length} more storage`}
-                aria-haspopup="dialog"
-                onClick={() => setBrowser("storage")}
               >
-                <strong>
-                  <Layers size={16} /> + {storageRows.hidden.length} storage
-                </strong>
-                <span>
-                  {hiddenStorage.files.toLocaleString("en-US")} files ·{" "}
-                  {bytes(hiddenStorage.bytes)} active
-                </span>
-                <span>{bytes(hiddenStorage.capacity)} registered capacity</span>
-              </ButtonBase>
+                <CardActionArea
+                  aria-label={`Show ${storageRows.hidden.length} more storage`}
+                  aria-haspopup="dialog"
+                  onClick={() => setBrowser("storage")}
+                >
+                  <CardContent>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: "center" }}
+                    >
+                      <Layers size={18} />
+                      <Typography variant="subtitle2">
+                        + {storageRows.hidden.length} storage
+                      </Typography>
+                    </Stack>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 1 }}
+                    >
+                      {hiddenStorage.files.toLocaleString("en-US")} files ·{" "}
+                      {bytes(hiddenStorage.bytes)} active
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {bytes(hiddenStorage.capacity)} configured capacity
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
             )}
-          </div>
-          {!storages.length && <p className="empty">No storage registered.</p>}
-        </div>
-      </section>
-      <div className="connection-selection" role="status">
+          </Stack>
+          {!storages.length && (
+            <Typography color="text.secondary">
+              No storage registered.
+            </Typography>
+          )}
+        </Stack>
+      </Box>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        role="status"
+        aria-label="Selected connection"
+      >
         {selectedClient
           ? assignment.isError
             ? "Storage assignment unavailable"
@@ -253,7 +408,7 @@ export function Connections({
               storages.some((row) => row.storage_id === activeStorage)
             ? activeStorage
             : "Configured connections · Storage connectivity not checked"}
-      </div>
+      </Typography>
       {browser && (
         <ConnectionBrowser
           kind={browser}
@@ -268,6 +423,6 @@ export function Connections({
           }}
         />
       )}
-    </>
+    </Stack>
   );
 }

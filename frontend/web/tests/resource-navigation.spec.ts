@@ -44,13 +44,23 @@ test("Overview highlights the registered assignment outside its first five stora
     }),
   );
   await page.goto("/api/admin/console/#");
-  await expect(page.locator(".connection-title")).toHaveCount(5);
+  await expect(
+    page
+      .getByRole("region", { name: "Registered storage connections" })
+      .getByRole("link"),
+  ).toHaveCount(5);
   await page.getByRole("link", { name: "Open client notegate" }).focus();
   await expect(
-    page.locator(".connection-item.selected .connection-title"),
+    page
+      .locator('[data-side="storage"][data-selected="true"]')
+      .getByRole("link"),
   ).toContainText("storage-7");
   await expect(page.getByRole("status")).toContainText("notegate → storage-7");
-  await expect(page.locator(".connection-title")).toHaveCount(5);
+  await expect(
+    page
+      .getByRole("region", { name: "Registered storage connections" })
+      .getByRole("link"),
+  ).toHaveCount(5);
   await intercept(page, "client.show", (r) =>
     r.fulfill({ status: 404, json: failure(404) }),
   );
@@ -59,6 +69,8 @@ test("Overview highlights the registered assignment outside its first five stora
     "Storage assignment unavailable",
   );
   await expect(
-    page.locator(".connection-item.selected .connection-title"),
+    page
+      .locator('[data-side="storage"][data-selected="true"]')
+      .getByRole("link"),
   ).toHaveCount(0);
 });

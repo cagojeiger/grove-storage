@@ -10,18 +10,24 @@ export async function resourceChecks(page, { origin }) {
     "console-client → console-live",
   );
   await expect(
-    page.locator(".connection-item.selected .connection-title"),
+    page
+      .locator('[data-side="storage"][data-selected="true"]')
+      .getByRole("link"),
   ).toContainText("console-live");
   await page
     .getByRole("link", { name: "View all clients", exact: true })
     .click();
   await expect(
-    page.getByRole("grid", { name: "Clients", exact: true }).getByRole("row").filter({ hasText: "console-client" }),
+    page
+      .getByRole("grid", { name: "Clients", exact: true })
+      .getByRole("row")
+      .filter({ hasText: "console-client" }),
   ).toContainText("console-live");
   await page.getByRole("combobox", { name: "Rows per page:" }).click();
   await page.getByRole("option", { name: "50", exact: true }).click();
   await page
-    .getByRole("grid", { name: "Clients", exact: true }).getByRole("link")
+    .getByRole("grid", { name: "Clients", exact: true })
+    .getByRole("link")
     .filter({ hasText: "console-client" })
     .click();
   await expect(
@@ -31,7 +37,9 @@ export async function resourceChecks(page, { origin }) {
     .locator("main")
     .getByRole("link", { name: "Clients", exact: true })
     .click();
-  await expect(page.getByRole("combobox", { name: "Rows per page:" })).toHaveText("50");
+  await expect(
+    page.getByRole("combobox", { name: "Rows per page:" }),
+  ).toHaveText("50");
   console.log(
     "PASS real Client-to-Storage overview, assigned storage and list return state",
   );
