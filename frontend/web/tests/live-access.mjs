@@ -63,7 +63,7 @@ export async function accessChecks(
   await page.getByRole("button", { name: "Disable", exact: true }).click();
   await page.getByLabel("Confirm account name").fill("Console test owner");
   await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Disable account", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: "Accounts", exact: true }).click();
@@ -71,7 +71,7 @@ export async function accessChecks(
   await page.getByLabel("Name", { exact: true }).fill("Recovery admin");
   await page.getByLabel("Username", { exact: true }).fill("recovery-admin");
   await page.getByLabel("Role", { exact: true }).selectOption("admin");
-  await page.getByLabel("Current password").fill(currentPassword);
+  await page.getByLabel("Your current password").fill(currentPassword);
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
@@ -86,7 +86,7 @@ export async function accessChecks(
   await page.getByLabel("Name", { exact: true }).fill("CLI backup");
   await page.getByLabel("Username", { exact: true }).fill("cli-backup");
   await page.getByLabel("Role", { exact: true }).selectOption("writer");
-  await page.getByLabel("Current password").fill(currentPassword);
+  await page.getByLabel("Your current password").fill(currentPassword);
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
@@ -141,7 +141,7 @@ export async function accessChecks(
     .getByRole("button", { name: "Delete account", exact: true })
     .click();
   await page.getByLabel("Confirm account name").fill("CLI backup");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true }).click();
   await expect(page.getByText("Deleted", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Overview", exact: true }).click();
   console.log(

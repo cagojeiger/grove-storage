@@ -16,7 +16,7 @@ test("create a User without Agent or owner fields", async ({ page }) => {
   await page.getByLabel("Name", { exact: true }).fill("Writer");
   await page.getByLabel("Username", { exact: true }).fill("writer");
   await page.getByLabel("Role", { exact: true }).selectOption("writer");
-  await page.getByLabel("Current password").fill("a private admin password");
+  await page.getByLabel("Your current password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await expect(page.getByRole("textbox", { name: "Setup link", exact: true })).toBeVisible();
   await page.getByLabel("I have saved this setup link.").check();
@@ -85,11 +85,11 @@ test("last Admin conflict remains visible; destructive change requires name", as
     .getByRole("button", { name: "Delete account", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Confirm", exact: true }),
+    page.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true }),
   ).toBeDisabled();
   await page.getByLabel("Confirm account name").fill(owner.display_name);
   await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
 });
 

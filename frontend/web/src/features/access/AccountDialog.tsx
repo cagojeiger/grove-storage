@@ -173,6 +173,7 @@ export function AccountDialog({
             {state.unknown ? "Close and review" : "Cancel"}
           </Button>
           <Button type="submit" variant="contained"
+            color={dangerous ? "error" : "primary"}
             className="primary"
             disabled={
               state.busy ||
@@ -182,7 +183,7 @@ export function AccountDialog({
               Boolean(dangerous && confirmation !== account?.display_name)
             }
           >
-            {state.busy ? "Saving..." : "Confirm"}
+            {state.busy ? "Saving..." : action === "name" ? "Save name" : title}
           </Button>
         </div>
       </form>

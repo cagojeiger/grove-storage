@@ -55,7 +55,7 @@ export function DeleteStorage({
     <Dialog title="Delete storage" busy={busy} onClose={onClose}>
       <form onSubmit={(event) => void remove(event)}>
         <p className="delete-summary">
-          Remove <strong>{id}</strong> from the registry. The bucket or filesystem
+          Remove <strong>{id}</strong> from the registry. The S3 bucket
           is retained.
         </p>
         <label className="confirmation">

@@ -105,6 +105,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                   Change role
                 </Button>
                 <Button type="submit"
+                  color={account.is_active ? "error" : "primary"}
                   disabled={Boolean(account.deleted_at)}
                   onClick={() => setAction("active")}
                 >
@@ -113,6 +114,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                 <IconButton type="submit"
                   className="icon-button"
                   title="Delete account"
+                  color="error"
                   aria-label="Delete account"
                   disabled={Boolean(account.deleted_at)}
                   onClick={() => setAction("delete")}

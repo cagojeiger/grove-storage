@@ -65,7 +65,7 @@ export function CreateUserDialog({ onClose, onCreated }: {
         <label>Role<Select name="role" aria-label="Role" defaultValue="reader">
           <option value="reader">Reader</option><option value="writer">Writer</option><option value="admin">Admin</option>
         </Select></label>
-        <label className="full-field">Current password<Input name="current_password" type="password" autoComplete="current-password" required /></label>
+        <label className="full-field">Your current password<Input name="current_password" type="password" autoComplete="current-password" required /></label>
       </fieldset>
       {error && <p role="alert" className="form-error">{error}</p>}
       <div className="dialog-actions">

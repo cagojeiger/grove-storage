@@ -33,7 +33,7 @@ test("creation opens the returned account even outside the loaded page", async (
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("New account");
   await page.getByLabel("Username", { exact: true }).fill("new.account");
-  await page.getByLabel("Current password").fill("a private admin password");
+  await page.getByLabel("Your current password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();

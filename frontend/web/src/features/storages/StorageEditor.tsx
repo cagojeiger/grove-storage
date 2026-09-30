@@ -1,6 +1,6 @@
 import { Button } from "@mui/material";
 import { Input, Select } from "../../design/Fields";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { ApiError } from "../../api/http";
@@ -26,6 +26,7 @@ export function StorageEditor({
   onSaved: (id: string) => void;
 }) {
   const cache = useQueryClient();
+  const formId = useId();
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -76,8 +77,17 @@ export function StorageEditor({
       title={storage ? "Edit storage" : "Register storage"}
       busy={busy}
       onClose={onClose}
+      actions={<>
+        <Button type="button" disabled={busy} onClick={onClose}>
+          {unknown ? "Close and review" : "Cancel"}
+        </Button>
+        <Button variant="contained" type="submit" form={formId} disabled={busy || unknown}>
+          <Save size={16} />
+          {busy ? "Saving..." : "Save"}
+        </Button>
+      </>}
     >
-      <form onSubmit={(event) => void save(event)} autoComplete="off">
+      <form id={formId} onSubmit={(event) => void save(event)} autoComplete="off">
         <fieldset disabled={busy || unknown} className="storage-form">
           <label>
             Storage ID
@@ -186,15 +196,6 @@ export function StorageEditor({
             {error}
           </p>
         )}
-        <div className="dialog-actions">
-          <Button type="button" disabled={busy} onClick={onClose}>
-            {unknown ? "Close and review" : "Cancel"}
-          </Button>
-          <Button variant="contained" className="primary" type="submit" disabled={busy || unknown}>
-            <Save size={16} />
-            {busy ? "Saving..." : "Save"}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );

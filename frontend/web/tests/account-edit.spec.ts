@@ -9,7 +9,7 @@ test("rename trims the label while preserving account identity", async ({ page }
   await page.goto(detail);
   await page.getByRole("button", { name: "Edit name", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(owner.display_name);
-  const confirm = page.getByRole("button", { name: "Confirm", exact: true });
+  const confirm = page.getByRole("dialog").getByRole("button", { name: "Save name", exact: true });
   await expect(confirm).toBeDisabled();
   await page.getByLabel("Name", { exact: true }).fill("   ");
   await expect(confirm).toBeDisabled();
@@ -29,7 +29,7 @@ test("self demotion requires acknowledgement and refreshes permissions", async (
   await page.goto(detail);
   await page.getByRole("button", { name: "Change role", exact: true }).click();
   await page.getByLabel("Role", { exact: true }).selectOption("reader");
-  const confirm = page.getByRole("button", { name: "Confirm", exact: true });
+  const confirm = page.getByRole("dialog").getByRole("button", { name: "Change role", exact: true });
   await expect(confirm).toBeDisabled();
   await page.getByRole("checkbox", { name: "I understand I will lose access to Accounts." }).check();
   await confirm.click();
@@ -43,7 +43,7 @@ for (const action of ["Disable", "Delete account"]) {
     await page.goto(detail);
     await page.getByRole("button", { name: action, exact: true }).click();
     await page.getByLabel("Confirm account name").fill(owner.display_name);
-    const confirm = page.getByRole("button", { name: "Confirm", exact: true });
+    const confirm = page.getByRole("dialog").getByRole("button", { name: action === "Disable" ? "Disable account" : action, exact: true });
     await expect(confirm).toBeDisabled();
     await page.getByRole("checkbox", { name: acknowledgement }).check();
     await confirm.click();
@@ -58,7 +58,7 @@ test("other account changes do not claim to end the current session", async ({ p
   await page.getByRole("button", { name: "Disable", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: acknowledgement })).toHaveCount(0);
   await page.getByLabel("Confirm account name").fill(otherUser.display_name);
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Disable account", exact: true }).click();
   await page.getByRole("button", { name: "Enable", exact: true }).click();
   await expect(page.getByText("Unexpired, unrevoked tokens become usable again. Previous sessions remain revoked.")).toBeVisible();
 });
@@ -74,9 +74,9 @@ test("unknown rename outcome blocks resubmission", async ({ page }) => {
   await page.goto(detail);
   await page.getByRole("button", { name: "Edit name", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Uncertain");
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("outcome is unknown");
-  await expect(page.getByRole("button", { name: "Confirm", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save name", exact: true })).toBeDisabled();
   expect(writes).toBe(1);
   expect(mock.accounts[0].display_name).toBe(owner.display_name);
 });

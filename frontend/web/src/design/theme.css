@@ -73,6 +73,7 @@ header {
 .account-menu-panel.MuiPaper-root { width: 240px; max-width: calc(100vw - 32px); padding: 6px; }
 .account-menu-panel .MuiListItemButton-root { width: 100%; color: var(--text); }
 .MuiButtonBase-root.event-row, .MuiButtonBase-root.account-row, .MuiButtonBase-root.connection-browser-row, .MuiButtonBase-root.client-row, .MuiButtonBase-root.registry-row { display: grid; text-align: left; }
+.MuiButtonBase-root:is(.event-row, .account-row, .client-row, .registry-row) { padding: 16px 12px; border-bottom: 1px solid var(--line); border-radius: 0; }
 .MuiButtonBase-root.event-row:hover, .MuiButtonBase-root.account-row:hover { background: var(--selected); }
 .MuiInputBase-root { min-width: 0; }
 .MuiInputBase-root input, .MuiInputBase-root select, .MuiInputBase-root textarea { font: inherit; }
