@@ -1,3 +1,5 @@
+import { IconButton, Button } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, Pencil, RefreshCw } from "lucide-react";
@@ -61,7 +63,7 @@ export function Sessions({ session }: { session: Session }) {
           <p className="eyebrow">MY ACCOUNT</p>
           <h1>My account</h1>
         </div>
-        <button
+        <IconButton type="submit"
           className="icon-button"
           title="Refresh sessions"
           aria-label="Refresh sessions"
@@ -69,13 +71,13 @@ export function Sessions({ session }: { session: Session }) {
           onClick={() => void query.refetch()}
         >
           <RefreshCw size={18} />
-        </button>
+        </IconButton>
       </div>
       {passwordSession && profile.isPending && <p role="status">Loading profile...</p>}
-      {passwordSession && profile.isError && <p role="alert">{message(profile.error)} <button onClick={() => void profile.refetch()}>Retry</button></p>}
+      {passwordSession && profile.isError && <p role="alert">{message(profile.error)} <Button type="submit" onClick={() => void profile.refetch()}>Retry</Button></p>}
       {profile.data && <div className="section-heading">
         <h2>{profile.data.display_name}</h2>
-        <button className="icon-button" title="Edit my name" aria-label="Edit my name" onClick={() => setEditing(true)}><Pencil size={16} /></button>
+        <IconButton type="submit" className="icon-button" title="Edit my name" aria-label="Edit my name" onClick={() => setEditing(true)}><Pencil size={16} /></IconButton>
       </div>}
       <dl className="detail-fields">
         {profile.data && <div><dt>Username</dt><dd>{profile.data.username}</dd></div>}
@@ -131,8 +133,9 @@ export function Sessions({ session }: { session: Session }) {
                       Expires {time(row.expires_at)}
                     </span>
                   </div>
-                  <button
+                  <IconButton type="submit"
                     className="icon-button danger"
+                    color="error"
                     title={
                       current
                         ? "Revoke current session"
@@ -147,18 +150,18 @@ export function Sessions({ session }: { session: Session }) {
                     onClick={() => setSelected(row)}
                   >
                     <LogOut size={17} />
-                  </button>
+                  </IconButton>
                 </div>
               );
             })}
             {!rows.length && <p className="empty">No sessions found.</p>}
             {query.hasNextPage && (
-              <button
+              <Button type="submit"
                 disabled={query.isFetching}
                 onClick={() => void query.fetchNextPage()}
               >
                 {query.isFetching ? "Loading..." : "Load more"}
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -200,12 +203,12 @@ function EditProfile({ account, onClose, onSaved }: {
       });
     }}>
       <fieldset className="storage-form" disabled={action.busy || action.unknown}>
-        <label className="full-field">Name<input value={name} onChange={event => setName(event.target.value)} required maxLength={80} /></label>
+        <label className="full-field">Name<Input value={name} onChange={event => setName(event.target.value)} required maxLength={80} /></label>
       </fieldset>
       {action.error && <p role="alert" className="form-error">{action.error}</p>}
       <div className="dialog-actions">
-        <button type="button" disabled={action.busy} onClick={onClose}>{action.unknown ? "Close and review" : "Cancel"}</button>
-        <button className="primary" disabled={action.busy || action.unknown || !name.trim() || name.trim() === account.display_name}>Save</button>
+        <Button type="button" disabled={action.busy} onClick={onClose}>{action.unknown ? "Close and review" : "Cancel"}</Button>
+        <Button type="submit" variant="contained" className="primary" disabled={action.busy || action.unknown || !name.trim() || name.trim() === account.display_name}>Save</Button>
       </div>
     </form>
   </Dialog>;
@@ -236,10 +239,10 @@ function RevokeSession({
       <code className="key-value">{row.id}</code>
       {action.error && <p role="alert">{action.error}</p>}
       <div className="dialog-actions">
-        <button disabled={action.busy} onClick={onClose}>
+        <Button type="submit" disabled={action.busy} onClick={onClose}>
           {action.unknown ? "Close and review" : "Cancel"}
-        </button>
-        <button
+        </Button>
+        <Button type="submit" color="error"
           className="danger"
           disabled={action.busy || action.unknown}
           onClick={() =>
@@ -254,7 +257,7 @@ function RevokeSession({
           }
         >
           {action.busy ? "Revoking..." : "Confirm revoke"}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );

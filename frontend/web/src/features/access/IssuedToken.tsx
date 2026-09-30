@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { useState } from "react";
 import { Copy } from "lucide-react";
 import { Issued } from "../../api/identity";
@@ -16,7 +18,7 @@ export function IssuedToken({
       <h2>Token issued</h2>
       <label>
         Token
-        <input
+        <Input
           aria-label="Issued token"
           readOnly
           value={value.token}
@@ -24,7 +26,7 @@ export function IssuedToken({
           spellCheck={false}
         />
       </label>
-      <button
+      <Button
         type="button"
         className="action-button"
         onClick={() => {
@@ -37,7 +39,7 @@ export function IssuedToken({
       >
         <Copy size={16} />
         Copy token
-      </button>
+      </Button>
       <p role="status">{notice}</p>
       <dl>
         <dt>Account ID</dt>
@@ -53,16 +55,16 @@ export function IssuedToken({
         <code>Authorization: Bearer &lt;token&gt;</code>
       </div>
       <label className="check-field">
-        <input
+        <Input
           type="checkbox"
           checked={saved}
           onChange={(e) => setSaved(e.target.checked)}
         />
         I have saved this token. It is shown only once.
       </label>
-      <button type="button" onClick={onDone} disabled={!saved}>
+      <Button type="button" onClick={onDone} disabled={!saved}>
         Done
-      </button>
+      </Button>
     </section>
   );
 }

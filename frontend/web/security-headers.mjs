@@ -1,10 +1,12 @@
-export function consoleHeaders(development = false) {
+export function consoleHeaders(development = false, nonce) {
   return {
     "Content-Security-Policy": [
       "default-src 'none'",
       `script-src 'self'${development ? " 'unsafe-inline'" : ""}`,
       "script-src-attr 'none'",
       `style-src 'self'${development ? " 'unsafe-inline'" : ""}`,
+      ...(nonce ? [`style-src-elem 'self' 'nonce-${nonce}'`] : []),
+      "style-src-attr 'none'",
       "img-src 'self'",
       "font-src 'self'",
       `connect-src 'self'${development ? " ws: wss:" : ""}`,

@@ -1,3 +1,5 @@
+import { IconButton, Button, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { FormEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -47,7 +49,7 @@ export function UsageHistory() {
           <p className="eyebrow">USAGE</p>
           <h1>Usage history</h1>
         </div>
-        <button
+        <IconButton type="submit"
           className="icon-button"
           title="Refresh usage history"
           aria-label="Refresh usage history"
@@ -55,12 +57,12 @@ export function UsageHistory() {
           onClick={() => void query.refetch()}
         >
           <RefreshCw size={18} />
-        </button>
+        </IconButton>
       </div>
       <form className="usage-range" onSubmit={apply}>
         <label>
           Days
-          <input
+          <Input
             name="days"
             type="number"
             min="1"
@@ -70,9 +72,9 @@ export function UsageHistory() {
             defaultValue={90}
           />
         </label>
-        <button type="submit" disabled={query.isFetching}>
+        <Button type="submit" disabled={query.isFetching}>
           Apply
-        </button>
+        </Button>
       </form>
       {query.isPending ? (
         <p role="status">Loading usage history...</p>
@@ -88,37 +90,37 @@ export function UsageHistory() {
             aria-label="Daily snapshots"
             tabIndex={0}
           >
-            <table>
+            <Table>
               <caption>Daily snapshots (UTC)</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">Storage</th>
-                  <th scope="col">Client</th>
-                  <th scope="col">Active files</th>
-                  <th scope="col">Active data</th>
-                </tr>
-              </thead>
-              <tbody>
+              <TableHead>
+                <TableRow>
+                  <TableCell scope="col">Date</TableCell>
+                  <TableCell scope="col">Storage</TableCell>
+                  <TableCell scope="col">Client</TableCell>
+                  <TableCell scope="col">Active files</TableCell>
+                  <TableCell scope="col">Active data</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {rows.slice(0, visible).map((row) => (
-                  <tr
+                  <TableRow
                     key={JSON.stringify([
                       row.day,
                       row.storage_id,
                       row.client_id,
                     ])}
                   >
-                    <td>
+                    <TableCell>
                       <time dateTime={row.day}>{row.day}</time>
-                    </td>
-                    <td>{row.storage_id}</td>
-                    <td>{row.client_id}</td>
-                    <td>{row.active_files.toLocaleString("en-US")}</td>
-                    <td>{bytes(row.active_bytes)}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell>{row.storage_id}</TableCell>
+                    <TableCell>{row.client_id}</TableCell>
+                    <TableCell>{row.active_files.toLocaleString("en-US")}</TableCell>
+                    <TableCell>{bytes(row.active_bytes)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           <div className="usage-count">
             <span className="muted">
@@ -126,9 +128,9 @@ export function UsageHistory() {
               {rows.length.toLocaleString("en-US")} snapshots
             </span>
             {visible < rows.length && (
-              <button onClick={() => setVisible(visible + 100)}>
+              <Button type="submit" onClick={() => setVisible(visible + 100)}>
                 Show more
-              </button>
+              </Button>
             )}
           </div>
         </>

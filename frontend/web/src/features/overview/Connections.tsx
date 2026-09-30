@@ -1,3 +1,4 @@
+import { ButtonBase } from "@mui/material";
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -115,7 +116,7 @@ export function Connections({
                   data-side="client"
                   data-selected={selectedClient === id}
                 >
-                  <button
+                  <ButtonBase type="submit"
                     className="connection-select"
                     aria-pressed={selectedClient === id}
                     aria-label={`Select client ${id}`}
@@ -125,7 +126,7 @@ export function Connections({
                   >
                     <AppWindow size={18} />
                     <strong>{id}</strong>
-                  </button>
+                  </ButtonBase>
                   <p className="connection-usage">
                     {summary ? (
                       <>
@@ -145,7 +146,7 @@ export function Connections({
               );
             })}
             {clientRows.hidden.length > 0 && (
-              <button
+              <ButtonBase type="submit"
                 className="connection-item connection-more"
                 data-connection="client:more"
                 data-side="client"
@@ -161,7 +162,7 @@ export function Connections({
                     ? `${hiddenClients.files.toLocaleString("en-US")} files · ${bytes(hiddenClients.bytes)}`
                     : "Usage unavailable"}
                 </span>
-              </button>
+              </ButtonBase>
             )}
           </div>
           {!clients.length && <p className="empty">No clients registered.</p>}
@@ -202,7 +203,7 @@ export function Connections({
                 data-selected={row.storage_id === activeStorage}
               >
                 <div className="connection-storage-heading">
-                  <button
+                  <ButtonBase type="submit"
                     className="connection-select connection-title"
                     aria-label={`Select storage ${row.storage_id}`}
                     aria-pressed={row.storage_id === activeStorage}
@@ -216,7 +217,7 @@ export function Connections({
                   >
                     <HardDrive size={18} />
                     <strong>{row.storage_id}</strong>
-                  </button>
+                  </ButtonBase>
                   <a
                     className="connection-open"
                     href={storageLink(row.storage_id)}
@@ -257,7 +258,7 @@ export function Connections({
               </article>
             ))}
             {storageRows.hidden.length > 0 && (
-              <button
+              <ButtonBase type="submit"
                 className="connection-item connection-more"
                 data-connection="storage:more"
                 data-side="storage"
@@ -273,7 +274,7 @@ export function Connections({
                   {bytes(hiddenStorage.bytes)} active
                 </span>
                 <span>{bytes(hiddenStorage.capacity)} registered capacity</span>
-              </button>
+              </ButtonBase>
             )}
           </div>
           {!storages.length && <p className="empty">No storage registered.</p>}

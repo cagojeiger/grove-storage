@@ -1,3 +1,5 @@
+import { Input, Select } from "../../design/Fields";
+import { Button } from "@mui/material";
 import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { identity, ApiError, message, request } from "../../api/http";
@@ -58,17 +60,17 @@ export function CreateUserDialog({ onClose, onCreated }: {
       void onCreated(issued.account_id);
     }} /> : <form onSubmit={(event) => { void submit(event); }}>
       <fieldset className="storage-form" disabled={pending || unknown}>
-        <label className="full-field">Name<input name="display_name" required maxLength={80} /></label>
-        <label>Username<input name="username" autoComplete="off" required minLength={3} maxLength={64} pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,63}" /></label>
-        <label>Role<select name="role" aria-label="Role" defaultValue="reader">
+        <label className="full-field">Name<Input name="display_name" required maxLength={80} /></label>
+        <label>Username<Input name="username" autoComplete="off" required minLength={3} maxLength={64} pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,63}" /></label>
+        <label>Role<Select name="role" aria-label="Role" defaultValue="reader">
           <option value="reader">Reader</option><option value="writer">Writer</option><option value="admin">Admin</option>
-        </select></label>
-        <label className="full-field">Current password<input name="current_password" type="password" autoComplete="current-password" required /></label>
+        </Select></label>
+        <label className="full-field">Current password<Input name="current_password" type="password" autoComplete="current-password" required /></label>
       </fieldset>
       {error && <p role="alert" className="form-error">{error}</p>}
       <div className="dialog-actions">
-        <button type="button" disabled={pending} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</button>
-        <button className="primary" disabled={pending || unknown}>{pending ? "Creating..." : "Create user"}</button>
+        <Button type="button" disabled={pending} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</Button>
+        <Button type="submit" variant="contained" className="primary" disabled={pending || unknown}>{pending ? "Creating..." : "Create user"}</Button>
       </div>
     </form>}
   </Dialog>;

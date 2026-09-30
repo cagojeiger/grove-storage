@@ -12,6 +12,11 @@ export default defineConfig(() => {
   return {
     base: "/api/admin/console/",
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: { manualChunks: (id) => id.includes("node_modules") ? "vendor" : undefined },
+      },
+    },
     server: {
       host: "127.0.0.1",
       port: 5173,

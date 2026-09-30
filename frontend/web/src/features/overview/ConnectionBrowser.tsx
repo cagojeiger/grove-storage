@@ -1,3 +1,5 @@
+import { ButtonBase, IconButton } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, AppWindow, HardDrive } from "lucide-react";
@@ -65,7 +67,7 @@ export function ConnectionBrowser({
               ? "Search hidden clients"
               : "Search hidden storage"}
           </span>
-          <input
+          <Input
             type="search"
             placeholder={
               kind === "client" ? "Search clients" : "Search storage"
@@ -89,7 +91,7 @@ export function ConnectionBrowser({
                 const summary = sumClients([id], totals);
                 const row = storages.find((row) => row.storage_id === id);
                 return (
-                  <button
+                  <ButtonBase type="submit"
                     className="connection-browser-row"
                     key={id}
                     onClick={() => onSelect(id)}
@@ -110,7 +112,7 @@ export function ConnectionBrowser({
                           ? `${row.active_files.toLocaleString("en-US")} files · ${bytes(row.active_bytes)} / ${bytes(row.capacity_bytes)}`
                           : "Usage unavailable"}
                     </span>
-                  </button>
+                  </ButtonBase>
                 );
               })}
             </section>
@@ -125,7 +127,7 @@ export function ConnectionBrowser({
             {ids.length ? (current - 1) * 20 + 1 : 0}–
             {Math.min(current * 20, ids.length)} of {ids.length}
           </span>
-          <button
+          <IconButton type="submit"
             className="icon-button"
             title="Previous page"
             aria-label="Previous page"
@@ -133,8 +135,8 @@ export function ConnectionBrowser({
             onClick={() => setPage(current - 1)}
           >
             <ChevronLeft size={16} />
-          </button>
-          <button
+          </IconButton>
+          <IconButton type="submit"
             className="icon-button"
             title="Next page"
             aria-label="Next page"
@@ -142,7 +144,7 @@ export function ConnectionBrowser({
             onClick={() => setPage(current + 1)}
           >
             <ChevronRight size={16} />
-          </button>
+          </IconButton>
         </div>
       </div>
     </Dialog>

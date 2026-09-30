@@ -1,3 +1,4 @@
+import { IconButton, Button, ButtonBase } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -80,7 +81,7 @@ export function Storages({
           <h1>{id || "Storage"}</h1>
         </div>
         <div className="page-actions">
-          <button
+          <IconButton type="submit"
             className="icon-button"
             title="Refresh"
             aria-label="Refresh"
@@ -88,11 +89,11 @@ export function Storages({
             onClick={() => void refreshStorages(cache)}
           >
             <RefreshCw size={17} className={refreshing ? "spin" : ""} />
-          </button>
+          </IconButton>
           {canWrite &&
             (id ? (
               <>
-                <button
+                <IconButton type="submit"
                   className="icon-button"
                   title="Edit storage"
                   aria-label="Edit storage"
@@ -102,25 +103,26 @@ export function Storages({
                   onClick={() => setDialog("edit")}
                 >
                   <Pencil size={17} />
-                </button>
-                <button
+                </IconButton>
+                <IconButton type="submit"
                   className="icon-button danger"
+                  color="error"
                   title="Delete storage"
                   aria-label="Delete storage"
                   disabled={!detail.data || current.isError}
                   onClick={() => setDialog("delete")}
                 >
                   <Trash2 size={17} />
-                </button>
+                </IconButton>
               </>
             ) : (
-              <button
+              <Button type="submit" variant="contained"
                 className="primary action-button"
                 onClick={() => setDialog("edit")}
               >
                 <Plus size={17} />
                 Register
-              </button>
+              </Button>
             ))}
         </div>
       </div>
@@ -175,7 +177,7 @@ export function Storages({
                 ? usage.data.find((row) => row.storage_id === storage.id)
                 : undefined;
               return (
-                <a
+                <ButtonBase component="a"
                   className="registry-row"
                   key={storage.id}
                   href={listing.href(storageLink(storage.id))}
@@ -232,7 +234,7 @@ export function Storages({
                     )}
                   </span>
                   <ChevronRight size={16} />
-                </a>
+                </ButtonBase>
               );
             })}
             {page.total === 0 && (

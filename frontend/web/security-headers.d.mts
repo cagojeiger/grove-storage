@@ -1,1 +1,1 @@
-export function consoleHeaders(development?: boolean): Record<string, string>;
+export function consoleHeaders(development?: boolean, nonce?: string): Record<string, string>;

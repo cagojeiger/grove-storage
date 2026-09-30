@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { FormEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -58,7 +60,7 @@ export function DeleteStorage({
         </p>
         <label className="confirmation">
           Storage ID to delete
-          <input
+          <Input
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
             disabled={busy || unknown}
@@ -71,21 +73,21 @@ export function DeleteStorage({
           </p>
         )}
         <div className="dialog-actions">
-          <button
+          <Button
             type="button"
             onClick={unknown ? onReturnToList : onClose}
             disabled={busy}
           >
             {unknown ? "Review list" : "Cancel"}
-          </button>
-          <button
+          </Button>
+          <Button color="error"
             type="submit"
             className="danger action-button"
             disabled={busy || unknown || confirmation !== id}
           >
             <Trash2 size={16} />
             {busy ? "Deleting..." : "Confirm delete"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

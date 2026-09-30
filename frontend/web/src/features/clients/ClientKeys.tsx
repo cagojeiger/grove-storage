@@ -1,3 +1,4 @@
+import { Button, IconButton } from "@mui/material";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
@@ -16,31 +17,32 @@ export function ClientKeys({ clientId }: { clientId: string }) {
     <section className="service-keys" aria-label="S3 credentials">
       <div className="section-heading">
         <h2>S3 Credentials</h2>
-        <button onClick={() => setAction({ kind: "s3-create" })}>
+        <Button type="submit" onClick={() => setAction({ kind: "s3-create" })}>
           <Plus size={16} />
           Create credential
-        </button>
+        </Button>
       </div>
       {query.isPending ? (
         <p role="status">Loading credentials...</p>
       ) : query.isError ? (
         <p role="alert">
           {message(query.error)}{" "}
-          <button onClick={() => void query.refetch()}>Retry</button>
+          <Button type="submit" onClick={() => void query.refetch()}>Retry</Button>
         </p>
       ) : (
         <>
           {query.data.map((key) => (
             <div className="service-key-row" key={key}>
               <code>{key}</code>
-              <button
+              <IconButton type="submit"
                 className="icon-button danger"
+                color="error"
                 title={`Revoke ${key}`}
                 aria-label={`Revoke ${key}`}
                 onClick={() => setAction({ kind: "s3-delete", key })}
               >
                 <Trash2 size={16} />
-              </button>
+              </IconButton>
             </div>
           ))}
           {!query.data.length && (

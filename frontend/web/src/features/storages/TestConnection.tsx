@@ -1,3 +1,4 @@
+import { Button } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { PlugZap } from "lucide-react";
 import { command } from "../../api/commands";
@@ -20,10 +21,10 @@ export function TestConnection({ id, revision, refreshing }: { id: string; revis
     <section className="storage-section" aria-label="Storage connection">
       <div className="section-heading">
         <h2>Connection</h2>
-        <button disabled={check.isFetching || refreshing} onClick={() => void check.refetch()}>
+        <Button type="submit" disabled={check.isFetching || refreshing} onClick={() => void check.refetch()}>
           <PlugZap size={17} />
           {check.isFetching ? "Testing..." : "Test connection"}
-        </button>
+        </Button>
       </div>
       {check.isFetching ? <p role="status">Checking bucket access...</p>
         : check.isError ? <p role="alert">{error}</p>

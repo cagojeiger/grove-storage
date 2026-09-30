@@ -1,3 +1,5 @@
+import { Input, Select } from "../../design/Fields";
+import { Button } from "@mui/material";
 import { FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog } from "../../design/Dialog";
@@ -62,7 +64,7 @@ export function ClientDialog({
               </p>
               <label className="full-field">
                 Client ID to delete
-                <input
+                <Input
                   autoComplete="off"
                   value={confirmation}
                   onChange={(e) => setConfirmation(e.target.value)}
@@ -74,7 +76,7 @@ export function ClientDialog({
             <>
               <label>
                 Client ID
-                <input
+                <Input
                   name="id"
                   pattern={idPattern}
                   maxLength={64}
@@ -84,7 +86,7 @@ export function ClientDialog({
               </label>
               <label>
                 Storage
-                <select
+                <Select
                   name="storage_id"
                   aria-label="Storage"
                   required
@@ -99,15 +101,15 @@ export function ClientDialog({
                       {s.id}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               {storages.isPending && <p role="status">Loading storage...</p>}
               {storages.isError && (
                 <p role="alert">
                   {message(storages.error)}{" "}
-                  <button type="button" onClick={() => void storages.refetch()}>
+                  <Button type="button" onClick={() => void storages.refetch()}>
                     Retry storage
-                  </button>
+                  </Button>
                 </p>
               )}
               {!storages.isPending && !storages.isError && !options.length && (
@@ -122,10 +124,12 @@ export function ClientDialog({
           </p>
         )}
         <div className="dialog-actions">
-          <button type="button" disabled={state.busy} onClick={onClose}>
+          <Button type="button" disabled={state.busy} onClick={onClose}>
             {state.unknown ? "Close and review" : "Cancel"}
-          </button>
-          <button
+          </Button>
+          <Button type="submit"
+            variant={id ? "outlined" : "contained"}
+            color={id ? "error" : "primary"}
             className={id ? "danger" : "primary"}
             disabled={
               state.busy ||
@@ -134,7 +138,7 @@ export function ClientDialog({
             }
           >
             {state.busy ? "Saving..." : id ? "Confirm delete" : "Create"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

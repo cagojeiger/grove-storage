@@ -1,3 +1,5 @@
+import { Button, IconButton } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { FormEvent, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Trash2 } from "lucide-react";
@@ -26,19 +28,19 @@ export function PersonalTokens({ session }: { session: Session & { principal: "u
   return <section className="storage-section" aria-label="My API tokens">
     <div className="section-heading">
       <h2>My API tokens</h2>
-      <button className="action-button" disabled={query.isError} onClick={() => setTarget("issue")}><KeyRound size={16} />Issue token</button>
+      <Button type="submit" className="action-button" disabled={query.isError} onClick={() => setTarget("issue")}><KeyRound size={16} />Issue token</Button>
     </div>
     {query.isPending ? <p role="status">Loading tokens...</p> : query.isError ?
-      <p role="alert">{message(query.error)} <button onClick={() => void query.refetch()}>Retry</button></p> : <>
+      <p role="alert">{message(query.error)} <Button type="submit" onClick={() => void query.refetch()}>Retry</Button></p> : <>
         {rows.map(token => <div className="token-row" key={token.id}>
           <div><strong>{token.label}</strong><p className="muted">{token.token_prefix}</p><p className="muted">{token.id}</p></div>
           <div><span>{token.revoked_at ? "Revoked" : Date.parse(token.expires_at) <= Date.now() ? "Expired" : "Active"}</span>
             <p className="muted">Expires {time(token.expires_at)}</p></div>
-          <button className="icon-button" title={`Revoke ${token.label}`} aria-label={`Revoke ${token.label}`}
-            disabled={Boolean(token.revoked_at)} onClick={() => setTarget(token)}><Trash2 size={16} /></button>
+          <IconButton type="submit" className="icon-button" title={`Revoke ${token.label}`} aria-label={`Revoke ${token.label}`}
+            disabled={Boolean(token.revoked_at)} onClick={() => setTarget(token)}><Trash2 size={16} /></IconButton>
         </div>)}
         {!rows.length && <p className="empty">No API tokens.</p>}
-        {query.hasNextPage && <button disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>Load more</button>}
+        {query.hasNextPage && <Button type="submit" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>Load more</Button>}
       </>}
     {target && <PersonalTokenDialog account={session.user_id} target={target} onClose={() => setTarget(null)}
       onSaved={async () => { await cache.invalidateQueries({ queryKey: ["me", "tokens", session.user_id] }); }} />}
@@ -100,18 +102,18 @@ function PersonalTokenDialog({ account, target, onClose, onSaved }: {
     {issued ? <IssuedToken value={issued} onDone={onClose} /> : <form onSubmit={(event) => { void submit(event); }}>
       <fieldset className="storage-form" disabled={busy || unknown}>
         {target === "issue" ? <>
-          <label>Label<input name="label" required maxLength={80} /></label>
-          <label>Expires in days<input name="days" type="number" min={1} max={90} defaultValue={90} required /></label>
-          <label className="full-field">Current password<input name="current_password" type="password" autoComplete="current-password" required /></label>
-        </> : <label className="check-field full-field"><input type="checkbox" checked={confirmed}
+          <label>Label<Input name="label" required maxLength={80} /></label>
+          <label>Expires in days<Input name="days" type="number" min={1} max={90} defaultValue={90} required /></label>
+          <label className="full-field">Current password<Input name="current_password" type="password" autoComplete="current-password" required /></label>
+        </> : <label className="check-field full-field"><Input type="checkbox" checked={confirmed}
           onChange={event => setConfirmed(event.target.checked)} />Revoke {target.label}</label>}
       </fieldset>
       {error && <p role="alert" className="form-error">{error}</p>}
       <div className="dialog-actions">
-        <button type="button" disabled={busy} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</button>
-        <button className="primary" disabled={busy || unknown || (target !== "issue" && !confirmed)}>
+        <Button type="button" disabled={busy} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</Button>
+        <Button type="submit" variant="contained" className="primary" disabled={busy || unknown || (target !== "issue" && !confirmed)}>
           {busy ? "Saving..." : target === "issue" ? "Issue" : "Revoke"}
-        </button>
+        </Button>
       </div>
     </form>}
   </Dialog>;

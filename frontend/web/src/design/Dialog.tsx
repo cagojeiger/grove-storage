@@ -1,4 +1,10 @@
-import { useEffect, useId, useRef, ReactNode } from "react";
+import { useId, ReactNode } from "react";
+import {
+  Dialog as MuiDialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+} from "@mui/material";
 import { X } from "lucide-react";
 
 export function Dialog({
@@ -14,30 +20,18 @@ export function Dialog({
   children: ReactNode;
   closeDisabled?: boolean;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const label = useId();
-  useEffect(() => {
-    const dialog = ref.current!;
-    const trigger = document.activeElement;
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      if (trigger instanceof HTMLElement && trigger.isConnected)
-        trigger.focus();
-    };
-  }, []);
   return (
-    <dialog
-      ref={ref}
+    <MuiDialog
+      open
       aria-labelledby={label}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy && !closeDisabled) onClose();
+      onClose={(_event, reason) => {
+        if (reason === "escapeKeyDown" && !busy && !closeDisabled) onClose();
       }}
     >
-      <div className="dialog-heading">
-        <h2 id={label}>{title}</h2>
-        <button
+      <DialogTitle>
+        <span id={label}>{title}</span>
+        <IconButton
           type="button"
           className="icon-button"
           aria-label="Close"
@@ -46,9 +40,9 @@ export function Dialog({
           onClick={onClose}
         >
           <X size={18} />
-        </button>
-      </div>
-      {children}
-    </dialog>
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>{children}</DialogContent>
+    </MuiDialog>
   );
 }

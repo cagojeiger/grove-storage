@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { Button, ListItemButton, Popover, Divider } from "@mui/material";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronUp, CircleUserRound, LogOut, LayoutDashboard, HardDrive, Shield, AppWindow, ScrollText, Settings } from "lucide-react";
 import { identity, ApiError, currentSession, message, request } from "../api/http";
@@ -89,39 +90,39 @@ export function App() {
       ) : session.isError ? (
         <main className="connection">
           <p role="alert">{message(session.error)}</p>
-          <button onClick={() => void session.refetch()}>Reconnect</button>
+          <Button type="submit" onClick={() => void session.refetch()}>Reconnect</Button>
         </main>
       ) : session.data ? (
         <div className="workspace">
           <aside aria-label="Workspace sidebar">
             <nav aria-label="Main navigation">
-              <a
+              <ListItemButton component="a"
                 href="#"
                 aria-current={!storagePage && !accessPage && !clientPage && !activityPage && !settingsPage ? "page" : undefined}
               >
                 <LayoutDashboard size={18} />
                 <span>Overview</span>
-              </a>
+              </ListItemButton>
               <p className="nav-group">Resources</p>
-              <a
+              <ListItemButton component="a"
                 href="#storages"
                 aria-current={storagePage ? "page" : undefined}
               >
                 <HardDrive size={18} />
                 <span>Storage</span>
-              </a>
-              <a href="#clients" aria-current={clientPage ? "page" : undefined}><AppWindow size={18} /><span>Clients</span></a>
+              </ListItemButton>
+              <ListItemButton component="a" href="#clients" aria-current={clientPage ? "page" : undefined}><AppWindow size={18} /><span>Clients</span></ListItemButton>
               <p className="nav-group">Management</p>
               {session.data.role === "admin" && (
-                <a
+                <ListItemButton component="a"
                   href="#accounts"
                   aria-current={accessPage ? "page" : undefined}
                 >
                   <Shield size={18} />
                   <span>Accounts</span>
-                </a>
+                </ListItemButton>
               )}
-              <a href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></a>
+              <ListItemButton component="a" href="#activity" aria-current={activityPage ? "page" : undefined}><ScrollText size={18} /><span>Activity</span></ListItemButton>
             </nav>
             <div className="sidebar-account">
               <span className="admin-label">{{ reader: "Reader · Read-only", writer: "Writer · Operations", admin: "Admin · Management" }[session.data.role]}</span>
@@ -187,32 +188,16 @@ function AccountMenu({ name, role, passwordSession, loggingOut, onLogout }: {
   loggingOut: boolean;
   onLogout: () => void;
 }) {
-  const menu = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    const closeOutside = (event: MouseEvent) => {
-      if (!menu.current?.contains(event.target as Node)) menu.current?.removeAttribute("open");
-    };
-    const closeEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && menu.current?.open) {
-        menu.current.open = false;
-        menu.current.querySelector("summary")?.focus();
-      }
-    };
-    document.addEventListener("mousedown", closeOutside);
-    document.addEventListener("keydown", closeEscape);
-    return () => {
-      document.removeEventListener("mousedown", closeOutside);
-      document.removeEventListener("keydown", closeEscape);
-    };
-  }, []);
-  const close = () => { if (menu.current) menu.current.open = false; };
-  return <details className="account-menu" ref={menu}>
-    <summary role="button" aria-label="Account menu"><CircleUserRound size={18} /><span>{name}</span><ChevronUp size={16} /></summary>
-    <div className="account-menu-panel">
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  const close = () => setAnchor(null);
+  return <div className="account-menu">
+    <Button variant="text" className="account-menu-trigger" aria-label="Account menu" aria-haspopup="dialog" aria-expanded={Boolean(anchor)} onClick={(event) => setAnchor(event.currentTarget)}><CircleUserRound size={18} /><span>{name}</span><ChevronUp size={16} /></Button>
+    <Popover open={Boolean(anchor)} anchorEl={anchor} onClose={close} anchorOrigin={{ vertical: "top", horizontal: "left" }} transformOrigin={{ vertical: "bottom", horizontal: "left" }} slotProps={{ paper: { className: "account-menu-panel", role: "dialog", "aria-label": "Account menu" } }}>
       <div className="account-menu-identity"><strong>{name}</strong><span>{role}</span></div>
-      <a href="#settings" onClick={close}><CircleUserRound size={16} />My account</a>
-      {passwordSession && <a href="#settings/security" onClick={close}><Settings size={16} />Security</a>}
-      <button type="button" onClick={() => { close(); onLogout(); }} disabled={loggingOut}><LogOut size={16} />Sign out</button>
-    </div>
-  </details>;
+      <Divider />
+      <ListItemButton component="a" href="#settings" onClick={close}><CircleUserRound size={16} />My account</ListItemButton>
+      {passwordSession && <ListItemButton component="a" href="#settings/security" onClick={close}><Settings size={16} />Security</ListItemButton>}
+      <ListItemButton component="button" onClick={() => { close(); onLogout(); }} disabled={loggingOut}><LogOut size={16} />Sign out</ListItemButton>
+    </Popover>
+  </div>;
 }

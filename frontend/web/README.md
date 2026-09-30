@@ -3,6 +3,20 @@
 The console uses English labels and messages, `lang="en"`, and `en-US` number
 formatting. The UI language is independent of the browser locale.
 
+## UI Foundation
+
+| Responsibility | Implementation |
+|---|---|
+| Color, type scale, density, light/dark mode | MUI theme in `src/design/ConsoleTheme.tsx` |
+| Font | Self-hosted Inter, bundled from `@fontsource/inter` |
+| Controls, dialogs, navigation, Activity tabs | MUI; existing Lucide icons |
+| Native form constraints and FormData | `src/design/Fields.tsx` forwards attributes to the actual input |
+| Responsive page grids and Overview topology | `src/design/theme.css` |
+
+Keep API queries, mutation guards and authorization separate from presentation.
+Add component defaults to the shared theme rather than styling each screen.
+React remains on 18.3.1; the `react-is` override matches it, as required by MUI.
+
 ## Browser Preview
 
 Run `npm run build` and `node scripts/preview.mjs` in this directory. The printed
@@ -107,8 +121,14 @@ For release hosting, use a dedicated HTTPS console host. Mount `dist` at
 different host: uploaded HTML running on the console origin could act with the
 administrator's cookies. This does not require a separate backend process.
 
-Apply the production defaults in `security-headers.mjs` to the HTML response at the
-static host. The built sample preview uses these headers. Vite development adds
+For each HTML response, generate a cryptographically random nonce, replace
+`__GROVE_CSP_NONCE__` in `dist/index.html`, and apply
+`consoleHeaders(false, nonce)` from `security-headers.mjs`. The same nonce authorizes
+only the MUI/Emotion style elements for that response; `style-src-attr 'none'`,
+script restrictions and `Cache-Control: no-store` remain in force. A plain static
+file server without this HTML/header integration is not a production console host.
+Serve bundled `.woff2`/`.woff` files with their font MIME types from the same origin.
+The built sample preview implements this response contract. Vite development adds
 inline scripts/styles and websockets for React refresh and HMR; use the default
 policy for release hosting. Configure HSTS at the production TLS terminator.
 The backend image and production ingress are not configured by this frontend.

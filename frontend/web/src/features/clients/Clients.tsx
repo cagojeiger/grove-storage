@@ -1,3 +1,4 @@
+import { IconButton, Button } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -67,7 +68,7 @@ export function Clients({
           <h1>{id || "Clients"}</h1>
         </div>
         <div className="page-actions">
-          <button
+          <IconButton type="submit"
             className="icon-button"
             title="Refresh clients"
             aria-label="Refresh clients"
@@ -75,23 +76,24 @@ export function Clients({
             onClick={() => void refreshClients(cache)}
           >
             <RefreshCw size={18} />
-          </button>
+          </IconButton>
           {canWrite &&
             (id ? (
-              <button
+              <IconButton type="submit"
                 className="icon-button danger"
+                color="error"
                 title="Delete client"
                 aria-label="Delete client"
                 disabled={!detail.data || current.isError}
                 onClick={() => setDialog(true)}
               >
                 <Trash2 size={18} />
-              </button>
+              </IconButton>
             ) : (
-              <button className="primary" onClick={() => setDialog(true)}>
+              <Button type="submit" variant="contained" className="primary" onClick={() => setDialog(true)}>
                 <Plus size={18} />
                 Create client
-              </button>
+              </Button>
             ))}
         </div>
       </div>

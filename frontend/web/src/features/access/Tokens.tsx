@@ -1,3 +1,5 @@
+import { Button, IconButton } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Trash2 } from "lucide-react";
@@ -38,7 +40,7 @@ export function Tokens({ account }: { account: Account }) {
     <section className="storage-section" aria-label="Management tokens">
       <div className="section-heading">
         <h2>Management tokens</h2>
-        <button
+        <Button type="submit"
           className="action-button"
           disabled={
             !account.is_active || Boolean(account.deleted_at) || query.isError
@@ -47,14 +49,14 @@ export function Tokens({ account }: { account: Account }) {
         >
           <KeyRound size={16} />
           Issue token
-        </button>
+        </Button>
       </div>
       {query.isPending ? (
         <p role="status">Loading tokens...</p>
       ) : query.isError ? (
         <p role="alert">
           {message(query.error)}{" "}
-          <button onClick={() => void query.refetch()}>Retry</button>
+          <Button type="submit" onClick={() => void query.refetch()}>Retry</Button>
         </p>
       ) : (
         <>
@@ -80,7 +82,7 @@ export function Tokens({ account }: { account: Account }) {
                     Expires {new Date(token.expires_at).toLocaleString("en-US")}
                   </p>
                 </div>
-                <button
+                <IconButton type="submit"
                   className="icon-button"
                   title={`Revoke ${token.label}`}
                   aria-label={`Revoke ${token.label}`}
@@ -88,19 +90,19 @@ export function Tokens({ account }: { account: Account }) {
                   onClick={() => setDialog(token)}
                 >
                   <Trash2 size={16} />
-                </button>
+                </IconButton>
               </div>
             ))}
           {!query.data.pages.some((p) => p.items.length) && (
             <p className="empty">No tokens.</p>
           )}
           {query.hasNextPage && (
-            <button
+            <Button type="submit"
               disabled={query.isFetchingNextPage}
               onClick={() => void query.fetchNextPage()}
             >
               Load more tokens
-            </button>
+            </Button>
           )}
         </>
       )}
@@ -192,11 +194,11 @@ function TokenDialog({
               <>
                 <label>
                   Label
-                  <input name="label" required maxLength={80} />
+                  <Input name="label" required maxLength={80} />
                 </label>
                 <label>
                   Expires in days
-                  <input
+                  <Input
                     name="days"
                     type="number"
                     min={1}
@@ -208,7 +210,7 @@ function TokenDialog({
               </>
             ) : (
               <label className="check-field full-field">
-                <input
+                <Input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
@@ -223,10 +225,10 @@ function TokenDialog({
             </p>
           )}
           <div className="dialog-actions">
-            <button type="button" disabled={state.busy} onClick={onClose}>
+            <Button type="button" disabled={state.busy} onClick={onClose}>
               {state.unknown ? "Close and review" : "Cancel"}
-            </button>
-            <button
+            </Button>
+            <Button type="submit" variant="contained"
               className="primary"
               disabled={
                 state.busy ||
@@ -239,7 +241,7 @@ function TokenDialog({
                 : target === "issue"
                   ? "Issue"
                   : "Revoke"}
-            </button>
+            </Button>
           </div>
         </form>
       )}

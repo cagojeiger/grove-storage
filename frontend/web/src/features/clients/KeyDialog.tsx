@@ -1,3 +1,5 @@
+import { Input } from "../../design/Fields";
+import { Button } from "@mui/material";
 import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
@@ -64,13 +66,13 @@ export function KeyDialog({
           {issued.map((item) => (
             <label key={item.name}>
               {item.name}
-              <input
+              <Input
                 readOnly
                 value={item.value}
                 autoComplete="off"
                 spellCheck={false}
               />
-              <button
+              <Button
                 type="button"
                 className="icon-button"
                 title={`Copy ${item.name}`}
@@ -85,21 +87,21 @@ export function KeyDialog({
                 }}
               >
                 <Copy size={16} />
-              </button>
+              </Button>
             </label>
           ))}
           {copyError && <p role="alert">{copyError}</p>}
           <label className="check-field">
-            <input
+            <Input
               type="checkbox"
               checked={saved}
               onChange={(e) => setSaved(e.target.checked)}
             />
             I have saved these keys. Secrets are shown only once.
           </label>
-          <button className="primary" disabled={!saved} onClick={onClose}>
+          <Button type="submit" variant="contained" className="primary" disabled={!saved} onClick={onClose}>
             Done
-          </button>
+          </Button>
         </div>
       ) : (
         <form onSubmit={(e) => void submit(e)}>
@@ -115,7 +117,7 @@ export function KeyDialog({
                 <p className="full-field key-value">{action.key}</p>
                 <label className="full-field">
                   Client ID to confirm
-                  <input
+                  <Input
                     autoComplete="off"
                     required
                     value={confirmation}
@@ -131,10 +133,10 @@ export function KeyDialog({
             </p>
           )}
           <div className="dialog-actions">
-            <button type="button" disabled={state.busy} onClick={onClose}>
+            <Button type="button" disabled={state.busy} onClick={onClose}>
               {state.unknown ? "Close and review" : "Cancel"}
-            </button>
-            <button
+            </Button>
+            <Button type="submit"
               className={deleting ? "danger" : "primary"}
               disabled={
                 state.busy ||
@@ -143,7 +145,7 @@ export function KeyDialog({
               }
             >
               {state.busy ? "Saving..." : "Confirm"}
-            </button>
+            </Button>
           </div>
         </form>
       )}

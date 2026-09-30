@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { previewIdentity } from "./preview-identity.mjs";
@@ -155,13 +155,20 @@ async function response(req, res) {
   const file = resolve(dist, relative);
   if (!file.startsWith(dist + sep)) return json(res, 404, {});
   try {
-    const body = await readFile(file);
+    let body = await readFile(file);
+    if (relative === "index.html") {
+      const nonce = randomBytes(24).toString("base64");
+      body = Buffer.from(body.toString().replace("__GROVE_CSP_NONCE__", nonce));
+      for (const [name, value] of Object.entries(consoleHeaders(false, nonce))) res.setHeader(name, value);
+    }
     const type = file.endsWith(".js")
       ? "text/javascript"
       : file.endsWith(".css")
         ? "text/css"
         : file.endsWith(".png")
           ? "image/png"
+          : file.endsWith(".woff2") ? "font/woff2"
+          : file.endsWith(".woff") ? "font/woff"
           : "text/html";
     res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
     res.end(body);

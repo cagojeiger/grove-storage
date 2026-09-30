@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
@@ -47,16 +49,16 @@ export function PasswordChange() {
       <h2 id="password-heading">Password</h2>
       <form className="account-password-form" onSubmit={(event) => { void submit(event); }}>
         <label htmlFor="current-password">Current password</label>
-        <input id="current-password" name="current_password" type="password" autoComplete="current-password" required disabled={pending} />
+        <Input id="current-password" name="current_password" type="password" autoComplete="current-password" required disabled={pending} />
         <label htmlFor="new-password">New password</label>
-        <input id="new-password" name="new_password" type="password" autoComplete="new-password" minLength={15} maxLength={128} required disabled={pending} />
+        <Input id="new-password" name="new_password" type="password" autoComplete="new-password" minLength={15} maxLength={128} required disabled={pending} />
         <label htmlFor="confirm-password">Confirm new password</label>
-        <input id="confirm-password" name="confirmation" type="password" autoComplete="new-password" minLength={15} maxLength={128} required disabled={pending} />
+        <Input id="confirm-password" name="confirmation" type="password" autoComplete="new-password" minLength={15} maxLength={128} required disabled={pending} />
         {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={pending}>
+        <Button variant="contained" type="submit" disabled={pending}>
           <KeyRound size={16} aria-hidden="true" />
           {pending ? "Changing password" : "Change password"}
-        </button>
+        </Button>
       </form>
     </section>
   );

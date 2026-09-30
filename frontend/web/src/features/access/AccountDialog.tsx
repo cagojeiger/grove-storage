@@ -1,3 +1,5 @@
+import { Input, Select } from "../../design/Fields";
+import { Button } from "@mui/material";
 import { FormEvent, useState } from "react";
 import {
   Account,
@@ -86,7 +88,7 @@ export function AccountDialog({
           {action === "name" ? (
             <label className="full-field">
               Name
-              <input
+              <Input
                 name="display_name"
                 required
                 maxLength={80}
@@ -100,7 +102,7 @@ export function AccountDialog({
           {action === "role" && (
             <label>
               Role
-              <select
+              <Select
                 name="role"
                 aria-label="Role"
                 value={role}
@@ -112,7 +114,7 @@ export function AccountDialog({
                 <option value="reader">Reader</option>
                 <option value="writer">Writer</option>
                 <option value="admin">Admin</option>
-              </select>
+              </Select>
             </label>
           )}
           {action === "delete" && (
@@ -133,7 +135,7 @@ export function AccountDialog({
           )}
           {selfImpact && (
             <label className="full-field check-field account-confirmation">
-              <input
+              <Input
                 type="checkbox"
                 checked={acknowledged}
                 onChange={(e) => setAcknowledged(e.target.checked)}
@@ -152,7 +154,7 @@ export function AccountDialog({
           {dangerous && (
             <label className="full-field">
               Confirm account name
-              <input
+              <Input
                 value={confirmation}
                 onChange={(e) => setConfirmation(e.target.value)}
                 autoComplete="off"
@@ -167,10 +169,10 @@ export function AccountDialog({
           </p>
         )}
         <div className="dialog-actions">
-          <button type="button" disabled={state.busy} onClick={onClose}>
+          <Button type="button" disabled={state.busy} onClick={onClose}>
             {state.unknown ? "Close and review" : "Cancel"}
-          </button>
-          <button
+          </Button>
+          <Button type="submit" variant="contained"
             className="primary"
             disabled={
               state.busy ||
@@ -181,7 +183,7 @@ export function AccountDialog({
             }
           >
             {state.busy ? "Saving..." : "Confirm"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

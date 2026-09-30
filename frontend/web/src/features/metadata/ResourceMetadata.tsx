@@ -1,3 +1,5 @@
+import { IconButton, Button } from "@mui/material";
+import { Textarea } from "../../design/Fields";
 import { FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, RefreshCw, Save } from "lucide-react";
@@ -27,8 +29,8 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
     <dt className="metadata-heading">
       <span>Metadata</span>
       <div className="page-actions">
-        <button className="icon-button" title="Refresh metadata" aria-label="Refresh metadata" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw size={18} /></button>
-        {canWrite && <button className="icon-button" title="Edit metadata" aria-label="Edit metadata" disabled={!query.data || query.isError || query.isFetching} onClick={() => setEditing(true)}><Pencil size={18} /></button>}
+        <IconButton type="submit" className="icon-button" title="Refresh metadata" aria-label="Refresh metadata" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw size={18} /></IconButton>
+        {canWrite && <IconButton type="submit" className="icon-button" title="Edit metadata" aria-label="Edit metadata" disabled={!query.data || query.isError || query.isFetching} onClick={() => setEditing(true)}><Pencil size={18} /></IconButton>}
       </div>
     </dt>
     <dd>
@@ -62,12 +64,12 @@ function MetadataEditor({ resource, id, value, onClose }: Omit<Props, "canWrite"
     <form onSubmit={(event) => void save(event)}>
       <label className="metadata-field">
         Metadata JSON
-        <textarea value={text} onChange={(event) => setText(event.target.value)} rows={12} spellCheck={false} autoComplete="off" disabled={state.busy || state.unknown} />
+        <Textarea value={text} onChange={(event) => setText(event.target.value)} rows={12} spellCheck={false} autoComplete="off" disabled={state.busy || state.unknown} />
       </label>
       {(validation || state.error) && <p role="alert">{validation || state.error}</p>}
       <div className="dialog-actions">
-        <button type="button" disabled={state.busy} onClick={onClose}>{state.unknown ? "Close and review" : "Cancel"}</button>
-        <button className="primary" type="submit" disabled={state.busy || state.unknown}><Save size={16} />{state.busy ? "Saving..." : "Save"}</button>
+        <Button type="button" disabled={state.busy} onClick={onClose}>{state.unknown ? "Close and review" : "Cancel"}</Button>
+        <Button variant="contained" className="primary" type="submit" disabled={state.busy || state.unknown}><Save size={16} />{state.busy ? "Saving..." : "Save"}</Button>
       </div>
     </form>
   </Dialog>;

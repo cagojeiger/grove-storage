@@ -53,7 +53,7 @@ try {
       (await fetch("/api/admin/identity/v1/session", { method: "DELETE" })).status,
   );
   assert.equal(csrf, 403);
-  await page.locator('summary[aria-label="Account menu"]').click();
+  await page.locator('button[aria-label="Account menu"]').click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.getByLabel("Password", { exact: true }).waitFor();
   assert(
@@ -174,7 +174,7 @@ try {
     await recipient.getByRole("button", { name: "Sign in", exact: true }).click();
     await recipient.getByText("Reader · Read-only").waitFor();
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
-    await recipient.locator('summary[aria-label="Account menu"]').click();
+    await recipient.locator('button[aria-label="Account menu"]').click();
     await recipient.getByRole("link", { name: "My account" }).click();
     await recipient.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();
     await recipient.getByLabel("Label", { exact: true }).fill("Reader CLI");

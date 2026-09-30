@@ -1,3 +1,4 @@
+import { IconButton, Button } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -55,7 +56,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
           <p className="eyebrow">ADMINISTRATION</p>
           <h1>Accounts</h1>
         </div>
-        <button
+        <IconButton type="submit"
           className="icon-button"
           title="Refresh accounts"
           aria-label="Refresh accounts"
@@ -63,30 +64,30 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
           onClick={() => void refresh()}
         >
           <RefreshCw size={18} />
-        </button>
+        </IconButton>
       </div>
       {!selected ? <AccountsList onCreate={() => setCreating(true)} /> : current.isPending ? (
         <p role="status">Loading accounts...</p>
       ) : current.isError ? (
         <p role="alert">
           {current.error instanceof ApiError && current.error.status === 404 ? "Account unavailable." : message(current.error)}{" "}
-          <button onClick={() => void current.refetch()}>Retry</button>
+          <Button type="submit" onClick={() => void current.refetch()}>Retry</Button>
           <a href={listing.href("#accounts")}>Back to accounts</a>
         </p>
       ) : selected ? (
         account ? (
           <>
-            <button className="back-link" onClick={() => { window.location.hash = listing.href("#accounts"); }}>
+            <Button type="button" variant="text" className="back-link" onClick={() => { window.location.hash = listing.href("#accounts"); }}>
               <ArrowLeft size={16} />
               Accounts
-            </button>
+            </Button>
             <div className="section-heading">
               <h2>{account.display_name}</h2>
               <div className="page-actions">
                 <a className="icon-button" href={activityLink(account.id)} title="View account actions" aria-label="View account actions">
                   <History size={16} />
                 </a>
-                <button
+                <IconButton type="submit"
                   className="icon-button"
                   title="Edit name"
                   aria-label="Edit name"
@@ -94,22 +95,22 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                   onClick={() => setAction("name")}
                 >
                   <Pencil size={16} />
-                </button>
-                <button
+                </IconButton>
+                <Button type="submit"
                   className="action-button"
                   disabled={Boolean(account.deleted_at)}
                   onClick={() => setAction("role")}
                 >
                   <Shield size={16} />
                   Change role
-                </button>
-                <button
+                </Button>
+                <Button type="submit"
                   disabled={Boolean(account.deleted_at)}
                   onClick={() => setAction("active")}
                 >
                   {account.is_active ? "Disable" : "Enable"}
-                </button>
-                <button
+                </Button>
+                <IconButton type="submit"
                   className="icon-button"
                   title="Delete account"
                   aria-label="Delete account"
@@ -117,7 +118,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
                   onClick={() => setAction("delete")}
                 >
                   <Trash2 size={16} />
-                </button>
+                </IconButton>
               </div>
             </div>
             <dl className="detail-fields">
@@ -152,7 +153,7 @@ export function Access({ route, currentUserId }: { route: string; currentUserId?
         ) : (
           <p>
             Account unavailable.{" "}
-            <button onClick={() => { window.location.hash = listing.href("#accounts"); }}>Back to accounts</button>
+            <Button type="submit" onClick={() => { window.location.hash = listing.href("#accounts"); }}>Back to accounts</Button>
           </p>
         )
       ) : null}

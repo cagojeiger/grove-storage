@@ -1,3 +1,4 @@
+import { IconButton } from "@mui/material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, History } from "lucide-react";
 import { message, request, Usage } from "../../api/http";
@@ -44,7 +45,7 @@ export function Overview() {
             <History size={16} />
             Usage history
           </a>
-          <button
+          <IconButton type="submit"
             className="icon-button"
             title="Refresh"
             aria-label="Refresh"
@@ -55,7 +56,7 @@ export function Overview() {
             }}
           >
             <RefreshCw size={18} className={query.isFetching ? "spin" : ""} />
-          </button>
+          </IconButton>
         </div>
       </div>
       {query.isPending ? (

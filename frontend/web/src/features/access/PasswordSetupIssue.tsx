@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { FormEvent, useState } from "react";
 import { Copy, Link2 } from "lucide-react";
 import { identity, ApiError, message, request } from "../../api/http";
@@ -19,9 +21,9 @@ export function PasswordSetupIssue({ account }: { account: Account }) {
     <section className="storage-section" aria-label="Password setup">
       <div className="section-heading">
         <h2>Password setup</h2>
-        <button className="action-button" disabled={!account.is_active || Boolean(account.deleted_at)} onClick={() => setOpen(true)}>
+        <Button type="submit" className="action-button" disabled={!account.is_active || Boolean(account.deleted_at)} onClick={() => setOpen(true)}>
           <Link2 size={16} aria-hidden="true" />Issue setup link
-        </button>
+        </Button>
       </div>
       {open && <SetupDialog account={account} onClose={() => setOpen(false)} />}
     </section>
@@ -35,15 +37,15 @@ export function IssuedSetupLink({ issued, onDone }: { issued: IssuedSetup; onDon
   return <div className="storage-form">
     <p>Share this link privately with {issued.username}. It is shown once and expires in 24 hours.</p>
     <label className="full-field">Setup link
-      <input aria-label="Setup link" value={link} readOnly onFocus={(event) => event.currentTarget.select()} />
+      <Input aria-label="Setup link" value={link} readOnly onFocus={(event) => event.currentTarget.select()} />
     </label>
-    <button type="button" onClick={() => {
+    <Button type="button" onClick={() => {
       if (!navigator.clipboard) { setCopyError("Copy unavailable. Select the link manually."); return; }
       void navigator.clipboard.writeText(link).catch(() => setCopyError("Copy failed. Select the link manually."));
-    }}><Copy size={16} aria-hidden="true" />Copy link</button>
+    }}><Copy size={16} aria-hidden="true" />Copy link</Button>
     {copyError && <p role="alert">{copyError}</p>}
-    <label className="check-field full-field"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />I have saved this setup link.</label>
-    <div className="dialog-actions"><button className="primary" disabled={!acknowledged} onClick={onDone}>Done</button></div>
+    <label className="check-field full-field"><Input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />I have saved this setup link.</label>
+    <div className="dialog-actions"><Button type="submit" variant="contained" className="primary" disabled={!acknowledged} onClick={onDone}>Done</Button></div>
   </div>;
 }
 
@@ -90,13 +92,13 @@ function SetupDialog({ account, onClose }: { account: Account; onClose: () => vo
       ) : (
         <form onSubmit={(event) => { void submit(event); }}>
           <fieldset className="storage-form" disabled={pending || unknown}>
-            <label>Username<input name="username" autoComplete="off" required minLength={3} maxLength={64} pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,63}" /></label>
-            <label>Current password<input name="current_password" type="password" autoComplete="current-password" required /></label>
+            <label>Username<Input name="username" autoComplete="off" required minLength={3} maxLength={64} pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,63}" /></label>
+            <label>Current password<Input name="current_password" type="password" autoComplete="current-password" required /></label>
           </fieldset>
           {error && <p role="alert" className="form-error">{error}</p>}
           <div className="dialog-actions">
-            <button type="button" disabled={pending} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</button>
-            <button className="primary" disabled={pending || unknown}>{pending ? "Issuing..." : "Issue link"}</button>
+            <Button type="button" disabled={pending} onClick={onClose}>{unknown ? "Close and review" : "Cancel"}</Button>
+            <Button type="submit" variant="contained" className="primary" disabled={pending || unknown}>{pending ? "Issuing..." : "Issue link"}</Button>
           </div>
         </form>
       )}

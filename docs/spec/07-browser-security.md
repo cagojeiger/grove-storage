@@ -60,13 +60,15 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 
 ## 문서 응답 헤더
 
-정본은 [security-headers.mjs](../../frontend/web/security-headers.mjs)의 기본 정책이다.
+정본은 [security-headers.mjs](../../frontend/web/security-headers.mjs)의 `consoleHeaders(false, nonce)` 정책이다.
+HTML 응답마다 암호학적 난수 nonce를 발급하고 `index.html`의 `__GROVE_CSP_NONCE__`를 교체한다.
+MUI/Emotion은 같은 nonce로 style 요소를 삽입한다. nonce 없는 inline style/script는 차단한다.
 `scripts/preview.mjs`는 빌드 화면에 이 정책을 적용한다. Vite 개발 모드는 React refresh·
 스타일 삽입·HMR용 inline script/style 및 websocket을 추가 허용한다. 운영은 기본 정책을 쓴다.
 
 | 헤더 | 기본 정책 |
 |---|---|
-| Content-Security-Policy | default none; script/style/img/font/connect self; base none; form self; frame-ancestors none |
+| Content-Security-Policy | default none; script/style/img/font/connect self; style-src-elem self + 응답별 nonce; style-src-attr none; base none; form self; frame-ancestors none |
 | X-Frame-Options | DENY |
 | X-Content-Type-Options | nosniff |
 | Referrer-Policy | no-referrer |

@@ -1,36 +1,15 @@
-import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { Select } from "./Fields";
+import { useThemePreference } from "./ConsoleTheme";
 
 type Theme = "system" | "light" | "dark";
 export function ThemePicker() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const saved = localStorage.getItem("grove-theme");
-      return saved === "light" || saved === "dark" ? saved : "system";
-    } catch {
-      return "system";
-    }
-  });
-  useEffect(() => {
-    const media = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      document.documentElement.dataset.theme =
-        theme === "system" ? (media.matches ? "dark" : "light") : theme;
-    };
-    apply();
-    media.addEventListener("change", apply);
-    try {
-      localStorage.setItem("grove-theme", theme);
-    } catch {
-      /* Preferences may be disabled. */
-    }
-    return () => media.removeEventListener("change", apply);
-  }, [theme]);
+  const { mode: theme, setMode: setTheme } = useThemePreference();
   const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
   return (
     <label className="theme">
       <Icon size={16} aria-hidden="true" />
-      <select
+      <Select
         aria-label="Theme"
         value={theme}
         onChange={(event) => setTheme(event.target.value as Theme)}
@@ -38,7 +17,7 @@ export function ThemePicker() {
         <option value="system">System</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
-      </select>
+      </Select>
     </label>
   );
 }

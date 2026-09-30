@@ -89,7 +89,7 @@ test("login clears token; logout removes overview", async ({ page }) => {
       JSON.stringify({ ...localStorage, ...sessionStorage }),
     ),
   ).not.toContain("test-token");
-  await page.locator('summary[aria-label="Account menu"]').click();
+  await page.locator('button[aria-label="Account menu"]').click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
@@ -164,6 +164,7 @@ for (const width of [320, 768, 1440]) {
       expect(panel!.y).toBeGreaterThanOrEqual(64);
       expect(panel!.y + panel!.height).toBeLessThanOrEqual(600);
       await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+      await expect(page.locator(".account-menu-panel")).toHaveCSS("opacity", "1");
       await page.screenshot({ path: `test-results/sidebar-account-${width}-${theme}.png` });
       await page.keyboard.press("Escape");
       await expect(menu).toBeFocused();
@@ -292,7 +293,7 @@ test("empty, API failure, retry, and logout failure", async ({ page }) => {
   await page.route("**/session", (route) =>
     route.fulfill({ status: 500, json: {} }),
   );
-  await page.locator('summary[aria-label="Account menu"]').click();
+  await page.locator('button[aria-label="Account menu"]').click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(

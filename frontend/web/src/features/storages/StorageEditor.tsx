@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input, Select } from "../../design/Fields";
 import { FormEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
@@ -79,7 +81,7 @@ export function StorageEditor({
         <fieldset disabled={busy || unknown} className="storage-form">
           <label>
             Storage ID
-            <input
+            <Input
               name="id"
               required
               pattern={idPattern}
@@ -91,7 +93,7 @@ export function StorageEditor({
           </label>
           <label className="full-field">
             Endpoint
-            <input
+            <Input
               key="endpoint"
               name="endpoint"
               type="url"
@@ -103,7 +105,7 @@ export function StorageEditor({
           </label>
           <label className="full-field">
             Public endpoint (optional)
-            <input
+            <Input
               name="public_endpoint"
               type="url"
               defaultValue={storage?.public_endpoint ?? ""}
@@ -112,7 +114,7 @@ export function StorageEditor({
           </label>
           <label>
             Region
-            <input
+            <Input
               name="region"
               required
               defaultValue={storage?.region ?? "us-east-1"}
@@ -120,7 +122,7 @@ export function StorageEditor({
           </label>
           <label>
             Bucket
-            <input
+            <Input
               name="bucket"
               required
               defaultValue={storage?.bucket ?? ""}
@@ -129,7 +131,7 @@ export function StorageEditor({
           </label>
           <label className="full-field">
             Access key
-            <input
+            <Input
               name="access_key"
               required
               defaultValue={storage?.access_key ?? ""}
@@ -138,7 +140,7 @@ export function StorageEditor({
           </label>
           <label className="full-field">
             {storage ? "Secret key (re-enter)" : "Secret key"}
-            <input
+            <Input
               name="secret_key"
               type="password"
               required
@@ -146,7 +148,7 @@ export function StorageEditor({
             />
           </label>
           <label className="check-field">
-            <input
+            <Input
               name="force_path_style"
               type="checkbox"
               defaultChecked={storage?.force_path_style}
@@ -154,7 +156,7 @@ export function StorageEditor({
             Path-style
           </label>
           <label className="check-field">
-            <input
+            <Input
               name="force_relay"
               type="checkbox"
               defaultChecked={storage?.force_relay}
@@ -164,18 +166,18 @@ export function StorageEditor({
           <label className="full-field">
             Registered capacity
             <div className="capacity-input">
-              <input
+              <Input
                 name="capacity"
                 aria-label="Registered capacity"
                 inputMode="decimal"
                 required
                 defaultValue={storage?.capacity_bytes ?? "0"}
               />
-              <select name="unit" aria-label="Capacity unit" defaultValue="B">
+              <Select name="unit" aria-label="Capacity unit" defaultValue="B">
                 <option>B</option>
                 <option>GiB</option>
                 <option>TiB</option>
-              </select>
+              </Select>
             </div>
           </label>
         </fieldset>
@@ -185,13 +187,13 @@ export function StorageEditor({
           </p>
         )}
         <div className="dialog-actions">
-          <button type="button" disabled={busy} onClick={onClose}>
+          <Button type="button" disabled={busy} onClick={onClose}>
             {unknown ? "Close and review" : "Cancel"}
-          </button>
-          <button className="primary" type="submit" disabled={busy || unknown}>
+          </Button>
+          <Button variant="contained" className="primary" type="submit" disabled={busy || unknown}>
             <Save size={16} />
             {busy ? "Saving..." : "Save"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

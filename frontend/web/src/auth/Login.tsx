@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input } from "../design/Fields";
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { identity, ApiError, currentSession, message, request, Session } from "../api/http";
@@ -47,7 +49,7 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       <h2>Sign in</h2>
       <form onSubmit={(event) => { void submit(event); }}>
         <label htmlFor="username">Username</label>
-        <input
+        <Input
           id="username"
           autoComplete="username"
           spellCheck={false}
@@ -57,7 +59,7 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           disabled={pending}
         />
         <label htmlFor="password">Password</label>
-        <input
+        <Input
           id="password"
           type="password"
           autoComplete="current-password"
@@ -68,14 +70,14 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           disabled={pending}
         />
         {error && <p role="alert">{error}</p>}
-        <button
+        <Button variant="contained"
           className="primary"
           type="submit"
           disabled={pending || !username.trim() || !password || wait > 0}
         >
           {pending ? "Signing in" : wait ? `Retry in ${wait}s` : "Sign in"}
           <ArrowRight size={16} aria-hidden="true" />
-        </button>
+        </Button>
       </form>
       <p className="muted">Lost access? Contact the server operator for account recovery.</p>
     </main>

@@ -1,4 +1,5 @@
 import { useQueries } from "@tanstack/react-query";
+import { ButtonBase } from "@mui/material";
 import { ChevronRight } from "lucide-react";
 import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
@@ -32,7 +33,7 @@ export function ClientRows({
       {ids.map((id, i) => {
         const summary = usage ? totals(usage, id) : undefined;
         return (
-          <a className="client-row" key={id} href={href(clientLink(id))}>
+          <ButtonBase component="a" className="client-row" key={id} href={href(clientLink(id))}>
             <strong>{id}</strong>
             <span>
               <span className="mobile-label">Storage</span>
@@ -51,7 +52,7 @@ export function ClientRows({
               {summary ? bytes(summary.bytes) : "Unavailable"}
             </span>
             <ChevronRight size={16} />
-          </a>
+          </ButtonBase>
         );
       })}
     </div>

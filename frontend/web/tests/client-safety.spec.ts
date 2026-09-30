@@ -28,6 +28,7 @@ test("conflicting deletion retains the client and presents the reference guard",
   await page.getByLabel("Client ID to delete").fill("notegate");
   await page.getByRole("button", { name: "Confirm delete" }).click();
   await expect(page.getByRole("alert")).toContainText("pending cleanup");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("heading", { name: "notegate" })).toBeVisible();
 });
 

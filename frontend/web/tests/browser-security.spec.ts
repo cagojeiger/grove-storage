@@ -5,6 +5,9 @@ const root = "http://127.0.0.1:5180/api/admin/console/";
 test("built console loads with restrictive browser headers", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error" && /Content Security Policy|Refused to apply|Refused to load/.test(message.text())) errors.push(message.text());
+  });
   const response = await page.goto(root);
   const headers = response?.headers();
   expect(headers?.["content-security-policy"]).not.toContain("unsafe-inline");
@@ -23,7 +26,41 @@ test("built console loads with restrictive browser headers", async ({ page }) =>
   await page.getByRole("link", { name: "Storage", exact: true }).click();
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".MuiDialog-paper")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   expect(errors).toEqual([]);
+});
+
+test("built MUI styles use a fresh nonce and fonts stay same-origin", async ({ page, request }) => {
+  const response = await page.goto(root);
+  const nonce = await page.locator('meta[name="csp-nonce"]').getAttribute("content");
+  expect(nonce).toMatch(/^[A-Za-z0-9+/]{32}$/);
+  expect(response?.headers()["content-security-policy"]).toContain(`style-src-elem 'self' 'nonce-${nonce}'`);
+  expect(response?.headers()["content-security-policy"]).toContain("style-src-attr 'none'");
+  await expect(page.locator('style[data-emotion]').first()).toBeAttached();
+  const nonces = await page.locator('style[data-emotion]').evaluateAll(styles => styles.map(style => (style as HTMLStyleElement).nonce));
+  expect(nonces.length).toBeGreaterThan(0);
+  expect(nonces.every(value => value === nonce)).toBe(true);
+  await page.evaluate(() => document.fonts.ready);
+  expect(await page.evaluate(() => [...document.fonts].some(font => font.family === "Inter" && font.status === "loaded"))).toBe(true);
+  const fonts = await page.evaluate(() => performance.getEntriesByType("resource").filter(entry => /\.woff2?$/.test(entry.name)).map(entry => entry.name));
+  expect(fonts.length).toBeGreaterThan(0);
+  for (const font of fonts) expect(new URL(font).origin).toBe(new URL(root).origin);
+  const second = await request.get(root);
+  expect(second.headers()["content-security-policy"]).not.toContain(`nonce-${nonce}`);
+});
+
+test("built console rejects styles without its nonce", async ({ page }) => {
+  await page.goto(root);
+  await page.evaluate(() => {
+    document.addEventListener("securitypolicyviolation", event => {
+      document.documentElement.dataset.blockedDirective = event.effectiveDirective;
+    }, { once: true });
+    const style = document.createElement("style");
+    style.textContent = "body { --injected-style: yes; }";
+    document.head.append(style);
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-blocked-directive", "style-src-elem");
+  expect(await page.evaluate(() => getComputedStyle(document.body).getPropertyValue("--injected-style"))).toBe("");
 });
 
 test("built console blocks injected inline scripts", async ({ page }) => {

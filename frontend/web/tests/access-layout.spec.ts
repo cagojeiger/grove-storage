@@ -34,7 +34,7 @@ for (const width of [320, 390, 768, 1024, 1440])
       await expect(page.getByLabel("Expires in days")).toBeVisible();
       expect(
         await page
-          .locator("dialog")
+          .getByRole("dialog")
           .evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
     });

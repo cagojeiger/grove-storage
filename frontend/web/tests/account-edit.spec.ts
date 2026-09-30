@@ -96,7 +96,7 @@ for (const width of [320, 768, 1440]) for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Delete account", exact: true }).click();
     await expect(page.getByRole("checkbox", { name: acknowledgement })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    expect(await page.locator("dialog").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await page.getByRole("dialog").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: `test-results/account-confirm-${width}-${theme}.png`, fullPage: true });
   });
 }

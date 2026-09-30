@@ -73,7 +73,7 @@ test("pending issuance cannot double-submit and clears the secret after close", 
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel("Label", { exact: true }).fill("One request");
-  await page.locator("dialog form").evaluate((form) => {
+  await page.getByRole("dialog").locator("form").evaluate((form) => {
     form.dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
     );

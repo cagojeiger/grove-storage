@@ -40,13 +40,13 @@ test("activity tabs, bigint cursor and details preserve actor and token attribut
   expect(cursors.filter((cursor) => cursor !== null)).toEqual([context.id]);
   expect(cursors[0]).toBeNull();
   await page
-    .getByRole("link", { name: "Command history", exact: true })
+    .getByRole("tab", { name: "Command history", exact: true })
     .click();
   await page.getByRole("button", { name: /storage.test/ }).click();
   await expect(page.getByRole("dialog")).toContainText("Duration (ms)");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
-    .getByRole("link", { name: "Security events", exact: true })
+    .getByRole("tab", { name: "Security events", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: /permission_denied/ }),
@@ -65,10 +65,10 @@ for (const role of ["reader", "writer"])
     await page.goto("/api/admin/console/#activity/security");
     await expect(page.getByRole("alert")).toHaveText("Admin access required.");
     await expect(
-      page.getByRole("link", { name: "Security events" }),
+      page.getByRole("tab", { name: "Security events" }),
     ).toHaveCount(0);
     expect(requests).toBe(0);
-    await page.getByRole("link", { name: "Audit log" }).click();
+    await page.getByRole("tab", { name: "Audit log" }).click();
     await expect(page.getByText("MY ACTIVITY", { exact: true })).toBeVisible();
   });
 

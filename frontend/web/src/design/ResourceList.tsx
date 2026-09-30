@@ -1,3 +1,5 @@
+import { IconButton, Button } from "@mui/material";
+import { Input, Select } from "./Fields";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ResourceListState } from "../app/resourceList";
 
@@ -12,7 +14,7 @@ export function ListToolbar({
     <div className="list-toolbar resource-toolbar">
       <label>
         <span className="sr-only">{label}</span>
-        <input
+        <Input
           type="search"
           placeholder={label}
           value={state.search}
@@ -21,14 +23,14 @@ export function ListToolbar({
       </label>
       <label className="sort-control">
         Sort
-        <select
+        <Select
           aria-label="Sort"
           value={state.sort}
           onChange={(e) => state.update({ sort: e.target.value })}
         >
           <option value="asc">Name A–Z</option>
           <option value="desc">Name Z–A</option>
-        </select>
+        </Select>
       </label>
     </div>
   );
@@ -56,7 +58,7 @@ export function Pagination({
     <div className="pagination">
       <label>
         Rows
-        <select
+        <Select
           aria-label="Rows per page"
           value={state.size}
           onChange={(e) => state.update({ size: Number(e.target.value) })}
@@ -64,14 +66,14 @@ export function Pagination({
           {[20, 50, 100].map((size) => (
             <option key={size}>{size}</option>
           ))}
-        </select>
+        </Select>
       </label>
       <span className="muted" role="status">
         {total ? (page - 1) * state.size + 1 : 0}–
         {Math.min(page * state.size, total)} of {total.toLocaleString("en-US")}
       </span>
       <nav aria-label="Pagination">
-        <button
+        <IconButton type="submit"
           className="icon-button"
           title="Previous page"
           aria-label="Previous page"
@@ -79,22 +81,22 @@ export function Pagination({
           onClick={() => state.update({ page: page - 1 })}
         >
           <ChevronLeft size={16} />
-        </button>
+        </IconButton>
         {visible.map((n, i) => (
           <span className="page-number" key={n}>
             {i > 0 && n - visible[i - 1] > 1 && (
               <span aria-hidden="true">…</span>
             )}
-            <button
+            <Button type="submit"
               aria-label={`Page ${n}`}
               aria-current={page === n ? "page" : undefined}
               onClick={() => state.update({ page: n })}
             >
               {n}
-            </button>
+            </Button>
           </span>
         ))}
-        <button
+        <IconButton type="submit"
           className="icon-button"
           title="Next page"
           aria-label="Next page"
@@ -102,7 +104,7 @@ export function Pagination({
           onClick={() => state.update({ page: page + 1 })}
         >
           <ChevronRight size={16} />
-        </button>
+        </IconButton>
       </nav>
     </div>
   );

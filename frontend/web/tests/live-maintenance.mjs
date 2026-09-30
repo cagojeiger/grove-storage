@@ -18,7 +18,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await expect(page.getByRole("dialog")).toContainText("Request ID");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
-    .getByRole("link", { name: "Command history", exact: true })
+    .getByRole("tab", { name: "Command history", exact: true })
     .click();
   await page
     .getByRole("button", { name: /storage.test/ })
@@ -27,7 +27,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await expect(page.getByRole("dialog")).toContainText("Duration (ms)");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
-    .getByRole("link", { name: "Security events", exact: true })
+    .getByRole("tab", { name: "Security events", exact: true })
     .click();
   await expect(page.locator(".event-row").first()).toBeVisible();
 

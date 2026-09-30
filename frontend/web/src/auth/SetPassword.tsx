@@ -1,3 +1,5 @@
+import { Button } from "@mui/material";
+import { Input } from "../design/Fields";
 import { FormEvent, useEffect, useState } from "react";
 import { identity, ApiError, message, request } from "../api/http";
 import { field } from "../api/identity";
@@ -94,13 +96,13 @@ export function SetPassword() {
       {status === "ready" && info && (
         <form onSubmit={(event) => { void submit(event); }}>
           <label htmlFor="setup-username">Username</label>
-          <input id="setup-username" value={info.username} readOnly autoComplete="username" />
+          <Input id="setup-username" value={info.username} readOnly autoComplete="username" />
           <label htmlFor="setup-password">New password</label>
-          <input id="setup-password" name="password" type="password" minLength={15} maxLength={128} autoComplete="new-password" required disabled={pending} />
+          <Input id="setup-password" name="password" type="password" minLength={15} maxLength={128} autoComplete="new-password" required disabled={pending} />
           <label htmlFor="setup-confirmation">Confirm password</label>
-          <input id="setup-confirmation" name="confirmation" type="password" minLength={15} maxLength={128} autoComplete="new-password" required disabled={pending} />
+          <Input id="setup-confirmation" name="confirmation" type="password" minLength={15} maxLength={128} autoComplete="new-password" required disabled={pending} />
           {error && <p role="alert">{error}</p>}
-          <button className="primary" type="submit" disabled={pending}>{pending ? "Setting password" : "Set password"}</button>
+          <Button variant="contained" className="primary" type="submit" disabled={pending}>{pending ? "Setting password" : "Set password"}</Button>
         </form>
       )}
       {(status === "complete" || status === "unavailable") && <a href="#">Sign in</a>}

@@ -12,7 +12,7 @@ async function signIn(page: import("@playwright/test").Page) {
   await page.getByLabel("Username").fill("owner");
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.locator('summary[aria-label="Account menu"]').click();
+  await page.locator('button[aria-label="Account menu"]').click();
   await page.getByRole("link", { name: "My account" }).click();
   await expect(page.getByRole("heading", { name: "My API tokens" })).toBeVisible();
 }
@@ -35,7 +35,7 @@ test("password user manages only own API tokens", async ({ page }) => {
   await page.getByRole("dialog").getByLabel("Current password").fill("wrong password");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Current password is incorrect");
-  await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My account", includeHidden: true })).toBeAttached();
   await page.getByLabel("Label", { exact: true }).fill("Laptop CLI");
   await page.getByLabel("Expires in days").fill("7");
   await page.getByRole("dialog").getByLabel("Current password").fill(password);

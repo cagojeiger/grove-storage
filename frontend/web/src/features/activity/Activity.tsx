@@ -1,3 +1,5 @@
+import { IconButton, Button, ButtonBase, Tabs, Tab } from "@mui/material";
+import { Input } from "../../design/Fields";
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ListFilter, RefreshCw } from "lucide-react";
@@ -59,7 +61,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           <p className="eyebrow">{admin ? "INSTALLATION" : "MY ACTIVITY"}</p>
           <h1>Activity</h1>
         </div>
-        <button
+        <IconButton type="submit"
           className="icon-button"
           aria-label="Refresh activity"
           title="Refresh activity"
@@ -70,35 +72,18 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           }}
         >
           <RefreshCw size={18} />
-        </button>
+        </IconButton>
       </div>
-      <nav className="view-tabs" aria-label="Activity views">
-        <a
-          href={`#activity${suffix}`}
-          aria-current={stream === "audit" ? "page" : undefined}
-        >
-          Audit log
-        </a>
-        <a
-          href={`#activity/invocations${suffix}`}
-          aria-current={stream === "invocations" ? "page" : undefined}
-        >
-          Command history
-        </a>
-        {admin && (
-          <a
-            href={`#activity/security${suffix}`}
-            aria-current={stream === "security" ? "page" : undefined}
-          >
-            Security events
-          </a>
-        )}
-      </nav>
+      <Tabs value={denied ? false : stream} variant="scrollable" scrollButtons="auto" aria-label="Activity views">
+        <Tab component="a" value="audit" href={`#activity${suffix}`} label="Audit log" />
+        <Tab component="a" value="invocations" href={`#activity/invocations${suffix}`} label="Command history" />
+        {admin && <Tab component="a" value="security" href={`#activity/security${suffix}`} label="Security events" />}
+      </Tabs>
       {!denied && (rows.length > 0 || params.size > 0 || query.isPending || query.isError) &&
         <div className="activity-toolbar">
-          <button type="button" aria-expanded={filtersOpen} aria-controls="activity-filters" onClick={() => setFiltersOpen(!filtersOpen)}>
+          <Button type="button" aria-expanded={filtersOpen} aria-controls="activity-filters" onClick={() => setFiltersOpen(!filtersOpen)}>
             <ListFilter size={16} />Filters{params.size > 0 ? ` (${params.size})` : ""}
-          </button>
+          </Button>
           {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}
         </div>}
       {!denied && (
@@ -113,12 +98,12 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           window.location.hash = `${path}${next.size ? `?${next}` : ""}`;
         }}>
           <label>Actor account ID
-            <input name="account_id" defaultValue={params.get("account_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
+            <Input name="account_id" defaultValue={params.get("account_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
           </label>
           <label>Used token ID
-            <input name="credential_id" defaultValue={params.get("credential_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
+            <Input name="credential_id" defaultValue={params.get("credential_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
           </label>
-          <button type="submit">Apply</button>
+          <Button type="submit">Apply</Button>
         </form>
       )}
       {denied ? (
@@ -133,7 +118,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         <>
           <div className="event-list">
             {rows.map((event) => (
-              <button
+              <ButtonBase type="submit"
                 className="event-row"
                 key={event.context.id}
                 onClick={() => setSelected(event)}
@@ -150,17 +135,17 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                   <span className="muted">{event.context.surface}</span>
                 </span>
                 <ChevronRight size={16} />
-              </button>
+              </ButtonBase>
             ))}
           </div>
           {!rows.length && <p className="empty">{params.size > 0 ? "No activity matches these filters." : "No activity recorded yet."}</p>}
           {query.hasNextPage && (
-            <button
+            <Button type="submit"
               disabled={query.isFetching}
               onClick={() => void query.fetchNextPage()}
             >
               {query.isFetching ? "Loading..." : "Load more"}
-            </button>
+            </Button>
           )}
         </>
       )}

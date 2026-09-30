@@ -58,7 +58,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
       return response.status;
     });
     assert.equal(blocked, 403);
-    await page.locator('summary[aria-label="Account menu"]').click();
+    await page.locator('button[aria-label="Account menu"]').click();
     await page.getByRole("button", { name: "Sign out" }).click();
     await loginWithPassword(page, "console-writer", writerPassword);
     await expect(page.getByText("Reader · Read-only")).toBeVisible();
@@ -69,7 +69,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     assert(!JSON.stringify(audit).includes(credential.token));
     await page.goto(`${origin}/api/admin/console/#activity`);
     await expect(page.getByText("MY ACTIVITY", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Security events", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Security events", exact: true })).toHaveCount(0);
     const scoped = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/audit?limit=100")).json()));
     assert(scoped.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
     const calls = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/invocations?limit=100")).json()));
