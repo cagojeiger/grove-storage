@@ -86,7 +86,7 @@ test("demotion and forbidden history responses remove installation event details
   );
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Refresh activity" }).click();
-  await expect(page.getByText("Reader · Read-only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
   await expect(
     page.getByRole("button", { name: /permission_denied/ }),
   ).toHaveCount(0);

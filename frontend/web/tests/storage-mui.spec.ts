@@ -42,17 +42,14 @@ for (const mode of ["light", "dark"]) {
         .getByRole("link", { name: "Storage", exact: true })
         .last()
         .click();
-      const table = page.getByRole("table", { name: "Storage", exact: true });
+      const table = page.getByRole("grid", { name: "Storage", exact: true });
       await expect(
         table.getByRole("link", { name: "home-archive" }),
       ).toBeVisible();
       expect(
         await table.evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
-      const row = table.locator("tbody tr").first();
-      await expect(
-        row.getByText(width < 600 ? "/ 1 TiB" : "1 TiB", { exact: true }),
-      ).toBeVisible();
+      if (width >= 600) await expect(table.getByRole("gridcell", { name: "1 TiB", exact: true })).toBeVisible();
       await page.screenshot({
         path: `test-results/storage-mui-list-${width}-${mode}.png`,
         fullPage: true,

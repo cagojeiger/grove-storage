@@ -2,13 +2,11 @@ import type { ReactNode } from "react";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
+import { cspNonce } from "../app/csp";
 
-const nonce = document.querySelector<HTMLMetaElement>(
-  'meta[name="csp-nonce"]',
-)?.content;
 const cache = createCache({
   key: "grove",
-  nonce: nonce === "__GROVE_CSP_NONCE__" ? undefined : nonce,
+  nonce: cspNonce,
 });
 
 const theme = createTheme({

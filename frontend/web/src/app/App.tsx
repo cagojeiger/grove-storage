@@ -1,5 +1,5 @@
 import { Alert, Button, Container, Stack, Typography } from "@mui/material";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   identity,
@@ -11,17 +11,26 @@ import {
 import { identityRequest, isAccount } from "../api/identity";
 import { Login } from "../auth/Login";
 import { SetPassword } from "../auth/SetPassword";
-import { ConsoleLayout } from "./ConsoleLayout";
+import { Shell } from "./Shell";
 import { Overview } from "../features/overview/Overview";
-import { Storages } from "../features/storages/Storages";
 import { clearSession } from "../auth/session";
 import { useRoute } from "./navigation";
 import { Access } from "../features/access/Access";
-import { Clients } from "../features/clients/Clients";
 import { Activity } from "../features/activity/Activity";
 import { Sessions } from "../features/settings/Sessions";
 import { Security } from "../features/settings/Security";
 import { UsageHistory } from "../features/overview/UsageHistory";
+
+const Storages = lazy(() =>
+  import("../features/storages/Storages").then((module) => ({
+    default: module.Storages,
+  })),
+);
+const Clients = lazy(() =>
+  import("../features/clients/Clients").then((module) => ({
+    default: module.Clients,
+  })),
+);
 
 export function App() {
   const cache = useQueryClient();
@@ -77,7 +86,7 @@ export function App() {
     }
   }
   return (
-    <ConsoleLayout
+    <Shell
       session={route === "set-password" ? null : session.data}
       route={route}
       name={profile.data?.display_name ?? "Account"}
@@ -102,53 +111,64 @@ export function App() {
       ) : session.data ? (
         <>
           {logoutError && <Alert severity="error">{logoutError}</Alert>}
-          {accessPage ? (
-            session.data.role === "admin" ? (
-              <Access
-                key={`${route}:${session.data.session_id}`}
-                route={route}
-                currentUserId={session.data.user_id}
-              />
-            ) : (
-              <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
-                <Alert severity="error">Admin access required.</Alert>
+          <Suspense
+            fallback={
+              <Container component="main" sx={{ py: 3 }}>
+                <Typography role="status">Loading page...</Typography>
               </Container>
-            )
-          ) : activityPage ? (
-            <Activity
-              key={`${fullRoute}:${session.data.role}:${session.data.session_id}`}
-              route={fullRoute}
-              admin={session.data.role === "admin"}
-            />
-          ) : settingsPage ? (
-            route === "settings/security" ? (
-              session.data.credential_id === null ? (
-                <Security />
+            }
+          >
+            {accessPage ? (
+              session.data.role === "admin" ? (
+                <Access
+                  key={`${route}:${session.data.session_id}`}
+                  route={route}
+                  currentUserId={session.data.user_id}
+                />
               ) : (
                 <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
-                  <Alert severity="error">Password sign-in required.</Alert>
+                  <Alert severity="error">Admin access required.</Alert>
                 </Container>
               )
+            ) : activityPage ? (
+              <Activity
+                key={`${fullRoute}:${session.data.role}:${session.data.session_id}`}
+                route={fullRoute}
+                admin={session.data.role === "admin"}
+              />
+            ) : settingsPage ? (
+              route === "settings/security" ? (
+                session.data.credential_id === null ? (
+                  <Security />
+                ) : (
+                  <Container component="main" maxWidth="sm" sx={{ py: 6 }}>
+                    <Alert severity="error">Password sign-in required.</Alert>
+                  </Container>
+                )
+              ) : (
+                <Sessions
+                  key={session.data.session_id}
+                  session={session.data}
+                />
+              )
+            ) : clientPage ? (
+              <Clients
+                key={`${route}:${session.data.role}`}
+                route={route}
+                canWrite={session.data.role !== "reader"}
+              />
+            ) : storagePage ? (
+              <Storages
+                key={`${route}:${session.data.role}`}
+                route={route}
+                canWrite={session.data.role !== "reader"}
+              />
+            ) : route === "usage" ? (
+              <UsageHistory />
             ) : (
-              <Sessions key={session.data.session_id} session={session.data} />
-            )
-          ) : clientPage ? (
-            <Clients
-              key={`${route}:${session.data.role}`}
-              route={route}
-              canWrite={session.data.role !== "reader"}
-            />
-          ) : storagePage ? (
-            <Storages
-              key={`${route}:${session.data.role}`}
-              route={route}
-              canWrite={session.data.role !== "reader"}
-            />
-          ) : route === "usage" ? (
-            <UsageHistory />
-          ) : (
-            <Overview />
-          )}
+              <Overview />
+            )}
+          </Suspense>
         </>
       ) : (
         <Login
@@ -158,6 +178,6 @@ export function App() {
           }}
         />
       )}
-    </ConsoleLayout>
+    </Shell>
   );
 }

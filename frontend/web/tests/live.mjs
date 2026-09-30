@@ -175,7 +175,7 @@ try {
     await recipient.getByLabel("Username").fill("recipient");
     await recipient.getByLabel(/^Password\s*\*?$/).fill(recipientPassword);
     await recipient.getByRole("button", { name: "Sign in", exact: true }).click();
-    await recipient.getByText("Reader · Read-only").waitFor();
+    await expect(recipient.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
     await recipient.locator('button[aria-label="Account menu"]').click();
     await recipient.getByRole("menuitem", { name: "My account" }).click();

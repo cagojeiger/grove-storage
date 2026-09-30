@@ -14,7 +14,17 @@ export default defineConfig(() => {
     plugins: [react()],
     build: {
       rollupOptions: {
-        output: { manualChunks: (id) => id.includes("node_modules") ? "vendor" : undefined },
+        output: {
+          manualChunks: (id) => {
+            if (
+              /\/node_modules\/@mui\/x-(data-grid|internals|virtualizer)\//.test(
+                id,
+              )
+            )
+              return "mui-x-grid";
+            if (id.includes("node_modules")) return "vendor";
+          },
+        },
       },
     },
     server: {
@@ -29,10 +39,11 @@ export default defineConfig(() => {
           ? { key: readFileSync(key), cert: readFileSync(cert) }
           : undefined,
       proxy: Object.fromEntries(
-        ["/api/admin/identity/v1", "/api/admin/console-commands/v1", "/readyz"].map((path) => [
-          path,
-          { target, changeOrigin: false },
-        ]),
+        [
+          "/api/admin/identity/v1",
+          "/api/admin/console-commands/v1",
+          "/readyz",
+        ].map((path) => [path, { target, changeOrigin: false }]),
       ),
     },
   };

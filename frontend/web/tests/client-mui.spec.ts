@@ -16,7 +16,7 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(root);
       await page.getByLabel("Theme").selectOption(theme);
-      const table = page.getByRole("table", { name: "Clients", exact: true });
+      const table = page.getByRole("grid", { name: "Clients", exact: true });
       await expect(
         table.getByRole("link", { name: id, exact: true }),
       ).toBeVisible();
@@ -31,13 +31,11 @@ for (const theme of ["light", "dark"]) {
       const row = table
         .getByRole("row")
         .filter({ has: page.getByRole("link", { name: id, exact: true }) });
+      if (width >= 600) await expect(row.getByRole("gridcell", { name: "0", exact: true })).toBeVisible();
       await expect(
-        row.getByText("0 files", { exact: true }).filter({ visible: true }),
+        row.getByRole("gridcell", { name: "0 B", exact: true }),
       ).toBeVisible();
-      await expect(
-        row.getByRole("cell", { name: /^0 B(?:\s+0 files)?$/ }),
-      ).toBeVisible();
-      await expect(
+      if (width >= 900) await expect(
         row
           .getByText("storage-with-a-long-identifier-for-responsive-layout", {
             exact: true,

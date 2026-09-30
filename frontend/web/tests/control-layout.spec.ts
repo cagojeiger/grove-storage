@@ -5,8 +5,8 @@ import { maintenanceMock } from "./maintenance-fixture";
 import { storageMock } from "./storage-fixture";
 
 const lists = [
-  { route: "storages", selector: "tbody td", setup: storageMock },
-  { route: "clients", selector: "tbody td", setup: clientMock },
+  { route: "storages", selector: '[role="gridcell"]', setup: storageMock },
+  { route: "clients", selector: '[role="gridcell"]', setup: clientMock },
   { route: "accounts", selector: "tbody td", setup: accessMock },
   { route: "activity", selector: "tbody td", setup: maintenanceMock },
 ] as const;
@@ -21,9 +21,14 @@ for (const theme of ["light", "dark"]) {
         await page.getByLabel("Theme").selectOption(theme);
         const row = page.locator(list.selector).first();
         await expect(row).toBeVisible();
-        await expect(row).toHaveCSS("padding-top", "6px");
-        await expect(row).toHaveCSS("padding-bottom", "6px");
-        await expect(row).toHaveCSS("border-bottom-width", "1px");
+        if (list.route === "accounts" || list.route === "activity") {
+          await expect(row).toHaveCSS("padding-top", "6px");
+          await expect(row).toHaveCSS("padding-bottom", "6px");
+          await expect(row).toHaveCSS("border-bottom-width", "1px");
+        } else {
+          const bounds = await row.boundingBox();
+          expect(bounds!.height).toBeGreaterThanOrEqual(44);
+        }
         await expect(row).toHaveCSS("font-family", /^-apple-system,/);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         if (width === 1280 && theme === "light") {

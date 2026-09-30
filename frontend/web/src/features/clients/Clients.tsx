@@ -1,17 +1,18 @@
 import {
   Alert,
   Box,
-  Container,
   IconButton,
   Button,
   Link,
   Stack,
   Tooltip,
   Typography,
+  TextField,
 } from "@mui/material";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Page } from "../../app/Page";
 import { command } from "../../api/commands";
 import { message } from "../../api/http";
 import { bytes } from "../../design/format";
@@ -25,10 +26,9 @@ import {
 } from "./model";
 import { ClientDialog } from "./ClientDialog";
 import { ClientKeys } from "./ClientKeys";
-import { ClientRows } from "./ClientRows";
+import { ClientGrid } from "./ClientGrid";
 import { ResourceMetadata } from "../metadata/ResourceMetadata";
 import { paginate, useResourceList } from "../../app/resourceList";
-import { ListToolbar, Pagination } from "../../design/ResourceList";
 
 export function Clients({
   route,
@@ -65,36 +65,14 @@ export function Clients({
   const used = usage.isSuccess ? totals(usage.data, id) : undefined;
   const page = paginate(list.data ?? [], listing, (id) => id);
   return (
-    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
-      <Stack spacing={3}>
-        {id && (
-          <Button
-            component="a"
-            href={listing.href("#clients")}
-            startIcon={<ArrowLeft size={16} />}
-            sx={{ alignSelf: "flex-start" }}
-          >
-            Clients
-          </Button>
-        )}
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            rowGap: 1,
-          }}
-        >
-          <Typography
-            component="h1"
-            variant="h5"
-            sx={{ minWidth: 0, overflowWrap: "anywhere", flex: "1 1 180px" }}
-          >
-            {id || "Clients"}
-          </Typography>
-          <Stack direction="row" spacing={1}>
+    <>
+      <Page
+        title={id || "Clients"}
+        back={
+          id ? { label: "Clients", href: listing.href("#clients") } : undefined
+        }
+        actions={
+          <>
             <Tooltip title="Refresh clients">
               <span>
                 <IconButton
@@ -132,8 +110,9 @@ export function Clients({
                   Create client
                 </Button>
               ))}
-          </Stack>
-        </Stack>
+          </>
+        }
+      >
         {current.isPending ? (
           <Typography role="status" color="text.secondary" sx={{ py: 4 }}>
             Loading clients...
@@ -210,23 +189,22 @@ export function Clients({
           </>
         ) : (
           <>
-            <ListToolbar state={listing} label="Search clients" />
-            <ClientRows
+            <TextField
+              label="Search clients"
+              type="search"
+              value={listing.search}
+              onChange={(event) =>
+                listing.update({ search: event.target.value })
+              }
+              sx={{ maxWidth: 360 }}
+            />
+            <ClientGrid
               ids={page.rows}
               usage={usage.isSuccess ? usage.data : undefined}
-              href={listing.href}
+              state={listing}
+              page={page.page}
+              total={page.total}
             />
-            {page.total === 0 && (
-              <Typography
-                color="text.secondary"
-                sx={{ py: 4, textAlign: "center" }}
-              >
-                {listing.search
-                  ? "No matching clients."
-                  : "No clients registered."}
-              </Typography>
-            )}
-            <Pagination state={listing} {...page} />
           </>
         )}
         {usage.isError && (
@@ -234,7 +212,7 @@ export function Clients({
             Usage unavailable. {message(usage.error)}
           </Alert>
         )}
-      </Stack>
+      </Page>
       {canWrite && dialog && (
         <ClientDialog
           id={id || undefined}
@@ -247,6 +225,6 @@ export function Clients({
           }}
         />
       )}
-    </Container>
+    </>
   );
 }

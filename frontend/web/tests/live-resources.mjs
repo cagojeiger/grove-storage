@@ -16,11 +16,12 @@ export async function resourceChecks(page, { origin }) {
     .getByRole("link", { name: "View all clients", exact: true })
     .click();
   await expect(
-    page.getByRole("table", { name: "Clients", exact: true }).locator("tbody tr").filter({ hasText: "console-client" }),
+    page.getByRole("grid", { name: "Clients", exact: true }).getByRole("row").filter({ hasText: "console-client" }),
   ).toContainText("console-live");
-  await page.getByLabel("Rows per page").selectOption("50");
+  await page.getByRole("combobox", { name: "Rows per page:" }).click();
+  await page.getByRole("option", { name: "50", exact: true }).click();
   await page
-    .locator("table[aria-label=Clients] tbody a")
+    .getByRole("grid", { name: "Clients", exact: true }).getByRole("link")
     .filter({ hasText: "console-client" })
     .click();
   await expect(
@@ -30,7 +31,7 @@ export async function resourceChecks(page, { origin }) {
     .locator("main")
     .getByRole("link", { name: "Clients", exact: true })
     .click();
-  await expect(page.getByLabel("Rows per page")).toHaveValue("50");
+  await expect(page.getByRole("combobox", { name: "Rows per page:" })).toHaveText("50");
   console.log(
     "PASS real Client-to-Storage overview, assigned storage and list return state",
   );

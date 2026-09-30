@@ -6,7 +6,7 @@ test("Reader can inspect storages but has no write controls", async ({ page }) =
   await storageMock(page);
   await page.route("**/identity/v1/session", (route) => route.fulfill({ json: { ...session, role: "reader" } }));
   await page.goto(root);
-  await expect(page.getByText("Reader · Read-only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
   await expect(page.getByRole("button", { name: "Register", exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: new RegExp(example.id) }).click();
   await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
@@ -22,7 +22,7 @@ test("demotion while editing refreshes role and discards the form", async ({ pag
   await page.route("**/identity/v1/session", (route) => route.fulfill({ json: { ...session, role: "reader" } }));
   await intercept(page, "storage.replace", (route) => route.fulfill({ status: 403, json: failure(403) }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Reader · Read-only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByLabel("Secret key (re-enter)")).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveText("Write access required.");

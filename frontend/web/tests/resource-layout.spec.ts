@@ -70,16 +70,16 @@ for (const width of [320, 768, 1440])
         }
       }
       await page.getByRole("link", { name: "View all storage" }).click();
-      await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(7);
+      await expect(page.getByRole("grid", { name: "Storage", exact: true }).getByRole("link")).toHaveCount(7);
       await capture("storage-list");
       if (width < 900) await page.getByRole("button", { name: "Open navigation" }).click();
       await page
         .getByRole("navigation", { name: "Main navigation" })
         .getByRole("link", { name: "Clients", exact: true })
         .click();
-      await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a")).toHaveCount(20);
-      await page.getByRole("button", { name: "Next page" }).click();
-      await expect(page.getByRole("table", { name: "Clients", exact: true }).locator("tbody a")).toHaveCount(4);
+      await expect(page.getByText("1–20 of 24", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: /next page/i }).click();
+      await expect(page.getByRole("grid", { name: "Clients", exact: true }).getByRole("link")).toHaveCount(4);
       await capture("client-list");
       async function capture(view: string) {
         expect(

@@ -353,9 +353,9 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       ).toBeVisible();
       if (width < 900) {
         await page.getByRole("button", { name: "Open navigation" }).click();
-        await expect(page.getByText("Admin · Management")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("admin");
         await page.getByRole("button", { name: "Close navigation" }).click();
-      } else await expect(page.getByText("Admin · Management")).toBeVisible();
+      } else await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("admin");
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

@@ -45,7 +45,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     });
     assert.equal(forbidden.status(), 403);
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText("Reader · Read-only")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await page.reload();
@@ -65,7 +65,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     await page.locator('button[aria-label="Account menu"]').click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await loginWithPassword(page, "console-writer", writerPassword);
-    await expect(page.getByText("Reader · Read-only")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");
     const events = audit.items.filter((e) => e.action === "storage.create");

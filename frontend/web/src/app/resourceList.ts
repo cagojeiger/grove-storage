@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useRoute } from "./navigation";
 
 function readState(route: string) {
@@ -18,9 +19,12 @@ export function useResourceList() {
   const route = useRoute();
   const query = route.split("?")[1] ?? "";
   const state = readState(route);
-  function href(target: string) {
-    return target + (query ? `?${query}` : "");
-  }
+  const href = useCallback(
+    (target: string) => {
+      return target + (query ? `?${query}` : "");
+    },
+    [query],
+  );
   function update(values: Partial<typeof state>) {
     const current = window.location.hash.slice(1);
     const next = { ...readState(current), ...values };
