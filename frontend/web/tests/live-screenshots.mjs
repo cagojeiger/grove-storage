@@ -16,6 +16,8 @@ export async function captureConsole(page, origin, directory) {
       ["client", "clients/console-client", "console-client"],
       ["accounts", "accounts", "Accounts"],
       ["activity", "activity", "Activity"],
+      ["profile", "settings", "My account"],
+      ["security", "settings/security", "Security"],
     ]) {
       await page.goto(`${origin}/api/admin/console/#${route}`);
       await expect(
@@ -53,17 +55,61 @@ export async function captureConsole(page, origin, directory) {
           page.getByLabel("Saved metadata", { exact: true }),
         ).toHaveText("{}");
         await expect(page.getByText("No credentials issued.")).toBeVisible();
+      } else if (name === "profile") {
+        await expect(
+          page.getByRole("heading", {
+            name: "Console test owner",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "My sessions", exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("list", { name: "My API tokens", exact: true }),
+        ).toBeAttached();
+        await expect(
+          page
+            .getByRole("list", { name: "My sessions", exact: true })
+            .getByRole("listitem")
+            .first(),
+        ).toBeVisible();
+      } else if (name === "security") {
+        await expect(page.getByLabel("Current password")).toBeVisible();
       } else {
         await expect(
           page.getByRole("table").locator("tbody tr").first(),
         ).toBeVisible();
       }
       await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(
+        page.getByRole("status").filter({ hasText: /Loading/ }),
+      ).toHaveCount(0);
       await page.screenshot({
         path: join(output, `${name}-${mode}.png`),
         fullPage: true,
         animations: "disabled",
       });
+      if (name === "accounts") {
+        await page
+          .getByRole("link", { name: "Console test owner", exact: true })
+          .click();
+        await expect(
+          page.getByRole("heading", {
+            name: "Console test owner",
+            exact: true,
+            level: 1,
+          }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: "Edit name", exact: true }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: join(output, `account-detail-${mode}.png`),
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${origin}/api/admin/console/#accounts`);

@@ -22,7 +22,7 @@ test("search finds an unloaded account and survives detail navigation and reload
   await page.getByRole("link", { name: "Unloaded needle", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Unloaded needle" })).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Accounts", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
   await expect(page.getByRole("searchbox", { name: "Search accounts" })).toHaveValue("needle");
   await expect(page.getByLabel("Account role")).toHaveValue("writer");
   await expect(page.getByRole("link", { name: "Unloaded needle", exact: true })).toBeVisible();

@@ -20,7 +20,7 @@ test("rename trims the label while preserving account identity", async ({ page }
   await expect(page).toHaveURL(new RegExp(owner.id));
   await page.reload();
   await expect(page.getByRole("heading", { name: "New administrator", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Accounts", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
   await expect(page.getByRole("row").filter({ has: page.getByRole("link", { name: "New administrator", exact: true }) }).filter({ hasText: "Active" })).toBeVisible();
 });
 

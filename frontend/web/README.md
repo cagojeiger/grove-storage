@@ -10,12 +10,28 @@ formatting. The UI language is independent of the browser locale.
 | Color, type scale, density, light/dark mode | MUI theme in `src/design/ConsoleTheme.tsx` |
 | Font | System font stack; no web font downloads |
 | Controls, dialogs, navigation, Activity tabs | MUI; existing Lucide icons |
-| Native form constraints and FormData | `src/design/Fields.tsx` forwards attributes to the actual input |
-| Responsive page grids and Overview topology | `src/design/theme.css` |
+| Resource lists | MUI X Community Data Grid |
+| Recorded usage chart | MUI X Community LineChart; missing days remain gaps |
+| Page structure | MUI Container/Stack/Grid; `src/app/Page.tsx` composes title, back link and actions |
+| Native form constraints and FormData | MUI TextField `slotProps.htmlInput` and native form submission |
+| Connection visualization | `src/features/overview/connections.css` and measured SVG paths |
+| Global CSS | `src/design/theme.css`: root sizing, scroll clearance and keyboard focus only |
 
 Keep API queries, mutation guards and authorization separate from presentation.
-Add component defaults to the shared theme rather than styling each screen.
+Use stock MUI component appearance. The shared theme sets the system font stack,
+green primary colors, zero letter spacing and full-width TextField default;
+it has no component style overrides. JSON and credentials use the local monospace
+font. Responsive layout uses MUI breakpoints and spacing. There is one console,
+with no alternate legacy presentation or custom field/dialog wrappers.
 React remains on 18.3.1; the `react-is` override matches it, as required by MUI.
+
+The foundation follows the free [MUI dashboard template](https://mui.com/material-ui/getting-started/templates/dashboard/)
+in its default-theme mode and the component documentation, rather than copying
+the template's optional branded theme. Material UI, Data Grid Community and
+Charts Community are MIT-licensed. Pro/Premium packages are not installed.
+See [MUI X licensing](https://mui.com/x/introduction/licensing/).
+Management routes, resource grids and usage charts load on demand; the built
+browser security test verifies these chunks under the production CSP.
 
 ## Browser Preview
 
@@ -29,7 +45,7 @@ The sample preview starts signed out. Sign in with username `owner` and password
 `a private phrase for preview`. The sample session is process-wide and held in
 memory; the real API stores passwords and sessions in PostgreSQL.
 The preview includes Admin-only Accounts with sample Users and token lifecycle.
-Activity returns an empty sample history; My account lists the current sample session.
+Activity records sample management actions in memory; My account lists the current sample session.
 Use the real fixture below to verify persisted history and independent sessions.
 It initializes the first Admin through a server-local command against an empty database.
 
@@ -40,8 +56,8 @@ It initializes the first Admin through a server-local command against an empty d
 | Atomic account creation and one-time password setup link, pending/ready status, recipient setup and Reader sign-in | OIDC integration |
 | Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
-| API readiness, client count, per-storage/client usage and daily snapshot history | Server-paged large usage histories |
-| Activity: audit, command history, security events; scoped cursor paging and event details | Server-side actor/resource/date filters |
+| API readiness, client/storage counts, per-storage/client usage and daily snapshot chart/table | Server-paged large usage histories |
+| Activity: audit, command history, security events; actor/token filters, scoped cursor paging and event details | Resource/date filters |
 | My account: display-name edit, password change, own sessions and own management API tokens | Historical token-session cleanup |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
@@ -160,7 +176,9 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/password-setup.spec.ts`, `tests/personal-tokens.spec.ts` | One-time setup, own token lifecycle and responsive forms |
 | `tests/clients.spec.ts`, `client-safety.spec.ts`, `client-layout.spec.ts` | S3-only key controls, client lifecycle, conflicts, secret handling and responsive layouts |
 | `tests/maintenance.spec.ts`, `maintenance-layout.spec.ts` | Scoped history, bigint cursors, demotion, session revocation, unknown outcomes and responsive layouts |
-| `tests/usage-history.spec.ts` | Snapshot dates/counts, range validation, empty/error/401, progressive rendering and responsive tables |
+| `tests/usage-history.spec.ts` | Snapshot dates/counts, range validation, empty/error/401, local pagination and responsive tables |
+| `tests/usage-chart.spec.ts` | Daily aggregation, UTC gaps, a single observation, keyboard metrics, actual chart fonts and mobile pagination |
+| `tests/management-mui.spec.ts`, `tests/accounts-mui.spec.ts` | Default component appearance, responsive management pages, system fonts and short-screen secret dialogs |
 | `tests/resource-navigation.spec.ts` | Bounded paging, list state across detail/reload/deletion, authoritative Client assignment and overview highlighting |
 | `tests/resource-layout.spec.ts` | Multi-resource topology and paged lists at phone/tablet/desktop widths in both themes |
 | `tests/overview-connections.spec.ts` | Six/seven folding boundary, aggregate totals, curved paths, selection pinning, bounded grouped browser and failure states |
@@ -183,6 +201,8 @@ outcomes require a fresh read. S3 secrets are cleared at submission and never st
 in browser storage or the query/mutation cache. Capacity input is limited to exact
 JSON integers (0 through 2^53-1 bytes); the backend's wider i64 contract is unchanged.
 Issued management tokens stay in component state only. Closing requires an explicit
-saved-token acknowledgement; the token is then discarded. Access search filters
-loaded pages; **Load more** fetches the next server page. User identity actions
+saved-token acknowledgement; the token is then discarded. Account search and
+role/status filters run on the server; previous/next cursors survive reload and
+detail navigation. History, token and session lists fetch the next server page
+through **Load more**. User identity actions
 use console-only APIs, separate from resource commands available to CLI/MCP.

@@ -56,7 +56,7 @@ export async function accessChecks(
   database,
   currentPassword,
 ) {
-  await page.getByRole("link", { name: "Accounts", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Accounts", exact: true }).click();
   await page
     .getByRole("link", { name: "Console test owner", exact: true })
     .click();
@@ -66,7 +66,7 @@ export async function accessChecks(
   await page.getByRole("dialog").getByRole("button", { name: "Disable account", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("button", { name: "Accounts", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel(/^Name\s*\*?$/).fill("Recovery admin");
   await page.getByLabel(/^Username\s*\*?$/).fill("recovery-admin");
@@ -81,7 +81,7 @@ export async function accessChecks(
   await page.getByLabel(/^Label\s*\*?$/).fill("Recovery fixture");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   const oldToken = await takeToken(page);
-  await page.getByRole("button", { name: "Accounts", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
   await page.getByLabel(/^Name\s*\*?$/).fill("CLI backup");
   await page.getByLabel(/^Username\s*\*?$/).fill("cli-backup");

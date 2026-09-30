@@ -40,6 +40,8 @@ test("built console loads with restrictive browser headers", async ({
   ).toBeVisible();
   expect(assets.some((url) => url.includes("mui-x-grid"))).toBe(false);
   expect(assets.some((url) => url.includes("mui-x-charts"))).toBe(false);
+  for (const name of ["Access", "Activity", "Sessions", "Security"])
+    expect(assets.some((url) => url.includes(`/assets/${name}-`))).toBe(false);
   await page.getByRole("link", { name: "Storage", exact: true }).click();
   await expect(
     page.getByRole("grid", { name: "Storage", exact: true }),
@@ -103,6 +105,18 @@ test("built console loads with restrictive browser headers", async ({
       .locator(".MuiLineChart-line"),
   ).toHaveAttribute("d", /^M/);
   expect(assets.some((url) => url.includes("mui-x-charts"))).toBe(true);
+  for (const [route, title, chunk] of [
+    ["accounts", "Accounts", "Access"],
+    ["activity", "Activity", "Activity"],
+    ["settings", "My account", "Sessions"],
+    ["settings/security", "Security", "Security"],
+  ]) {
+    await page.goto(`${root}#${route}`);
+    await expect(
+      page.getByRole("heading", { name: title, exact: true, level: 1 }),
+    ).toBeVisible();
+    expect(assets.some((url) => url.includes(`/assets/${chunk}-`))).toBe(true);
+  }
   expect(errors).toEqual([]);
 });
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { maintenanceMock } from "./maintenance-fixture";
 import { owner } from "./access-fixture";
 import { session } from "./command-fixture";
@@ -11,6 +11,21 @@ test("shared theme has no component style overrides or legacy page CSS", async (
   expect(css).not.toMatch(
     /\.Mui|font-size|font-family|\.storage|\.account|\.usage|\.activity/,
   );
+  const files = await readdir("src", { recursive: true });
+  expect(files.filter((path) => path.endsWith(".css")).sort()).toEqual([
+    "design/theme.css",
+    "features/overview/connections.css",
+  ]);
+  expect(files).not.toContain("design/Fields.tsx");
+  expect(files).not.toContain("design/Dialog.tsx");
+  const dependencies = JSON.parse(await readFile("package.json", "utf8")) as {
+    dependencies: Record<string, string>;
+  };
+  expect(
+    Object.keys(dependencies.dependencies)
+      .filter((name) => /@mui\/x-/.test(name))
+      .sort(),
+  ).toEqual(["@mui/x-charts", "@mui/x-data-grid"]);
 });
 
 for (const mode of ["light", "dark"]) {
@@ -45,6 +60,9 @@ for (const mode of ["light", "dark"]) {
         await expect(heading).toHaveCSS("font-size", "24px");
         await expect(heading).toHaveCSS("font-weight", "400");
         await expect(heading).toHaveCSS("font-family", /^-apple-system,/);
+        await expect(
+          page.getByRole("navigation", { name: "Breadcrumb" }),
+        ).toContainText(title);
         await expect(page.getByRole("main")).not.toHaveClass(
           /overview|settings|activity/,
         );

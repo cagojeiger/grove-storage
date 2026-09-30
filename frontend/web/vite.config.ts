@@ -26,6 +26,9 @@ export default defineConfig(() => {
               return "mui-x-shared";
             if (/\/node_modules\/@mui\/x-(data-grid|virtualizer)\//.test(id))
               return "mui-x-grid";
+            if (/\/node_modules\/@(mui|emotion)\//.test(id)) return "mui-core";
+            if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id))
+              return "react-runtime";
             if (id.includes("node_modules")) return "vendor";
           },
         },

@@ -67,7 +67,11 @@ export function Shell({
         ? sections[3]
         : sections.find((item) => item.path === root);
   const label =
-    root === "usage" ? "Usage history" : (section?.label ?? "My account");
+    root === "usage"
+      ? "Usage history"
+      : route === "settings/security"
+        ? "Security"
+        : (section?.label ?? "My account");
   const brand = (
     <Stack
       component="a"

@@ -15,10 +15,26 @@ import { Shell } from "./Shell";
 import { Overview } from "../features/overview/Overview";
 import { clearSession } from "../auth/session";
 import { useRoute } from "./navigation";
-import { Access } from "../features/access/Access";
-import { Activity } from "../features/activity/Activity";
-import { Sessions } from "../features/settings/Sessions";
-import { Security } from "../features/settings/Security";
+const Access = lazy(() =>
+  import("../features/access/Access").then((module) => ({
+    default: module.Access,
+  })),
+);
+const Activity = lazy(() =>
+  import("../features/activity/Activity").then((module) => ({
+    default: module.Activity,
+  })),
+);
+const Sessions = lazy(() =>
+  import("../features/settings/Sessions").then((module) => ({
+    default: module.Sessions,
+  })),
+);
+const Security = lazy(() =>
+  import("../features/settings/Security").then((module) => ({
+    default: module.Security,
+  })),
+);
 const UsageHistory = lazy(() =>
   import("../features/overview/UsageHistory").then((module) => ({
     default: module.UsageHistory,
