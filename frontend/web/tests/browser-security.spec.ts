@@ -47,9 +47,9 @@ test("built console loads with restrictive browser headers", async ({
     page.getByRole("grid", { name: "Storage", exact: true }),
   ).toBeVisible();
   expect(assets.some((url) => url.includes("mui-x-grid"))).toBe(true);
-  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await page.getByRole("button", { name: "Add storage", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Register storage", exact: true }),
+    page.getByRole("heading", { name: "Add storage", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("link", { name: "home-archive", exact: true }).click();
@@ -101,7 +101,7 @@ test("built console loads with restrictive browser headers", async ({
   await page.goto(`${root}#usage`);
   await expect(
     page
-      .getByLabel("Active data by day", { exact: true })
+      .getByLabel("Stored data by day", { exact: true })
       .locator(".MuiLineChart-line"),
   ).toHaveAttribute("d", /^M/);
   expect(assets.some((url) => url.includes("mui-x-charts"))).toBe(true);

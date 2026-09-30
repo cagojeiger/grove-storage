@@ -75,10 +75,10 @@ export function ClientDetail({
       <Grid container spacing={2}>
         {[
           [
-            "Active files",
+            "Stored files",
             usage ? usage.files.toLocaleString("en-US") : "Unavailable",
           ],
-          ["Active data", usage ? bytes(usage.bytes) : "Unavailable"],
+          ["Stored data", usage ? bytes(usage.bytes) : "Unavailable"],
         ].map(([label, value]) => (
           <Grid key={label} size={{ xs: 12, sm: 6 }}>
             <Card variant="outlined">

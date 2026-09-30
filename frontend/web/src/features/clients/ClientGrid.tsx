@@ -79,7 +79,7 @@ export function ClientGrid({
       },
       {
         field: "files",
-        headerName: "Active files",
+        headerName: "Stored files",
         type: "number",
         flex: 0.7,
         minWidth: 120,
@@ -89,7 +89,7 @@ export function ClientGrid({
       },
       {
         field: "bytes",
-        headerName: "Active data",
+        headerName: "Stored data",
         type: "number",
         flex: 0.7,
         minWidth: 115,
@@ -101,7 +101,7 @@ export function ClientGrid({
     [href],
   );
   return (
-    <Box sx={{ height: 560, width: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", maxHeight: 560, minHeight: 180, width: "100%" }}>
       <DataGrid
         nonce={cspNonce}
         aria-label="Clients"

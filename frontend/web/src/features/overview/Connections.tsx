@@ -5,7 +5,6 @@ import {
   CardActionArea,
   CardContent,
   Chip,
-  LinearProgress,
   Stack,
   Typography,
 } from "@mui/material";
@@ -22,6 +21,8 @@ import {
 import { command } from "../../api/commands";
 import { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
+import { CapacityUsage } from "../storages/CapacityUsage";
+import { accountedBytes } from "../storages/capacity";
 import { storageLink } from "../../app/navigation";
 import { Client, ClientUsage, clientLink } from "../clients/model";
 import { clientTotals, foldConnections, sumClients } from "./connectionsModel";
@@ -327,22 +328,7 @@ export function Connections({
                       {row.kind.toUpperCase()} ·{" "}
                       {row.active_files.toLocaleString("en-US")} files
                     </Typography>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      {bytes(row.active_bytes)} / {bytes(row.capacity_bytes)}{" "}
-                      configured
-                    </Typography>
-                    <LinearProgress
-                      aria-label={`${row.storage_id} allocation used`}
-                      variant="determinate"
-                      value={
-                        row.capacity_bytes > 0
-                          ? Math.min(
-                              100,
-                              (row.active_bytes / row.capacity_bytes) * 100,
-                            )
-                          : 0
-                      }
-                    />
+                    <CapacityUsage used={accountedBytes(row)} capacity={row.capacity_bytes} />
                   </CardContent>
                 </CardActionArea>
               </Card>

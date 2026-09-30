@@ -13,6 +13,8 @@ import type { Storage } from "./model";
 import type { Usage } from "../../api/http";
 import { bytes } from "../../design/format";
 import { ResourceMetadata } from "../metadata/ResourceMetadata";
+import { CapacityUsage } from "./CapacityUsage";
+import { accountedBytes } from "./capacity";
 
 export function StorageDetail({
   storage,
@@ -26,7 +28,7 @@ export function StorageDetail({
   const fields = [
     ["Type", storage.kind === "fs" ? "Filesystem" : "S3"],
     [
-      "Registered capacity",
+      "Configured capacity",
       `${bytes(storage.capacity_bytes)} (${storage.capacity_bytes.toLocaleString("en-US")} bytes)`,
     ],
     ...(storage.kind === "fs"
@@ -88,24 +90,26 @@ export function StorageDetail({
           Usage
         </Typography>
         {usage ? (
+          <Stack spacing={2}>
+          <CapacityUsage used={accountedBytes(usage)} capacity={usage.capacity_bytes} />
           <Grid container spacing={2}>
             {[
               {
-                label: "Active",
+                label: "Stored data",
                 bytes: usage.active_bytes,
                 files: usage.active_files,
               },
               {
-                label: "Reserved",
+                label: "Upload reservations",
                 bytes: usage.reserved_bytes,
                 files: usage.reserved_files,
               },
               {
-                label: "Pending deletion",
+                label: "Pending cleanup",
                 bytes: usage.purge_pending_bytes,
                 files: usage.purge_pending_files,
               },
-              { label: "Remaining", bytes: usage.remaining_bytes },
+              { label: "Remaining capacity", bytes: usage.remaining_bytes },
             ].map((counter) => (
               <Grid key={counter.label} size={{ xs: 12, sm: 6, lg: 3 }}>
                 <Card variant="outlined" sx={{ height: "100%" }}>
@@ -126,6 +130,7 @@ export function StorageDetail({
               </Grid>
             ))}
           </Grid>
+          </Stack>
         ) : (
           <Typography color="text.secondary">Usage is unavailable.</Typography>
         )}

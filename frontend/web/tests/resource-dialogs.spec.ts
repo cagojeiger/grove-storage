@@ -31,15 +31,13 @@ for (const theme of ["light", "dark"]) {
       await page
         .getByRole("button", { name: "Edit storage", exact: true })
         .click();
-      const editor = page.getByRole("dialog", {
-        name: "Edit storage",
-        exact: true,
-      });
+      const editor = page.getByRole("main");
       await expect(editor).toBeVisible();
       const save = editor.getByRole("button", { name: "Save", exact: true });
+      await save.scrollIntoViewIfNeeded();
       await expect(save).toBeInViewport();
       await editor
-        .getByLabel("Registered capacity", { exact: true })
+        .getByLabel("Configured capacity", { exact: true })
         .scrollIntoViewIfNeeded();
       await editor.getByLabel("Capacity unit").selectOption("TiB");
       await editor.getByLabel("Capacity unit").scrollIntoViewIfNeeded();
@@ -53,7 +51,7 @@ for (const theme of ["light", "dark"]) {
         ),
       });
       await editor.getByRole("button", { name: "Cancel", exact: true }).click();
-      await expect(editor).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Edit storage", exact: true })).toHaveCount(0);
       await expect(
         page.getByRole("heading", { name: "home-archive", exact: true }),
       ).toBeVisible();

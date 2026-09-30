@@ -113,8 +113,8 @@ for (const count of [0, 1, 6, 7]) {
     ).toHaveText([
       "Clients",
       "Storage",
-      "Total files",
-      "Total stored",
+      "Stored files",
+      "Stored data",
       "Configured capacity",
     ]);
     await expect(
@@ -226,10 +226,10 @@ test("refresh totals include hidden storage and assignment failures clear highli
   );
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(
-    page.getByRole("region", { name: "Total files", exact: true }),
+    page.getByRole("region", { name: "Stored files", exact: true }),
   ).toContainText("16");
   await expect(
-    page.getByRole("region", { name: "Total stored", exact: true }),
+    page.getByRole("region", { name: "Stored data", exact: true }),
   ).toContainText("8 GiB");
   await page
     .getByRole("link", { name: "Open client client-0", exact: true })

@@ -9,7 +9,8 @@ import type { Usage } from "../../api/http";
 import { storageLink } from "../../app/navigation";
 import { cspNonce } from "../../app/csp";
 import type { ResourceListState } from "../../app/resourceList";
-import { bytes } from "../../design/format";
+import { CapacityUsage } from "./CapacityUsage";
+import { accountedBytes } from "./capacity";
 import type { Storage } from "./model";
 
 export function StorageGrid({
@@ -26,7 +27,6 @@ export function StorageGrid({
   total: number;
 }) {
   const desktop = useMediaQuery(useTheme().breakpoints.up("md"));
-  const wide = useMediaQuery(useTheme().breakpoints.up("sm"));
   const sortModel = useMemo<GridSortModel>(
     () => [{ field: "id", sort: state.sort === "desc" ? "desc" : "asc" }],
     [state.sort],
@@ -36,7 +36,7 @@ export function StorageGrid({
     return {
       ...row,
       used: used
-        ? used.active_bytes + used.reserved_bytes + used.purge_pending_bytes
+        ? accountedBytes(used)
         : null,
     };
   });
@@ -70,33 +70,24 @@ export function StorageGrid({
       },
       {
         field: "used",
-        headerName: "Grove usage",
+        headerName: "Capacity",
         type: "number",
-        minWidth: 115,
-        flex: 0.6,
+        minWidth: 210,
+        flex: 1.2,
         sortable: false,
-        valueFormatter: (value: number | null) =>
-          value === null ? "Unavailable" : bytes(value),
-      },
-      {
-        field: "capacity_bytes",
-        headerName: "Configured capacity",
-        type: "number",
-        minWidth: 165,
-        flex: 0.7,
-        sortable: false,
-        valueFormatter: (value: number) => bytes(value),
+        renderCell: ({ row }) => <Box sx={{ width: "100%", py: 1 }}><CapacityUsage used={row.used} capacity={row.capacity_bytes} /></Box>,
       },
     ],
     [href],
   );
   return (
-    <Box sx={{ height: 560, width: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", maxHeight: 560, minHeight: 180, width: "100%" }}>
       <DataGrid
         nonce={cspNonce}
         aria-label="Storage"
         rows={data}
         columns={columns}
+        rowHeight={88}
         disableRowSelectionOnClick
         disableColumnFilter
         disableColumnMenu
@@ -104,7 +95,6 @@ export function StorageGrid({
         columnVisibilityModel={{
           endpoint: desktop,
           bucket: desktop,
-          capacity_bytes: wide,
         }}
         paginationMode="server"
         rowCount={total}

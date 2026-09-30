@@ -26,6 +26,7 @@ import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
 import { Connections } from "./Connections";
 import { storageLink } from "../../app/navigation";
+import { CapacityUsage } from "../storages/CapacityUsage";
 
 export function Overview() {
   const cache = useQueryClient();
@@ -105,8 +106,8 @@ export function Overview() {
                 {[
                   ["Clients", data.clients.length.toLocaleString("en-US")],
                   ["Storage", data.usage.length.toLocaleString("en-US")],
-                  ["Total files", sum("active_files").toLocaleString("en-US")],
-                  ["Total stored", bytes(sum("active_bytes"))],
+                  ["Stored files", sum("active_files").toLocaleString("en-US")],
+                  ["Stored data", bytes(sum("active_bytes"))],
                   ["Configured capacity", bytes(sum("capacity_bytes"))],
                 ].map(([label, value]) => (
                   <Grid key={label} size={{ xs: 1, sm: 2, lg: 1 }}>
@@ -136,6 +137,7 @@ export function Overview() {
                   </Grid>
                 ))}
               </Grid>
+              <CapacityUsage used={sum("active_bytes") + sum("reserved_bytes") + sum("purge_pending_bytes")} capacity={sum("capacity_bytes")} />
               <Stack
                 direction="row"
                 spacing={3}
@@ -143,13 +145,13 @@ export function Overview() {
                 sx={{ flexWrap: "wrap" }}
               >
                 <Typography variant="body2" color="text.secondary">
-                  Reserved {bytes(sum("reserved_bytes"))}
+                  Upload reservations {bytes(sum("reserved_bytes"))}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Pending deletion {bytes(sum("purge_pending_bytes"))}
+                  Pending cleanup {bytes(sum("purge_pending_bytes"))}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Available allocation {bytes(sum("remaining_bytes"))}
+                  Remaining capacity {bytes(sum("remaining_bytes"))}
                 </Typography>
               </Stack>
               <Connections
@@ -185,8 +187,8 @@ export function Overview() {
                         <TableCell>Storage</TableCell>
                         <TableCell align="right">Files</TableCell>
                         <TableCell align="right">Stored</TableCell>
-                        <TableCell align="right">Reserved</TableCell>
-                        <TableCell align="right">Pending deletion</TableCell>
+                        <TableCell align="right">Upload reservations</TableCell>
+                        <TableCell align="right">Pending cleanup</TableCell>
                         <TableCell align="right">Configured capacity</TableCell>
                       </TableRow>
                     </TableHead>
@@ -228,7 +230,7 @@ export function Overview() {
                   color="text.secondary"
                   sx={{ mt: 1.5 }}
                 >
-                  Grove-managed usage and configured allocation limits, not
+                  Grove-managed usage and configured capacity, not
                   provider free space.
                 </Typography>
               </Box>

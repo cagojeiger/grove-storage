@@ -6,7 +6,7 @@ test("S3 registration sends all options with CSRF and removes the secret", async
 }) => {
   const { writes } = await storageMock(page, []);
   await page.goto(root);
-  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await page.getByRole("button", { name: "Add storage", exact: true }).click();
   await fillS3(page);
   const sent = page.waitForRequest((req) => req.method() === "POST");
   await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -42,7 +42,8 @@ test("S3 registration sends all options with CSRF and removes the secret", async
   await page.getByRole("button", { name: "Edit storage" }).click();
   await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
   await page.getByLabel("Secret key (re-enter)").fill("replacement-secret");
-  await page.getByLabel(/^Registered capacity\s*\*?$/).fill("1000");
+  await page.getByLabel(/^Configured capacity\s*\*?$/).fill("1000");
+  await page.getByLabel("Capacity unit").selectOption("B");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "new-s3", exact: true })).toBeVisible();
   expect(writes[1].command).toBe("storage.replace");
@@ -59,7 +60,7 @@ test("S3-only creation, reload, history and deletion", async ({
 }) => {
   const { writes } = await storageMock(page, []);
   await page.goto(root);
-  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await page.getByRole("button", { name: "Add storage", exact: true }).click();
   await fillS3(page, "list");
   await expect(page.getByLabel(/^Type\s*\*?$/)).toHaveCount(0);
   await expect(page.getByLabel("Root path")).toHaveCount(0);
@@ -87,10 +88,10 @@ test("search, cancel and keyboard focus do not mutate registry", async ({
 }) => {
   const { writes } = await storageMock(page);
   await page.goto(root);
-  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await page.getByRole("button", { name: "Add storage", exact: true }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Register", exact: true }),
+    page.getByRole("button", { name: "Add storage", exact: true }),
   ).toBeVisible();
   await page.getByRole("searchbox", { name: "Search storage" }).fill("missing");
   await expect(page.getByText("No matching storage.")).toBeVisible();

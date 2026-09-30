@@ -59,7 +59,7 @@ test("lost response blocks resubmission and refreshes instead of retrying", asyn
     return route.abort("connectionreset");
   });
   await page.goto(root);
-  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await page.getByRole("button", { name: "Add storage", exact: true }).click();
   await fillS3(page);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
@@ -99,7 +99,7 @@ for (const method of ["POST", "PUT", "DELETE"]) {
       await page.getByRole("button", { name: "Delete storage" }).click();
       await page.getByLabel("Storage ID to delete").fill(example.id);
     } else if (method === "POST") {
-      await page.getByRole("button", { name: "Register", exact: true }).click();
+      await page.getByRole("button", { name: "Add storage", exact: true }).click();
       await fillS3(page);
     } else {
       await page.getByRole("button", { name: "Edit storage" }).click();
@@ -138,13 +138,13 @@ test("pending write clears secret, prevents double submit and disables cancel", 
     return route.fulfill({ status: 400, json: failure(400) });
   });
   await page.goto(root);
-  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await page.getByRole("button", { name: "Add storage", exact: true }).click();
   await fillS3(page);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await expect(page.getByLabel(/^Secret key\s*\*?$/)).toHaveValue("");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Register storage" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add storage" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
   expect(posts).toBe(1);
   release();

@@ -125,7 +125,7 @@ for (const mode of ["light", "dark"]) {
         grid,
         grid.getByRole("columnheader").first(),
         grid.getByRole("gridcell").first(),
-        page.getByRole("button", { name: "Register", exact: true }),
+        page.getByRole("button", { name: "Add storage", exact: true }),
       ]) {
         await expect(item).toHaveCSS("font-family", /^-apple-system,/);
       }

@@ -98,6 +98,6 @@ export async function fillS3(page: Page, id = "new-s3") {
     .fill("ephemeral-provider-secret");
   await page.getByLabel(/^Path-style\s*\*?$/).check();
   await page.getByLabel(/^Use relay\s*\*?$/).check();
-  await page.getByLabel(/^Registered capacity\s*\*?$/).fill("1.5");
+  await page.getByLabel(/^Configured capacity\s*\*?$/).fill("1.5");
   await page.getByLabel("Capacity unit").selectOption("TiB");
 }

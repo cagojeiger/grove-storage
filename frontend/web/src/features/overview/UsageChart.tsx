@@ -7,7 +7,7 @@ import { dailyUsage, Snapshot } from "./usageHistoryModel";
 export function UsageChart({ rows }: { rows: Snapshot[] }) {
   const [metric, setMetric] = useState<"bytes" | "files">("bytes");
   const daily = useMemo(() => dailyUsage(rows), [rows]);
-  const label = metric === "bytes" ? "Active data" : "Active files";
+  const label = metric === "bytes" ? "Stored data" : "Stored files";
   const format = (value: number) =>
     metric === "bytes" ? bytes(value) : value.toLocaleString("en-US");
   return (
@@ -20,8 +20,8 @@ export function UsageChart({ rows }: { rows: Snapshot[] }) {
         onChange={(_event, value: "bytes" | "files") => setMetric(value)}
         aria-label="Usage metric"
       >
-        <Tab value="bytes" label="Active data" />
-        <Tab value="files" label="Active files" />
+        <Tab value="bytes" label="Stored data" />
+        <Tab value="files" label="Stored files" />
       </Tabs>
       <LineChart
         height={280}

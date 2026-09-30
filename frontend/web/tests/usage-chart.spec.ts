@@ -46,7 +46,7 @@ test("a single observation stays visible and missing days do not imply transfers
     route.fulfill({ json: envelope("usage.history", rows) }),
   );
   await page.goto("/api/admin/console/#usage");
-  const chart = page.getByLabel("Active data by day", { exact: true });
+  const chart = page.getByLabel("Stored data by day", { exact: true });
   await expect(chart.locator(".MuiLineChart-mark")).toHaveCount(1);
   await expect(chart.locator(".MuiLineChart-mark")).toBeVisible();
   rows = [row, { ...row, day: "2026-09-26" }];
@@ -60,11 +60,11 @@ test("a single observation stays visible and missing days do not imply transfers
         )?.length,
     )
     .toBe(2);
-  await page.getByRole("tab", { name: "Active data", exact: true }).focus();
+  await page.getByRole("tab", { name: "Stored data", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("tab", { name: "Active files", exact: true }),
+    page.getByRole("tab", { name: "Stored files", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
 });
 
@@ -96,7 +96,7 @@ for (const width of [320, 768, 1440])
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/api/admin/console/#usage");
       await page.getByLabel("Theme").selectOption(mode);
-      const chart = page.getByLabel("Active data by day", { exact: true });
+      const chart = page.getByLabel("Stored data by day", { exact: true });
       await expect(chart.locator("svg")).toBeVisible();
       await expect(chart.locator(".MuiLineChart-line")).toHaveAttribute(
         "d",
@@ -107,11 +107,11 @@ for (const width of [320, 768, 1440])
         /^-apple-system,/,
       );
       await page
-        .getByRole("tab", { name: "Active files", exact: true })
+        .getByRole("tab", { name: "Stored files", exact: true })
         .click();
       await expect(
         page
-          .getByLabel("Active files by day", { exact: true })
+          .getByLabel("Stored files by day", { exact: true })
           .locator(".MuiLineChart-line"),
       ).toHaveAttribute("d", /^M/);
       const next = page.getByRole("button", { name: "Go to next page" });

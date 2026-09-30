@@ -154,7 +154,7 @@ export function Storages({
                     window.location.hash = listing.href("#storages/create/new");
                   }}
                 >
-                  Register
+                  Add storage
                 </Button>
               ))}
           </>
@@ -201,6 +201,7 @@ export function Storages({
         ) : (
           <>
             <TextField
+              size="small"
               label="Search storage"
               type="search"
               value={listing.search}

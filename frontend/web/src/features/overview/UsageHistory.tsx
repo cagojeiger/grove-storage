@@ -132,8 +132,8 @@ export function UsageHistory() {
                     <TableCell scope="col">Date</TableCell>
                     <TableCell scope="col">Storage</TableCell>
                     <TableCell scope="col">Client</TableCell>
-                    <TableCell scope="col">Active files</TableCell>
-                    <TableCell scope="col">Active data</TableCell>
+                    <TableCell scope="col">Stored files</TableCell>
+                    <TableCell scope="col">Stored data</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

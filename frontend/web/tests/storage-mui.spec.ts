@@ -19,7 +19,7 @@ for (const mode of ["light", "dark"]) {
       await expect(properties.getByRole("listitem")).toHaveCount(9);
       for (const label of [
         properties.getByText("Type", { exact: true }),
-        usage.getByText("Active", { exact: true }),
+        usage.getByText("Stored data", { exact: true }),
       ]) {
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
@@ -70,7 +70,7 @@ for (const mode of ["light", "dark"]) {
       ).toBe(true);
       if (width >= 600)
         await expect(
-          table.getByRole("gridcell", { name: "1 TiB", exact: true }),
+          table.getByRole("gridcell").filter({ hasText: /\/ 1 TiB/ }),
         ).toBeVisible();
       await page.screenshot({
         path: `test-results/storage-mui-list-${width}-${mode}.png`,

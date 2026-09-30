@@ -2,13 +2,8 @@ import {
   TextField,
   Checkbox,
   FormControlLabel,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Box,
   Grid,
-  useMediaQuery,
-  useTheme,
   Button,
   Typography,
   Alert,
@@ -22,6 +17,7 @@ import { Save } from "lucide-react";
 import { ApiError } from "../../api/http";
 import { command } from "../../api/commands";
 import { clearSession } from "../../auth/session";
+import { capacityInput } from "./capacity";
 import {
   Storage,
   idPattern,
@@ -42,7 +38,7 @@ export function StorageEditor({
 }) {
   const cache = useQueryClient();
   const titleId = useId();
-  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+  const capacity = capacityInput(storage?.capacity_bytes ?? 0);
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -92,20 +88,11 @@ export function StorageEditor({
     }
   }
   return (
-    <Dialog
-      open
-      fullWidth
-      maxWidth="sm"
-      fullScreen={fullScreen}
-      aria-labelledby={titleId}
-      onClose={(_event, reason) => {
-        if (reason === "escapeKeyDown" && !busy) onClose();
-      }}
-    >
-      <DialogTitle id={titleId}>
-        {storage ? "Edit storage" : "Register storage"}
-      </DialogTitle>
-      <DialogContent role="main" dividers>
+    <Stack spacing={3} sx={{ maxWidth: 720 }}>
+      <Typography component="h1" variant="h5" id={titleId}>
+        {storage ? "Edit storage" : "Add storage"}
+      </Typography>
+      <Box>
         <form
           id={`${titleId}-form`}
           onSubmit={(event) => void save(event)}
@@ -215,13 +202,13 @@ export function StorageEditor({
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 8 }}>
                 <TextField
-                  label="Registered capacity"
+                  label="Configured capacity"
                   name="capacity"
                   required
-                  defaultValue={storage?.capacity_bytes ?? "0"}
+                  defaultValue={capacity.value}
                   slotProps={{
                     htmlInput: {
-                      "aria-label": "Registered capacity",
+                      "aria-label": "Configured capacity",
                       inputMode: "decimal",
                     },
                   }}
@@ -231,7 +218,7 @@ export function StorageEditor({
                 <TextField
                   label="Unit"
                   name="unit"
-                  defaultValue="B"
+                  defaultValue={capacity.unit}
                   select
                   slotProps={{
                     htmlInput: { "aria-label": "Capacity unit" },
@@ -251,8 +238,9 @@ export function StorageEditor({
             </Alert>
           )}
         </form>
-      </DialogContent>
-      <DialogActions>
+      </Box>
+      <Divider />
+      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
         <Button type="button" disabled={busy} onClick={onClose}>
           {unknown ? "Close and review" : "Cancel"}
         </Button>
@@ -265,7 +253,7 @@ export function StorageEditor({
         >
           {busy ? "Saving..." : "Save"}
         </Button>
-      </DialogActions>
-    </Dialog>
+      </Stack>
+    </Stack>
   );
 }
