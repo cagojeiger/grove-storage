@@ -362,8 +362,6 @@ p[role="alert"],
 .issued-token { display: grid; gap: 16px; min-width: 0; }
 .token-connections { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
 .token-connections code { overflow-wrap: anywhere; }
-.service-keys { margin-top: 28px; }
-.clients .section-heading, .clients .page-actions { flex-wrap: wrap; }
 .storage-section .section-heading { flex-wrap: wrap; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .storage-section .section-heading h2 { padding: 0; border: 0; }
 .usage-range { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
@@ -387,9 +385,7 @@ p[role="alert"],
   .session-row > div { grid-column: 1; }
   .session-row > button { grid-column: 2; grid-row: 1 / span 2; }
 }
-.clients h1, .clients h2 { overflow-wrap: anywhere; }
-.service-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
-.service-key-row code, .key-value { overflow-wrap: anywhere; min-width: 0; }
+.key-value { overflow-wrap: anywhere; min-width: 0; }
 .issued-token dd { font-size: 13px; overflow-wrap: anywhere; margin: 6px 0 14px; }
 .issued-token .check-field { display: flex; gap: 10px; align-items: flex-start; }
 .load-more { margin-top: 20px; }

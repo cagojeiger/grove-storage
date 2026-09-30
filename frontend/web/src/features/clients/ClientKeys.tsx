@@ -1,4 +1,14 @@
-import { Button, IconButton } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  IconButton,
+  List,
+  ListItem,
+  Stack,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
@@ -14,41 +24,77 @@ export function ClientKeys({ clientId }: { clientId: string }) {
       command<string[]>("credential.list", { client_id: clientId }, signal),
   });
   return (
-    <section className="service-keys" aria-label="S3 credentials">
-      <div className="section-heading">
-        <h2>S3 Credentials</h2>
-        <Button type="submit" onClick={() => setAction({ kind: "s3-create" })}>
-          <Plus size={16} />
+    <Stack
+      component="section"
+      aria-label="S3 credentials"
+      spacing={2}
+      sx={{ pt: 3, borderTop: 1, borderColor: "divider" }}
+    >
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1}
+        sx={{
+          alignItems: { xs: "flex-start", sm: "center" },
+          justifyContent: "space-between",
+        }}
+      >
+        <Typography variant="h2">S3 Credentials</Typography>
+        <Button
+          type="button"
+          variant="outlined"
+          startIcon={<Plus size={16} />}
+          onClick={() => setAction({ kind: "s3-create" })}
+        >
           Create credential
         </Button>
-      </div>
+      </Stack>
       {query.isPending ? (
-        <p role="status">Loading credentials...</p>
+        <Typography role="status" color="text.secondary">
+          Loading credentials...
+        </Typography>
       ) : query.isError ? (
-        <p role="alert">
+        <Alert severity="error">
           {message(query.error)}{" "}
-          <Button type="submit" onClick={() => void query.refetch()}>Retry</Button>
-        </p>
+          <Button type="button" onClick={() => void query.refetch()}>
+            Retry
+          </Button>
+        </Alert>
       ) : (
-        <>
-          {query.data.map((key) => (
-            <div className="service-key-row" key={key}>
-              <code>{key}</code>
-              <IconButton type="submit"
-                className="icon-button danger"
-                color="error"
-                title={`Revoke ${key}`}
-                aria-label={`Revoke ${key}`}
-                onClick={() => setAction({ kind: "s3-delete", key })}
-              >
-                <Trash2 size={16} />
-              </IconButton>
-            </div>
-          ))}
+        <Box>
+          <List disablePadding aria-label="Issued S3 credentials">
+            {query.data.map((key) => (
+              <ListItem disableGutters key={key} sx={{ gap: 2, py: 1 }}>
+                <Typography
+                  component="code"
+                  variant="body2"
+                  sx={{
+                    fontFamily: "monospace",
+                    overflowWrap: "anywhere",
+                    minWidth: 0,
+                    flex: 1,
+                  }}
+                >
+                  {key}
+                </Typography>
+                <Tooltip title={`Revoke ${key}`}>
+                  <IconButton
+                    type="button"
+                    color="error"
+                    aria-label={`Revoke ${key}`}
+                    onClick={() => setAction({ kind: "s3-delete", key })}
+                  >
+                    <Trash2 size={16} />
+                  </IconButton>
+                </Tooltip>
+              </ListItem>
+            ))}
+          </List>
           {!query.data.length && (
-            <p className="empty">No credentials issued.</p>
+            <Typography color="text.secondary" sx={{ py: 3 }}>
+              No credentials issued.
+            </Typography>
           )}
-        </>
+        </Box>
       )}
       {action && (
         <KeyDialog
@@ -57,6 +103,6 @@ export function ClientKeys({ clientId }: { clientId: string }) {
           onClose={() => setAction(null)}
         />
       )}
-    </section>
+    </Stack>
   );
 }

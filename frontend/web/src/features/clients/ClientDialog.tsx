@@ -1,4 +1,12 @@
-import { DialogContent, DialogActions, TextField, Button } from "@mui/material";
+import {
+  Alert,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Stack,
+  Typography,
+} from "@mui/material";
 
 import { FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,23 +61,24 @@ export function ClientDialog({
     >
       <form onSubmit={(e) => void submit(e)}>
         <DialogContent>
-          <fieldset
-            className="storage-form"
+          <Stack
+            component="fieldset"
+            spacing={3}
+            sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
             disabled={state.busy || state.unknown}
           >
             {id ? (
               <>
-                <p className="full-field">
+                <Typography sx={{ overflowWrap: "anywhere" }}>
                   Delete <strong>{id}</strong> and its service keys. Referenced
                   files and pending cleanup block deletion.
-                </p>
+                </Typography>
                 <TextField
                   autoComplete="off"
                   value={confirmation}
                   onChange={(e) => setConfirmation(e.target.value)}
                   required
                   label={"Client ID to delete"}
-                  className="full-field"
                 />
               </>
             ) : (
@@ -105,9 +114,11 @@ export function ClientDialog({
                     </option>
                   ))}
                 </TextField>
-                {storages.isPending && <p role="status">Loading storage...</p>}
+                {storages.isPending && (
+                  <Typography role="status">Loading storage...</Typography>
+                )}
                 {storages.isError && (
-                  <p role="alert">
+                  <Alert severity="error">
                     {message(storages.error)}{" "}
                     <Button
                       type="button"
@@ -115,18 +126,20 @@ export function ClientDialog({
                     >
                       Retry storage
                     </Button>
-                  </p>
+                  </Alert>
                 )}
                 {!storages.isPending &&
                   !storages.isError &&
-                  !options.length && <p>No S3 storage registered.</p>}
+                  !options.length && (
+                    <Alert severity="info">No S3 storage registered.</Alert>
+                  )}
               </>
             )}
-          </fieldset>
+          </Stack>
           {state.error && (
-            <p className="form-error" role="alert">
+            <Alert severity="error" sx={{ mt: 2 }}>
               {state.error}
-            </p>
+            </Alert>
           )}
         </DialogContent>
         <DialogActions>
@@ -137,7 +150,6 @@ export function ClientDialog({
             type="submit"
             variant={id ? "outlined" : "contained"}
             color={id ? "error" : "primary"}
-            className={id ? "danger" : "primary"}
             disabled={
               state.busy ||
               state.unknown ||

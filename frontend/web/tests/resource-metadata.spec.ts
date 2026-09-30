@@ -35,7 +35,7 @@ for (const resource of ["storage", "client"] as const) {
       await expect(page.getByRole("region", { name: "Storage settings" }).locator(".resource-metadata")).toHaveCount(1);
     } else {
       const metadataBeforeKeys = await page.locator(".resource-metadata").evaluate((element) =>
-        Boolean(element.compareDocumentPosition(document.querySelector(".service-keys")!) & Node.DOCUMENT_POSITION_FOLLOWING));
+        Boolean(element.compareDocumentPosition(document.querySelector('[aria-label="S3 credentials"]')!) & Node.DOCUMENT_POSITION_FOLLOWING));
       expect(metadataBeforeKeys).toBe(true);
     }
     await page.getByRole("button", { name: "Edit metadata", exact: true }).click();

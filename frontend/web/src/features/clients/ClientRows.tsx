@@ -1,5 +1,14 @@
 import { useQueries } from "@tanstack/react-query";
-import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
+import {
+  Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { command } from "../../api/commands";
 import { bytes } from "../../design/format";
 import { Client, ClientUsage, clientLink, totals } from "./model";
@@ -21,31 +30,79 @@ export function ClientRows({
     })),
   });
   return (
-    <TableContainer><Table size="small" aria-label="Clients" sx={{ minWidth: 520 }}>
-      <TableHead><TableRow><TableCell>Client</TableCell><TableCell>Storage</TableCell><TableCell align="right">Active files</TableCell><TableCell align="right">Active data</TableCell></TableRow></TableHead>
-      <TableBody>
-      {ids.map((id, i) => {
-        const summary = usage ? totals(usage, id) : undefined;
-        return (
-          <TableRow hover key={id}>
-            <TableCell><Link href={href(clientLink(id))}>{id}</Link></TableCell>
-            <TableCell>
-              {details[i].isError
-                ? "Unavailable"
-                : (details[i].data?.storage_id ?? "Loading...")}
+    <TableContainer>
+      <Table size="small" aria-label="Clients" sx={{ tableLayout: "fixed" }}>
+        <TableHead>
+          <TableRow>
+            <TableCell>Client</TableCell>
+            <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+              Storage
             </TableCell>
-            <TableCell align="right">
-              {summary
-                ? `${summary.files.toLocaleString("en-US")} files`
-                : "Unavailable"}
+            <TableCell
+              align="right"
+              sx={{ display: { xs: "none", sm: "table-cell" } }}
+            >
+              Active files
             </TableCell>
-            <TableCell align="right">
-              {summary ? bytes(summary.bytes) : "Unavailable"}
-            </TableCell>
+            <TableCell align="right">Active data</TableCell>
           </TableRow>
-        );
-      })}
-      </TableBody>
-    </Table></TableContainer>
+        </TableHead>
+        <TableBody>
+          {ids.map((id, i) => {
+            const summary = usage ? totals(usage, id) : undefined;
+            const storage = details[i].isError
+              ? "Unavailable"
+              : (details[i].data?.storage_id ?? "Loading...");
+            const files = summary
+              ? `${summary.files.toLocaleString("en-US")} files`
+              : "Unavailable";
+            return (
+              <TableRow hover key={id}>
+                <TableCell sx={{ overflowWrap: "anywhere" }}>
+                  <Link href={href(clientLink(id))}>{id}</Link>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ display: { xs: "block", md: "none" } }}
+                  >
+                    {storage}
+                  </Typography>
+                </TableCell>
+                <TableCell
+                  sx={{
+                    display: { xs: "none", md: "table-cell" },
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {storage}
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    display: { xs: "none", sm: "table-cell" },
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {files}
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                >
+                  {summary ? bytes(summary.bytes) : "Unavailable"}
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ display: { xs: "block", sm: "none" } }}
+                  >
+                    {files}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }

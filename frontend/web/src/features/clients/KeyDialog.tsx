@@ -8,6 +8,8 @@ import {
   Stack,
   IconButton,
   Tooltip,
+  Alert,
+  Typography,
 } from "@mui/material";
 
 import { FormEvent, useState } from "react";
@@ -75,49 +77,55 @@ export function KeyDialog({
       onClose={onClose}
     >
       {issued ? (
-        <DialogContent>
-          <div className="issued-token">
-            {issued.map((item) => (
-              <Stack
-                key={item.name}
-                direction="row"
-                spacing={1}
-                sx={{ alignItems: "center" }}
-              >
-                <TextField
-                  label={item.name}
-                  value={item.value}
-                  autoComplete="off"
-                  slotProps={{
-                    htmlInput: { spellCheck: false },
-                    input: { readOnly: true },
-                  }}
-                />
-                <Tooltip title={`Copy ${item.name}`}>
-                  <IconButton
-                    type="button"
-                    className="icon-button"
-                    title={`Copy ${item.name}`}
-                    aria-label={`Copy ${item.name}`}
-                    onClick={() => {
-                      setCopyError("");
-                      void navigator.clipboard
-                        .writeText(item.value)
-                        .catch(() =>
-                          setCopyError(
-                            "Copy failed. Select the key to copy it.",
-                          ),
-                        );
+        <>
+          <DialogContent>
+            <Stack spacing={3}>
+              {issued.map((item) => (
+                <Stack
+                  key={item.name}
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: "center" }}
+                >
+                  <TextField
+                    label={item.name}
+                    value={item.value}
+                    autoComplete="off"
+                    slotProps={{
+                      htmlInput: { spellCheck: false },
+                      input: {
+                        readOnly: true,
+                        sx: { fontFamily: "monospace" },
+                      },
                     }}
-                  >
-                    <Copy size={16} />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
-            ))}
-            {copyError && <p role="alert">{copyError}</p>}
+                  />
+                  <Tooltip title={`Copy ${item.name}`}>
+                    <IconButton
+                      type="button"
+                      aria-label={`Copy ${item.name}`}
+                      onClick={() => {
+                        setCopyError("");
+                        void navigator.clipboard
+                          .writeText(item.value)
+                          .catch(() =>
+                            setCopyError(
+                              "Copy failed. Select the key to copy it.",
+                            ),
+                          );
+                      }}
+                    >
+                      <Copy size={16} />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              ))}
+              {copyError && <Alert severity="error">{copyError}</Alert>}
+            </Stack>
+          </DialogContent>
+          <DialogActions
+            sx={{ flexDirection: "column", alignItems: "stretch", gap: 1 }}
+          >
             <FormControlLabel
-              className="check-field"
               control={
                 <Checkbox
                   checked={saved}
@@ -127,44 +135,51 @@ export function KeyDialog({
               label={"I have saved these keys. Secrets are shown only once."}
             />
             <Button
-              type="submit"
+              type="button"
               variant="contained"
-              className="primary"
+              sx={{ alignSelf: "flex-end" }}
               disabled={!saved}
               onClick={onClose}
             >
               Done
             </Button>
-          </div>
-        </DialogContent>
+          </DialogActions>
+        </>
       ) : (
         <form onSubmit={(e) => void submit(e)}>
           <DialogContent>
-            <fieldset
-              className="storage-form"
+            <Stack
+              component="fieldset"
+              spacing={3}
+              sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
               disabled={state.busy || state.unknown}
             >
-              <p className="full-field">
+              <Typography sx={{ overflowWrap: "anywhere" }}>
                 Client: <strong>{clientId}</strong>
-              </p>
+              </Typography>
               {deleting && (
                 <>
-                  <p className="full-field key-value">{action.key}</p>
+                  <Typography
+                    component="code"
+                    variant="body2"
+                    sx={{ fontFamily: "monospace", overflowWrap: "anywhere" }}
+                  >
+                    {action.key}
+                  </Typography>
                   <TextField
                     autoComplete="off"
                     required
                     value={confirmation}
                     onChange={(e) => setConfirmation(e.target.value)}
                     label={"Client ID to confirm"}
-                    className="full-field"
                   />
                 </>
               )}
-            </fieldset>
+            </Stack>
             {state.error && (
-              <p className="form-error" role="alert">
+              <Alert severity="error" sx={{ mt: 2 }}>
                 {state.error}
-              </p>
+              </Alert>
             )}
           </DialogContent>
           <DialogActions>
@@ -175,7 +190,6 @@ export function KeyDialog({
               type="submit"
               variant="contained"
               color={deleting ? "error" : "primary"}
-              className={deleting ? "danger" : "primary"}
               disabled={
                 state.busy ||
                 state.unknown ||
