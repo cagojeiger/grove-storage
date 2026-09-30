@@ -43,7 +43,7 @@ test("replace conflict clears secret and retains editable nonsecret settings", a
     "address cannot be changed",
   );
   await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
-  await expect(page.getByLabel("Endpoint", { exact: true })).toHaveValue(
+  await expect(page.getByLabel(/^Endpoint\s*\*?$/)).toHaveValue(
     example.endpoint!,
   );
 });
@@ -65,7 +65,7 @@ test("lost response blocks resubmission and refreshes instead of retrying", asyn
   await expect(page.getByRole("alert")).toContainText(
     "change outcome is unconfirmed",
   );
-  await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel(/^Secret key\s*\*?$/)).toHaveValue("");
   await expect(
     page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
@@ -142,7 +142,7 @@ test("pending write clears secret, prevents double submit and disables cancel", 
   await fillS3(page);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Saving..." })).toBeDisabled();
-  await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel(/^Secret key\s*\*?$/)).toHaveValue("");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Register storage" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();

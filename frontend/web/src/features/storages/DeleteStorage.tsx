@@ -1,5 +1,5 @@
-import { Button } from "@mui/material";
-import { Input } from "../../design/Fields";
+import { DialogContent, DialogActions, TextField, Button } from "@mui/material";
+
 import { FormEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -54,25 +54,26 @@ export function DeleteStorage({
   return (
     <Dialog title="Delete storage" busy={busy} onClose={onClose}>
       <form onSubmit={(event) => void remove(event)}>
-        <p className="delete-summary">
-          Remove <strong>{id}</strong> from the registry. The S3 bucket
-          is retained.
-        </p>
-        <label className="confirmation">
-          Storage ID to delete
-          <Input
+        <DialogContent>
+          <p className="delete-summary">
+            Remove <strong>{id}</strong> from the registry. The S3 bucket is
+            retained.
+          </p>
+          <TextField
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
             disabled={busy || unknown}
             autoComplete="off"
+            label={"Storage ID to delete"}
+            className="confirmation"
           />
-        </label>
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
-        <div className="dialog-actions">
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
+        </DialogContent>
+        <DialogActions>
           <Button
             type="button"
             onClick={unknown ? onReturnToList : onClose}
@@ -80,7 +81,9 @@ export function DeleteStorage({
           >
             {unknown ? "Review list" : "Cancel"}
           </Button>
-          <Button color="error"
+          <Button
+            color="error"
+            variant="contained"
             type="submit"
             className="danger action-button"
             disabled={busy || unknown || confirmation !== id}
@@ -88,7 +91,7 @@ export function DeleteStorage({
             <Trash2 size={16} />
             {busy ? "Deleting..." : "Confirm delete"}
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );

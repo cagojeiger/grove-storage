@@ -21,8 +21,8 @@ for (const theme of ["light", "dark"]) {
         await page.getByLabel("Theme").selectOption(theme);
         const row = page.locator(list.selector).first();
         await expect(row).toBeVisible();
-        await expect(row).toHaveCSS("padding-top", "14px");
-        await expect(row).toHaveCSS("padding-bottom", "14px");
+        await expect(row).toHaveCSS("padding-top", "6px");
+        await expect(row).toHaveCSS("padding-bottom", "6px");
         await expect(row).toHaveCSS("border-bottom-width", "1px");
         await expect(row).toHaveCSS("font-family", /^Inter,/);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -43,13 +43,13 @@ for (const theme of ["light", "dark"]) {
       await expect(save).toBeInViewport();
       await expect(cancel).toBeInViewport();
       await page.screenshot({ path: `test-results/review-register-${width}-${theme}.png`, animations: "disabled" });
-      await page.getByLabel("Registered capacity", { exact: true }).scrollIntoViewIfNeeded();
+      await page.getByLabel(/^Registered capacity\s*\*?$/).scrollIntoViewIfNeeded();
       await expect(save).toBeInViewport();
       const after = await save.boundingBox();
       expect(after!.y).toBeGreaterThan(600);
       expect(after!.y + after!.height).toBeLessThanOrEqual(720);
       await save.click();
-      await expect(page.getByLabel("Storage ID", { exact: true })).toBeFocused();
+      await expect(page.getByLabel(/^Storage ID\s*\*?$/)).toBeFocused();
       await expect(page.getByRole("heading", { name: "Register storage" })).toBeVisible();
       await cancel.click();
       await expect(page.getByRole("heading", { name: "Storage", exact: true })).toBeVisible();

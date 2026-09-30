@@ -42,8 +42,11 @@ for (const resource of ["storage", "client"] as const) {
     await page.getByLabel("Metadata JSON").fill('{"description":42}');
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("string values");
+    await expect(page.getByLabel("Metadata JSON")).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByLabel("Metadata JSON")).toHaveAccessibleDescription(/string values/);
     expect(writes).toHaveLength(0);
     await page.getByLabel("Metadata JSON").fill('{"description":"Production files","environment":"home"}');
+    await expect(page.getByLabel("Metadata JSON")).toHaveAttribute("aria-invalid", "false");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(writes).toEqual([{ id, metadata: { description: "Production files", environment: "home" } }]);
@@ -88,7 +91,7 @@ for (const width of [390, 768, 1440]) {
     await clientMock(page);
     await page.goto("/api/admin/console/#clients/notegate");
     for (const theme of ["Light", "Dark"]) {
-      await page.getByLabel("Theme", { exact: true }).selectOption({ label: theme });
+      await page.getByLabel(/^Theme\s*\*?$/).selectOption({ label: theme });
       await page.getByRole("button", { name: "Edit metadata" }).click();
       await page.getByLabel("Metadata JSON").fill(JSON.stringify({ description: "a".repeat(500) }));
       const box = await page.getByLabel("Metadata JSON").boundingBox();

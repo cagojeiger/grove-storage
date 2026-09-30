@@ -42,7 +42,7 @@ test("S3 registration sends all options with CSRF and removes the secret", async
   await page.getByRole("button", { name: "Edit storage" }).click();
   await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
   await page.getByLabel("Secret key (re-enter)").fill("replacement-secret");
-  await page.getByLabel("Registered capacity", { exact: true }).fill("1000");
+  await page.getByLabel(/^Registered capacity\s*\*?$/).fill("1000");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "new-s3", exact: true })).toBeVisible();
   expect(writes[1].command).toBe("storage.replace");
@@ -61,7 +61,7 @@ test("S3-only creation, reload, history and deletion", async ({
   await page.goto(root);
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await fillS3(page, "list");
-  await expect(page.getByLabel("Type", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel(/^Type\s*\*?$/)).toHaveCount(0);
   await expect(page.getByLabel("Root path")).toHaveCount(0);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(

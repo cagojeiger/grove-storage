@@ -105,7 +105,7 @@ test("login clears token; logout removes overview", async ({ page }) => {
     ),
   ).not.toContain("test-token");
   await page.locator('button[aria-label="Account menu"]').click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
@@ -120,7 +120,7 @@ test("password change validates confirmation and signs out", async ({ page }) =>
   await page.goto(`${root}#settings/security`);
   await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
   await page.getByLabel("Current password").fill("old-private-password");
-  await page.getByLabel("New password", { exact: true }).fill("new-private-password");
+  await page.getByLabel(/^New password\s*\*?$/).fill("new-private-password");
   await page.getByLabel("Confirm new password").fill("different-password");
   await page.getByRole("button", { name: "Change password" }).click();
   await expect(page.getByText("The new passwords do not match.")).toBeVisible();
@@ -144,16 +144,16 @@ test("account menu separates profile and security", async ({ page }) => {
   await expect(menu).toContainText("Owner");
   await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "My account" })).toHaveCount(0);
   await menu.click();
-  await page.getByRole("link", { name: "My account" }).click();
+  await page.getByRole("menuitem", { name: "My account" }).click();
   await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
   await expect(page.getByLabel("Current password")).toHaveCount(0);
   await menu.click();
-  await page.getByRole("link", { name: "Security" }).click();
+  await page.getByRole("menuitem", { name: "Security" }).click();
   await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
   await expect(page.getByLabel("Current password")).toBeVisible();
   await menu.click();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
+  await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeHidden();
 });
 
 for (const width of [320, 768, 1440]) {
@@ -173,17 +173,17 @@ for (const width of [320, 768, 1440]) {
         expect(rect!.y + rect!.height).toBeLessThanOrEqual(600);
       }
       await menu.click();
-      const panel = await page.locator(".account-menu-panel").boundingBox();
+      const panel = await page.getByRole("menu", { name: "Account menu" }).boundingBox();
       expect(panel!.x).toBeGreaterThanOrEqual(0);
       expect(panel!.x + panel!.width).toBeLessThanOrEqual(width);
       expect(panel!.y).toBeGreaterThanOrEqual(64);
       expect(panel!.y + panel!.height).toBeLessThanOrEqual(600);
-      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-      await expect(page.locator(".account-menu-panel")).toHaveCSS("opacity", "1");
+      await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
+      await expect(page.getByRole("menu", { name: "Account menu" })).toHaveCSS("opacity", "1");
       await page.screenshot({ path: `test-results/sidebar-account-${width}-${theme}.png` });
       await page.keyboard.press("Escape");
       await expect(menu).toBeFocused();
-      await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
+      await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeHidden();
     });
   }
 }
@@ -193,7 +193,33 @@ test("token browser sessions cannot open password settings", async ({ page }) =>
   await page.goto(`${root}#settings/security`);
   await expect(page.getByRole("alert")).toHaveText("Password sign-in required.");
   await page.getByRole("button", { name: "Account menu" }).click();
-  await expect(page.getByRole("link", { name: "Security" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Security" })).toHaveCount(0);
+});
+
+test("account menu supports arrow navigation and restores trigger focus", async ({ page }) => {
+  await mock(page, true, true);
+  await page.goto(root);
+  const trigger = page.getByRole("button", { name: "Account menu" });
+  await trigger.click();
+  await expect(page.getByRole("menu", { name: "Account menu" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "My account", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Security", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+});
+
+test("MUI synchronizes an explicit theme between tabs", async ({ page, context }) => {
+  await mock(page);
+  await page.goto(root);
+  const other = await context.newPage();
+  await mock(other);
+  await other.goto(root);
+  await page.getByLabel("Theme").selectOption("dark");
+  await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
+  await other.getByLabel("Theme").selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await other.close();
 });
 
 test("keyboard focus stays visible on a short mobile viewport", async ({ page }) => {
@@ -308,7 +334,7 @@ test("empty, API failure, retry, and logout failure", async ({ page }) => {
     route.fulfill({ status: 500, json: {} }),
   );
   await page.locator('button[aria-label="Account menu"]').click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
@@ -337,7 +363,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       ).toBe(true);
       expect(
         await page
-          .locator(".brand img")
+          .getByRole("link", { name: "Grove Storage", exact: true }).locator("img")
           .evaluate((img: HTMLImageElement) => img.naturalWidth > 0),
       ).toBe(true);
       await page.screenshot({

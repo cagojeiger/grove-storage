@@ -83,21 +83,21 @@ export async function storageMock(page: Page, initial = [example]) {
 }
 
 export async function fillS3(page: Page, id = "new-s3") {
-  await page.getByLabel("Storage ID", { exact: true }).fill(id);
+  await page.getByLabel(/^Storage ID\s*\*?$/).fill(id);
   await page
-    .getByLabel("Endpoint", { exact: true })
+    .getByLabel(/^Endpoint\s*\*?$/)
     .fill("https://s3.example.com");
   await page
     .getByLabel("Public endpoint (optional)")
     .fill("https://public.example.com");
-  await page.getByLabel("Region", { exact: true }).fill("ap-northeast-2");
-  await page.getByLabel("Bucket", { exact: true }).fill("files");
-  await page.getByLabel("Access key", { exact: true }).fill("test-access");
+  await page.getByLabel(/^Region\s*\*?$/).fill("ap-northeast-2");
+  await page.getByLabel(/^Bucket\s*\*?$/).fill("files");
+  await page.getByLabel(/^Access key\s*\*?$/).fill("test-access");
   await page
-    .getByLabel("Secret key", { exact: true })
+    .getByLabel(/^Secret key\s*\*?$/)
     .fill("ephemeral-provider-secret");
-  await page.getByLabel("Path-style", { exact: true }).check();
-  await page.getByLabel("Use relay", { exact: true }).check();
-  await page.getByLabel("Registered capacity", { exact: true }).fill("1.5");
+  await page.getByLabel(/^Path-style\s*\*?$/).check();
+  await page.getByLabel(/^Use relay\s*\*?$/).check();
+  await page.getByLabel(/^Registered capacity\s*\*?$/).fill("1.5");
   await page.getByLabel("Capacity unit").selectOption("TiB");
 }

@@ -31,7 +31,7 @@ export async function usageChecks(page, { database, origin }) {
   await expect(
     page.getByRole("cell", { name: "retired-client", exact: true }),
   ).toHaveCount(0);
-  await page.getByLabel("Days", { exact: true }).fill("365");
+  await page.getByLabel(/^Days\s*\*?$/).fill("365");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "retired-client", exact: true }),

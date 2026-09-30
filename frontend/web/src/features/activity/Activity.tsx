@@ -1,5 +1,19 @@
-import { IconButton, Button, Link, Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
-import { Input } from "../../design/Fields";
+import {
+  DialogContent,
+  TextField,
+  IconButton,
+  Button,
+  Link,
+  Tabs,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+} from "@mui/material";
+
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilter, RefreshCw } from "lucide-react";
@@ -60,7 +74,8 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         <div>
           <h1>{admin ? "Activity" : "My activity"}</h1>
         </div>
-        <IconButton type="submit"
+        <IconButton
+          type="submit"
           className="icon-button"
           aria-label="Refresh activity"
           title="Refresh activity"
@@ -73,35 +88,85 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           <RefreshCw size={18} />
         </IconButton>
       </div>
-      <Tabs value={denied ? false : stream} variant="scrollable" scrollButtons="auto" aria-label="Activity views">
-        <Tab component="a" value="audit" href={`#activity${suffix}`} label="Audit log" />
-        <Tab component="a" value="invocations" href={`#activity/invocations${suffix}`} label="Command history" />
-        {admin && <Tab component="a" value="security" href={`#activity/security${suffix}`} label="Security events" />}
+      <Tabs
+        value={denied ? false : stream}
+        variant="scrollable"
+        scrollButtons="auto"
+        aria-label="Activity views"
+      >
+        <Tab
+          component="a"
+          value="audit"
+          href={`#activity${suffix}`}
+          label="Audit log"
+        />
+        <Tab
+          component="a"
+          value="invocations"
+          href={`#activity/invocations${suffix}`}
+          label="Command history"
+        />
+        {admin && (
+          <Tab
+            component="a"
+            value="security"
+            href={`#activity/security${suffix}`}
+            label="Security events"
+          />
+        )}
       </Tabs>
-      {!denied && (rows.length > 0 || params.size > 0 || query.isPending || query.isError) &&
-        <div className="activity-toolbar">
-          <Button type="button" aria-expanded={filtersOpen} aria-controls="activity-filters" onClick={() => setFiltersOpen(!filtersOpen)}>
-            <ListFilter size={16} />Filters{params.size > 0 ? ` (${params.size})` : ""}
-          </Button>
-          {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}
-        </div>}
+      {!denied &&
+        (rows.length > 0 ||
+          params.size > 0 ||
+          query.isPending ||
+          query.isError) && (
+          <div className="activity-toolbar">
+            <Button
+              type="button"
+              aria-expanded={filtersOpen}
+              aria-controls="activity-filters"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            >
+              <ListFilter size={16} />
+              Filters{params.size > 0 ? ` (${params.size})` : ""}
+            </Button>
+            {params.size > 0 && <a href={`#${path}`}>Clear filters</a>}
+          </div>
+        )}
       {!denied && (
-        <form id="activity-filters" className="activity-filters" hidden={!filtersOpen} onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          const next = new URLSearchParams();
-          for (const key of ["account_id", "credential_id"]) {
-            const value = field(data, key).trim();
-            if (value) next.set(key, value);
-          }
-          window.location.hash = `${path}${next.size ? `?${next}` : ""}`;
-        }}>
-          <label>Actor account ID
-            <Input name="account_id" defaultValue={params.get("account_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
-          </label>
-          <label>Used token ID
-            <Input name="credential_id" defaultValue={params.get("credential_id") ?? ""} pattern={uuidPattern} autoComplete="off" spellCheck={false} />
-          </label>
+        <form
+          id="activity-filters"
+          className="activity-filters"
+          hidden={!filtersOpen}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            const next = new URLSearchParams();
+            for (const key of ["account_id", "credential_id"]) {
+              const value = field(data, key).trim();
+              if (value) next.set(key, value);
+            }
+            window.location.hash = `${path}${next.size ? `?${next}` : ""}`;
+          }}
+        >
+          <TextField
+            name="account_id"
+            defaultValue={params.get("account_id") ?? ""}
+            autoComplete="off"
+            label={"Actor account ID"}
+            slotProps={{
+              htmlInput: { pattern: uuidPattern, spellCheck: false },
+            }}
+          />
+          <TextField
+            name="credential_id"
+            defaultValue={params.get("credential_id") ?? ""}
+            autoComplete="off"
+            label={"Used token ID"}
+            slotProps={{
+              htmlInput: { pattern: uuidPattern, spellCheck: false },
+            }}
+          />
           <Button type="submit">Apply</Button>
         </form>
       )}
@@ -115,26 +180,59 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         <p role="alert">{message(query.error)}</p>
       ) : (
         <>
-          <TableContainer><Table size="small" aria-label="Activity" sx={{ minWidth: 640 }}>
-            <TableHead><TableRow><TableCell>Time</TableCell><TableCell>Event</TableCell><TableCell>{stream === "audit" ? "Resource" : stream === "security" ? "Reason" : "Result"}</TableCell><TableCell>Actor / Source</TableCell></TableRow></TableHead>
-            <TableBody>
-            {rows.map((event) => (
-              <TableRow key={event.context.id} hover>
-                <TableCell sx={{ whiteSpace: "nowrap" }}>
-                <time dateTime={event.context.created_at}>
-                  {time(event.context.created_at)}
-                </time>
-                </TableCell>
-                <TableCell><Link component="button" onClick={() => setSelected(event)} sx={{ textAlign: "left" }}>{eventName(event)}</Link></TableCell>
-                <TableCell>{eventResult(event)}</TableCell>
-                <TableCell>{actor(event.context)}<div className="muted">{event.context.surface}</div></TableCell>
-              </TableRow>
-            ))}
-            </TableBody>
-          </Table></TableContainer>
-          {!rows.length && <p className="empty">{params.size > 0 ? "No activity matches these filters." : "No activity recorded yet."}</p>}
+          <TableContainer>
+            <Table size="small" aria-label="Activity" sx={{ minWidth: 640 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Time</TableCell>
+                  <TableCell>Event</TableCell>
+                  <TableCell>
+                    {stream === "audit"
+                      ? "Resource"
+                      : stream === "security"
+                        ? "Reason"
+                        : "Result"}
+                  </TableCell>
+                  <TableCell>Actor / Source</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((event) => (
+                  <TableRow key={event.context.id} hover>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                      <time dateTime={event.context.created_at}>
+                        {time(event.context.created_at)}
+                      </time>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        component="button"
+                        onClick={() => setSelected(event)}
+                        sx={{ textAlign: "left" }}
+                      >
+                        {eventName(event)}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{eventResult(event)}</TableCell>
+                    <TableCell>
+                      {actor(event.context)}
+                      <div className="muted">{event.context.surface}</div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {!rows.length && (
+            <p className="empty">
+              {params.size > 0
+                ? "No activity matches these filters."
+                : "No activity recorded yet."}
+            </p>
+          )}
           {query.hasNextPage && (
-            <Button type="submit"
+            <Button
+              type="submit"
               disabled={query.isFetching}
               onClick={() => void query.fetchNextPage()}
             >
@@ -149,38 +247,40 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           busy={false}
           onClose={() => setSelected(null)}
         >
-          <dl className="detail-fields event-details">
-            {Object.entries({
-              Event: eventName(selected),
-              Result: eventResult(selected),
-              Time: time(selected.context.created_at),
-              Actor: actor(selected.context),
-              "Actor type":
-                selected.context.actor_kind === "master"
-                  ? "root"
-                  : selected.context.actor_kind,
-              Surface: selected.context.surface,
-              "Token ID": selected.context.credential_id,
-              "Session ID": selected.context.session_id,
-              "Request ID": selected.context.request_id,
-              ...("duration_ms" in selected
-                ? {
-                    "Duration (ms)": selected.duration_ms,
-                    Error: selected.error_code,
-                  }
-                : {}),
-            }).map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value ?? "-"}</dd>
-              </div>
-            ))}
-          </dl>
-          {"metadata" in selected && (
-            <pre className="event-metadata">
-              {JSON.stringify(selected.metadata, null, 2)}
-            </pre>
-          )}
+          <DialogContent>
+            <dl className="detail-fields event-details">
+              {Object.entries({
+                Event: eventName(selected),
+                Result: eventResult(selected),
+                Time: time(selected.context.created_at),
+                Actor: actor(selected.context),
+                "Actor type":
+                  selected.context.actor_kind === "master"
+                    ? "root"
+                    : selected.context.actor_kind,
+                Surface: selected.context.surface,
+                "Token ID": selected.context.credential_id,
+                "Session ID": selected.context.session_id,
+                "Request ID": selected.context.request_id,
+                ...("duration_ms" in selected
+                  ? {
+                      "Duration (ms)": selected.duration_ms,
+                      Error: selected.error_code,
+                    }
+                  : {}),
+              }).map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value ?? "-"}</dd>
+                </div>
+              ))}
+            </dl>
+            {"metadata" in selected && (
+              <pre className="event-metadata">
+                {JSON.stringify(selected.metadata, null, 2)}
+              </pre>
+            )}
+          </DialogContent>
         </Dialog>
       )}
     </main>

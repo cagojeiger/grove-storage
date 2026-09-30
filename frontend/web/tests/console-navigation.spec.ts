@@ -18,7 +18,7 @@ for (const width of [390, 768]) {
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await open.click();
     await page.getByRole("button", { name: "Account menu", exact: true }).click();
-    await page.getByRole("link", { name: "My account", exact: true }).click();
+    await page.getByRole("menuitem", { name: "My account", exact: true }).click();
     await expect(page.getByRole("heading", { name: "My account", exact: true })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("contentinfo")).toHaveCount(0);
@@ -29,7 +29,7 @@ test("storage edit deep link survives reload and cancellation retains the resour
   const { writes } = await storageMock(page);
   await page.goto(`/api/admin/console/#storages/${example.id}/edit`);
   await expect(page.getByRole("heading", { name: "Edit storage" })).toBeVisible();
-  await expect(page.getByLabel("Storage ID", { exact: true })).toHaveValue(example.id);
+  await expect(page.getByLabel(/^Storage ID\s*\*?$/)).toHaveValue(example.id);
   await page.reload();
   await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -54,5 +54,5 @@ for (const id of ["create", "edit"]) test(`storage named ${id} is not mistaken f
   await page.goto(`/api/admin/console/#storages/${id}`);
   await expect(page.getByRole("heading", { name: id, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit storage", exact: true }).click();
-  await expect(page.getByLabel("Storage ID", { exact: true })).toHaveValue(id);
+  await expect(page.getByLabel(/^Storage ID\s*\*?$/)).toHaveValue(id);
 });

@@ -12,9 +12,9 @@ export async function clientChecks(page, { database }) {
   await page
     .getByRole("button", { name: "Create client", exact: true })
     .click();
-  await page.getByLabel("Client ID", { exact: true }).fill(id);
+  await page.getByLabel(/^Client ID\s*\*?$/).fill(id);
   await page
-    .getByLabel("Storage", { exact: true })
+    .getByLabel(/^Storage\s*\*?$/)
     .selectOption("console-live");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(
@@ -32,12 +32,12 @@ export async function clientChecks(page, { database }) {
 
   await page.getByRole("button", { name: "Create credential", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByLabel("Secret key", { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/^Secret key\s*\*?$/)).toBeVisible();
   const s3 = await page
-    .getByLabel("Access key ID", { exact: true })
+    .getByLabel(/^Access key ID\s*\*?$/)
     .inputValue();
   const secret = await page
-    .getByLabel("Secret key", { exact: true })
+    .getByLabel(/^Secret key\s*\*?$/)
     .inputValue();
   assert(secret.length > 0);
   await saved();

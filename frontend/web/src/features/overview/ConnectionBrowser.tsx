@@ -1,5 +1,10 @@
-import { ButtonBase, IconButton } from "@mui/material";
-import { Input } from "../../design/Fields";
+import {
+  DialogContent,
+  TextField,
+  ButtonBase,
+  IconButton,
+} from "@mui/material";
+
 import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, AppWindow, HardDrive } from "lucide-react";
@@ -60,14 +65,15 @@ export function ConnectionBrowser({
       busy={false}
       onClose={onClose}
     >
-      <div className="connection-browser">
-        <label className="connection-search">
-          <span className="sr-only">
-            {kind === "client"
-              ? "Search hidden clients"
-              : "Search hidden storage"}
-          </span>
-          <Input
+      <DialogContent>
+        <div className="connection-browser">
+          <TextField
+            className="connection-search"
+            label={
+              kind === "client"
+                ? "Search hidden clients"
+                : "Search hidden storage"
+            }
             type="search"
             placeholder={
               kind === "client" ? "Search clients" : "Search storage"
@@ -78,75 +84,80 @@ export function ConnectionBrowser({
               setPage(1);
             }}
           />
-        </label>
-        {kind === "client" && <p className="muted">Assignments on this page</p>}
-        {[...groups]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([label, members]) => (
-            <section key={label}>
-              <h3>
-                {label} <span className="muted">({members.length})</span>
-              </h3>
-              {members.map((id) => {
-                const summary = sumClients([id], totals);
-                const row = storages.find((row) => row.storage_id === id);
-                return (
-                  <ButtonBase type="submit"
-                    className="connection-browser-row"
-                    key={id}
-                    onClick={() => onSelect(id)}
-                    aria-label={`Show ${kind} ${id} on map`}
-                  >
-                    {kind === "client" ? (
-                      <AppWindow size={16} />
-                    ) : (
-                      <HardDrive size={16} />
-                    )}
-                    <strong>{id}</strong>
-                    <span>
-                      {kind === "client"
-                        ? summary
-                          ? `${summary.files.toLocaleString("en-US")} files · ${bytes(summary.bytes)}`
-                          : "Usage unavailable"
-                        : row
-                          ? `${row.active_files.toLocaleString("en-US")} files · ${bytes(row.active_bytes)} / ${bytes(row.capacity_bytes)}`
-                          : "Usage unavailable"}
-                    </span>
-                  </ButtonBase>
-                );
-              })}
-            </section>
-          ))}
-        {!ids.length && (
-          <p className="empty">
-            No matching {kind === "client" ? "clients" : "storage"}.
-          </p>
-        )}
-        <div className="connection-browser-pages">
-          <span role="status">
-            {ids.length ? (current - 1) * 20 + 1 : 0}–
-            {Math.min(current * 20, ids.length)} of {ids.length}
-          </span>
-          <IconButton type="submit"
-            className="icon-button"
-            title="Previous page"
-            aria-label="Previous page"
-            disabled={current === 1}
-            onClick={() => setPage(current - 1)}
-          >
-            <ChevronLeft size={16} />
-          </IconButton>
-          <IconButton type="submit"
-            className="icon-button"
-            title="Next page"
-            aria-label="Next page"
-            disabled={current === pages}
-            onClick={() => setPage(current + 1)}
-          >
-            <ChevronRight size={16} />
-          </IconButton>
+          {kind === "client" && (
+            <p className="muted">Assignments on this page</p>
+          )}
+          {[...groups]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([label, members]) => (
+              <section key={label}>
+                <h3>
+                  {label} <span className="muted">({members.length})</span>
+                </h3>
+                {members.map((id) => {
+                  const summary = sumClients([id], totals);
+                  const row = storages.find((row) => row.storage_id === id);
+                  return (
+                    <ButtonBase
+                      type="submit"
+                      className="connection-browser-row"
+                      key={id}
+                      onClick={() => onSelect(id)}
+                      aria-label={`Show ${kind} ${id} on map`}
+                    >
+                      {kind === "client" ? (
+                        <AppWindow size={16} />
+                      ) : (
+                        <HardDrive size={16} />
+                      )}
+                      <strong>{id}</strong>
+                      <span>
+                        {kind === "client"
+                          ? summary
+                            ? `${summary.files.toLocaleString("en-US")} files · ${bytes(summary.bytes)}`
+                            : "Usage unavailable"
+                          : row
+                            ? `${row.active_files.toLocaleString("en-US")} files · ${bytes(row.active_bytes)} / ${bytes(row.capacity_bytes)}`
+                            : "Usage unavailable"}
+                      </span>
+                    </ButtonBase>
+                  );
+                })}
+              </section>
+            ))}
+          {!ids.length && (
+            <p className="empty">
+              No matching {kind === "client" ? "clients" : "storage"}.
+            </p>
+          )}
+          <div className="connection-browser-pages">
+            <span role="status">
+              {ids.length ? (current - 1) * 20 + 1 : 0}–
+              {Math.min(current * 20, ids.length)} of {ids.length}
+            </span>
+            <IconButton
+              type="submit"
+              className="icon-button"
+              title="Previous page"
+              aria-label="Previous page"
+              disabled={current === 1}
+              onClick={() => setPage(current - 1)}
+            >
+              <ChevronLeft size={16} />
+            </IconButton>
+            <IconButton
+              type="submit"
+              className="icon-button"
+              title="Next page"
+              aria-label="Next page"
+              disabled={current === pages}
+              onClick={() => setPage(current + 1)}
+            >
+              <ChevronRight size={16} />
+            </IconButton>
+          </div>
         </div>
-      </div>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -5,8 +5,8 @@ test("client creation and confirmed deletion use the shared resource contract", 
   const { calls } = await clientMock(page);
   await page.goto(root);
   await page.getByRole("button", { name: "Create client" }).click();
-  await page.getByLabel("Client ID", { exact: true }).fill("new-client");
-  await page.getByLabel("Storage", { exact: true }).selectOption("home-archive");
+  await page.getByLabel(/^Client ID\s*\*?$/).fill("new-client");
+  await page.getByLabel(/^Storage\s*\*?$/).selectOption("home-archive");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { name: "new-client", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Delete client", exact: true }).click();
@@ -34,7 +34,7 @@ test("S3 issuance and revocation keep the secret out of lists and storage", asyn
   await page.goto(root + "/notegate");
   await page.getByRole("button", { name: "Create credential", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByLabel("Secret key", { exact: true })).toHaveValue("one-time-provider-independent-secret");
+  await expect(page.getByLabel(/^Secret key\s*\*?$/)).toHaveValue("one-time-provider-independent-secret");
   await expect(page.getByRole("button", { name: "Close", exact: true })).toBeDisabled();
   await page.getByLabel("I have saved these keys. Secrets are shown only once.").check();
   await page.getByRole("button", { name: "Done", exact: true }).click();

@@ -70,7 +70,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     await page
       .getByRole("button", { name: "Confirm revoke", exact: true })
       .click();
-    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+    await expect(page.getByLabel(/^Password\s*\*?$/)).toBeVisible();
     await loginWithPassword(page, "owner", ownerPassword);
     await expect(
       page.getByRole("heading", { name: "My sessions", exact: true }),

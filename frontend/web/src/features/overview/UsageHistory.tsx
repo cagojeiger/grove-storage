@@ -1,5 +1,14 @@
-import { IconButton, Button, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
-import { Input } from "../../design/Fields";
+import {
+  TextField,
+  IconButton,
+  Button,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "@mui/material";
+
 import { FormEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -48,7 +57,8 @@ export function UsageHistory() {
         <div>
           <h1>Usage history</h1>
         </div>
-        <IconButton type="submit"
+        <IconButton
+          type="submit"
           className="icon-button"
           title="Refresh usage history"
           aria-label="Refresh usage history"
@@ -59,18 +69,14 @@ export function UsageHistory() {
         </IconButton>
       </div>
       <form className="usage-range" onSubmit={apply}>
-        <label>
-          Days
-          <Input
-            name="days"
-            type="number"
-            min="1"
-            max="3650"
-            step="1"
-            required
-            defaultValue={90}
-          />
-        </label>
+        <TextField
+          name="days"
+          type="number"
+          required
+          defaultValue={90}
+          label={"Days"}
+          slotProps={{ htmlInput: { min: "1", max: "3650", step: "1" } }}
+        />
         <Button type="submit" disabled={query.isFetching}>
           Apply
         </Button>
@@ -114,7 +120,9 @@ export function UsageHistory() {
                     </TableCell>
                     <TableCell>{row.storage_id}</TableCell>
                     <TableCell>{row.client_id}</TableCell>
-                    <TableCell>{row.active_files.toLocaleString("en-US")}</TableCell>
+                    <TableCell>
+                      {row.active_files.toLocaleString("en-US")}
+                    </TableCell>
                     <TableCell>{bytes(row.active_bytes)}</TableCell>
                   </TableRow>
                 ))}

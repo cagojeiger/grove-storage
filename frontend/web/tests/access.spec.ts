@@ -9,13 +9,13 @@ test("create a User without Agent or owner fields", async ({ page }) => {
     page.getByRole("link", { name: "Agents", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await expect(page.getByLabel("Owner", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Role", { exact: true }).locator("option")).toHaveText([
+  await expect(page.getByLabel(/^Owner\s*\*?$/)).toHaveCount(0);
+  await expect(page.getByLabel(/^Role\s*\*?$/).locator("option")).toHaveText([
     "Reader", "Writer", "Admin",
   ]);
-  await page.getByLabel("Name", { exact: true }).fill("Writer");
-  await page.getByLabel("Username", { exact: true }).fill("writer");
-  await page.getByLabel("Role", { exact: true }).selectOption("writer");
+  await page.getByLabel(/^Name\s*\*?$/).fill("Writer");
+  await page.getByLabel(/^Username\s*\*?$/).fill("writer");
+  await page.getByLabel(/^Role\s*\*?$/).selectOption("writer");
   await page.getByLabel("Your current password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await expect(page.getByRole("textbox", { name: "Setup link", exact: true })).toBeVisible();
@@ -38,7 +38,7 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
-  await page.getByLabel("Label", { exact: true }).fill("CLI automation");
+  await page.getByLabel(/^Label\s*\*?$/).fill("CLI automation");
   await page.getByLabel("Expires in days").fill("7");
   const sent = page.waitForRequest((r) => r.method() === "POST");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
@@ -118,7 +118,7 @@ for (const failure of ["lost", "unknown", "malformed"])
     await page
       .getByRole("button", { name: "Issue token", exact: true })
       .click();
-    await page.getByLabel("Label", { exact: true }).fill("Uncertain");
+    await page.getByLabel(/^Label\s*\*?$/).fill("Uncertain");
     await page.getByRole("button", { name: "Issue", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("outcome is unknown");
     await expect(

@@ -1,10 +1,9 @@
 import { useId, ReactNode } from "react";
 import {
   Dialog as MuiDialog,
-  DialogContent,
-  DialogActions,
   DialogTitle,
   IconButton,
+  Tooltip,
 } from "@mui/material";
 import { X } from "lucide-react";
 
@@ -13,14 +12,12 @@ export function Dialog({
   busy,
   onClose,
   children,
-  actions,
   closeDisabled = false,
 }: {
   title: string;
   busy: boolean;
   onClose: () => void;
   children: ReactNode;
-  actions?: ReactNode;
   closeDisabled?: boolean;
 }) {
   const label = useId();
@@ -28,25 +25,48 @@ export function Dialog({
     <MuiDialog
       open
       aria-labelledby={label}
+      slotProps={{
+        paper: {
+          sx: {
+            "& > form": {
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              minHeight: 0,
+            },
+          },
+        },
+      }}
       onClose={(_event, reason) => {
         if (reason === "escapeKeyDown" && !busy && !closeDisabled) onClose();
       }}
     >
-      <DialogTitle>
+      <DialogTitle
+        id={`${label}-heading`}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
         <span id={label}>{title}</span>
-        <IconButton
-          type="button"
-          className="icon-button"
-          aria-label="Close"
-          title="Close"
-          disabled={busy || closeDisabled}
-          onClick={onClose}
-        >
-          <X size={18} />
-        </IconButton>
+        <Tooltip title="Close">
+          <span>
+            <IconButton
+              type="button"
+              className="icon-button"
+              aria-label="Close"
+              title="Close"
+              disabled={busy || closeDisabled}
+              onClick={onClose}
+            >
+              <X size={18} />
+            </IconButton>
+          </span>
+        </Tooltip>
       </DialogTitle>
-      <DialogContent>{children}</DialogContent>
-      {actions && <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: "divider", flexShrink: 0 }}>{actions}</DialogActions>}
+      {children}
     </MuiDialog>
   );
 }

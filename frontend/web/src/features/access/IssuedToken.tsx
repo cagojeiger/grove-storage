@@ -1,5 +1,5 @@
-import { Button } from "@mui/material";
-import { Input } from "../../design/Fields";
+import { TextField, Checkbox, FormControlLabel, Button } from "@mui/material";
+
 import { useState } from "react";
 import { Copy } from "lucide-react";
 import { Issued } from "../../api/identity";
@@ -16,16 +16,15 @@ export function IssuedToken({
   return (
     <section className="issued-token" aria-label="Issued token">
       <h2>Token issued</h2>
-      <label>
-        Token
-        <Input
-          aria-label="Issued token"
-          readOnly
-          value={value.token}
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </label>
+      <TextField
+        value={value.token}
+        autoComplete="off"
+        label={"Token"}
+        slotProps={{
+          htmlInput: { "aria-label": "Issued token", spellCheck: false },
+          input: { readOnly: true },
+        }}
+      />
       <Button
         type="button"
         className="action-button"
@@ -49,19 +48,24 @@ export function IssuedToken({
       </dl>
       <div className="token-connections">
         <strong>CLI</strong>
-        <code>gscli --endpoint {window.location.origin} --token-file &lt;token-file&gt; status</code>
+        <code>
+          gscli --endpoint {window.location.origin} --token-file
+          &lt;token-file&gt; status
+        </code>
         <strong>MCP</strong>
         <code>{window.location.origin}/api/admin/mcp</code>
         <code>Authorization: Bearer &lt;token&gt;</code>
       </div>
-      <label className="check-field">
-        <Input
-          type="checkbox"
-          checked={saved}
-          onChange={(e) => setSaved(e.target.checked)}
-        />
-        I have saved this token. It is shown only once.
-      </label>
+      <FormControlLabel
+        className="check-field"
+        control={
+          <Checkbox
+            checked={saved}
+            onChange={(e) => setSaved(e.target.checked)}
+          />
+        }
+        label={"I have saved this token. It is shown only once."}
+      />
       <Button type="button" onClick={onDone} disabled={!saved}>
         Done
       </Button>

@@ -12,7 +12,7 @@ test("password user edits own display name without changing username or role", a
   await page.getByLabel("Password").fill("a private phrase for preview");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.locator('button[aria-label="Account menu"]').click();
-  await page.getByRole("link", { name: "My account" }).click();
+  await page.getByRole("menuitem", { name: "My account" }).click();
   await expect(page.getByRole("heading", { name: "Home administrator" })).toBeVisible();
   await expect(page.getByText("owner", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit my name" }).click();

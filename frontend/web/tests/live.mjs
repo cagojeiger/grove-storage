@@ -54,15 +54,15 @@ try {
   );
   assert.equal(csrf, 403);
   await page.locator('button[aria-label="Account menu"]').click();
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await page.getByLabel("Password", { exact: true }).waitFor();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await page.getByLabel(/^Password\s*\*?$/).waitFor();
   assert(
     !(await context.cookies()).some(
       (cookie) => cookie.name === "__Host-grove_session",
     ),
   );
   await page.reload();
-  await page.getByLabel("Password", { exact: true }).waitFor();
+  await page.getByLabel(/^Password\s*\*?$/).waitFor();
   console.log(
     "PASS real HTTPS login, Secure/HttpOnly cookie, reload, CSRF rejection, logout",
   );
@@ -89,7 +89,7 @@ try {
     { timeout: 10000, stdio: "pipe" },
   );
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Password", { exact: true }).waitFor();
+  await page.getByLabel(/^Password\s*\*?$/).waitFor();
   assert.equal(
     await page.getByRole("link", { name: "Open storage console-live", exact: true }).count(),
     0,
@@ -117,20 +117,20 @@ try {
   }));
   assert.equal(recovered.account_id, accountId);
   await page.getByRole("button", { name: "Refresh" }).click();
-  await page.getByLabel("Password", { exact: true }).waitFor();
+  await page.getByLabel(/^Password\s*\*?$/).waitFor();
   await page.getByLabel("Username").fill("owner");
-  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel(/^Password\s*\*?$/).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
   await page.goto(`${origin}/api/admin/console/#settings/security`);
   const replacement = "a different private browser integration passphrase";
   await page.getByLabel("Current password").fill(password);
-  await page.getByLabel("New password", { exact: true }).fill(replacement);
+  await page.getByLabel(/^New password\s*\*?$/).fill(replacement);
   await page.getByLabel("Confirm new password").fill(replacement);
   await page.getByRole("button", { name: "Change password" }).click();
   await page.getByRole("button", { name: "Sign in", exact: true }).waitFor();
   await page.getByLabel("Username").fill("owner");
-  await page.getByLabel("Password", { exact: true }).fill(replacement);
+  await page.getByLabel(/^Password\s*\*?$/).fill(replacement);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "Security", exact: true }).waitFor();
   await page.getByRole("main").getByRole("link", { name: "My account", exact: true }).click();
@@ -146,9 +146,9 @@ try {
   console.log("PASS real local recovery, password login, password change and re-login");
   await page.getByRole("link", { name: "Accounts", exact: true }).click();
   await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill("Setup recipient");
-  await page.getByLabel("Username", { exact: true }).fill("recipient");
-  await page.getByLabel("Role", { exact: true }).selectOption("reader");
+  await page.getByLabel(/^Name\s*\*?$/).fill("Setup recipient");
+  await page.getByLabel(/^Username\s*\*?$/).fill("recipient");
+  await page.getByLabel(/^Role\s*\*?$/).selectOption("reader");
   await page.getByLabel("Current password").fill(replacement);
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   const setupLink = await page.getByRole("textbox", { name: "Setup link", exact: true }).inputValue();
@@ -170,14 +170,14 @@ try {
     await recipient.getByText("Password set. Sign in with your username and password.").waitFor();
     await recipient.getByRole("link", { name: "Sign in" }).click();
     await recipient.getByLabel("Username").fill("recipient");
-    await recipient.getByLabel("Password", { exact: true }).fill(recipientPassword);
+    await recipient.getByLabel(/^Password\s*\*?$/).fill(recipientPassword);
     await recipient.getByRole("button", { name: "Sign in", exact: true }).click();
     await recipient.getByText("Reader · Read-only").waitFor();
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
     await recipient.locator('button[aria-label="Account menu"]').click();
-    await recipient.getByRole("link", { name: "My account" }).click();
+    await recipient.getByRole("menuitem", { name: "My account" }).click();
     await recipient.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();
-    await recipient.getByLabel("Label", { exact: true }).fill("Reader CLI");
+    await recipient.getByLabel(/^Label\s*\*?$/).fill("Reader CLI");
     await recipient.getByLabel("Expires in days").fill("1");
     await recipient.getByRole("dialog").getByLabel("Current password").fill(recipientPassword);
     await recipient.getByRole("button", { name: "Issue", exact: true }).click();

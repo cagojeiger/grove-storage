@@ -1,8 +1,15 @@
-import { Button } from "@mui/material";
-import { Input } from "../design/Fields";
+import { TextField, Button } from "@mui/material";
+
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { identity, ApiError, currentSession, message, request, Session } from "../api/http";
+import {
+  identity,
+  ApiError,
+  currentSession,
+  message,
+  request,
+  Session,
+} from "../api/http";
 
 export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   const [username, setUsername] = useState("");
@@ -47,30 +54,35 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       />
       <h1>Grove Storage</h1>
       <h2>Sign in</h2>
-      <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="username">Username</label>
-        <Input
+      <form
+        onSubmit={(event) => {
+          void submit(event);
+        }}
+      >
+        <TextField
+          label="Username"
           id="username"
           autoComplete="username"
-          spellCheck={false}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           required
           disabled={pending}
+          slotProps={{ htmlInput: { spellCheck: false } }}
         />
-        <label htmlFor="password">Password</label>
-        <Input
+        <TextField
+          label="Password"
           id="password"
           type="password"
           autoComplete="current-password"
-          spellCheck={false}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           required
           disabled={pending}
+          slotProps={{ htmlInput: { spellCheck: false } }}
         />
         {error && <p role="alert">{error}</p>}
-        <Button variant="contained"
+        <Button
+          variant="contained"
           className="primary"
           type="submit"
           disabled={pending || !username.trim() || !password || wait > 0}
@@ -79,7 +91,9 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           <ArrowRight size={16} aria-hidden="true" />
         </Button>
       </form>
-      <p className="muted">Lost access? Contact the server operator for account recovery.</p>
+      <p className="muted">
+        Lost access? Contact the server operator for account recovery.
+      </p>
     </main>
   );
 }

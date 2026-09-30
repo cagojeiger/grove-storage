@@ -1,5 +1,5 @@
-import { Button } from "@mui/material";
-import { Input } from "../design/Fields";
+import { TextField, Button } from "@mui/material";
+
 import { FormEvent, useEffect, useState } from "react";
 import { identity, ApiError, message, request } from "../api/http";
 import { field } from "../api/identity";
@@ -10,7 +10,11 @@ function captureSetupToken() {
   const prefix = "#set-password/";
   if (!window.location.hash.startsWith(prefix)) return;
   setupToken = window.location.hash.slice(prefix.length);
-  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#set-password?link=${++setupLinkVersion}`);
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}#set-password?link=${++setupLinkVersion}`,
+  );
 }
 captureSetupToken();
 window.addEventListener("hashchange", captureSetupToken);
@@ -24,7 +28,9 @@ type SetupInfo = { username: string; expires_at: string };
 export function SetPassword() {
   const [token, setToken] = useState(takeToken);
   const [info, setInfo] = useState<SetupInfo | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "unavailable" | "complete">(token ? "loading" : "unavailable");
+  const [status, setStatus] = useState<
+    "loading" | "ready" | "unavailable" | "complete"
+  >(token ? "loading" : "unavailable");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,19 +40,23 @@ export function SetPassword() {
     void request<SetupInfo>(`${identity}/password-setup/inspect`, {
       method: "POST",
       body: JSON.stringify({ token }),
-    }).then((value) => {
-      if (active) {
-        setInfo(value);
-        setStatus("ready");
-      }
-    }).catch(() => {
-      if (active) {
-        setupToken = null;
-        setToken(null);
-        setStatus("unavailable");
-      }
-    });
-    return () => { active = false; };
+    })
+      .then((value) => {
+        if (active) {
+          setInfo(value);
+          setStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setupToken = null;
+          setToken(null);
+          setStatus("unavailable");
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [token]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -76,9 +86,11 @@ export function SetPassword() {
         setToken(null);
         setStatus("unavailable");
       } else {
-        setError(failure instanceof ApiError && failure.status === 400
-          ? "Choose a password of 15 to 128 characters."
-          : message(failure));
+        setError(
+          failure instanceof ApiError && failure.status === 400
+            ? "Choose a password of 15 to 128 characters."
+            : message(failure),
+        );
       }
     } finally {
       setPending(false);
@@ -87,25 +99,72 @@ export function SetPassword() {
 
   return (
     <main className="login">
-      <img className="login-logo" src={`${import.meta.env.BASE_URL}grove-storage-logo.png`} alt="" />
+      <img
+        className="login-logo"
+        src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
+        alt=""
+      />
       <h1>Grove Storage</h1>
       <h2>Set password</h2>
       {status === "loading" && <p role="status">Checking setup link...</p>}
-      {status === "unavailable" && <p role="alert">This setup link is unavailable or expired. Ask an admin for a new link.</p>}
-      {status === "complete" && <p role="status">Password set. Sign in with your username and password.</p>}
+      {status === "unavailable" && (
+        <p role="alert">
+          This setup link is unavailable or expired. Ask an admin for a new
+          link.
+        </p>
+      )}
+      {status === "complete" && (
+        <p role="status">
+          Password set. Sign in with your username and password.
+        </p>
+      )}
       {status === "ready" && info && (
-        <form onSubmit={(event) => { void submit(event); }}>
-          <label htmlFor="setup-username">Username</label>
-          <Input id="setup-username" value={info.username} readOnly autoComplete="username" />
-          <label htmlFor="setup-password">New password</label>
-          <Input id="setup-password" name="password" type="password" minLength={15} maxLength={128} autoComplete="new-password" required disabled={pending} />
-          <label htmlFor="setup-confirmation">Confirm password</label>
-          <Input id="setup-confirmation" name="confirmation" type="password" minLength={15} maxLength={128} autoComplete="new-password" required disabled={pending} />
+        <form
+          onSubmit={(event) => {
+            void submit(event);
+          }}
+        >
+          <TextField
+            label="Username"
+            id="setup-username"
+            value={info.username}
+            autoComplete="username"
+            slotProps={{ input: { readOnly: true } }}
+          />
+          <TextField
+            label="New password"
+            id="setup-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            disabled={pending}
+            slotProps={{ htmlInput: { minLength: 15, maxLength: 128 } }}
+          />
+          <TextField
+            label="Confirm password"
+            id="setup-confirmation"
+            name="confirmation"
+            type="password"
+            autoComplete="new-password"
+            required
+            disabled={pending}
+            slotProps={{ htmlInput: { minLength: 15, maxLength: 128 } }}
+          />
           {error && <p role="alert">{error}</p>}
-          <Button variant="contained" className="primary" type="submit" disabled={pending}>{pending ? "Setting password" : "Set password"}</Button>
+          <Button
+            variant="contained"
+            className="primary"
+            type="submit"
+            disabled={pending}
+          >
+            {pending ? "Setting password" : "Set password"}
+          </Button>
         </form>
       )}
-      {(status === "complete" || status === "unavailable") && <a href="#">Sign in</a>}
+      {(status === "complete" || status === "unavailable") && (
+        <a href="#">Sign in</a>
+      )}
     </main>
   );
 }

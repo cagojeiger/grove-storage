@@ -22,7 +22,7 @@ for (const width of [320, 390, 768, 1024, 1440])
       await page.getByRole("button", { name: "Create credential" }).click();
       await page.getByRole("button", { name: "Confirm", exact: true }).click();
       await expect(
-        page.getByLabel("Secret key", { exact: true }),
+        page.getByLabel(/^Secret key\s*\*?$/),
       ).toBeVisible();
       expect(
         await page

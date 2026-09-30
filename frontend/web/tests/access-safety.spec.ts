@@ -17,8 +17,8 @@ test("role demotion during an Access mutation removes private controls", async (
   });
   await page.goto(root);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill("Rejected");
-  await page.getByLabel("Username", { exact: true }).fill("rejected");
+  await page.getByLabel(/^Name\s*\*?$/).fill("Rejected");
+  await page.getByLabel(/^Username\s*\*?$/).fill("rejected");
   await page.getByLabel("Your current password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -72,7 +72,7 @@ test("pending issuance cannot double-submit and clears the secret after close", 
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
-  await page.getByLabel("Label", { exact: true }).fill("One request");
+  await page.getByLabel(/^Label\s*\*?$/).fill("One request");
   await page.getByRole("dialog").locator("form").evaluate((form) => {
     form.dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
@@ -116,7 +116,7 @@ test("wrong-account issued tokens are rejected as unknown", async ({
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
-  await page.getByLabel("Label", { exact: true }).fill("Wrong account");
+  await page.getByLabel(/^Label\s*\*?$/).fill("Wrong account");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("outcome is unknown");
   await expect(

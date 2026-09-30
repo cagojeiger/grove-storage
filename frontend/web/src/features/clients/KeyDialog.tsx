@@ -1,5 +1,15 @@
-import { Input } from "../../design/Fields";
-import { Button } from "@mui/material";
+import {
+  DialogContent,
+  DialogActions,
+  TextField,
+  Checkbox,
+  FormControlLabel,
+  Button,
+  Stack,
+  IconButton,
+  Tooltip,
+} from "@mui/material";
+
 import { FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
@@ -46,7 +56,10 @@ export function KeyDialog({
           { name: "Secret key", value: result.secret_key },
         ]);
       } else if ("key" in action) {
-        await command("credential.delete", { client_id: clientId, access_key_id: action.key });
+        await command("credential.delete", {
+          client_id: clientId,
+          access_key_id: action.key,
+        });
         onClose();
       }
       await cache.invalidateQueries({
@@ -62,81 +75,106 @@ export function KeyDialog({
       onClose={onClose}
     >
       {issued ? (
-        <div className="issued-token">
-          {issued.map((item) => (
-            <label key={item.name}>
-              {item.name}
-              <Input
-                readOnly
-                value={item.value}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <Button
-                type="button"
-                className="icon-button"
-                title={`Copy ${item.name}`}
-                aria-label={`Copy ${item.name}`}
-                onClick={() => {
-                  setCopyError("");
-                  void navigator.clipboard
-                    .writeText(item.value)
-                    .catch(() =>
-                      setCopyError("Copy failed. Select the key to copy it."),
-                    );
-                }}
+        <DialogContent>
+          <div className="issued-token">
+            {issued.map((item) => (
+              <Stack
+                key={item.name}
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: "center" }}
               >
-                <Copy size={16} />
-              </Button>
-            </label>
-          ))}
-          {copyError && <p role="alert">{copyError}</p>}
-          <label className="check-field">
-            <Input
-              type="checkbox"
-              checked={saved}
-              onChange={(e) => setSaved(e.target.checked)}
+                <TextField
+                  label={item.name}
+                  value={item.value}
+                  autoComplete="off"
+                  slotProps={{
+                    htmlInput: { spellCheck: false },
+                    input: { readOnly: true },
+                  }}
+                />
+                <Tooltip title={`Copy ${item.name}`}>
+                  <IconButton
+                    type="button"
+                    className="icon-button"
+                    title={`Copy ${item.name}`}
+                    aria-label={`Copy ${item.name}`}
+                    onClick={() => {
+                      setCopyError("");
+                      void navigator.clipboard
+                        .writeText(item.value)
+                        .catch(() =>
+                          setCopyError(
+                            "Copy failed. Select the key to copy it.",
+                          ),
+                        );
+                    }}
+                  >
+                    <Copy size={16} />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            ))}
+            {copyError && <p role="alert">{copyError}</p>}
+            <FormControlLabel
+              className="check-field"
+              control={
+                <Checkbox
+                  checked={saved}
+                  onChange={(e) => setSaved(e.target.checked)}
+                />
+              }
+              label={"I have saved these keys. Secrets are shown only once."}
             />
-            I have saved these keys. Secrets are shown only once.
-          </label>
-          <Button type="submit" variant="contained" className="primary" disabled={!saved} onClick={onClose}>
-            Done
-          </Button>
-        </div>
+            <Button
+              type="submit"
+              variant="contained"
+              className="primary"
+              disabled={!saved}
+              onClick={onClose}
+            >
+              Done
+            </Button>
+          </div>
+        </DialogContent>
       ) : (
         <form onSubmit={(e) => void submit(e)}>
-          <fieldset
-            className="storage-form"
-            disabled={state.busy || state.unknown}
-          >
-            <p className="full-field">
-              Client: <strong>{clientId}</strong>
-            </p>
-            {deleting && (
-              <>
-                <p className="full-field key-value">{action.key}</p>
-                <label className="full-field">
-                  Client ID to confirm
-                  <Input
+          <DialogContent>
+            <fieldset
+              className="storage-form"
+              disabled={state.busy || state.unknown}
+            >
+              <p className="full-field">
+                Client: <strong>{clientId}</strong>
+              </p>
+              {deleting && (
+                <>
+                  <p className="full-field key-value">{action.key}</p>
+                  <TextField
                     autoComplete="off"
                     required
                     value={confirmation}
                     onChange={(e) => setConfirmation(e.target.value)}
+                    label={"Client ID to confirm"}
+                    className="full-field"
                   />
-                </label>
-              </>
+                </>
+              )}
+            </fieldset>
+            {state.error && (
+              <p className="form-error" role="alert">
+                {state.error}
+              </p>
             )}
-          </fieldset>
-          {state.error && (
-            <p className="form-error" role="alert">
-              {state.error}
-            </p>
-          )}
-          <div className="dialog-actions">
+          </DialogContent>
+          <DialogActions>
             <Button type="button" disabled={state.busy} onClick={onClose}>
               {state.unknown ? "Close and review" : "Cancel"}
             </Button>
-            <Button type="submit"
+            <Button
+              type="submit"
+              variant="contained"
+              color={deleting ? "error" : "primary"}
               className={deleting ? "danger" : "primary"}
               disabled={
                 state.busy ||
@@ -146,7 +184,7 @@ export function KeyDialog({
             >
               {state.busy ? "Saving..." : "Confirm"}
             </Button>
-          </div>
+          </DialogActions>
         </form>
       )}
     </Dialog>

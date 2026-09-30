@@ -42,7 +42,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await expect(page.getByLabel("Secret key (re-enter)")).toBeVisible();
       await screenshot("editor");
       await page
-        .getByLabel("Registered capacity", { exact: true })
+        .getByLabel(/^Registered capacity\s*\*?$/)
         .scrollIntoViewIfNeeded();
       await page
         .getByRole("button", { name: "Save", exact: true })

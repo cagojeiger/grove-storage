@@ -29,87 +29,15 @@ dt,
   color: var(--muted);
   font-size: 12px;
 }
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text);
-  text-decoration: none;
-  font-size: 17px;
-  font-weight: 650;
-  min-width: 0;
-}
-.brand img {
-  width: 32px;
-  height: 32px;
-  object-fit: contain;
-}
-.header-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.account-menu { position: relative; }
-.account-menu-trigger.MuiButton-root { width: 100%; justify-content: flex-start; min-height: 44px; padding: 8px; color: var(--text); }
-.account-menu-trigger > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.account-menu-trigger > svg { flex-shrink: 0; }
-.account-menu-panel.MuiPaper-root { width: 240px; max-width: calc(100vw - 32px); padding: 6px; }
-.account-menu-panel .MuiListItemButton-root { width: 100%; color: var(--text); }
 .MuiButtonBase-root.connection-browser-row { display: grid; text-align: left; }
 .MuiInputBase-root { min-width: 0; }
-.MuiInputBase-root input, .MuiInputBase-root select, .MuiInputBase-root textarea { font: inherit; }
 .MuiNativeSelect-select { min-width: 0; }
-.metadata-field .MuiInputBase-root { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .MuiDialogContent-root { min-width: 0; }
 .MuiTabs-root a { text-decoration: none; }
-.sidebar-account { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); min-width: 0; }
-.account-menu-identity { display: grid; gap: 2px; padding: 10px; font-size: 13px; overflow-wrap: anywhere; }
-.account-menu-identity span { color: var(--muted); text-transform: capitalize; font-size: 12px; }
-.theme {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-}
-.workspace {
-  flex: 1;
-  min-height: 0;
-}
-.content { flex: 1; min-width: 0; }
-aside nav {
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  gap: 6px;
-}
-aside nav a {
-  color: var(--muted);
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-aside nav a[aria-current="page"] {
-  border-color: var(--accent);
-  background: var(--selected);
-  color: var(--accent);
-}
-.admin-label {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  padding: 0 8px;
-}
-.nav-group { margin: 20px 14px 4px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
-.resource-toolbar { flex-wrap: wrap; }
-.resource-toolbar .sort-control { width: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
 .pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 24px; }
-.pagination label, .pagination nav, .page-number { display: flex; align-items: center; gap: 6px; }
-.pagination label { font-size: 12px; color: var(--muted); }
+.pagination nav { display: flex; align-items: center; gap: 6px; }
+.pagination > .MuiFormControl-root { width: 100px; }
 .pagination nav { margin-left: auto; flex-wrap: wrap; }
-.page-number button { min-width: 36px; padding: 8px; }
-.page-number button[aria-current="page"] { background: var(--selected); color: var(--accent); border-color: var(--accent); }
 .capacity-breakdown { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--muted); }
 .topology-overview { max-width: 1600px; }
 .topology-overview .page-actions { flex-wrap: wrap; }
@@ -167,7 +95,6 @@ aside nav a[aria-current="page"] {
   .grove-hub { padding: 12px 0; }
 }
 @media (max-width: 600px) {
-  .nav-group { display: none; }
   .pagination { gap: 12px; }
   .pagination nav { width: 100%; margin: 0; }
 }
@@ -303,9 +230,9 @@ progress::-webkit-progress-value {
 }
 .login form {
   display: grid;
-  gap: 12px;
+  gap: 24px;
 }
-[role="alert"],
+p[role="alert"],
 .danger {
   color: var(--danger);
   font-size: 13px;
@@ -378,9 +305,6 @@ progress::-webkit-progress-value {
   gap: 16px;
   margin: 28px 0 18px;
 }
-.list-toolbar label {
-  width: min(300px, 80%);
-}
 .storage-section {
   margin-top: 32px;
 }
@@ -390,12 +314,9 @@ progress::-webkit-progress-value {
 }
 .account-password-form {
   display: grid;
-  gap: 10px;
+  gap: 24px;
   width: min(100%, 420px);
   margin-top: 20px;
-}
-.account-password-form label {
-  font-size: 13px;
 }
 .detail-fields {
   display: grid;
@@ -430,7 +351,6 @@ progress::-webkit-progress-value {
   gap: 18px;
   min-width: 0;
 }
-.storage-form label,
 .confirmation {
   display: grid;
   gap: 8px;
@@ -467,12 +387,12 @@ progress::-webkit-progress-value {
 .activity-toolbar a { color: var(--accent); font-size: 13px; }
 .activity-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 12px 0 20px; }
 .activity-filters[hidden] { display: none; }
-.activity-filters label { display: grid; gap: 6px; flex: 1 1 250px; min-width: 0; font-size: 12px; }
+.activity-filters > .MuiFormControl-root { flex: 1 1 250px; min-width: 0; }
 .activity-filters > a { padding: 10px 0; color: var(--accent); }
 .token-row a { color: var(--accent); }
 .account-toolbar form { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; min-width: 0; }
-.account-toolbar form label { flex: 1; min-width: 0; }
-.account-toolbar > label { width: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.account-toolbar form > .MuiFormControl-root { flex: 1; min-width: 0; }
+.account-toolbar > .MuiFormControl-root { width: 150px; }
 .token-row div { min-width: 0; overflow-wrap: anywhere; }
 .token-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
 .token-row p { margin-top: 6px; }
@@ -486,9 +406,8 @@ progress::-webkit-progress-value {
 .metadata-json { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .resource-metadata { grid-column: 1 / -1; min-width: 0; }
 .metadata-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.metadata-field { display: grid; gap: 8px; min-width: 0; }
 .usage-range { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
-.usage-range label { display: grid; gap: 8px; width: 140px; max-width: 100%; }
+.usage-range > .MuiFormControl-root { width: 140px; max-width: 100%; }
 .usage-range input { width: 100%; min-width: 0; }
 .usage-table { max-width: 100%; overflow: auto; }
 .usage-table table { width: 100%; min-width: 620px; border-collapse: collapse; }
@@ -511,7 +430,6 @@ progress::-webkit-progress-value {
 .clients h1, .clients h2 { overflow-wrap: anywhere; }
 .service-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .service-key-row code, .key-value { overflow-wrap: anywhere; min-width: 0; }
-.issued-token label { display: grid; gap: 8px; font-size: 13px; }
 .issued-token dd { font-size: 13px; overflow-wrap: anywhere; margin: 6px 0 14px; }
 .issued-token .check-field { display: flex; gap: 10px; align-items: flex-start; }
 .load-more { margin-top: 20px; }
@@ -541,23 +459,6 @@ progress::-webkit-progress-value {
   }
 }
 @media (max-width: 767px) {
-  .brand {
-    font-size: 15px;
-    gap: 6px;
-  }
-  .brand img {
-    width: 26px;
-    height: 26px;
-  }
-  .header-actions {
-    gap: 6px;
-  }
-  .theme {
-    gap: 3px;
-  }
-  .theme > svg {
-    display: none;
-  }
   .storages .page-heading {
     flex-wrap: wrap;
   }

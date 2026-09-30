@@ -34,7 +34,7 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
   );
   await page.goto("/api/admin/console/#storages");
   await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(20);
-  await page.getByRole("button", { name: "Page 3", exact: true }).click();
+  await page.getByRole("button", { name: "Last page", exact: true }).click();
   await page.getByRole("link", { name: /store-41/ }).click();
   await expect(
     page.getByRole("heading", { name: "store-41", exact: true }),
@@ -45,8 +45,8 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
     .getByRole("link", { name: "Storage", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Page 3", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
+    page.getByRole("status"),
+  ).toHaveText("41–41 of 41");
   await page.getByRole("link", { name: /store-41/ }).click();
   await page
     .getByRole("button", { name: "Delete storage", exact: true })
@@ -54,10 +54,10 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
   await page.getByLabel("Storage ID to delete").fill("store-41");
   await page.getByRole("button", { name: "Confirm delete" }).click();
   await expect(
-    page.getByRole("button", { name: "Page 2", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
+    page.getByRole("status"),
+  ).toHaveText("21–40 of 40");
   await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(20);
-  await page.getByLabel("Sort", { exact: true }).selectOption("desc");
+  await page.getByLabel(/^Sort\s*\*?$/).selectOption("desc");
   await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a").first()).toContainText(
     "store-40",
   );
@@ -69,7 +69,7 @@ test("Storage keeps search, order and page across detail, reload and deletion", 
     .getByRole("link", { name: "Storage", exact: true })
     .click();
   await expect(page.getByLabel("Search storage")).toHaveValue("store-3");
-  await expect(page.getByLabel("Sort", { exact: true })).toHaveValue("desc");
+  await expect(page.getByLabel(/^Sort\s*\*?$/)).toHaveValue("desc");
   await page.getByLabel("Search storage").fill("");
   await page.getByLabel("Rows per page").selectOption("50");
   await expect(page.getByRole("table", { name: "Storage", exact: true }).locator("tbody a")).toHaveCount(40);
@@ -117,8 +117,8 @@ test("Client rows resolve assigned storage only for the visible page, including 
     .getByRole("link", { name: "Clients", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Page 2", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
+    page.getByRole("status"),
+  ).toHaveText("21–40 of 45");
   await page.getByLabel("Search clients").fill("missing");
   await expect(page.getByText("No matching clients.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();

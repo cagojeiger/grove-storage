@@ -27,15 +27,15 @@ export async function storageChecks(
   }
   async function createS3(id) {
     await page.getByRole("button", { name: "Register", exact: true }).click();
-    await page.getByLabel("Storage ID", { exact: true }).fill(id);
+    await page.getByLabel(/^Storage ID\s*\*?$/).fill(id);
     await expect(page.getByLabel("Root path")).toHaveCount(0);
-    await page.getByLabel("Endpoint", { exact: true }).fill(minio.endpoint);
-    await page.getByLabel("Region", { exact: true }).fill(minio.region);
-    await page.getByLabel("Bucket", { exact: true }).fill(minio.bucket);
-    await page.getByLabel("Access key", { exact: true }).fill(minio.access_key);
-    await page.getByLabel("Secret key", { exact: true }).fill(minio.secret_key);
-    await page.getByLabel("Path-style", { exact: true }).check();
-    await page.getByLabel("Registered capacity", { exact: true }).fill("1");
+    await page.getByLabel(/^Endpoint\s*\*?$/).fill(minio.endpoint);
+    await page.getByLabel(/^Region\s*\*?$/).fill(minio.region);
+    await page.getByLabel(/^Bucket\s*\*?$/).fill(minio.bucket);
+    await page.getByLabel(/^Access key\s*\*?$/).fill(minio.access_key);
+    await page.getByLabel(/^Secret key\s*\*?$/).fill(minio.secret_key);
+    await page.getByLabel(/^Path-style\s*\*?$/).check();
+    await page.getByLabel(/^Registered capacity\s*\*?$/).fill("1");
     await page.getByLabel("Capacity unit").selectOption("GiB");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
@@ -61,7 +61,7 @@ export async function storageChecks(
   console.log("PASS real MinIO Test connection UI and shared command");
   await page.getByRole("button", { name: "Edit storage" }).click();
   await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
-  await page.getByLabel("Registered capacity", { exact: true }).fill("2147483648");
+  await page.getByLabel(/^Registered capacity\s*\*?$/).fill("2147483648");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   assert.equal(
@@ -122,17 +122,17 @@ export async function storageChecks(
 
   if (minio) {
     await page.getByRole("button", { name: "Register", exact: true }).click();
-    await page.getByLabel("Storage ID", { exact: true }).fill("console-minio");
-    await page.getByLabel("Endpoint", { exact: true }).fill(minio.endpoint);
+    await page.getByLabel(/^Storage ID\s*\*?$/).fill("console-minio");
+    await page.getByLabel(/^Endpoint\s*\*?$/).fill(minio.endpoint);
     await page.getByLabel("Public endpoint (optional)").fill(minio.endpoint);
-    await page.getByLabel("Region", { exact: true }).fill(minio.region);
-    await page.getByLabel("Bucket", { exact: true }).fill(minio.bucket);
-    await page.getByLabel("Access key", { exact: true }).fill(minio.access_key);
-    await page.getByLabel("Secret key", { exact: true }).fill(minio.secret_key);
-    await page.getByLabel("Path-style", { exact: true }).check();
-    await page.getByLabel("Use relay", { exact: true }).check();
+    await page.getByLabel(/^Region\s*\*?$/).fill(minio.region);
+    await page.getByLabel(/^Bucket\s*\*?$/).fill(minio.bucket);
+    await page.getByLabel(/^Access key\s*\*?$/).fill(minio.access_key);
+    await page.getByLabel(/^Secret key\s*\*?$/).fill(minio.secret_key);
+    await page.getByLabel(/^Path-style\s*\*?$/).check();
+    await page.getByLabel(/^Use relay\s*\*?$/).check();
     await page
-      .getByLabel("Registered capacity", { exact: true })
+      .getByLabel(/^Registered capacity\s*\*?$/)
       .fill(String(minio.capacity_bytes));
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
@@ -146,7 +146,7 @@ export async function storageChecks(
     await page.getByRole("button", { name: "Edit storage" }).click();
     await expect(page.getByLabel("Secret key (re-enter)")).toHaveValue("");
     await page.getByLabel("Secret key (re-enter)").fill(minio.secret_key);
-    await page.getByLabel("Registered capacity", { exact: true }).fill("2147483648");
+    await page.getByLabel(/^Registered capacity\s*\*?$/).fill("2147483648");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     assert.equal(

@@ -31,8 +31,8 @@ test("creation opens the returned account even outside the loaded page", async (
   await page.route("**/v1/accounts?*", route => route.fulfill({ json: { items: [owner], next_before: owner.id, previous_after: null, initialized: true } }));
   await page.goto(base);
   await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill("New account");
-  await page.getByLabel("Username", { exact: true }).fill("new.account");
+  await page.getByLabel(/^Name\s*\*?$/).fill("New account");
+  await page.getByLabel(/^Username\s*\*?$/).fill("new.account");
   await page.getByLabel("Your current password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
   await page.getByLabel("I have saved this setup link.").check();
@@ -40,7 +40,7 @@ test("creation opens the returned account even outside the loaded page", async (
   await expect(page).toHaveURL(/#accounts\/33333333-3333-3333-3333-333333333333\?/);
   await expect(page.getByRole("heading", { name: "New account" })).toBeVisible();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
-  await expect(page.getByLabel("Label", { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/^Label\s*\*?$/)).toBeVisible();
 });
 
 test("missing accounts show a route back and mismatched responses show no tokens", async ({ page }) => {

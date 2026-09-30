@@ -44,16 +44,16 @@ test("Reader can load usage snapshots, including retired resource IDs, and chang
   await expect(page.getByRole("row").nth(1)).toContainText("2026-09-25");
   await expect(page.getByRole("row").nth(2)).toContainText("retired-storage");
   expect(inputs.every((i) => i.days === 90)).toBe(true);
-  await page.getByLabel("Days", { exact: true }).fill("7");
+  await page.getByLabel(/^Days\s*\*?$/).fill("7");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect.poll(() => inputs.at(-1)?.days).toBe(7);
   const count = inputs.length;
   for (const value of ["0", "3651", "1.5"]) {
-    await page.getByLabel("Days", { exact: true }).fill(value);
+    await page.getByLabel(/^Days\s*\*?$/).fill(value);
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     expect(inputs.length).toBe(count);
   }
-  await page.getByLabel("Days", { exact: true }).fill("3650");
+  await page.getByLabel(/^Days\s*\*?$/).fill("3650");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect.poll(() => inputs.at(-1)?.days).toBe(3650);
 });

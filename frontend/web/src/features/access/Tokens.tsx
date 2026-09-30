@@ -1,5 +1,13 @@
-import { Button, IconButton } from "@mui/material";
-import { Input } from "../../design/Fields";
+import {
+  DialogContent,
+  DialogActions,
+  TextField,
+  Checkbox,
+  FormControlLabel,
+  Button,
+  IconButton,
+} from "@mui/material";
+
 import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Trash2 } from "lucide-react";
@@ -40,7 +48,8 @@ export function Tokens({ account }: { account: Account }) {
     <section className="storage-section" aria-label="Management tokens">
       <div className="section-heading">
         <h2>Management tokens</h2>
-        <Button type="submit"
+        <Button
+          type="submit"
           className="action-button"
           disabled={
             !account.is_active || Boolean(account.deleted_at) || query.isError
@@ -56,7 +65,9 @@ export function Tokens({ account }: { account: Account }) {
       ) : query.isError ? (
         <p role="alert">
           {message(query.error)}{" "}
-          <Button type="submit" onClick={() => void query.refetch()}>Retry</Button>
+          <Button type="submit" onClick={() => void query.refetch()}>
+            Retry
+          </Button>
         </p>
       ) : (
         <>
@@ -68,7 +79,9 @@ export function Tokens({ account }: { account: Account }) {
                   <strong>{token.label}</strong>
                   <p className="muted">{token.token_prefix}</p>
                   <p className="muted">{token.id}</p>
-                  <a href={activityLink(account.id, token.id)}>View token actions</a>
+                  <a href={activityLink(account.id, token.id)}>
+                    View token actions
+                  </a>
                 </div>
                 <div>
                   <span>
@@ -82,7 +95,8 @@ export function Tokens({ account }: { account: Account }) {
                     Expires {new Date(token.expires_at).toLocaleString("en-US")}
                   </p>
                 </div>
-                <IconButton type="submit"
+                <IconButton
+                  type="submit"
                   className="icon-button"
                   title={`Revoke ${token.label}`}
                   aria-label={`Revoke ${token.label}`}
@@ -97,7 +111,8 @@ export function Tokens({ account }: { account: Account }) {
             <p className="empty">No tokens.</p>
           )}
           {query.hasNextPage && (
-            <Button type="submit"
+            <Button
+              type="submit"
               disabled={query.isFetchingNextPage}
               onClick={() => void query.fetchNextPage()}
             >
@@ -151,7 +166,9 @@ function TokenDialog({
       onClose={onClose}
     >
       {issued ? (
-        <IssuedToken value={issued} onDone={onClose} />
+        <DialogContent>
+          <IssuedToken value={issued} onDone={onClose} />
+        </DialogContent>
       ) : (
         <form
           onSubmit={(e) => {
@@ -186,49 +203,55 @@ function TokenDialog({
             });
           }}
         >
-          <fieldset
-            className="storage-form"
-            disabled={state.busy || state.unknown}
-          >
-            {target === "issue" ? (
-              <>
-                <label>
-                  Label
-                  <Input name="label" required maxLength={80} />
-                </label>
-                <label>
-                  Expires in days
-                  <Input
+          <DialogContent>
+            <fieldset
+              className="storage-form"
+              disabled={state.busy || state.unknown}
+            >
+              {target === "issue" ? (
+                <>
+                  <TextField
+                    name="label"
+                    required
+                    label={"Label"}
+                    slotProps={{ htmlInput: { maxLength: 80 } }}
+                  />
+                  <TextField
                     name="days"
                     type="number"
-                    min={1}
-                    max={90}
                     defaultValue={90}
                     required
+                    label={"Expires in days"}
+                    slotProps={{ htmlInput: { min: 1, max: 90 } }}
                   />
-                </label>
-              </>
-            ) : (
-              <label className="check-field full-field">
-                <Input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
+                </>
+              ) : (
+                <FormControlLabel
+                  className="check-field full-field"
+                  control={
+                    <Checkbox
+                      checked={confirmed}
+                      onChange={(e) => setConfirmed(e.target.checked)}
+                    />
+                  }
+                  label={<>Revoke {target.label} and its sessions</>}
                 />
-                Revoke {target.label} and its sessions
-              </label>
+              )}
+            </fieldset>
+            {state.error && (
+              <p role="alert" className="form-error">
+                {state.error}
+              </p>
             )}
-          </fieldset>
-          {state.error && (
-            <p role="alert" className="form-error">
-              {state.error}
-            </p>
-          )}
-          <div className="dialog-actions">
+          </DialogContent>
+          <DialogActions>
             <Button type="button" disabled={state.busy} onClick={onClose}>
               {state.unknown ? "Close and review" : "Cancel"}
             </Button>
-            <Button type="submit" variant="contained"
+            <Button
+              type="submit"
+              variant="contained"
+              color={target === "issue" ? "primary" : "error"}
               className="primary"
               disabled={
                 state.busy ||
@@ -242,7 +265,7 @@ function TokenDialog({
                   ? "Issue"
                   : "Revoke"}
             </Button>
-          </div>
+          </DialogActions>
         </form>
       )}
     </Dialog>

@@ -1,11 +1,14 @@
-import { Input, Select } from "../../design/Fields";
-import { Button } from "@mui/material";
-import { FormEvent, useState } from "react";
 import {
-  Account,
-  identityRequest,
-  isChanged,
-} from "../../api/identity";
+  DialogContent,
+  DialogActions,
+  TextField,
+  Checkbox,
+  FormControlLabel,
+  Button,
+} from "@mui/material";
+
+import { FormEvent, useState } from "react";
+import { Account, identityRequest, isChanged } from "../../api/identity";
 import { Dialog } from "../../design/Dialog";
 import { useAction } from "./useAction";
 
@@ -26,28 +29,32 @@ export function AccountDialog({
   const state = useAction();
   const [confirmation, setConfirmation] = useState("");
   const [name, setName] = useState(
-    action === "name" ? account?.display_name ?? "" : "",
+    action === "name" ? (account?.display_name ?? "") : "",
   );
   const [role, setRole] = useState(account?.role ?? "reader");
   const [acknowledged, setAcknowledged] = useState(false);
   const title =
     action === "name"
-        ? "Edit name"
-        : action === "role"
-          ? "Change role"
-          : action === "delete"
-            ? "Delete account"
-            : account?.is_active
-              ? "Disable account"
-              : "Enable account";
+      ? "Edit name"
+      : action === "role"
+        ? "Change role"
+        : action === "delete"
+          ? "Delete account"
+          : account?.is_active
+            ? "Disable account"
+            : "Enable account";
   const dangerous =
     action === "delete" || (action === "active" && account?.is_active);
   const selfDemotion =
-    isSelf && action === "role" && account?.role === "admin" && role !== "admin";
+    isSelf &&
+    action === "role" &&
+    account?.role === "admin" &&
+    role !== "admin";
   const selfImpact = isSelf && (dangerous || selfDemotion);
   const invalidName =
     action === "name" &&
-    (!name.trim() || Array.from(name.trim()).length > 80 ||
+    (!name.trim() ||
+      Array.from(name.trim()).length > 80 ||
       name.trim() === account?.display_name);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -68,7 +75,10 @@ export function AccountDialog({
                       ? { operation: "name", display_name: name.trim() }
                       : action === "role"
                         ? { operation: "role", role }
-                        : { operation: "active", is_active: !account.is_active },
+                        : {
+                            operation: "active",
+                            is_active: !account.is_active,
+                          },
                   ),
                 }),
           },
@@ -81,98 +91,107 @@ export function AccountDialog({
   return (
     <Dialog title={title} busy={state.busy} onClose={onClose}>
       <form onSubmit={(e) => void submit(e)}>
-        <fieldset
-          className="storage-form"
-          disabled={state.busy || state.unknown}
-        >
-          {action === "name" ? (
-            <label className="full-field">
-              Name
-              <Input
+        <DialogContent>
+          <fieldset
+            className="storage-form"
+            disabled={state.busy || state.unknown}
+          >
+            {action === "name" ? (
+              <TextField
                 name="display_name"
                 required
-                maxLength={80}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                label={"Name"}
+                className="full-field"
+                slotProps={{ htmlInput: { maxLength: 80 } }}
               />
-            </label>
-          ) : (
-            <p className="full-field">{account?.display_name}</p>
-          )}
-          {action === "role" && (
-            <label>
-              Role
-              <Select
+            ) : (
+              <p className="full-field">{account?.display_name}</p>
+            )}
+            {action === "role" && (
+              <TextField
                 name="role"
-                aria-label="Role"
                 value={role}
                 onChange={(e) => {
                   setRole(e.target.value as Account["role"]);
                   setAcknowledged(false);
                 }}
+                label={"Role"}
+                select
+                slotProps={{
+                  htmlInput: { "aria-label": "Role" },
+                  select: { native: true },
+                }}
               >
                 <option value="reader">Reader</option>
                 <option value="writer">Writer</option>
                 <option value="admin">Admin</option>
-              </Select>
-            </label>
-          )}
-          {action === "delete" && (
-            <p className="full-field danger">
-              All tokens and sessions belonging to this User will be revoked.
-              Storage, clients, and files are preserved.
-            </p>
-          )}
-          {action === "role" && (
-            <p className="full-field">
-              The selected role applies to existing tokens and sessions.
-            </p>
-          )}
-          {action === "active" && !account?.is_active && (
-            <p className="full-field">
-              Unexpired, unrevoked tokens become usable again. Previous sessions remain revoked.
-            </p>
-          )}
-          {selfImpact && (
-            <label className="full-field check-field account-confirmation">
-              <Input
-                type="checkbox"
-                checked={acknowledged}
-                onChange={(e) => setAcknowledged(e.target.checked)}
+              </TextField>
+            )}
+            {action === "delete" && (
+              <p className="full-field danger">
+                All tokens and sessions belonging to this User will be revoked.
+                Storage, clients, and files are preserved.
+              </p>
+            )}
+            {action === "role" && (
+              <p className="full-field">
+                The selected role applies to existing tokens and sessions.
+              </p>
+            )}
+            {action === "active" && !account?.is_active && (
+              <p className="full-field">
+                Unexpired, unrevoked tokens become usable again. Previous
+                sessions remain revoked.
+              </p>
+            )}
+            {selfImpact && (
+              <FormControlLabel
+                className="full-field check-field account-confirmation"
+                control={
+                  <Checkbox
+                    checked={acknowledged}
+                    onChange={(e) => setAcknowledged(e.target.checked)}
+                  />
+                }
+                label={
+                  selfDemotion
+                    ? "I understand I will lose access to Accounts."
+                    : "I understand my current session will end."
+                }
               />
-              {selfDemotion
-                ? "I understand I will lose access to Accounts."
-                : "I understand my current session will end."}
-            </label>
-          )}
-          {action === "active" && account?.is_active && (
-            <p className="full-field danger">
-              Access is suspended for all of this User's tokens. Existing
-              sessions are revoked.
-            </p>
-          )}
-          {dangerous && (
-            <label className="full-field">
-              Confirm account name
-              <Input
+            )}
+            {action === "active" && account?.is_active && (
+              <p className="full-field danger">
+                Access is suspended for all of this User's tokens. Existing
+                sessions are revoked.
+              </p>
+            )}
+            {dangerous && (
+              <TextField
                 value={confirmation}
                 onChange={(e) => setConfirmation(e.target.value)}
                 autoComplete="off"
                 required
+                label={"Confirm account name"}
+                className="full-field"
               />
-            </label>
+            )}
+          </fieldset>
+          {state.error && (
+            <p role="alert" className="form-error">
+              {state.error}
+            </p>
           )}
-        </fieldset>
-        {state.error && (
-          <p role="alert" className="form-error">
-            {state.error}
-          </p>
-        )}
-        <div className="dialog-actions">
+        </DialogContent>
+        <DialogActions>
           <Button type="button" disabled={state.busy} onClick={onClose}>
             {state.unknown ? "Close and review" : "Cancel"}
           </Button>
-          <Button type="submit" variant="contained"
+          <Button
+            type="submit"
+            variant="contained"
             color={dangerous ? "error" : "primary"}
             className="primary"
             disabled={
@@ -185,7 +204,7 @@ export function AccountDialog({
           >
             {state.busy ? "Saving..." : action === "name" ? "Save name" : title}
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );

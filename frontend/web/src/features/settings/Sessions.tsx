@@ -1,7 +1,17 @@
-import { IconButton, Button } from "@mui/material";
-import { Input } from "../../design/Fields";
+import {
+  DialogContent,
+  DialogActions,
+  TextField,
+  IconButton,
+  Button,
+} from "@mui/material";
+
 import { useState } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { LogOut, Pencil, RefreshCw } from "lucide-react";
 import { ApiError, Session, message } from "../../api/http";
 import {
@@ -62,7 +72,8 @@ export function Sessions({ session }: { session: Session }) {
         <div>
           <h1>My account</h1>
         </div>
-        <IconButton type="submit"
+        <IconButton
+          type="submit"
           className="icon-button"
           title="Refresh sessions"
           aria-label="Refresh sessions"
@@ -72,14 +83,38 @@ export function Sessions({ session }: { session: Session }) {
           <RefreshCw size={18} />
         </IconButton>
       </div>
-      {passwordSession && profile.isPending && <p role="status">Loading profile...</p>}
-      {passwordSession && profile.isError && <p role="alert">{message(profile.error)} <Button type="submit" onClick={() => void profile.refetch()}>Retry</Button></p>}
-      {profile.data && <div className="section-heading">
-        <h2>{profile.data.display_name}</h2>
-        <IconButton type="submit" className="icon-button" title="Edit my name" aria-label="Edit my name" onClick={() => setEditing(true)}><Pencil size={16} /></IconButton>
-      </div>}
+      {passwordSession && profile.isPending && (
+        <p role="status">Loading profile...</p>
+      )}
+      {passwordSession && profile.isError && (
+        <p role="alert">
+          {message(profile.error)}{" "}
+          <Button type="submit" onClick={() => void profile.refetch()}>
+            Retry
+          </Button>
+        </p>
+      )}
+      {profile.data && (
+        <div className="section-heading">
+          <h2>{profile.data.display_name}</h2>
+          <IconButton
+            type="submit"
+            className="icon-button"
+            title="Edit my name"
+            aria-label="Edit my name"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil size={16} />
+          </IconButton>
+        </div>
+      )}
       <dl className="detail-fields">
-        {profile.data && <div><dt>Username</dt><dd>{profile.data.username}</dd></div>}
+        {profile.data && (
+          <div>
+            <dt>Username</dt>
+            <dd>{profile.data.username}</dd>
+          </div>
+        )}
         <div>
           <dt>Account</dt>
           <dd>{session.user_id}</dd>
@@ -89,11 +124,23 @@ export function Sessions({ session }: { session: Session }) {
           <dd>{session.role}</dd>
         </div>
       </dl>
-      {editing && profile.data && <EditProfile account={profile.data} onClose={() => setEditing(false)}
-        onSaved={async () => { await cache.invalidateQueries({ queryKey: ["me", "profile"] }); }} />}
-      {passwordSession && <section className="storage-section" aria-label="Security">
-        <div className="section-heading"><h2>Security</h2><a href="#settings/security">Change password</a></div>
-      </section>}
+      {editing && profile.data && (
+        <EditProfile
+          account={profile.data}
+          onClose={() => setEditing(false)}
+          onSaved={async () => {
+            await cache.invalidateQueries({ queryKey: ["me", "profile"] });
+          }}
+        />
+      )}
+      {passwordSession && (
+        <section className="storage-section" aria-label="Security">
+          <div className="section-heading">
+            <h2>Security</h2>
+            <a href="#settings/security">Change password</a>
+          </div>
+        </section>
+      )}
       {passwordSession && <PersonalTokens session={session} />}
       <section className="storage-section" aria-label="My sessions">
         <h2>My sessions</h2>
@@ -132,7 +179,8 @@ export function Sessions({ session }: { session: Session }) {
                       Expires {time(row.expires_at)}
                     </span>
                   </div>
-                  <IconButton type="submit"
+                  <IconButton
+                    type="submit"
                     className="icon-button danger"
                     color="error"
                     title={
@@ -155,7 +203,8 @@ export function Sessions({ session }: { session: Session }) {
             })}
             {!rows.length && <p className="empty">No sessions found.</p>}
             {query.hasNextPage && (
-              <Button type="submit"
+              <Button
+                type="submit"
                 disabled={query.isFetching}
                 onClick={() => void query.fetchNextPage()}
               >
@@ -183,34 +232,73 @@ export function Sessions({ session }: { session: Session }) {
   );
 }
 
-function EditProfile({ account, onClose, onSaved }: {
+function EditProfile({
+  account,
+  onClose,
+  onSaved,
+}: {
   account: Account;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const action = useAction();
   const [name, setName] = useState(account.display_name);
-  return <Dialog title="Edit my name" busy={action.busy} onClose={onClose}>
-    <form onSubmit={(event) => {
-      event.preventDefault();
-      void action.run(async () => {
-        await identityRequest("/me", isChanged, {
-          method: "PATCH", body: JSON.stringify({ display_name: name.trim() }),
-        });
-        onClose();
-        await onSaved();
-      });
-    }}>
-      <fieldset className="storage-form" disabled={action.busy || action.unknown}>
-        <label className="full-field">Name<Input value={name} onChange={event => setName(event.target.value)} required maxLength={80} /></label>
-      </fieldset>
-      {action.error && <p role="alert" className="form-error">{action.error}</p>}
-      <div className="dialog-actions">
-        <Button type="button" disabled={action.busy} onClick={onClose}>{action.unknown ? "Close and review" : "Cancel"}</Button>
-        <Button type="submit" variant="contained" className="primary" disabled={action.busy || action.unknown || !name.trim() || name.trim() === account.display_name}>Save</Button>
-      </div>
-    </form>
-  </Dialog>;
+  return (
+    <Dialog title="Edit my name" busy={action.busy} onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void action.run(async () => {
+            await identityRequest("/me", isChanged, {
+              method: "PATCH",
+              body: JSON.stringify({ display_name: name.trim() }),
+            });
+            onClose();
+            await onSaved();
+          });
+        }}
+      >
+        <DialogContent>
+          <fieldset
+            className="storage-form"
+            disabled={action.busy || action.unknown}
+          >
+            <TextField
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              label={"Name"}
+              className="full-field"
+              slotProps={{ htmlInput: { maxLength: 80 } }}
+            />
+          </fieldset>
+          {action.error && (
+            <p role="alert" className="form-error">
+              {action.error}
+            </p>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" disabled={action.busy} onClick={onClose}>
+            {action.unknown ? "Close and review" : "Cancel"}
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            className="primary"
+            disabled={
+              action.busy ||
+              action.unknown ||
+              !name.trim() ||
+              name.trim() === account.display_name
+            }
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
 }
 function RevokeSession({
   row,
@@ -230,18 +318,23 @@ function RevokeSession({
   );
   return (
     <Dialog title="Revoke session" busy={action.busy} onClose={onClose}>
-      <p>
-        {current
-          ? "This signs you out of the current console session."
-          : "This ends the selected browser session. The account token remains valid."}
-      </p>
-      <code className="key-value">{row.id}</code>
-      {action.error && <p role="alert">{action.error}</p>}
-      <div className="dialog-actions">
-        <Button type="submit" disabled={action.busy} onClick={onClose}>
+      <DialogContent>
+        <p>
+          {current
+            ? "This signs you out of the current console session."
+            : "This ends the selected browser session. The account token remains valid."}
+        </p>
+        <code className="key-value">{row.id}</code>
+        {action.error && <p role="alert">{action.error}</p>}
+      </DialogContent>
+      <DialogActions>
+        <Button type="button" disabled={action.busy} onClick={onClose}>
           {action.unknown ? "Close and review" : "Cancel"}
         </Button>
-        <Button type="submit" color="error"
+        <Button
+          type="button"
+          variant="contained"
+          color="error"
           className="danger"
           disabled={action.busy || action.unknown}
           onClick={() =>
@@ -257,7 +350,7 @@ function RevokeSession({
         >
           {action.busy ? "Revoking..." : "Confirm revoke"}
         </Button>
-      </div>
+      </DialogActions>
     </Dialog>
   );
 }

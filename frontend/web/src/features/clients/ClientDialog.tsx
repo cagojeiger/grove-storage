@@ -1,5 +1,5 @@
-import { Input, Select } from "../../design/Fields";
-import { Button } from "@mui/material";
+import { DialogContent, DialogActions, TextField, Button } from "@mui/material";
+
 import { FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog } from "../../design/Dialog";
@@ -52,46 +52,48 @@ export function ClientDialog({
       onClose={onClose}
     >
       <form onSubmit={(e) => void submit(e)}>
-        <fieldset
-          className="storage-form"
-          disabled={state.busy || state.unknown}
-        >
-          {id ? (
-            <>
-              <p className="full-field">
-                Delete <strong>{id}</strong> and its service keys. Referenced
-                files and pending cleanup block deletion.
-              </p>
-              <label className="full-field">
-                Client ID to delete
-                <Input
+        <DialogContent>
+          <fieldset
+            className="storage-form"
+            disabled={state.busy || state.unknown}
+          >
+            {id ? (
+              <>
+                <p className="full-field">
+                  Delete <strong>{id}</strong> and its service keys. Referenced
+                  files and pending cleanup block deletion.
+                </p>
+                <TextField
                   autoComplete="off"
                   value={confirmation}
                   onChange={(e) => setConfirmation(e.target.value)}
                   required
+                  label={"Client ID to delete"}
+                  className="full-field"
                 />
-              </label>
-            </>
-          ) : (
-            <>
-              <label>
-                Client ID
-                <Input
+              </>
+            ) : (
+              <>
+                <TextField
                   name="id"
-                  pattern={idPattern}
-                  maxLength={64}
                   required
                   autoComplete="off"
+                  label={"Client ID"}
+                  slotProps={{
+                    htmlInput: { pattern: idPattern, maxLength: 64 },
+                  }}
                 />
-              </label>
-              <label>
-                Storage
-                <Select
+                <TextField
                   name="storage_id"
-                  aria-label="Storage"
                   required
                   defaultValue=""
                   disabled={storages.isError || storages.isPending}
+                  label={"Storage"}
+                  select
+                  slotProps={{
+                    htmlInput: { "aria-label": "Storage" },
+                    select: { native: true },
+                  }}
                 >
                   <option value="" disabled>
                     Select storage
@@ -101,33 +103,37 @@ export function ClientDialog({
                       {s.id}
                     </option>
                   ))}
-                </Select>
-              </label>
-              {storages.isPending && <p role="status">Loading storage...</p>}
-              {storages.isError && (
-                <p role="alert">
-                  {message(storages.error)}{" "}
-                  <Button type="button" onClick={() => void storages.refetch()}>
-                    Retry storage
-                  </Button>
-                </p>
-              )}
-              {!storages.isPending && !storages.isError && !options.length && (
-                <p>No S3 storage registered.</p>
-              )}
-            </>
+                </TextField>
+                {storages.isPending && <p role="status">Loading storage...</p>}
+                {storages.isError && (
+                  <p role="alert">
+                    {message(storages.error)}{" "}
+                    <Button
+                      type="button"
+                      onClick={() => void storages.refetch()}
+                    >
+                      Retry storage
+                    </Button>
+                  </p>
+                )}
+                {!storages.isPending &&
+                  !storages.isError &&
+                  !options.length && <p>No S3 storage registered.</p>}
+              </>
+            )}
+          </fieldset>
+          {state.error && (
+            <p className="form-error" role="alert">
+              {state.error}
+            </p>
           )}
-        </fieldset>
-        {state.error && (
-          <p className="form-error" role="alert">
-            {state.error}
-          </p>
-        )}
-        <div className="dialog-actions">
+        </DialogContent>
+        <DialogActions>
           <Button type="button" disabled={state.busy} onClick={onClose}>
             {state.unknown ? "Close and review" : "Cancel"}
           </Button>
-          <Button type="submit"
+          <Button
+            type="submit"
             variant={id ? "outlined" : "contained"}
             color={id ? "error" : "primary"}
             className={id ? "danger" : "primary"}
@@ -139,7 +145,7 @@ export function ClientDialog({
           >
             {state.busy ? "Saving..." : id ? "Confirm delete" : "Create"}
           </Button>
-        </div>
+        </DialogActions>
       </form>
     </Dialog>
   );
