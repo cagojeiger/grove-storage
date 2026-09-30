@@ -75,6 +75,19 @@ const theme = createTheme({
         h1: theme.typography.h1,
         h2: theme.typography.h2,
         h3: theme.typography.h3,
+        ".detail-fields": {
+          gap: theme.spacing(2, 3),
+          paddingTop: theme.spacing(2),
+        },
+        ".detail-fields dt": {
+          ...theme.typography.body2,
+          color: theme.vars.palette.text.secondary,
+        },
+        ".detail-fields dd": {
+          ...theme.typography.body1,
+          marginTop: theme.spacing(0.5),
+          overflowWrap: "anywhere",
+        },
         a: { color: theme.vars.palette.primary.main },
         "button, input, select, textarea": { letterSpacing: 0 },
         "fieldset:disabled .MuiInputBase-root, fieldset:disabled .MuiButtonBase-root":

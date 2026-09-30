@@ -12,6 +12,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
 import { useState } from "react";
@@ -32,6 +35,7 @@ import { time } from "../../design/format";
 import { activityFilters, uuidPattern } from "./filters";
 
 export function Activity({ route, admin }: { route: string; admin: boolean }) {
+  const compact = useMediaQuery(useTheme().breakpoints.down("sm"));
   const path = route.split("?")[0];
   const { params, valid } = activityFilters(route);
   const suffix = params.size ? `?${params}` : "";
@@ -90,21 +94,24 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       </div>
       <Tabs
         value={denied ? false : stream}
-        variant="scrollable"
+        variant={compact ? "fullWidth" : "scrollable"}
         scrollButtons="auto"
         aria-label="Activity views"
+        sx={{ "& .MuiTab-root": { minWidth: 0 } }}
       >
         <Tab
           component="a"
           value="audit"
           href={`#activity${suffix}`}
           label="Audit log"
+          wrapped
         />
         <Tab
           component="a"
           value="invocations"
           href={`#activity/invocations${suffix}`}
           label="Command history"
+          wrapped
         />
         {admin && (
           <Tab
@@ -112,6 +119,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
             value="security"
             href={`#activity/security${suffix}`}
             label="Security events"
+            wrapped
           />
         )}
       </Tabs>
@@ -181,25 +189,33 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       ) : (
         <>
           <TableContainer>
-            <Table size="small" aria-label="Activity" sx={{ minWidth: 640 }}>
+            <Table
+              size="small"
+              aria-label="Activity"
+              sx={{ tableLayout: compact ? "fixed" : "auto", overflowWrap: "anywhere" }}
+            >
               <TableHead>
                 <TableRow>
-                  <TableCell>Time</TableCell>
+                  <TableCell sx={{ width: compact ? 104 : "auto" }}>Time</TableCell>
                   <TableCell>Event</TableCell>
-                  <TableCell>
-                    {stream === "audit"
-                      ? "Resource"
-                      : stream === "security"
-                        ? "Reason"
-                        : "Result"}
-                  </TableCell>
-                  <TableCell>Actor / Source</TableCell>
+                  {!compact && (
+                    <>
+                      <TableCell>
+                        {stream === "audit"
+                          ? "Resource"
+                          : stream === "security"
+                            ? "Reason"
+                            : "Result"}
+                      </TableCell>
+                      <TableCell>Actor / Source</TableCell>
+                    </>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {rows.map((event) => (
                   <TableRow key={event.context.id} hover>
-                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <TableCell sx={{ whiteSpace: compact ? "normal" : "nowrap", verticalAlign: "top" }}>
                       <time dateTime={event.context.created_at}>
                         {time(event.context.created_at)}
                       </time>
@@ -212,12 +228,31 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                       >
                         {eventName(event)}
                       </Link>
+                      {compact && (
+                        <>
+                          <Typography variant="body2" sx={{ mt: 0.5 }}>
+                            {eventResult(event)}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {actor(event.context)}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {event.context.surface}
+                          </Typography>
+                        </>
+                      )}
                     </TableCell>
-                    <TableCell>{eventResult(event)}</TableCell>
-                    <TableCell>
-                      {actor(event.context)}
-                      <div className="muted">{event.context.surface}</div>
-                    </TableCell>
+                    {!compact && (
+                      <>
+                        <TableCell>{eventResult(event)}</TableCell>
+                        <TableCell>
+                          {actor(event.context)}
+                          <Typography variant="body2" color="text.secondary">
+                            {event.context.surface}
+                          </Typography>
+                        </TableCell>
+                      </>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

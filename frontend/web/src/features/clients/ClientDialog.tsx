@@ -93,6 +93,7 @@ export function ClientDialog({
                   slotProps={{
                     htmlInput: { "aria-label": "Storage" },
                     select: { native: true },
+                    inputLabel: { shrink: true },
                   }}
                 >
                   <option value="" disabled>
