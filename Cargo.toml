@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "backend/crates/management-service",
+    "backend/crates/management-command",
+    "backend/crates/management-policy",
     "backend/crates/s3-protocol",
     "backend/crates/object-service",
     "backend/crates/object-policy",
@@ -16,6 +19,9 @@ version = "0.4.1"
 edition = "2024"
 
 [workspace.dependencies]
+grove-management-service = { path = "backend/crates/management-service" }
+grove-management-command = { path = "backend/crates/management-command" }
+grove-management-policy = { path = "backend/crates/management-policy" }
 grove-s3-protocol = { path = "backend/crates/s3-protocol" }
 grove-object-service = { path = "backend/crates/object-service" }
 grove-object-policy = { path = "backend/crates/object-policy" }
@@ -35,6 +41,7 @@ sqlx = { version = "0.8", default-features = false, features = [
     "migrate",
     "uuid",
     "chrono",
+    "json",
 ] }
 aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio"] }
 # TLS 커넥터는 명시적으로 주입한다(infra::s3) — rustls 0.23 + ring로 sqlx와
@@ -45,6 +52,8 @@ serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 serde_json = "1"
+schemars = { version = "1.2.2", features = ["derive"] }
+rmcp = { version = "3.4.1", default-features = false, features = ["server", "transport-streamable-http-server"] }
 anyhow = "1"
 thiserror = "2"
 tracing = "0.1"
@@ -57,6 +66,8 @@ sha2 = "0.10"
 md-5 = "0.10"
 futures-util = { version = "0.3", default-features = false }
 subtle = "2"
+argon2 = { version = "0.6", features = ["zeroize"] }
+unicode-normalization = "0.1"
 hex = "0.4"
 dotenvy = "0.15"
 percent-encoding = "2"

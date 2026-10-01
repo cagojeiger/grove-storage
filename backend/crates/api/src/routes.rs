@@ -7,6 +7,9 @@
 //!   /readyz            readiness (DB 체크)
 //!   /api/v1/*          클라이언트 API (클라이언트 키 — v1 모듈)
 //!   /api/admin/v1/*    운영자 API (관리자 토큰 또는 콘솔 세션)
+//!   /api/admin/commands/v1  공통 자원 명령 (User Bearer)
+//!   /api/admin/console-commands/v1  공통 자원 명령 (User 세션 + CSRF)
+//!   /api/admin/mcp      같은 자원 명령의 stateless MCP (User Bearer)
 //!   /blobs/*           중계 바이트 엔드포인트 (lease secret — blobs 모듈)
 
 use std::sync::Arc;
@@ -31,7 +34,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// 단일 리스너의 최상위 제어 경로 세그먼트다. client id(= S3 버킷, 루트
 /// path-style)가 이 중 하나와 같으면 제어 라우트를 가리므로 예약된다
 /// (admin::clients가 client id로 거부한다).
-pub(crate) const RESERVED_TOP_LEVEL: &[&str] = &["api", "blobs", "healthz", "readyz"];
+pub(crate) const RESERVED_TOP_LEVEL: &[&str] = filegate_db::registry::RESERVED_CLIENT_IDS;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -48,11 +51,10 @@ pub struct AppState {
     pub part_size: i64,
     /// storage당 S3 클라이언트 재사용 — 커넥션 풀을 웜 상태로 유지한다.
     pub s3_clients: Arc<filegate_infra::S3ClientCache>,
-    /// fs part 승격 동시성 상한 — 승격은 claim(DB 행 락 + 커넥션)을 쥔 채
-    /// 디스크 복사를 하므로, 파드당 동시 승격 수를 묶어 풀 고갈을 막는다.
-    pub part_promotions: Arc<tokio::sync::Semaphore>,
+    /// Bound the DB connections held by Native single-upload relay claims.
+    pub single_upload_claims: Arc<tokio::sync::Semaphore>,
     /// S3 중계 스풀 동시성 상한 — 공유 임시 볼륨(temp_dir)을 채우는 자원
-    /// 고갈(DoS)을 막는다. 진입 시 S3 백엔드만 슬롯을 잡는다(spool 모듈).
+    /// 고갈(DoS)을 막는다. relay 진입 시 슬롯을 잡는다(spool 모듈).
     pub spool_slots: Arc<tokio::sync::Semaphore>,
 }
 
@@ -77,6 +79,16 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
         .route("/", get(root))
         .merge(system_routes())
         .nest("/api/admin/v1", admin_guarded(state.clone()))
+        .route("/api/admin/mcp", axum::routing::any(crate::mcp::handle))
+        .route(
+            "/api/admin/commands/v1",
+            axum::routing::post(crate::resource_commands::execute),
+        )
+        .merge(crate::console_identity::resources::routes(state.clone()))
+        .nest(
+            "/api/admin/identity/v1",
+            crate::console_identity::routes(state.clone()),
+        )
         .nest("/api/v1", v1_guarded(state.clone()))
         .layer(RequestBodyLimitLayer::new(CONTROL_BODY_LIMIT))
         .layer(TimeoutLayer::with_status_code(

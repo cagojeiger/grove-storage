@@ -14,14 +14,12 @@ fn invalid_storage_documents_fail_before_http() {
     for (name, contents) in [
         ("array", "[]"),
         (
-            "id",
-            r#"{"id":"inside","kind":"fs","root_path":"/tmp","capacity_bytes":1}"#,
+            "filesystem",
+            r#"{"kind":"fs","root_path":"/tmp","capacity_bytes":1}"#,
         ),
-        (
-            "unknown",
-            r#"{"kind":"fs","root_path":"/tmp","capacity_bytes":1,"typo":true}"#,
-        ),
-        ("missing", r#"{"kind":"fs","root_path":"/tmp"}"#),
+        ("id", r#"{"id":"inside","kind":"s3","capacity_bytes":1}"#),
+        ("unknown", r#"{"kind":"s3","capacity_bytes":1,"typo":true}"#),
+        ("missing", r#"{"kind":"s3"}"#),
         ("kind", r#"{"kind":"other","capacity_bytes":1}"#),
     ] {
         let path = directory.path().join(name);
@@ -50,14 +48,14 @@ fn invalid_storage_documents_fail_before_http() {
 #[test]
 fn storage_document_can_be_read_from_stdin() {
     let response = json!({
-        "id":"archive","kind":"fs","force_relay":false,"root_path":"/tmp",
+        "id":"archive","kind":"s3","force_relay":false,"root_path":null,
         "endpoint":null,"public_endpoint":null,"region":null,"bucket":null,
         "force_path_style":false,"access_key":null,"capacity_bytes":1
     });
     let server = Server::routes(vec![(
         "POST",
-        "/api/admin/v1/storages",
-        Reply::status(201, response),
+        "storage.create",
+        Reply::status(200, response),
     )]);
     let mut child = server
         .command()
@@ -71,7 +69,7 @@ fn storage_document_can_be_read_from_stdin() {
         .stdin
         .take()
         .unwrap()
-        .write_all(br#"{"kind":"fs","root_path":"/tmp","capacity_bytes":1}"#)
+        .write_all(br#"{"kind":"s3","capacity_bytes":1}"#)
         .unwrap();
     envelope(&child.wait_with_output().unwrap(), 0);
     assert_eq!(server.seen().len(), 1);
@@ -123,5 +121,24 @@ fn secret_output_cannot_be_stdout() {
     ]);
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
+    assert!(server.seen().is_empty());
+}
+
+#[test]
+fn filesystem_replacement_is_rejected_before_http() {
+    let server = Server::new(vec![]);
+    let input = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        input.path(),
+        r#"{"kind":"fs","root_path":"/not-probed","capacity_bytes":1}"#,
+    )
+    .unwrap();
+    let output = server
+        .command()
+        .args(["storage", "replace", "archive", "--yes", "--from"])
+        .arg(input.path())
+        .output()
+        .unwrap();
+    assert_eq!(at(&envelope(&output, 2), "/error/outcome"), "not_applied");
     assert!(server.seen().is_empty());
 }

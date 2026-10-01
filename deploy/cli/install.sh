@@ -45,7 +45,7 @@ tmp=$(mktemp -d "$bin_dir/.gscli-install.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 1' HUP INT TERM
 asset=gscli-$target
-base=https://github.com/cagojeiger/filegate/releases/download/v$version
+base=https://github.com/cagojeiger/grove-storage/releases/download/v$version
 download() {
     curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
         --connect-timeout 15 --max-time 300 "$base/$1" --output "$tmp/$1"

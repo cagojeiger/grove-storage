@@ -9,9 +9,9 @@ fn credential_secret_is_written_once_to_a_private_file() {
     let secret = "issued-secret-that-must-not-reach-stdout";
     let server = Server::routes(vec![(
         "POST",
-        "/api/admin/v1/clients/app/s3-credentials",
+        "credential.create",
         Reply::status(
-            201,
+            200,
             json!({"access_key_id":"fgakpublic","secret_key":secret}),
         ),
     )]);
@@ -44,7 +44,8 @@ fn credential_secret_is_written_once_to_a_private_file() {
     }
     let seen = server.seen();
     assert_eq!(seen.len(), 1);
-    assert!(seen.first().unwrap().body.is_empty());
+    let body: Value = serde_json::from_str(&seen.first().unwrap().body).unwrap();
+    assert_eq!(at(&body, "/input"), &json!({"client_id":"app"}));
 }
 
 #[test]
@@ -82,8 +83,8 @@ fn existing_secret_paths_are_rejected_before_issuance() {
 fn rejected_issuance_removes_the_reserved_empty_file() {
     let server = Server::routes(vec![(
         "POST",
-        "/api/admin/v1/clients/missing/s3-credentials",
-        Reply::error(404),
+        "credential.create",
+        Reply::rejected(404, "not_found", "not_applied"),
     )]);
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("credential.json");
@@ -109,21 +110,17 @@ fn uncertain_or_malformed_issuance_preserves_the_marker_file() {
     for (reply, outcome, access_key_id) in [
         (Reply::error(500), "unknown", None),
         (
-            Reply::status(201, json!({"unexpected":true})),
-            "applied",
+            Reply::status(200, json!({"unexpected":true})),
+            "unknown",
             None,
         ),
         (
-            Reply::status(201, json!({"access_key_id":"fgakpublic","secret_key":""})),
+            Reply::status(200, json!({"access_key_id":"fgakpublic","secret_key":""})),
             "applied",
             Some("fgakpublic"),
         ),
     ] {
-        let server = Server::routes(vec![(
-            "POST",
-            "/api/admin/v1/clients/app/s3-credentials",
-            reply,
-        )]);
+        let server = Server::routes(vec![("POST", "credential.create", reply)]);
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("credential.json");
         let output = server

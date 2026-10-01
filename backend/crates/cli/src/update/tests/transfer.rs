@@ -41,6 +41,7 @@ fn manifest_rejects_wrong_origin_platform_schema_and_unstable_versions() {
     for kind in [
         "schema",
         "repository",
+        "filegate_repository",
         "missing",
         "name",
         "hash",
@@ -54,6 +55,7 @@ fn manifest_rejects_wrong_origin_platform_schema_and_unstable_versions() {
         match kind {
             "schema" => metadata["schema_version"] = json!(2),
             "repository" => metadata["repository"] = json!("attacker/other"),
+            "filegate_repository" => metadata["repository"] = json!("cagojeiger/filegate"),
             "missing" => metadata["assets"] = json!({}),
             "name" => metadata["assets"][target().unwrap()]["name"] = json!("../bad"),
             "hash" => metadata["assets"][target().unwrap()]["sha256"] = json!("bad"),

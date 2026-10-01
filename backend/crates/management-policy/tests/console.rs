@@ -1,0 +1,76 @@
+mod support;
+
+use grove_management_policy::*;
+use support::*;
+
+#[test]
+fn console_matrix_preserves_role_and_query_scope() {
+    for role in ROLES {
+        for (action, reader_writer, admin) in [
+            (
+                Action::ReadOwnSessions,
+                Ok(Scope::SelfOnly),
+                Ok(Scope::SelfOnly),
+            ),
+            (
+                Action::RevokeOwnSessions,
+                Ok(Scope::SelfOnly),
+                Ok(Scope::SelfOnly),
+            ),
+            (
+                Action::ReadIdentities,
+                Err(Denial::InsufficientRole),
+                Ok(Scope::Installation),
+            ),
+            (
+                Action::ManageIdentities,
+                Err(Denial::InsufficientRole),
+                Ok(Scope::Installation),
+            ),
+            (
+                Action::ReadAuditHistory,
+                Ok(Scope::SelfOnly),
+                Ok(Scope::Installation),
+            ),
+            (
+                Action::ReadInvocationHistory,
+                Ok(Scope::SelfOnly),
+                Ok(Scope::Installation),
+            ),
+            (
+                Action::ReadSecurityEvents,
+                Err(Denial::InsufficientRole),
+                Ok(Scope::Installation),
+            ),
+        ] {
+            assert_eq!(
+                authorize(
+                    user(role, AuthMethod::UserSession),
+                    Surface::Console,
+                    action
+                ),
+                if role == Role::Admin {
+                    admin
+                } else {
+                    reader_writer
+                },
+                "{role:?} {action:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn even_admin_bearer_cannot_use_identity_session_or_history_operations() {
+    for role in ROLES {
+        for surface in MACHINE_SURFACES {
+            for action in CONSOLE_ACTIONS {
+                assert_eq!(
+                    authorize(user(role, AuthMethod::ManagementToken), surface, action),
+                    Err(Denial::ConsoleSessionRequired),
+                    "{role:?} {surface:?} {action:?}"
+                );
+            }
+        }
+    }
+}

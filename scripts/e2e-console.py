@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import runpy
+import secrets
 import socket
 import signal
 import ssl
@@ -17,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HARNESS = runpy.run_path(str(ROOT / "scripts/e2e-cli.py"))
 
 
-def check(endpoint, directory, database, origin, serve):
+def check(endpoint, directory, database, origin, serve, minio):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 30
     while True:
@@ -30,16 +31,11 @@ def check(endpoint, directory, database, origin, serve):
         if time.monotonic() > deadline:
             raise RuntimeError('API readiness timeout')
         time.sleep(.2)
-    port = HARNESS['docker']('port', database, '5432').rsplit(':', 1)[1]
-    env = {k: v for k, v in os.environ.items() if not k.startswith('FILEGATE_')}
-    env.update(FILEGATE_DATABASE_URL=f'postgres://filegate:filegate@127.0.0.1:{port}/filegate',
-               FILEGATE_ENC_ROOT_SECRET='local-cli-integration-root-secret-32bytes')
-    issued = subprocess.run([str(HARNESS['SERVER']), 'admin', 'init'], env=env,
-                            capture_output=True, text=True, check=True, timeout=30)
-    credential = json.loads(issued.stdout)
-    token = credential['token']
-    objects = Path(directory) / 'objects'
-    objects.mkdir()
+    owner_password = 'fixture-' + secrets.token_urlsafe(32)
+    owner = json.loads(subprocess.check_output(
+        ['python3', 'scripts/e2e-password-account.py', database], cwd=ROOT,
+        env=dict(os.environ, GROVE_E2E_PASSWORD=owner_password,
+                 GROVE_E2E_DISPLAY_NAME='Console test owner'), text=True, timeout=45))
     key, cert = Path(directory) / 'key.pem', Path(directory) / 'cert.pem'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                     '-keyout', str(key), '-out', str(cert), '-days', '1',
@@ -61,20 +57,21 @@ def check(endpoint, directory, database, origin, serve):
                         raise RuntimeError('HTTPS Vite readiness timeout')
                     time.sleep(.2)
             if serve:
-                token_file = Path(directory) / 'operator-token'
+                token_file = Path(directory) / 'owner-password'
                 fd = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(fd, 'w') as output:
-                    output.write(token)
+                    output.write(owner_password)
                 print('Console:', origin + '/api/admin/console/', flush=True)
-                print('Local disposable admin token:', token_file, flush=True)
+                print('Username: owner; local disposable password file:', token_file, flush=True)
                 while vite.poll() is None:
                     time.sleep(1)
             else:
                 subprocess.run(['node', 'tests/live.mjs'], cwd=ROOT / 'frontend/web',
-                               input=json.dumps({'origin': origin, 'token': token, 'credentialId': credential['id'],
-                                                 'database': database, 'server': str(HARNESS['SERVER']),
-                                                 'serverEnv': env, 'objects': str(objects)}), text=True,
-                               check=True, timeout=90)
+                               input=json.dumps({'origin': origin, 'ownerPassword': owner_password,
+                                                 'ownerId': owner['account_id'],
+                                                 'database': database, 'endpoint': endpoint,
+                                                 'minio': minio.spec}), text=True,
+                               check=True, timeout=150)
         finally:
             vite.terminate()
             try:
@@ -89,9 +86,12 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, stop)
     parser = argparse.ArgumentParser()
     parser.add_argument('--serve', action='store_true')
+    parser.add_argument('--with-minio', action='store_true')
     args = parser.parse_args()
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
     origin = f'https://127.0.0.1:{port}'
-    HARNESS['main'](lambda endpoint, directory, database: check(endpoint, directory, database, origin, args.serve),
-                    with_database=True, console_origin=origin)
+    from s3_backend_fixture import minio_backend
+    with minio_backend() as minio:
+        HARNESS['main'](lambda endpoint, directory, database: check(endpoint, directory, database, origin, args.serve, minio),
+                        with_database=True, console_origin=origin, management=True)

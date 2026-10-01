@@ -4,7 +4,7 @@ use grove_object_service::multipart_create::MultipartCreate;
 
 use crate::error::{ApiError, internal};
 use crate::routes::AppState;
-use crate::storage_access::StorageBackend;
+use filegate_infra::backend::StorageBackend;
 
 pub(super) struct Operations<'a> {
     pub state: &'a AppState,
@@ -17,9 +17,7 @@ impl MultipartCreate for Operations<'_> {
     type Error = ApiError;
 
     async fn create_vendor_upload(&self) -> Result<Option<String>, ApiError> {
-        let StorageBackend::S3 { spec, .. } = self.backend else {
-            return Ok(None);
-        };
+        let spec = &self.backend.spec;
         let storage = self
             .state
             .s3_clients
@@ -70,7 +68,8 @@ async fn cleanup_failed_multipart_create(
 
     let result = cleanup_then_finalize(
         || async {
-            if let StorageBackend::S3 { spec, .. } = backend {
+            {
+                let spec = &backend.spec;
                 let storage = state
                     .s3_clients
                     .get(&created.storage.id, spec, Address::Internal);

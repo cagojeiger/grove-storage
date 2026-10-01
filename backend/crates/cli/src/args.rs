@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use grove_management_command::CommandName;
 
 #[derive(Parser)]
 #[command(name = "gscli", version, about = "Grove Storage management CLI")]
@@ -8,7 +9,7 @@ pub struct Args {
     /// Management API origin.
     #[arg(long, global = true, env = "GROVE_ENDPOINT", hide_env_values = true)]
     pub endpoint: Option<String>,
-    /// Read the operator token from a file (overrides GROVE_OPERATOR_TOKEN).
+    /// Read a User token from a file (overrides GROVE_TOKEN).
     #[arg(long, global = true)]
     pub token_file: Option<PathBuf>,
     #[arg(long, global = true, value_enum, default_value = "table")]
@@ -60,7 +61,15 @@ pub enum Command {
 
 #[derive(Subcommand)]
 pub enum StorageCommand {
+    /// Read or replace resource labels without changing connection settings.
+    #[command(subcommand)]
+    Metadata(MetadataCommand),
     List,
+    /// Test saved S3 bucket access without writing objects or registry settings.
+    Test {
+        #[arg(value_parser = resource_id)]
+        id: String,
+    },
     Show {
         #[arg(value_parser = resource_id)]
         id: String,
@@ -93,6 +102,9 @@ pub enum StorageCommand {
 
 #[derive(Subcommand)]
 pub enum ClientCommand {
+    /// Read or replace resource labels without changing the storage assignment.
+    #[command(subcommand)]
+    Metadata(MetadataCommand),
     List,
     Show {
         #[arg(value_parser = resource_id)]
@@ -108,6 +120,23 @@ pub enum ClientCommand {
         #[arg(value_parser = resource_id)]
         id: String,
         /// Skip the interactive deletion confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum MetadataCommand {
+    Show {
+        #[arg(value_parser = resource_id)]
+        id: String,
+    },
+    /// Replace the entire string-valued JSON object; {} clears all labels.
+    Replace {
+        #[arg(value_parser = resource_id)]
+        id: String,
+        #[arg(long = "from", value_name = "PATH")]
+        from: PathBuf,
         #[arg(long)]
         yes: bool,
     },
@@ -184,25 +213,48 @@ impl Command {
             Self::Update { check: true } => "update.check",
             Self::Update { check: false } => "update",
             Self::Install { .. } => "install",
-            Self::Status => "status",
-            Self::Storage(StorageCommand::List) => "storage.list",
-            Self::Storage(StorageCommand::Show { .. }) => "storage.show",
-            Self::Storage(StorageCommand::Create { .. }) => "storage.create",
-            Self::Storage(StorageCommand::Replace { .. }) => "storage.replace",
-            Self::Storage(StorageCommand::Delete { .. }) => "storage.delete",
-            Self::Client(ClientCommand::List) => "client.list",
-            Self::Client(ClientCommand::Show { .. }) => "client.show",
-            Self::Client(ClientCommand::Create { .. }) => "client.create",
-            Self::Client(ClientCommand::Delete { .. }) => "client.delete",
-            Self::Credential(CredentialCommand::List { .. }) => "credential.list",
-            Self::Credential(CredentialCommand::Create { .. }) => "credential.create",
-            Self::Credential(CredentialCommand::Delete { .. }) => "credential.delete",
-            Self::ClientKey(ClientKeyCommand::List { .. }) => "client-key.list",
-            Self::ClientKey(ClientKeyCommand::Register { .. }) => "client-key.register",
-            Self::ClientKey(ClientKeyCommand::Delete { .. }) => "client-key.delete",
-            Self::Usage(Usage::Storages) => "usage.storages",
-            Self::Usage(Usage::Clients) => "usage.clients",
-            Self::Usage(Usage::History { .. }) => "usage.history",
+            Self::Status => CommandName::Status.as_str(),
+            Self::Storage(StorageCommand::List) => CommandName::StorageList.as_str(),
+            Self::Storage(StorageCommand::Metadata(MetadataCommand::Show { .. })) => {
+                CommandName::StorageMetadataShow.as_str()
+            }
+            Self::Storage(StorageCommand::Metadata(MetadataCommand::Replace { .. })) => {
+                CommandName::StorageMetadataReplace.as_str()
+            }
+            Self::Storage(StorageCommand::Show { .. }) => CommandName::StorageShow.as_str(),
+            Self::Storage(StorageCommand::Test { .. }) => CommandName::StorageTest.as_str(),
+            Self::Storage(StorageCommand::Create { .. }) => CommandName::StorageCreate.as_str(),
+            Self::Storage(StorageCommand::Replace { .. }) => CommandName::StorageReplace.as_str(),
+            Self::Storage(StorageCommand::Delete { .. }) => CommandName::StorageDelete.as_str(),
+            Self::Client(ClientCommand::List) => CommandName::ClientList.as_str(),
+            Self::Client(ClientCommand::Metadata(MetadataCommand::Show { .. })) => {
+                CommandName::ClientMetadataShow.as_str()
+            }
+            Self::Client(ClientCommand::Metadata(MetadataCommand::Replace { .. })) => {
+                CommandName::ClientMetadataReplace.as_str()
+            }
+            Self::Client(ClientCommand::Show { .. }) => CommandName::ClientShow.as_str(),
+            Self::Client(ClientCommand::Create { .. }) => CommandName::ClientCreate.as_str(),
+            Self::Client(ClientCommand::Delete { .. }) => CommandName::ClientDelete.as_str(),
+            Self::Credential(CredentialCommand::List { .. }) => {
+                CommandName::CredentialList.as_str()
+            }
+            Self::Credential(CredentialCommand::Create { .. }) => {
+                CommandName::CredentialCreate.as_str()
+            }
+            Self::Credential(CredentialCommand::Delete { .. }) => {
+                CommandName::CredentialDelete.as_str()
+            }
+            Self::ClientKey(ClientKeyCommand::List { .. }) => CommandName::ClientKeyList.as_str(),
+            Self::ClientKey(ClientKeyCommand::Register { .. }) => {
+                CommandName::ClientKeyRegister.as_str()
+            }
+            Self::ClientKey(ClientKeyCommand::Delete { .. }) => {
+                CommandName::ClientKeyDelete.as_str()
+            }
+            Self::Usage(Usage::Storages) => CommandName::UsageStorages.as_str(),
+            Self::Usage(Usage::Clients) => CommandName::UsageClients.as_str(),
+            Self::Usage(Usage::History { .. }) => CommandName::UsageHistory.as_str(),
         }
     }
 }

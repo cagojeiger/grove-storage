@@ -1,19 +1,18 @@
 #!/bin/sh
 # multipart 동등성 E2E (spec 02 완료 조건): 같은 대용량 시나리오가
-# 직결(minio) = 중계(minio) = 중계(fs)에서 같은 상태 전이·회계·응답을 낸다.
+# Compare S3 direct and relay state transitions, accounting and bytes.
 # + 강화 케이스: 재발급(재개), part 크기·범위 검증, 미완성 commit 400,
-#   미완성 회수(벤더 Abort·fs mp 임시 삭제), purge 후 소멸.
+#   미완성 회수(벤더 Abort), purge 후 소멸.
 #
 # 전제: 서버가 작은 multipart 설정으로 실행 중이어야 한다:
 #   FILEGATE_MULTIPART_THRESHOLD_BYTES=6291456 (6MiB)
 #   FILEGATE_PART_SIZE_BYTES=5242880 (5MiB)
 #   (+ FILEGATE_PUBLIC_URL, 짧은 reconciler tick)
-#   deploy/local 적용(3 storage + storage별 client/key)
+#   Register minio-local/minio-relay and their client keys first.
 # 12MiB 파일 → part 3개 (5MiB, 5MiB, 2MiB). 사용: sh scripts/e2e-multipart.sh
 BASE=http://127.0.0.1:8080
 AUTH_DIRECT="Authorization: Bearer fg_local-dev-notegate-key-0123456789abcdef"
 AUTH_RELAY="Authorization: Bearer fg_local-dev-notegate-relay-key-0123456789abcdef"
-AUTH_FS="Authorization: Bearer fg_local-dev-notegate-fs-key-0123456789abcdef"
 JSON="Content-Type: application/json"
 PG_CONTAINER="${FILEGATE_PG_CONTAINER:-filegate-postgres-1}"
 PSQL="docker exec $PG_CONTAINER psql -U filegate -d filegate -qtc"
@@ -31,9 +30,6 @@ $PSQL "DELETE FROM lease_parts;" >/dev/null 2>&1
 $PSQL "DELETE FROM leases;" >/dev/null 2>&1
 $PSQL "DELETE FROM locations;" >/dev/null 2>&1
 $PSQL "DELETE FROM files;" >/dev/null 2>&1
-mkdir -p /tmp/filegate-fs-demo
-rm -rf /tmp/filegate-fs-demo/fg /tmp/filegate-fs-demo/.fg-tmp-* 2>/dev/null
-fs_count() { find /tmp/filegate-fs-demo -type f ! -name '.fg-tmp-*' | wc -l | tr -d ' '; }
 
 # 12MiB 페이로드와 part 분할 (part 크기 5MiB)
 dd if=/dev/urandom of="$WORK/big.bin" bs=1048576 count=12 2>/dev/null
@@ -102,14 +98,12 @@ run_mode() {
   case "$LABEL" in
     direct) FID_DIRECT=$FID;;
     relay_s3) FID_RELAY_S3=$FID;;
-    relay_fs) FID_RELAY_FS=$FID;;
   esac
 }
 
-echo "=== 3-모드 동등성 (multipart) ==="
+echo "=== S3 direct/relay 동등성 (multipart) ==="
 run_mode direct   minio-local "$AUTH_DIRECT" direct
 run_mode relay_s3 minio-relay "$AUTH_RELAY"  relay
-run_mode relay_fs fs-local     "$AUTH_FS"     relay
 
 echo "=== part 검증 강화 ==="
 C=$(curl -s -H "$AUTH_RELAY" -H "$JSON" -X POST $BASE/api/v1/files -d "{\"declared_size\":$SIZE}")
@@ -134,15 +128,11 @@ INCOMPLETE=$(docker run --rm --network host --entrypoint sh minio/mc:RELEASE.202
   "mc alias set m http://127.0.0.1:9000 filegate filegate-secret >/dev/null 2>&1 && mc ls --incomplete --recursive m/filegate-std 2>/dev/null | wc -l" | tr -d ' ')
 expect "벤더 미완성 세션 0 (Abort 확인)" 0 "$INCOMPLETE"
 
-echo "=== 세 모드 delete → purge → 회계 0 + fs 소멸 ==="
+echo "=== S3 direct/relay delete -> purge -> usage 0 ==="
 expect "[direct] delete 200" 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_DIRECT" -X DELETE $BASE/api/v1/files/$FID_DIRECT)"
 expect "[relay_s3] delete 200" 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_RELAY" -X DELETE $BASE/api/v1/files/$FID_RELAY_S3)"
-expect "[relay_fs] delete 200" 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH_FS" -X DELETE $BASE/api/v1/files/$FID_RELAY_FS)"
 sleep 8
 expect "회계 전부 0" "0" "$($PSQL "SELECT coalesce(sum(f.declared_size),0) FROM files f JOIN locations l ON l.file_id=f.id;" | tr -d ' ')"
-expect "fs 실물 전부 소멸" 0 "$(fs_count)"
-FS_MP=$(find /tmp/filegate-fs-demo -name '.fg-tmp-mp-*' | wc -l | tr -d ' ')
-expect "fs multipart 임시 소멸" 0 "$FS_MP"
 
 # 정리
 $PSQL "DELETE FROM lease_parts;" >/dev/null 2>&1

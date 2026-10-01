@@ -128,6 +128,7 @@ async fn missing_wrong_and_symlink_receipts_make_no_network_requests() {
         "missing",
         "path",
         "repository",
+        "filegate_repository",
         "target",
         "symlink",
         "oversized",
@@ -142,6 +143,10 @@ async fn missing_wrong_and_symlink_receipts_make_no_network_requests() {
                 std::os::unix::fs::symlink(&install.binary, &path).unwrap();
             }
             "oversized" => fs::write(&path, vec![b' '; 16385]).unwrap(),
+            "filegate_repository" => {
+                receipt["repository"] = json!("cagojeiger/filegate");
+                fs::write(&path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+            }
             field => {
                 let field = if field == "path" {
                     "install_path"

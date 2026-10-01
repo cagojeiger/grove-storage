@@ -68,16 +68,18 @@ pub fn authorization(args: &Args) -> Result<HeaderValue, Error> {
             .unwrap_or(&text)
             .to_owned()
     } else {
-        std::env::var("GROVE_OPERATOR_TOKEN")
-            .map_err(|_| Error::input("Set --token-file or GROVE_OPERATOR_TOKEN"))?
+        std::env::var("GROVE_TOKEN").map_err(|_| Error::input("Set --token-file or GROVE_TOKEN"))?
     };
-    if token.is_empty() || token.len() > 8192 || !token.bytes().all(|b| b.is_ascii_graphic()) {
-        return Err(Error::input(
-            "Operator token must be a single nonempty ASCII bearer value",
-        ));
+    if !token.strip_prefix("gsm_").is_some_and(|value| {
+        value.len() == 64
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    }) {
+        return Err(Error::input("Use a gsm_ User management token"));
     }
     let mut header = HeaderValue::from_str(&format!("Bearer {token}"))
-        .map_err(|_| Error::input("Invalid operator token"))?;
+        .map_err(|_| Error::input("Invalid management token"))?;
     header.set_sensitive(true);
     Ok(header)
 }

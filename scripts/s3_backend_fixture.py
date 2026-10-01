@@ -1,8 +1,10 @@
 """Disposable MinIO backend; never connects to a configured production endpoint."""
 
 from contextlib import contextmanager
+from functools import lru_cache
 import hashlib
 import json
+from pathlib import Path
 import socket
 import subprocess
 import time
@@ -14,7 +16,14 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 
-IMAGE = "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
+IMAGE = "grove-contract-minio:07c3a429bfed"
+
+
+@lru_cache(maxsize=1)
+def build_minio_image():
+    context = Path(__file__).resolve().parent / "fixtures" / "minio"
+    subprocess.run(["docker", "build", "--tag", IMAGE, str(context)],
+                   check=True, timeout=900)
 
 
 def docker(*args):
@@ -91,6 +100,7 @@ class MinioBackend:
 
 @contextmanager
 def minio_backend():
+    build_minio_image()
     name = "grove-contract-minio-" + uuid.uuid4().hex[:12]
     secret = uuid.uuid4().hex
     # An explicitly published port survives stop/start; Docker's dynamic

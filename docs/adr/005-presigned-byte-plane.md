@@ -3,6 +3,7 @@
 - 상태: Accepted (네이티브 표면)
 - 최초 결정: 2026-07-13
 - 근거: [002](002-lease-model.md); S3 표면은 [006](006-s3-compat-surface.md)
+- 적용 범위 갱신: [007](007-grove-storage-foundation.md)의 S3-only 전환. Native URL 계약 유지.
 
 ## 결정
 
@@ -12,7 +13,7 @@
 | read | GET URL | 다운로드 |
 | parts | part별 PUT URL | multipart 전송 |
 | storage가 S3 직결 | vendor presigned URL | 클라이언트 ↔ 저장소 |
-| fs·force_relay | FileGate lease URL | 클라이언트 ↔ FileGate ↔ 저장소 |
+| S3 force_relay | FileGate lease URL | 클라이언트 ↔ FileGate ↔ 저장소 |
 
 네이티브 클라이언트는 발급된 URL로 전송하고 확정 결과를 확인한다.
 URL 발급과 바이트 I/O를 분리해 직결 storage에서 FileGate의 전송 부하를 줄인다.

@@ -26,7 +26,13 @@ def docker(*args):
     return subprocess.check_output(["docker", *args], text=True, timeout=90).strip()
 
 
-def check_lifecycle(endpoint, directory):
+def check_lifecycle(endpoint, directory, database):
+    from s3_backend_fixture import minio_backend
+    with minio_backend() as backend:
+        check_s3_lifecycle(endpoint, directory, backend, database)
+
+
+def check_s3_lifecycle(endpoint, directory, backend, database):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def request(method, path, body=None, token=TOKEN):
@@ -51,11 +57,11 @@ def check_lifecycle(endpoint, directory):
         time.sleep(0.1)
 
     admin = "/api/admin/v1"
-    root = Path(directory) / "objects"
-    root.mkdir()
+    from cli_management_fixture import Management
+    management = Management(endpoint, database)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FILEGATE_", "GROVE_"))}
     env.pop("DATABASE_URL", None)
-    env.update(GROVE_ENDPOINT=endpoint, GROVE_OPERATOR_TOKEN=TOKEN, NO_PROXY="127.0.0.1")
+    env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
 
     def run_cli(*args):
         result = subprocess.run(
@@ -67,15 +73,18 @@ def check_lifecycle(endpoint, directory):
         output = json.loads(result.stdout)
         assert output["ok"] and output["error"] is None
         assert TOKEN not in result.stdout
+        assert management.token not in result.stdout
         print("PASS", " ".join(args))
         return output, result
 
     storage_spec = Path(directory) / "storage.json"
     storage_spec.write_text(json.dumps({
-        "kind": "fs", "root_path": str(root), "capacity_bytes": 1073741824,
+        **backend.spec, "capacity_bytes": 1073741824,
     }))
-    run_cli("storage", "create", "cli-test-fs", "--from", str(storage_spec))
-    run_cli("client", "create", "cli-test", "--storage", "cli-test-fs")
+    run_cli("storage", "create", "cli-test-s3", "--from", str(storage_spec))
+    checked, _ = run_cli("storage", "test", "cli-test-s3")
+    assert checked["data"] == {"id": "cli-test-s3", "state": "ok"}
+    run_cli("client", "create", "cli-test", "--storage", "cli-test-s3")
 
     raw_key = "cli-test-native-key"
     key_file = Path(directory) / "client-key"
@@ -98,14 +107,14 @@ def check_lifecycle(endpoint, directory):
     assert secret_file.stat().st_mode & 0o777 == 0o600
 
     storage_spec.write_text(json.dumps({
-        "kind": "fs", "root_path": str(root), "capacity_bytes": 2147483648,
+        **backend.spec, "capacity_bytes": 2147483648,
     }))
-    run_cli("storage", "replace", "cli-test-fs", "--from", str(storage_spec), "--yes")
+    run_cli("storage", "replace", "cli-test-s3", "--from", str(storage_spec), "--yes")
 
     cases = [
         (["status"], None),
         (["storage", "list"], "/storages"),
-        (["storage", "show", "cli-test-fs"], "/storages/cli-test-fs"),
+        (["storage", "show", "cli-test-s3"], "/storages/cli-test-s3"),
         (["client", "list"], "/clients"),
         (["client", "show", "cli-test"], "/clients/cli-test"),
         (["credential", "list", "--client", "cli-test"], "/clients/cli-test/s3-credentials"),
@@ -128,39 +137,48 @@ def check_lifecycle(endpoint, directory):
     run_cli("credential", "delete", "--client", "cli-test", access_key_id, "--yes")
     run_cli("client-key", "delete", "--client", "cli-test", key, "--yes")
     run_cli("client", "delete", "cli-test", "--yes")
-    run_cli("storage", "delete", "cli-test-fs", "--yes")
+    run_cli("storage", "delete", "cli-test-s3", "--yes")
     assert request("GET", admin + "/clients") == []
     assert request("GET", admin + "/storages") == []
     print("PASS registry lifecycle completed without Terraform")
 
     # A separate fixture remains in the disposable database until container teardown.
-    run_cli("storage", "create", "cli-test-fs", "--from", str(storage_spec))
-    run_cli("client", "create", "cli-test", "--storage", "cli-test-fs")
+    run_cli("storage", "create", "cli-test-s3", "--from", str(storage_spec))
+    run_cli("client", "create", "cli-test", "--storage", "cli-test-s3")
     run_cli("client-key", "register", "--client", "cli-test", "--key-file", str(key_file))
     request("POST", "/api/v1/files", {"declared_size": 0}, token=raw_key)
-    run_cli("storage", "replace", "cli-test-fs", "--from", str(storage_spec), "--yes")
-    other_root = Path(directory) / "other-objects"
-    other_root.mkdir()
-    replacement = {"kind": "fs", "root_path": str(other_root), "capacity_bytes": 2147483648}
+    run_cli("storage", "replace", "cli-test-s3", "--from", str(storage_spec), "--yes")
+    replacement = {**backend.spec, "public_endpoint": backend.spec["endpoint"] + "/changed",
+                   "capacity_bytes": 2147483648}
     try:
-        request("PUT", admin + "/storages/cli-test-fs", replacement)
+        request("PUT", admin + "/storages/cli-test-s3", replacement)
     except urllib.error.HTTPError as error:
         assert error.code == 409, error.code
     else:
         raise AssertionError("storage address replacement should be rejected")
     storage_spec.write_text(json.dumps(replacement))
     rejected = subprocess.run(
-        [str(CLI), "--output", "json", "storage", "replace", "cli-test-fs",
+        [str(CLI), "--output", "json", "storage", "replace", "cli-test-s3",
          "--from", str(storage_spec), "--yes"],
         cwd=directory, env=env, capture_output=True, text=True, timeout=10,
     )
     assert rejected.returncode != 0, rejected.stdout
-    assert request("GET", admin + "/storages/cli-test-fs")["root_path"] == str(root)
+    assert request("GET", admin + "/storages/cli-test-s3")["public_endpoint"] == backend.spec["endpoint"]
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
+
+    def run_as(args, token, expected):
+        result = subprocess.run([str(CLI), "--output", "json", *args],
+                                cwd=directory, env=dict(env, GROVE_TOKEN=token),
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == expected, (args, result.returncode, expected)
+        assert token not in result.stdout + result.stderr
+        return json.loads(result.stdout)
+    management.verify(run_as)
 
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
-         reconciler_interval=1):
+         reconciler_interval=1, management=False, verify_log=None, multipart=False,
+         s3_cors_origins=()):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -185,8 +203,15 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             )
             if with_database:
                 env["FILEGATE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
+            if multipart:
+                env.update(FILEGATE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
+                           FILEGATE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
             if console_origin:
                 env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
+            if s3_cors_origins:
+                env["FILEGATE_S3_CORS_ALLOWED_ORIGINS"] = ",".join(s3_cors_origins)
+            if management:
+                env["FILEGATE_CONSOLE_ORIGIN"] = console_origin or "https://console.test"
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
@@ -220,6 +245,9 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                     except subprocess.TimeoutExpired:
                         server.kill()
                         server.wait(timeout=5)
+                if verify_log:
+                    log.seek(0)
+                    verify_log(log.read())
     finally:
         subprocess.run(["docker", "rm", "-f", container],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=True)
@@ -227,4 +255,4 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
 
 
 if __name__ == "__main__":
-    main()
+    main(with_database=True, management=True)

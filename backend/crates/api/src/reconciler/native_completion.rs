@@ -40,7 +40,7 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                 continue;
             }
         };
-        let observation = crate::storage_access::observe_backend_object(
+        let observation = filegate_infra::backend::observe_backend_object(
             s3_clients,
             &backend,
             &candidate.storage_id,

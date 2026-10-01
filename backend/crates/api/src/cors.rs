@@ -79,13 +79,23 @@ mod tests {
             .uri("/notegate-dev/probe.png")
             .header("origin", "http://127.0.0.1:5173")
             .header("access-control-request-method", "PUT")
-            .header("access-control-request-headers", "content-type")
+            .header(
+                "access-control-request-headers",
+                "content-type,if-none-match",
+            )
             .body(Body::empty())
             .unwrap();
         let res = cors_router(&allowed()).oneshot(req).await.unwrap();
         // 핸들러(418)가 아니라 CORS가 단락 → 2xx. 핸들러는 안 탐.
         assert!(res.status().is_success());
         assert_ne!(res.status(), StatusCode::IM_A_TEAPOT);
+        assert!(
+            res.headers()["access-control-allow-headers"]
+                .to_str()
+                .unwrap()
+                .split(',')
+                .any(|header| header.trim() == "if-none-match")
+        );
         assert_eq!(
             res.headers().get("access-control-allow-origin").unwrap(),
             "http://127.0.0.1:5173"

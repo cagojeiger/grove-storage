@@ -14,8 +14,8 @@ pub struct S3Credential {
 const CREDENTIAL_SECRET_COLUMNS: &str =
     "client_id, secret_key_ciphertext, secret_key_nonce, enc_key_id";
 
-pub async fn insert_credential(
-    pool: &PgPool,
+pub async fn insert_credential<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
     access_key_id: &str,
     client_id: &str,
     secret_ciphertext: &[u8],
@@ -58,7 +58,10 @@ pub async fn get_credential(
     ))
 }
 
-pub async fn list_credentials(pool: &PgPool, client_id: &str) -> Result<Vec<String>, sqlx::Error> {
+pub async fn list_credentials<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    client_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
     sqlx::query_scalar(
         "SELECT access_key_id FROM s3_credentials WHERE client_id = $1 ORDER BY created_at",
     )
@@ -68,8 +71,8 @@ pub async fn list_credentials(pool: &PgPool, client_id: &str) -> Result<Vec<Stri
 }
 
 /// 폐기 — 지운 행 수를 돌려준다 (0이면 없던 자격증명, 멱등).
-pub async fn delete_credential(
-    pool: &PgPool,
+pub async fn delete_credential<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
     client_id: &str,
     access_key_id: &str,
 ) -> Result<u64, sqlx::Error> {

@@ -1,9 +1,27 @@
+import {
+  Alert,
+  Box,
+  Container,
+  Stack,
+  Typography,
+  TextField,
+  Button,
+} from "@mui/material";
+
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { admin, ApiError, message, request, Session } from "../api/http";
+import {
+  identity,
+  ApiError,
+  currentSession,
+  message,
+  request,
+  Session,
+} from "../api/http";
 
 export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
-  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [wait, setWait] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -15,18 +33,18 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (pending || wait) return;
-    const value = token.trim();
-    setToken("");
+    const loginName = username.trim();
+    const secret = password;
+    setPassword("");
     setPending(true);
     setError("");
     // Keep credentials out of query/mutation caches and browser storage.
     try {
-      onLogin(
-        await request<Session>(`${admin}/session`, {
-          method: "POST",
-          body: JSON.stringify({ token: value }),
-        }),
-      );
+      await request(`${identity}/session`, {
+        method: "POST",
+        body: JSON.stringify({ username: loginName, password: secret }),
+      });
+      onLogin(await currentSession());
     } catch (failure) {
       setError(message(failure));
       if (failure instanceof ApiError && failure.status === 429)
@@ -36,36 +54,62 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
     }
   }
   return (
-    <main className="login">
-      <img
-        className="login-logo"
-        src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
-        alt=""
-      />
-      <h1>Grove Storage</h1>
-      <h2>관리자 로그인</h2>
-      <form onSubmit={(event) => { void submit(event); }}>
-        <label htmlFor="token">관리자 토큰</label>
-        <input
-          id="token"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-          required
-          disabled={pending}
+    <Container component="main" maxWidth="xs" sx={{ py: 6 }}>
+      <Stack spacing={3}>
+        <Box
+          component="img"
+          sx={{ width: 64, height: 64, objectFit: "contain" }}
+          src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
+          alt=""
         />
-        {error && <p role="alert">{error}</p>}
-        <button
-          className="primary"
-          type="submit"
-          disabled={pending || !token.trim() || wait > 0}
+        <Typography component="h1" variant="h5">
+          Grove Storage
+        </Typography>
+        <Typography component="h2" variant="h6">
+          Sign in
+        </Typography>
+        <Stack
+          component="form"
+          spacing={3}
+          onSubmit={(event) => {
+            void submit(event);
+          }}
         >
-          {pending ? "로그인 중" : wait ? `${wait}초 후 재시도` : "로그인"}
-          <ArrowRight size={16} aria-hidden="true" />
-        </button>
-      </form>
-    </main>
+          <TextField
+            label="Username"
+            id="username"
+            autoComplete="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            required
+            disabled={pending}
+            slotProps={{ htmlInput: { spellCheck: false } }}
+          />
+          <TextField
+            label="Password"
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            disabled={pending}
+            slotProps={{ htmlInput: { spellCheck: false } }}
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+          <Button
+            variant="contained"
+            type="submit"
+            endIcon={<ArrowRight size={16} />}
+            disabled={pending || !username.trim() || !password || wait > 0}
+          >
+            {pending ? "Signing in" : wait ? `Retry in ${wait}s` : "Sign in"}
+          </Button>
+        </Stack>
+        <Typography variant="body2" color="text.secondary">
+          Lost access? Contact the server operator for account recovery.
+        </Typography>
+      </Stack>
+    </Container>
   );
 }

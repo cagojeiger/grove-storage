@@ -1,9 +1,9 @@
-use reqwest::{Client, Method, RequestBuilder, Response, Url, header::HeaderValue};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use tokio::time::{Instant, timeout_at};
+mod wire;
 
 use crate::error::Error;
+use grove_management_command::{COMMAND_PROTOCOL_VERSION, Command, Effect, Output};
+use reqwest::{Client, Url, header::HeaderValue};
+use tokio::time::{Instant, timeout_at};
 
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 
@@ -30,163 +30,61 @@ impl Api {
         })
     }
 
-    pub async fn get<T: DeserializeOwned>(
-        &self,
-        path: &[&str],
-        query: &[(&str, String)],
-        admin: bool,
-    ) -> Result<T, Error> {
-        let mut url = self.url(path, admin)?;
-        if !query.is_empty() {
-            url.query_pairs_mut().extend_pairs(query);
-        }
-        let request = self.request(Method::GET, url, admin);
-        let response = self.send(request, 200, false).await?;
-        self.read_json(response, 200, false).await
-    }
-
-    pub async fn post<I: Serialize + ?Sized, T: DeserializeOwned>(
-        &self,
-        path: &[&str],
-        body: &I,
-    ) -> Result<T, Error> {
-        self.write_json(Method::POST, path, body, 201).await
-    }
-
-    pub async fn post_empty<T: DeserializeOwned>(&self, path: &[&str]) -> Result<T, Error> {
-        let url = self.url(path, true)?;
-        let request = self.request(Method::POST, url, true);
-        let response = self.send(request, 201, true).await?;
-        self.read_json(response, 201, true).await
-    }
-
-    pub async fn put<I: Serialize + ?Sized, T: DeserializeOwned>(
-        &self,
-        path: &[&str],
-        body: &I,
-    ) -> Result<T, Error> {
-        self.write_json(Method::PUT, path, body, 200).await
-    }
-
-    pub async fn delete(&self, path: &[&str]) -> Result<(), Error> {
-        let url = self.url(path, true)?;
-        let request = self.request(Method::DELETE, url, true);
-        self.send(request, 204, true).await?;
-        Ok(())
-    }
-
     pub fn origin(&self) -> String {
         self.endpoint.origin().ascii_serialization()
     }
 
-    async fn write_json<I: Serialize + ?Sized, T: DeserializeOwned>(
-        &self,
-        method: Method,
-        path: &[&str],
-        body: &I,
-        expected_status: u16,
-    ) -> Result<T, Error> {
-        let bytes =
-            serde_json::to_vec(body).map_err(|_| Error::input("Cannot encode the request body"))?;
-        let url = self.url(path, true)?;
-        let request = self
-            .request(method, url, true)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(bytes);
-        let response = self.send(request, expected_status, true).await?;
-        self.read_json(response, expected_status, true).await
-    }
-
-    fn url(&self, path: &[&str], admin: bool) -> Result<Url, Error> {
+    pub async fn execute(&self, command: Command) -> Result<Output, Error> {
+        command
+            .validate()
+            .map_err(|_| Error::input("Invalid command input"))?;
+        let mutation = command.name().effect() == Effect::Mutation;
         let mut url = self.endpoint.clone();
-        let mut segments = url
-            .path_segments_mut()
-            .map_err(|_| Error::input("Endpoint cannot contain API paths"))?;
-        segments.clear();
-        if admin {
-            segments.extend(["api", "admin", "v1"]);
-        }
-        segments.extend(path);
-        drop(segments);
-        Ok(url)
-    }
-
-    fn request(&self, method: Method, url: Url, admin: bool) -> RequestBuilder {
-        let request = self
-            .client
-            .request(method, url)
-            .header(reqwest::header::ACCEPT, "application/json");
-        if admin {
-            request.header(reqwest::header::AUTHORIZATION, self.authorization.clone())
-        } else {
-            request
-        }
-    }
-
-    async fn send(
-        &self,
-        request: RequestBuilder,
-        expected_status: u16,
-        mutation: bool,
-    ) -> Result<Response, Error> {
+        url.set_path("/api/admin/commands/v1");
+        let body = serde_json::to_vec(&serde_json::json!({
+            "protocol":COMMAND_PROTOCOL_VERSION,"command":command.name().as_str(),"input":command,
+        }))
+        .map_err(|_| Error::input("Cannot encode the request body"))?;
         if Instant::now() >= self.deadline {
             return Err(Error::timeout());
         }
-        let response = match timeout_at(self.deadline, request.send()).await {
-            Ok(Ok(response)) => response,
-            Ok(Err(_)) if mutation => return Err(Error::mutation_transport()),
-            Ok(Err(_)) => {
-                return Err(Error::new(
-                    "transport",
-                    "HTTP connection, TLS, or transport failure",
-                    5,
-                ));
-            }
-            Err(_) if mutation => return Err(Error::mutation_timeout()),
-            Err(_) => return Err(Error::timeout()),
-        };
-        let status = response.status().as_u16();
-        if status != expected_status {
-            return Err(if mutation {
-                Error::mutation_response(status)
-            } else {
-                Error::response(status)
-            });
-        }
-        Ok(response)
-    }
-
-    async fn read_json<T: DeserializeOwned>(
-        &self,
-        mut response: Response,
-        status: u16,
-        applied: bool,
-    ) -> Result<T, Error> {
         let operation = async {
+            let mut response = self
+                .client
+                .post(url)
+                .header(reqwest::header::AUTHORIZATION, self.authorization.clone())
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .header(reqwest::header::ACCEPT, "application/json")
+                .body(body)
+                .send()
+                .await
+                .map_err(|_| {
+                    if mutation {
+                        Error::mutation_transport()
+                    } else {
+                        Error::new("transport", "HTTP connection, TLS, or transport failure", 5)
+                    }
+                })?;
+            let status = response.status().as_u16();
+            if response.status().is_redirection() {
+                return Err(Error::untrusted_response(status, mutation));
+            }
             let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(|_| {
-                if applied {
-                    Error::applied_invalid_response(status)
-                } else {
-                    Error::invalid_response()
-                }
-            })? {
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|_| Error::unverified_result(status, mutation))?
+            {
                 if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
-                    return Err(Error::response_too_large(status, applied));
+                    return Err(Error::response_too_large(status, mutation));
                 }
                 bytes.extend_from_slice(&chunk);
             }
-            serde_json::from_slice(&bytes).map_err(|_| {
-                if applied {
-                    Error::applied_invalid_response(status)
-                } else {
-                    Error::invalid_response()
-                }
-            })
+            wire::decode(&command, status, &bytes)
         };
         match timeout_at(self.deadline, operation).await {
             Ok(result) => result,
-            Err(_) if applied => Err(Error::applied_timeout(status)),
+            Err(_) if mutation => Err(Error::mutation_timeout()),
             Err(_) => Err(Error::timeout()),
         }
     }

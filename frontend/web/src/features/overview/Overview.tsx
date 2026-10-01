@@ -1,29 +1,41 @@
-import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, HardDrive } from "lucide-react";
-import { admin, message, request, Usage } from "../../api/http";
-
-export function bytes(value: number) {
-  const absolute = Math.abs(value);
-  const unit =
-    absolute >= 1024 ** 4
-      ? 4
-      : absolute >= 1024 ** 3
-        ? 3
-        : absolute >= 1024 ** 2
-          ? 2
-          : absolute >= 1024
-            ? 1
-            : 0;
-  return `${(value / 1024 ** unit).toLocaleString("ko-KR", { maximumFractionDigits: 1 })} ${["B", "KiB", "MiB", "GiB", "TiB"][unit]}`;
-}
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Container,
+  Grid,
+  IconButton,
+  Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Stack,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, History } from "lucide-react";
+import { message, request, Usage } from "../../api/http";
+import { command } from "../../api/commands";
+import { bytes } from "../../design/format";
+import { Connections } from "./Connections";
+import { storageLink } from "../../app/navigation";
+import { CapacityUsage } from "../storages/CapacityUsage";
 
 export function Overview() {
+  const cache = useQueryClient();
   const query = useQuery({
     queryKey: ["overview"],
     queryFn: async ({ signal }) => {
       const [usage, clients, ready] = await Promise.all([
-        request<Usage[]>(`${admin}/usage`, { signal }),
-        request<{ id: string }[]>(`${admin}/clients`, { signal }),
+        command<Usage[]>("usage.storages", {}, signal),
+        command<string[]>("client.list", {}, signal),
         request<{ status: string }>("/readyz", { signal }).then(
           (value) => value.status === "ready",
           () => false,
@@ -35,129 +47,197 @@ export function Overview() {
   });
   const data = query.data;
   const sum = (
-    key: "active_bytes" | "reserved_bytes" | "purge_pending_bytes",
+    key:
+      | "active_bytes"
+      | "active_files"
+      | "capacity_bytes"
+      | "remaining_bytes"
+      | "reserved_bytes"
+      | "purge_pending_bytes",
   ) => data?.usage.reduce((total, row) => total + row[key], 0) ?? 0;
   return (
-    <main className="overview">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">WORKSPACE</p>
-          <h1>개요</h1>
-        </div>
-        <button
-          className="icon-button"
-          title="새로고침"
-          aria-label="새로고침"
-          onClick={() => void query.refetch()}
-          disabled={query.isFetching}
+    <Container component="main" maxWidth="xl" sx={{ py: 3 }}>
+      <Stack spacing={3}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
         >
-          <RefreshCw size={18} className={query.isFetching ? "spin" : ""} />
-        </button>
-      </div>
-      {query.isPending ? (
-        <p role="status">불러오는 중...</p>
-      ) : query.isError ? (
-        <p role="alert">{message(query.error)}</p>
-      ) : (
-        data && (
-          <>
-            <div className="status-line">
-              <span className={`dot ${data.ready ? "online" : ""}`} />
-              <strong>
-                API {data.ready ? "준비됨" : "준비 상태 확인 실패"}
-              </strong>
-              <span className="muted">저장소 연결 상태는 별도</span>
-            </div>
-            <dl className="metrics">
-              <div>
-                <dt>저장소</dt>
-                <dd>{data.usage.length}</dd>
-              </div>
-              <div>
-                <dt>클라이언트</dt>
-                <dd>{data.clients.length}</dd>
-              </div>
-              <div>
-                <dt>활성 데이터</dt>
-                <dd>{bytes(sum("active_bytes"))}</dd>
-              </div>
-              <div>
-                <dt>예약 / 삭제 대기</dt>
-                <dd className="compact-value">
-                  {bytes(sum("reserved_bytes"))} /{" "}
-                  {bytes(sum("purge_pending_bytes"))}
-                </dd>
-              </div>
-            </dl>
-            <section>
-              <div className="section-heading">
-                <h2>저장소 점유</h2>
-                <span className="muted">{data.usage.length}개</span>
-              </div>
-              {data.usage.length === 0 ? (
-                <div className="empty">
-                  <HardDrive size={28} aria-hidden="true" />
-                  <p>등록된 저장소가 없습니다.</p>
-                </div>
-              ) : (
-                <div className="storage-list">
-                  {data.usage.map((row) => (
-                    <article className="storage-row" key={row.storage_id}>
-                      <div className="storage-name">
-                        <HardDrive size={18} aria-hidden="true" />
-                        <div>
-                          <h3>{row.storage_id}</h3>
-                          <span className="muted">
-                            {row.kind.toUpperCase()} · 활성 파일{" "}
-                            {row.active_files.toLocaleString()}개
-                          </span>
-                        </div>
-                      </div>
-                      <dl className="storage-values">
-                        <div>
-                          <dt>활성</dt>
-                          <dd>{bytes(row.active_bytes)}</dd>
-                        </div>
-                        <div>
-                          <dt>예약</dt>
-                          <dd>{bytes(row.reserved_bytes)}</dd>
-                        </div>
-                        <div>
-                          <dt>삭제 대기</dt>
-                          <dd>{bytes(row.purge_pending_bytes)}</dd>
-                        </div>
-                        <div>
-                          <dt>남은 용량</dt>
-                          <dd
-                            className={row.remaining_bytes < 0 ? "danger" : ""}
-                          >
-                            {bytes(row.remaining_bytes)}
-                          </dd>
-                        </div>
-                      </dl>
-                      <div className="capacity">
-                        <progress
-                          aria-label={`${row.storage_id} 점유율`}
-                          max={Math.max(1, row.capacity_bytes)}
-                          value={Math.max(
-                            0,
-                            row.active_bytes +
-                              row.reserved_bytes +
-                              row.purge_pending_bytes,
-                          )}
-                        />
-                        <span className="muted">
-                          등록 용량 {bytes(row.capacity_bytes)}
-                        </span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )
-      )}
-    </main>
+          <Typography component="h1" variant="h5">
+            Overview
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Button href="#usage" startIcon={<History size={16} />}>
+              Usage history
+            </Button>
+            <Tooltip title="Refresh">
+              <span>
+                <IconButton
+                  aria-label="Refresh"
+                  disabled={query.isFetching}
+                  onClick={() => {
+                    void query.refetch();
+                    void cache.invalidateQueries({ queryKey: ["clients"] });
+                  }}
+                >
+                  {query.isFetching ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <RefreshCw size={18} />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        </Stack>
+        {query.isPending ? (
+          <Typography role="status">Loading...</Typography>
+        ) : query.isError ? (
+          <Alert severity="error">{message(query.error)}</Alert>
+        ) : (
+          data && (
+            <>
+              <Grid
+                container
+                spacing={2}
+                columns={{ xs: 2, sm: 6, lg: 5 }}
+                aria-label="Usage summary"
+              >
+                {[
+                  ["Clients", data.clients.length.toLocaleString("en-US")],
+                  ["Storage", data.usage.length.toLocaleString("en-US")],
+                  ["Stored files", sum("active_files").toLocaleString("en-US")],
+                  ["Stored data", bytes(sum("active_bytes"))],
+                  ["Configured capacity", bytes(sum("capacity_bytes"))],
+                ].map(([label, value]) => (
+                  <Grid key={label} size={{ xs: 1, sm: 2, lg: 1 }}>
+                    <Card
+                      component="section"
+                      aria-label={label}
+                      variant="outlined"
+                      sx={{ height: "100%" }}
+                    >
+                      <CardContent>
+                        <Typography
+                          component="h2"
+                          variant="body2"
+                          color="text.secondary"
+                        >
+                          {label}
+                        </Typography>
+                        <Typography
+                          component="p"
+                          variant="h5"
+                          sx={{ mt: 1, overflowWrap: "anywhere" }}
+                        >
+                          {value}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+              <CapacityUsage used={sum("active_bytes") + sum("reserved_bytes") + sum("purge_pending_bytes")} capacity={sum("capacity_bytes")} />
+              <Stack
+                direction="row"
+                spacing={3}
+                useFlexGap
+                sx={{ flexWrap: "wrap" }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Upload reservations {bytes(sum("reserved_bytes"))}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Pending cleanup {bytes(sum("purge_pending_bytes"))}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Remaining capacity {bytes(sum("remaining_bytes"))}
+                </Typography>
+              </Stack>
+              <Connections
+                clients={data.clients}
+                storages={data.usage}
+                ready={data.ready}
+              />
+              <Box component="section">
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 2,
+                    mb: 2,
+                  }}
+                >
+                  <Typography component="h2" variant="h6">
+                    Storage usage
+                  </Typography>
+                  <Link href="#storages" variant="body2">
+                    View all storage
+                  </Link>
+                </Box>
+                <TableContainer>
+                  <Table
+                    size="small"
+                    aria-label="Storage usage"
+                    sx={{ minWidth: 640 }}
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Storage</TableCell>
+                        <TableCell align="right">Files</TableCell>
+                        <TableCell align="right">Stored</TableCell>
+                        <TableCell align="right">Upload reservations</TableCell>
+                        <TableCell align="right">Pending cleanup</TableCell>
+                        <TableCell align="right">Configured capacity</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {[...data.usage]
+                        .sort((a, b) =>
+                          a.storage_id.localeCompare(b.storage_id),
+                        )
+                        .slice(0, 5)
+                        .map((row) => (
+                          <TableRow key={row.storage_id} hover>
+                            <TableCell>
+                              <Link href={storageLink(row.storage_id)}>
+                                {row.storage_id}
+                              </Link>
+                            </TableCell>
+                            <TableCell align="right">
+                              {row.active_files.toLocaleString("en-US")}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.active_bytes)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.reserved_bytes)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.purge_pending_bytes)}
+                            </TableCell>
+                            <TableCell align="right">
+                              {bytes(row.capacity_bytes)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1.5 }}
+                >
+                  Grove-managed usage and configured capacity, not
+                  provider free space.
+                </Typography>
+              </Box>
+            </>
+          )
+        )}
+      </Stack>
+    </Container>
   );
 }

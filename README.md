@@ -4,8 +4,9 @@ FileGate 구현을 보존한 개발 기준선이다. 서버·패키지·API 이�
 유지한다. [이관 기록과 책임 분리 분석](docs/development/import-review.md)에 원본 커밋,
 후속 작업, 검증 범위를 기록한다. 관리자 인증 추가분과 콘솔 미리보기는 미배포 작업이다.
 
-PostgreSQL에 파일 메타데이터를 기록하고, fs·외부 S3 저장소의 바이트를
-네이티브 API와 S3 호환 API로 제공한다.
+PostgreSQL에 파일 메타데이터를 기록하고, 외부 S3 호환 저장소의 바이트를
+네이티브 API와 S3 호환 API로 제공한다. 신규 등록·교체는 S3만 지원하며,
+기존 로컬 FS 행의 데이터 접근은 이관 전까지 유지한다.
 
 ## 개선 계획
 
@@ -50,16 +51,20 @@ Compose는 PostgreSQL(`55432`), MinIO(`9000/9001`), 개발 버킷을 준비한�
 
 ## 관리 CLI
 
+MCP도 같은 20개 자원 명령을 `/api/admin/mcp`에서 제공한다.
+[연결·인증·비밀 전달 계약](docs/spec/10-management-mcp.md). 운영 배포는 별도다.
+
 ```sh
 cargo install --path backend/crates/cli --locked
-gscli --endpoint https://filegate.example.com --token-file /path/to/operator-token status
-gscli --endpoint https://filegate.example.com --token-file /path/to/operator-token client list --output json
-gscli --endpoint https://filegate.example.com --token-file /path/to/operator-token \
+gscli --endpoint https://filegate.example.com --token-file /path/to/management-token status
+gscli --endpoint https://filegate.example.com --token-file /path/to/management-token client list --output json
+gscli --endpoint https://filegate.example.com --token-file /path/to/management-token \
   client create notegate --storage primary
 ```
 
-`GROVE_ENDPOINT`·`GROVE_OPERATOR_TOKEN`으로 연결 설정을 공급할 수 있다.
-CLI는 DB·마스터 키 없이 기존 관리자 API를 호출한다. 기존 `filegate status`는
+`GROVE_ENDPOINT`·`GROVE_TOKEN`으로 연결 설정을 공급할 수 있다.
+CLI는 User 토큰으로 공통 관리 명령 API를 호출한다. 이전 서버에는 이전 CLI를 사용한다.
+DB·마스터 키는 CLI에 전달하지 않는다. 기존 `filegate status`는
 서버 로컬 진단으로 유지한다. [명령·출력·후속 계약](docs/spec/04-cli.md).
 
 배포 채널은 GitHub Release의 Linux/macOS 실행 파일이다.

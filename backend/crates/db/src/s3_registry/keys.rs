@@ -42,16 +42,7 @@ pub(super) async fn upsert_key_in_tx(
     // 없는 키는 잠글 행이 없으므로 SELECT FOR UPDATE만으로는 첫 PUT 둘을
     // 직렬화하지 못한다. 먼저 INSERT를 시도하면 unique index가 빈 키 경합도
     // 직렬화한다. 이 트랜잭션이 행을 만들었으면 교체할 이전 파일은 없다.
-    let inserted = sqlx::query(
-        "INSERT INTO s3_keys (client_id, key, file_id) VALUES ($1, $2, $3) \
-         ON CONFLICT (client_id, key) DO NOTHING",
-    )
-    .bind(client_id)
-    .bind(key)
-    .bind(file_id)
-    .execute(&mut **tx)
-    .await?;
-    if inserted.rows_affected() == 1 {
+    if insert_key_in_tx(tx, client_id, key, file_id).await? {
         return Ok(None);
     }
 
@@ -77,6 +68,24 @@ pub(super) async fn upsert_key_in_tx(
         detach_active(tx, old).await?;
     }
     Ok(displaced)
+}
+
+pub(super) async fn insert_key_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    client_id: &str,
+    key: &str,
+    file_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let inserted = sqlx::query(
+        "INSERT INTO s3_keys (client_id, key, file_id) VALUES ($1, $2, $3) \
+         ON CONFLICT (client_id, key) DO NOTHING",
+    )
+    .bind(client_id)
+    .bind(key)
+    .bind(file_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(inserted.rows_affected() == 1)
 }
 
 /// 매핑을 지우고 그 file을 **같은 트랜잭션에서** detach한다 (upsert_key와

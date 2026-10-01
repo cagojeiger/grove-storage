@@ -3,6 +3,7 @@
 - 상태: Accepted (현재 FileGate의 배경 결정)
 - 최초 결정: 2026-07-03
 - 새 제품 전제: [ADR 007](007-grove-storage-foundation.md)
+- 적용 범위 갱신: ADR 007의 S3-only 전환에 따라 기존 로컬 FS backend 제거.
 
 ## 전제
 
@@ -16,7 +17,7 @@
 | 업무 의미·사용자 권한 | 서비스 |
 | 파일 위치·접근 발급·물리 정리 | FileGate |
 | 파일 참조 | 네이티브 `file_id`, S3 `(client, key)` |
-| 네이티브 바이트 | storage presigned 직결, fs·force_relay는 FileGate 경유 |
+| 네이티브 바이트 | 외부 S3 presigned 직결, force_relay는 FileGate 경유 |
 | S3 바이트 | FileGate 경유 |
 | 인증 | 자체 client 키·SigV4·운영자 토큰 |
 | 기반 공간 | 운영자가 준비하고 FileGate가 접근 검증 |

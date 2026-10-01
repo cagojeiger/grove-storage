@@ -24,7 +24,6 @@ fn s3_row(id: &str) -> StorageRow {
         id: id.to_owned(),
         kind: "s3".to_owned(),
         force_relay: false,
-        root_path: None,
         endpoint: Some("http://minio:9000".to_owned()),
         public_endpoint: Some("http://minio:9000".to_owned()),
         region: Some("us-east-1".to_owned()),
@@ -59,6 +58,14 @@ pub async fn create_ok(pool: &PgPool) -> CreatedFile {
 }
 
 pub async fn create_s3_upload(pool: &PgPool, key: &str) -> CreatedFile {
+    create_s3_upload_with_condition(pool, key, false).await
+}
+
+pub async fn create_s3_upload_with_condition(
+    pool: &PgPool,
+    key: &str,
+    if_none_match: bool,
+) -> CreatedFile {
     let spec = CreateSpec {
         client_id: "c",
         declared_size: 100,
@@ -67,7 +74,10 @@ pub async fn create_s3_upload(pool: &PgPool, key: &str) -> CreatedFile {
         lease_ttl_secs: 900,
         part_size: None,
     };
-    match s3::create_upload(pool, spec, key).await.unwrap() {
+    match s3::create_upload(pool, spec, key, if_none_match)
+        .await
+        .unwrap()
+    {
         CreateOutcome::Created(created) => *created,
         CreateOutcome::NoClient => panic!("expected Created, got NoClient"),
     }

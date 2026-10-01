@@ -1,97 +1,77 @@
-# 리팩토링 중간 평가
+# 리소스 리팩토링 마감
 
-기준: 기계적 이관 `0a9c185` 이후 로컬 작업. 릴리스·운영 배포와 구분한다.
+기준: `520e172`까지의 코드·로컬 검증. S3-only 중개/릴레이와 NoteGate 호환 범위를 마감한다.
+릴리스·운영 이관·배포는 별도 단계다.
 
-이번 검증: workspace 305개 통과·1개 제외, S3·CLI E2E·Clippy·fmt 통과.
-후속 계약 검증에서는 동일 SDK 시나리오를 MinIO backend로도 통과했다.
-MinIO 실물 바이트·열린 multipart 0개·중지 중 503·재시작 후 읽기를 확인했다.
-MinIO Complete 응답 유실 후 기존 객체 보존·실물 관찰 확정·purge·점유 정산도 통과했다.
-응답 유실 후 SIGKILL·동일 DB 재시작에서도 소유권 보존·복구·점유 정산을 확인했다.
-vendor 성공 후 DB 커밋 거부에서도 요청·Reconciler 롤백과 장애 제거 후 복구를 확인했다.
-클라우드 S3/R2, 쓰기 진행 도중 종료·DB COMMIT 응답 유실, 운영 데이터 이관은 미검증이다.
-
-## 파일 트리
+## 책임 경계
 
 ```text
-backend/crates/
-├── s3-protocol/       S3 규칙: auth·signing·operation·XML·completion·integrity
-│   └── tests/        규칙별 독립 테스트 (HTTP·DB·Tokio 의존 없음)
-├── object-policy/    공통 검증·파트 계산·ETag·완료 복구 판단
-│   └── tests/        순수 입력/결과 검증
-├── object-service/   cleanup·native multipart 생성/실패 보상 순서
-│   └── tests/        fake 기반 단계별 실패·재시도
-├── api/src/
-│   ├── s3/          HTTP·인증 조회·규칙 연결·S3 작업 조율
-│   ├── v1/          native API·multipart adapter
-│   ├── admin/       등록부·운영자 관리·usage
-│   ├── reconciler/  native/S3 완료 복구·reclaim 재시도
-│   └── spool/       스트림 계측 테스트; 실행 코드는 spool.rs
-├── db/              행 락·트랜잭션·위치/lease/세션 보존
-│   └── tests/       상태 전이·경합·GC별 PG 통합 테스트
-├── infra/           filesystem·외부 S3 I/O
-├── core/            설정·암호·해시, 기존 경로 호환 재노출
-└── cli/             gscli → 관리자 HTTP API
-scripts/
-├── e2e-cli.py        격리 DB·서버의 CLI 계약
-├── e2e-s3.py         같은 격리 환경에서 S3 검증 조립
-├── e2e-s3-recovery.py 완료 응답 유실·실제 Reconciler 복구
-├── s3_fault_proxy.py 테스트 전용 Complete 응답 유실 주입
-├── s3_db_fault.py    격리 DB의 지연 트리거로 커밋 거부
-├── s3-capture.py     SDK 기본 객체·multipart·다운로드
-└── s3_*_cases.py     인증·multipart·무결성 실패 시나리오
-output/              콘솔 HTML 프로토타입·별도 UI 테스트
-docs/                현재 계약·구조·검증 범위
+Console / CLI / MCP
+    -> Management       설정·권한·안전장치·변경 감사
+        -> PostgreSQL   Storage·Client·키·metadata
+
+Native / S3 API
+    -> Object Service   설정 조회·파일 수명주기·복구 조율
+        -> PostgreSQL   위치·lease·완료 상태·사용량
+        -> Transfer     외부 S3 I/O·전송용 임시 스풀
+
+Presigned bytes: Client <-> External S3
+Relay bytes:     Client <-> Grove <-> External S3
 ```
 
-## 전후 비교
+논리적 책임 구분이다. 같은 서버·DB에서 실행하며, 설정 관리에는 화면의 Resources도 포함된다.
+Object Service는 파일 상태를 쓰는 control-plane 책임이며 Transfer가 바이트 경로를 담당한다.
 
-| 항목 | 이관 시점 | 현재 |
+## 전후
+
+| 경계 | 이전 | 현재 | 근거 |
+|---|---|---|---|
+| 설정 관리 | 전송 표면별 처리·응답 중복 | 공통 명령·서비스·자격증명·usage 응답 | `1395328`, `6042076` |
+| 등록과 I/O | 설정 처리와 backend 연결 혼재 | `storage_registration` / `storage_access` | `3f2a23e` |
+| Native 완료 | HTTP 처리 안에서 완료 조율 | `object-service/single_commit`, `multipart_commit` | `80cb22a`, `f68b26a` |
+| 저장소 | FS·S3 분기와 root_path | S3-only, FS adapter 제거 | `dc23721`, `0581766` |
+| 전송 임시 파일 | FS 저장소와 관련 구현 혼재 | `infra/temp_spool`, 전송 중 버퍼만 담당 | `0581766` |
+| 조건부 PUT | NoteGate create-only 요청 미지원 | 단일 PUT `If-None-Match: *`, 경합·복구 처리 | `019ff79` |
+| 소비자 검증 | Grove 내부 계약 중심 | 실제 NoteGate 핸들러·브라우저 연결 | `f9458ff`, `520e172` |
+
+현재 workspace는 11개 crate다. crate 수·줄 수는 성능 개선 지표와 구분한다.
+파일 배치는 [소스 구조](source-layout.md), 상세 계약은 [등록부](../spec/01-registry.md)를 따른다.
+
+## DB 변경
+
+| Migration | 의미 | 이관 조건 |
 |---|---|---|
-| crate | core/db/infra/api/cli 5개 | protocol/policy/service 추가, 8개 |
-| 규칙 검증 | API·core에 섞임 | DB 없이 직접 실행 |
-| API s3/multipart.rs | 750줄 | 679줄, 순수 완료 규칙 제거; I/O 조율은 여전히 큼 |
-| API v1/files.rs | 515줄 | 423줄, 생성 보상 흐름 분리 |
-| 테스트 배치 | 일부 HTTP 파일 안에 정책 테스트 | protocol 기능별·API auth/spool 별도 파일·SDK 시나리오별 분리 |
-| 정리 실패 | 복구 정보 유실 가능 | location·lease 보존과 재시도 |
-| S3 계약 | 정상 SDK 흐름 중심 | 잘못된 요청의 오류 코드·기존 데이터 보존·정상 재시도 검증 |
+| `0015` | Storage·Client JSON metadata | 등록 정보이며 파일 본문과 별개 |
+| `0016` | 관리 신원은 `management.accounts`로 통합 | 이전 writer 중단; 리소스 리팩토링과 별도 변경 |
+| `0017` | S3-only 제약·root_path 제거 | FS 행이 있으면 migration 차단; 자동 데이터 변환과 구분 |
+| `0018` | `s3_uploads.if_none_match` 추가 | 기본 false로 기존 PUT 의미 보존, 조건부 완료·복구에 사용 |
 
-줄 수는 분리 위치의 지표이며 전체 코드 감소나 성능 향상의 증거가 아니다.
-이번 작업은 규칙 테스트 비용과 장애 원인 추적 범위를 줄였다. 성능 벤치마크는
-실시하지 않았다. UploadPart의 SHA256·CRC32 계측 비용은 추가됐다.
+Native API·S3 논리키·업로드 복구 계약을 유지한다. 호환 DTO의 `root_path=null`은 DB 열이 아니다.
 
-## 평가와 다음 경계
+## 검증 근거
 
-| 영역 | 평가 | 다음 작업 |
-|---|---|---|
-| SRP | 순수 규칙과 HTTP/DB 경계가 명확해짐 | S3 생성·part·완료 조율은 API에 남아 있어 실패 경계별 검증 후 추출 |
-| 서비스 계층 | 정리·native 생성 일부를 독립 실행 | 모든 API 흐름이 서비스로 옮겨진 상태와 구분 |
-| DB | 원자적 변경과 락의 소유권 유지 | 파일 크기만 보고 transaction을 나누지 않음 |
-| 테스트 | 단위·실제 PG·SDK HTTP·응답 유실·재시작·DB 커밋 거부 복구 | 쓰기 진행 도중 종료·DB COMMIT 응답 유실은 별도 |
-| 큰 테스트 | DB 테스트는 현재 최대 298줄 | 독립 fixture/실패 경계가 늘어날 때 분리, 줄 수만으로 crate 추가하지 않음 |
-| checksum | PUT/part 요청 무결성 검증 | 저장·조회·전체 multipart checksum·추가 알고리즘은 아직 미완성 |
-| 조건부 쓰기 | 미지원 요청은 501, 무시해서 덮어쓰는 동작 제거 | 필요 시 논리키 transaction 안에서 원자적 조건 구현 |
-| UI/2차 스토리지 | 콘솔 프로토타입·기존 fs adapter 유지 | 완성 대시보드·스토리지 agent join은 별도 단계 |
+아래는 앞선 단계의 실행 결과다. 문서 정리를 새 제품 테스트 실행으로 계산하지 않는다.
 
-현재 결론: 안정화와 책임 분리는 진전됐지만 AWS 전체 호환·운영 검증 완료는 아니다.
-MinIO 경유 정상·오류·Complete 응답 유실 및 이후 프로세스 재시작 계약을 확인했다.
-DB 커밋 거부 뒤 재조정도 확인했다. 이번 세 장애 경계의 검증을 마감하고,
-남은 작업 조율 책임의 추출 필요성을 검토한 뒤 대시보드 구현으로 진행한다.
-crate 수 증가는 검증된 실패 경계에 맞춰 결정한다.
+| 실행 | 확인 범위 |
+|---|---|
+| Rust workspace·Clippy·fmt | 회귀 통과; CLI native-release-artifact 테스트 1개 기존 제외 |
+| MinIO SDK·Native direct/relay | 단일·multipart·실물 바이트·실패·재시도 |
+| 완료 복구 | 응답 유실·재시작·DB 커밋 거부·조건부 PUT 승자 보존 |
+| NoteGate 핸들러 27개 | 실제 Grove·MinIO 연결, REST/MCP 업로드 계약 |
+| NoteGate 브라우저 | 로컬 테스트 OIDC·세션·43 KB 단일·101 MiB multipart·다운로드 바이트/SHA-256 |
 
-## 대시보드 전환 점검
+재현 명령과 한계는 [S3 호환성 점검](s3-compatibility-review.md)에 모은다.
+NoteGate 업로드 직후 사용량 표시 캐시 지연은 별도 UI 이슈로 남는다.
 
-| 실제 책임 | 점검 결과 | 결정 |
-|---|---|---|
-| `object-policy/completion` | 실물 관찰에 따른 finalize/reopen/cleanup 순수 판단 공유 | 현재 경계 유지 |
-| `object-service/cleanup`, `multipart_create` | 물리 정리·실패 보상 순서 독립 테스트 | 현재 경계 유지 |
-| `api/reconciler/{native,s3}_completion` | 공통 판단을 서로 다른 DB 전이에 연결; native는 cleaning, S3는 aborting | 통합 wrapper·추가 crate 보류 |
-| `db/s3_registry/uploads` | 파일·lease·논리키·세션을 한 transaction에서 확정 | 원자성 경계 유지 |
-| `api/s3/multipart` | 여전히 큰 I/O 조율 모듈 | 줄 수만으로 분할하지 않고 추가 변경 시 실패 경계별 추출 검토 |
-| `output/` | 샘플 데이터 HTML·미리보기 테스트 | 실연결 앱과 구분 |
-| 관리 API·세션 | 등록부 API와 쿠키 인증 구현 | 기존 API에 실제 UI 연결 |
+## 다음 단계
 
-이번 점검에서 추가 제품 코드 분리를 필수로 만드는 결함은 확인하지 못했다.
-이는 전체 코드 무결성 증명이 아닌, 위 책임 경계와 세 장애 시나리오에 대한 판단이다.
-후속 A단계는 `frontend/web`에 구현했다. 실제 HTTPS 로그인·로그아웃·개요 조회,
-세션 만료·토큰 폐기 후 401, 반응형·테마를 로컬 검증했다. `output/` 미리보기와 구분한다.
-다음 구현은 [콘솔 spec](../spec/06-console.md)의 B단계: 저장소 조회·등록·교체·삭제다.
+| 항목 | 상태·완료 기준 |
+|---|---|
+| 리소스 코드 구조 | 현 범위 마감; S3 multipart 조율 일부는 API에 유지 |
+| Management | [준비 계획](management-review.md) 순서로 계약 점검·측정 후 최소 변경 |
+| 운영 이관 | [격리 업그레이드·복원 리허설](migration-rehearsal.md) 추가; 운영 DB·외부 객체의 실제 복원 검증은 별도 |
+| 운영 연결 | AWS/R2·실제 OIDC·Ingress/TLS·운영 endpoint 별도 검증 |
+| 추가 장애 | 쓰기 진행 중 종료·DB COMMIT 응답 유실 별도 검증 |
+| 미래 기능 | 자동 배치·S3 간 이동·독립 filesystem Node/Agent 조인 별도 설계 |
+
+추가 crate나 서버 분리는 재현된 결함·중복·변경 비용을 근거로 결정한다.

@@ -1,14 +1,19 @@
 # spec 05: 독립형 관리자 인증
 
+- 이 문서는 기존 `/api/admin/v1` 운영자 인증의 기록이다. 현행 콘솔·관리 토큰·로컬 계정 계약은 [spec 11](11-local-management-auth.md)을 따른다.
 - 상태: 작업 브랜치 구현, 미릴리스·미배포
 - 범위: 단일 관리자, 복수 토큰, 콘솔 세션, 로컬 복구
-- 콘솔 로그인·로그아웃·개요 조회는 실제 API 연결 및 로컬 HTTPS 검증 완료다. 변경 화면·운영 배포는 후속이다.
+- 아래는 이전 운영자 REST 인증의 유지 계약이다. 현재 콘솔은 [spec 08](08-management-plane.md)의 User 세션으로 전환했다. 운영 이관·이전 인증 종료는 후속이다.
+- 아래의 운영자 REST 경로는 콘솔 로그인 계약이 아니다.
+- 새 권한·DB·CLI/MCP·감사 설계: [spec 08](08-management-plane.md). 브라우저 보안: [spec 07](07-browser-security.md).
+- 새 UI는 `/api/admin/identity/v1/session`과 `/api/admin/console-commands/v1`을 사용한다. 아래의 기존 인증과 쿠키·토큰을 공유하지 않는다.
+- 아래는 이전 UI·REST 인증 계약이다. 새 CLI는 [spec 04](04-cli.md)의 User 토큰과 공통 명령 API를 사용한다.
 
 ## 자격증명 경계
 
 | 종류 | 주체 → 대상 | 저장 | 권한 |
 |---|---|---|---|
-| 관리자 토큰 `fgop_` | 관리자·gscli → 관리 API | 도메인 분리 SHA-256 해시 | 등록부 조회·변경 |
+| 관리자 토큰 `fgop_` | 관리자·이전 gscli → 기존 관리 API | 도메인 분리 SHA-256 해시 | 등록부 조회·변경 |
 | 콘솔 세션 `fgss_` | 브라우저 → 관리 API | 도메인 분리 SHA-256 해시 | 발급한 관리자 토큰과 동일 |
 | Native client key | 서비스 → `/api/v1` | 기존 SHA-256 해시 | 해당 client 파일 |
 | Client S3 credential | 서비스 → S3 호환 API | access ID + 암호화 secret | 해당 client 버킷 |
@@ -18,7 +23,7 @@
 flowchart LR
     Local["filegate admin"] --> P["Principal: admin"]
     P --> T["관리자 토큰 여러 개"]
-    T --> CLI["gscli: Bearer"]
+    T --> CLI["이전 gscli: Bearer"]
     T --> Login["POST session"]
     Login --> Cookie["HttpOnly 세션 쿠키"]
     CLI --> API["관리 API"]
@@ -90,7 +95,7 @@ HTTPS origin을 설정한다. 미설정이면 브라우저 로그인을 비활�
 | 새 버전 배포 | 기존 `FILEGATE_OPERATOR_TOKENS` 계속 사용, 기존 파일 API 유지 |
 | 모든 replica 업데이트 확인 | 구버전 서버를 종료하고 운영 접근·복구 경로 확인 |
 | `filegate admin init` | DB 인증 활성화, 환경변수 토큰 즉시 비활성 |
-| CLI 교체 | 새 토큰을 기존 `GROVE_OPERATOR_TOKEN` 또는 `--token-file`로 전달 |
+| 이전 CLI의 토큰 교체 | 새 운영자 토큰을 `GROVE_OPERATOR_TOKEN` 또는 `--token-file`로 전달; 새 CLI는 별도 User 토큰 필요 |
 | 정리 | 환경변수 운영자 토큰 제거; 마스터 키는 유지 |
 
 초기화 전 환경변수 토큰은 관리 API Bearer 호환만 제공한다. 브라우저 로그인에는
@@ -108,5 +113,25 @@ DB 토큰을 사용한다. 초기화 이후 구버전으로 롤백하면 환경�
 | status | HTTP 결과; NULL은 중단·timeout·완료 기록 실패로 결과 확인 필요 |
 
 감사 intent 저장 실패는 변경 전에 거부한다. 완료 기록 실패는 이미 실행한 응답을
-유지하고 오류 로그를 남긴다. 인증 실패·로그아웃의 별도 감사, 감사 조회 UI·보존 정책,
-원격 관리자 토큰 관리·콘솔 변경 화면은 후속 작업이다.
+유지하고 오류 로그를 남긴다. 인증 실패·로그아웃의 별도 감사, 감사 조회 UI·보존 정책은
+후속 작업이다. 원격 계정·토큰 관리는 아래 전환 계획을 따른다.
+
+## 관리 신원 전환 계획
+
+상태: 새 신원·명령·세션 API와 CLI/MCP·User 로그인/자원 UI 구현. master·신원·이력 UI와 운영 이관은 후속이다.
+이전 비밀번호·단일 Owner 안은 ADR 009로 대체했다.
+권한표·DB·토큰 수명·로그·검증 순서의 정본은 [spec 08](08-management-plane.md)이다.
+
+| 항목 | 이전 인증 | 새 관리 신원 계약 |
+|---|---|---|
+| 최초 설정 | 로컬 명령으로 관리자 토큰 발급 | 설정 master → 제한된 콘솔 설정 세션 → 첫 Admin |
+| 사람 로그인 | 공통 관리자 토큰 → 세션 | 개인 토큰 → 명명된 User 세션 |
+| 역할 | 공통 관리자 | viewer / operator / admin |
+| 자동화 | 관리자 토큰에 이름 지정 | User의 용도별 토큰 |
+| 신원 관리 | 서버 로컬 명령 | 콘솔 세션 전용; CLI/MCP는 자원 관리만 제공 |
+| 복구 | 로컬 명령으로 전체 토큰 재발급 | 설정 master로 대상 Admin 접근 복구 |
+| 감사 | HTTP intent + status | 확정 변경 audit + 관리 호출 + 보안 이벤트 |
+
+현재 환경변수 운영자 토큰은 초기화 후 비활성화되며 브라우저 로그인에 사용되지 않는다.
+새 master는 별도의 설정·복구 계약이다. 기존 환경변수에 복구 권한을 자동 부여하지 않는다.
+기존 runtime Client 키·S3 credential·Provider secret·파일 데이터는 전환과 분리한다.

@@ -143,6 +143,9 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None,
     assert [obj["Key"] for obj in objects] == [physical], objects
     assert len(attempts) == count
     print("PASS old physical object purged; usage settled; finalized retry returns NoSuchUpload")
+    if restart is not None:
+        from s3_conditional_recovery import check_conditional_recovery
+        check_conditional_recovery(client, sql, backend, restart, wait_for, ready)
 
 
 if __name__ == "__main__":

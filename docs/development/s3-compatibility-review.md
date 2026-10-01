@@ -4,11 +4,18 @@
 
 | 대상 | 이번 검증 |
 |---|---|
-| 서버 | Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·filesystem 또는 별도 MinIO 컨테이너 |
+| 서버 | S3-only Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·MinIO 컨테이너 |
 | SDK | boto3/botocore 1.43.99, path-style, HTTP |
 | 외부 S3 backend | MinIO RELEASE.2025-09-07T16-13-09Z 경유 검증; AWS S3·R2·운영 endpoint는 별도 |
 | 운영 | 배포·데이터 이관 없음 |
 | 호환성 의미 | spec 03의 지원 subset, AWS 전체 API 동등성을 뜻하지 않음 |
+
+MinIO fixture는 `scripts/fixtures/minio/Dockerfile`로 공식 소스 commit
+`07c3a429bfed433e49018cb0f78a52145d4bedeb`(위 release)을 직접 빌드한다.
+Go 빌더 이미지도 digest로 고정하며, 첫 실행에는 소스·의존성 다운로드가 필요하다.
+이후 실행은 Docker 빌드 캐시를 사용한다. 이 이미지는 loopback 테스트 전용이며
+Grove 릴리스 이미지에 포함하거나 운영용으로 배포하지 않는다.
+기존 Quay/Docker Hub MinIO 이미지 다운로드는 2026-09-29에 인증 오류로 실패했다.
 
 ## 결과
 
@@ -26,12 +33,81 @@
 | 완료·회수·GC | 기존 DB 통합 테스트 | 전체 workspace 회귀 실행 |
 | Complete part 계약 | `completion` 단위 테스트·`s3_multipart_cases.py` | 5 MiB 경계·순서·중복·누락·ETag; 실패 시 기존 객체 보존·같은 UploadId 복구 |
 | 요청 무결성 | `s3_integrity_cases.py`·spool 테스트 | PUT checksum·UploadPart signed hash 실패 시 기존 객체/part 유지, 정상 MD5·CRC32·SHA256 |
-| 조건부 요청 | 같은 SDK 시나리오 | GET/HEAD If-Match 정상·stale 412, 미지원 조건부 쓰기 501 |
+| 조건부 요청 | `s3_conditional_cases.py`·DB 조건부 PUT 테스트 | presigned PUT If-None-Match: *·동시 생성 단일 승자·412·삭제 후 재생성, GET/HEAD If-Match 정상·stale 412 |
+| 조건부 PUT 복구 | `e2e-s3-recovery.py --restart` | 실물 쓰기 후 DB commit 실패·강제 종료·재시작; 빈 키 게시 또는 기존 승자 보존·패자 실물 삭제 |
 | vendor 데이터 | `s3_backend_fixture.py` | 실제 MinIO bucket의 바이트 일치, 시나리오 종료 시 열린 multipart 0개 |
 | vendor 가용성 | 같은 fixture의 stop/start | 중지 중 GET 503 ServiceUnavailable, 같은 주소 재시작 후 동일 객체 읽기 |
 | Complete 응답 유실 | `e2e-s3-recovery.py`·`s3_fault_proxy.py` | MinIO 성공 후 응답 차단, 기존 객체 보존, 재시도 fencing, 실물 관찰 확정·purge·점유 정산 |
 | 응답 유실 후 프로세스 재시작 | `e2e-s3-recovery.py --restart` | SIGKILL 종료·새 PID 확인, 동일 DB·endpoint, 소유권 보존과 새 Reconciler 복구 |
 | DB 커밋 거부 | `e2e-s3-recovery.py --db-failure`·`s3_db_fault.py` | vendor 성공, 요청·Reconciler 커밋 롤백, 장애 제거 후 실물 관찰 확정·정산 |
+
+## 로컬 NoteGate 연결
+
+```text
+NoteGate REST/MCP handlers + Rust AWS SDK
+    -> Grove HTTP server -> MinIO
+       Grove PostgreSQL    NoteGate test PostgreSQL
+```
+
+```sh
+cargo build --bin filegate --bin gscli --locked
+python3 -B -u scripts/e2e-notegate.py --notegate-dir ../notegate
+```
+
+| 항목 | 범위 |
+|---|---|
+| 준비 | Docker·boto3·로컬 NoteGate 소스; macOS 링크 설정은 `DEVELOPER_DIR=/Library/Developer/CommandLineTools` |
+| 실행 | NoteGate `rest::file_upload_tests`를 실제 Grove endpoint에 연결; 환경 누락으로 건너뛴 테스트 거부 |
+| 격리 | 임시 MinIO·PostgreSQL 컨테이너, 서비스별 DB; 기존 `.env`·운영 스토리지 변경 없음 |
+| CORS | 테스트 origin `http://localhost:5173`; 조건부 PUT preflight·multipart ETag 노출 확인 |
+| 소스 | 실행한 NoteGate revision·작업 중 diff hash 출력; NoteGate 소스 변경 없음 |
+| 검증 경계 | NoteGate 핸들러는 테스트 프로세스 내 실행. OIDC 로그인·브라우저 UI·운영 Ingress/TLS 검증은 별도 |
+
+배포 환경은 `FILEGATE_S3_CORS_ALLOWED_ORIGINS`에 실제 NoteGate 브라우저 origin을 설정한다.
+
+### CI 소비자 계약
+
+| 항목 | 계약 |
+|---|---|
+| CI job | `NoteGate file transfer contract`; main push와 PR에서 실행 |
+| NoteGate 기준 | 공개 main commit `dab7fe552b3e6ac742465ea40ddd02b2253631fe` |
+| 실행 | 양쪽 저장소의 고정 toolchain·lockfile로 먼저 빌드한 뒤 `e2e-notegate.py` 실행 |
+| 서비스 | fixture가 만든 PostgreSQL·MinIO·Grove만 사용; 운영 환경변수·데이터와 분리 |
+| 검증 | 실제 REST/MCP 파일 업로드 테스트, 테스트 0개·DB skip은 실패 |
+| 릴리스 | 이 job을 포함한 CI 성공이 Grove 자동 릴리스의 선행 조건 |
+| 기준 갱신 | CI checkout SHA를 별도 변경으로 갱신하고 같은 계약을 재검증 |
+
+2026-09-29 로컬에서 위 고정 revision의 REST/MCP 테스트 27개가 실제 Grove·MinIO를
+상대로 통과했다(실패·무시 0개). NoteGate 작업 diff는 비어 있었고 fixture 서비스는
+종료 후 정리했다. GitHub Actions 실행 결과와 운영 endpoint 검증은 별도다.
+
+브라우저 전체 경로는 아래 스크립트로 별도 검증한다. 이 CI job의 핸들러 검증과 구분한다.
+
+### 브라우저 전체 경로
+
+```sh
+# NoteGate에서 서버와 프런트엔드를 먼저 빌드한다.
+cargo build -p notegate-api --locked
+pnpm --dir frontend/web build
+# Grove에서 실행한다. Python 환경에 boto3·cryptography가 필요하다.
+python3 -B -u scripts/e2e-notegate-browser.py --notegate-dir ../notegate
+```
+
+| 항목 | 검증 |
+|---|---|
+| 로그인 | Chromium 화면의 로그인 버튼 → NoteGate OIDC callback → HttpOnly·SameSite=Lax 세션 |
+| 인증 제공자 | loopback 전용 테스트 issuer; PKCE·nonce·서명 ID token·userinfo 사용, 제품 인증 코드 변경 없음 |
+| 파일 | 화면에서 Space 생성·파일 선택, 단일 PUT·101MiB multipart, 다운로드 원본 바이트·SHA-256 대조 |
+| 브라우저 통신 | 실제 교차 origin Grove PUT/GET·multipart part, 페이지 JavaScript 오류 확인 |
+| 결과 | 임시 evidence 디렉터리에 화면·파일 hash·비밀값 제외 요청 요약·테스트 소스 revision 기록 |
+| 종료 | 브라우저·NoteGate·Grove·테스트 DB·MinIO 정리, NoteGate 소스 변경 여부 확인 |
+| 별도 검증 | 운영 Google/AuthGate 로그인, Ingress·TLS·Secure cookie, 실제 운영 스토리지 |
+
+관찰된 NoteGate UI 이슈: 파일 두 개 업로드 직후 하단은 `0 items / 0 B`를 유지하지만,
+`/api/v1/me/usage`는 두 파일의 정확한 합계를 반환하고 새로고침 후 `2 items / 101 MB`로 바뀐다.
+`frontend/web/src/features/uploads/UploadProvider.tsx`의 완료 처리는 파일 목록·링크 캐시를
+갱신하고 사용량 캐시는 갱신하지 않는다. 브라우저 결과 JSON에 새로고침 전후 표시를 기록하며,
+NoteGate UI 수정은 별도 작업으로 둔다.
 
 ## 재현 후 수정
 
@@ -43,7 +119,7 @@
 | 604801초 presigned URL·host 없는 서명 수용 | 인증 단계에서 403 AccessDenied |
 | Complete 본문 바이트 변경 후 성공 | 상태 전이 전 400 XAmzContentSHA256Mismatch |
 | 작은 비최종 part 완료·역순 목록 InvalidPart | EntityTooSmall·InvalidPartOrder로 구분, 완료 선점 전 거부 |
-| If-None-Match 쓰기·잘못된 MD5/CRC32·변조된 UploadPart 성공 | 미지원 조건 501, checksum·서명 hash 대조 후에만 승격 |
+| If-None-Match 쓰기·잘못된 MD5/CRC32·변조된 UploadPart 성공 | 단일 PUT wildcard는 원자적 create-only·실패 412, 기타 조건 501, checksum·서명 hash 대조 후에만 승격 |
 
 XML 실패는 이전 파서 단위 테스트에서, CopyObject 성공은 수정 전 실제 boto3
 요청에서 재현했다. 운영 사고를 관찰했다는 의미와 구분한다.
@@ -62,9 +138,9 @@ api/s3                          HTTP·자격증명 조회·복호화·오류 응
   -> s3-protocol/multipart       Complete XML 파싱 (DB 없음)
   -> s3-protocol/completion      S3 완료 목록과 실측 원장 대조 (DB 없음)
   -> object-policy              공통 업로드 규칙·완료 관찰 판단
-  -> object-service             정리·실패 보상 순서
+  -> object-service             정리·Native 생성/완료·실패 보상 순서
   -> db                         파일 락·세션·원장·논리키 원자 전이
-  -> infra                      filesystem·vendor S3 I/O
+  -> infra                      vendor S3 I/O·전송용 임시 스풀
 ```
 
 SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션을 분리하기보다
@@ -76,7 +152,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 |---|---|---|
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
 | 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
-| 3 | 읽기·쓰기 추가 옵션 | 원자적 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
+| 3 | 읽기·쓰기 추가 옵션 | 단일 PUT wildcard 외 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
 | 4 | 쓰기 장애 복구 | DB COMMIT 응답 유실·쓰기 진행 도중 종료, AWS S3/R2 별도 호환성 |
 
 현재 raw query 정렬 방식은 유지한다. 필수 query 인증 파라미터의 중복은 거부하며,
@@ -90,19 +166,21 @@ cargo test -p grove-s3-protocol --locked
 cargo build --bin filegate --bin gscli --locked
 python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
-/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend fs
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
 ```
 
-두 모드는 같은 SDK 성공·거부·재시도 시나리오를 사용한다. MinIO 모드는 테스트가
+MinIO 경로에서 SDK 성공·거부·재시도 시나리오를 실행한다. 테스트가
 직접 만든 컨테이너만 중지·재시작하며 기존 운영 endpoint를 받지 않는다. 컨테이너·
 볼륨·PG·임시 파일은 finally에서 정리한다. 재시작 시 endpoint 유지가 계약이므로
 Docker 자동 포트 재할당 대신 명시적 임시 포트를 사용한다.
 
-이번 단계는 테스트/CI/문서 변경이다. 제품 Rust 코드는 변경하지 않았다.
+검증은 여러 단계에 걸쳐 실행했다. `019ff79`는 조건부 PUT 제품 코드·migration을,
+`f9458ff`·`520e172`는 NoteGate 연결 검증을 추가했다. 현재 마감 상태는
+[리소스 체크포인트](refactor-checkpoint.md)를 따른다.
+
 ### 완료 응답 유실 검증
 
 | 시점 | 확인 |

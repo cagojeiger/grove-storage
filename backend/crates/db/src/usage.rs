@@ -25,7 +25,9 @@ pub struct StorageUsage {
 
 /// storage별 사용량 — 등록된 모든 storage를 id 순으로, 조회 시점 집계.
 /// sum(bigint)은 NUMERIC이라 i64로 못 받는다 — bigint로 되돌린다.
-pub async fn by_storage(pool: &PgPool) -> Result<Vec<StorageUsage>, sqlx::Error> {
+pub async fn by_storage<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+) -> Result<Vec<StorageUsage>, sqlx::Error> {
     sqlx::query_as(
         "SELECT s.id AS storage_id, s.kind, s.capacity_bytes, \
          coalesce(sum(f.declared_size) FILTER (WHERE f.state = 'pending'), 0)::bigint \
@@ -58,7 +60,9 @@ pub struct ClientUsage {
     pub active_bytes: i64,
 }
 
-pub async fn by_client(pool: &PgPool) -> Result<Vec<ClientUsage>, sqlx::Error> {
+pub async fn by_client<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+) -> Result<Vec<ClientUsage>, sqlx::Error> {
     sqlx::query_as(
         // sum(bigint)은 NUMERIC이라 i64로 못 받는다 — bigint로 되돌린다.
         "SELECT f.client_id, l.storage_id, count(*) AS active_files, \
@@ -120,7 +124,10 @@ pub struct SnapshotRow {
 
 /// 최근 days일의 스냅샷 — 오래된 날부터. storage 합계·전체 합계 등
 /// 상위 축은 호출자가 행 SUM으로 파생한다.
-pub async fn snapshot_history(pool: &PgPool, days: i32) -> Result<Vec<SnapshotRow>, sqlx::Error> {
+pub async fn snapshot_history<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    days: i32,
+) -> Result<Vec<SnapshotRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT day, storage_id, client_id, active_bytes, active_files \
          FROM usage_snapshot \

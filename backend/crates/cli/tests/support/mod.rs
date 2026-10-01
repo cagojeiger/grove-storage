@@ -22,7 +22,9 @@ use std::{
 };
 use tokio::sync::oneshot;
 
-pub const TOKEN: &str = "test-operator-sensitive-value";
+pub const TOKEN: &str = "gsm_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+pub const COMMAND_PATH: &str = "/api/admin/commands/v1";
+pub const REQUEST_ID: &str = "019f49e7-c2b3-7ad1-bf80-62a05d8bd083";
 
 #[derive(Clone)]
 pub struct Reply {
@@ -30,6 +32,7 @@ pub struct Reply {
     pub body: String,
     pub location: Option<String>,
     pub delay_ms: u64,
+    pub raw: bool,
 }
 
 impl Reply {
@@ -39,6 +42,7 @@ impl Reply {
             body: value.to_string(),
             location: None,
             delay_ms: 0,
+            raw: false,
         }
     }
     pub fn error(status: u16) -> Self {
@@ -47,6 +51,7 @@ impl Reply {
             body: format!("sensitive backend text: {TOKEN}"),
             location: None,
             delay_ms: 0,
+            raw: false,
         }
     }
     pub fn status(status: u16, value: Value) -> Self {
@@ -55,6 +60,7 @@ impl Reply {
             body: value.to_string(),
             location: None,
             delay_ms: 0,
+            raw: false,
         }
     }
     pub fn empty(status: u16) -> Self {
@@ -63,7 +69,21 @@ impl Reply {
             body: String::new(),
             location: None,
             delay_ms: 0,
+            raw: false,
         }
+    }
+
+    pub fn wire(value: Value) -> Self {
+        Self {
+            raw: true,
+            ..Self::json(value)
+        }
+    }
+    pub fn rejected(status: u16, code: &str, outcome: &str) -> Self {
+        Self::status(
+            status,
+            json!({"protocol":1,"request_id":REQUEST_ID,"error":{"code":code,"outcome":outcome}}),
+        )
     }
 }
 
@@ -143,7 +163,7 @@ impl Server {
         let mut command = bare();
         command
             .args(["--endpoint", &self.endpoint, "--output", "json"])
-            .env("GROVE_OPERATOR_TOKEN", TOKEN);
+            .env("GROVE_TOKEN", TOKEN);
         command
     }
     pub fn run(&self, args: &[&str]) -> Output {
@@ -177,12 +197,20 @@ async fn reply(State(app): State<App>, request: Request) -> Response {
         method: method.clone(),
         path: path.clone(),
         authorization,
-        body,
+        body: body.clone(),
     });
+    let name = if method == "POST" && path == COMMAND_PATH {
+        serde_json::from_str::<Value>(&body)
+            .ok()
+            .and_then(|v| v["command"].as_str().map(str::to_owned))
+    } else {
+        None
+    };
+    let key = name.as_deref().unwrap_or(&path);
     let reply = app
         .replies
-        .get(&format!("{method} {path}"))
-        .or_else(|| app.replies.get(&format!("* {path}")))
+        .get(&format!("{method} {key}"))
+        .or_else(|| app.replies.get(&format!("* {key}")))
         .cloned()
         .unwrap_or_else(|| Reply::error(500));
     tokio::time::sleep(Duration::from_millis(reply.delay_ms)).await;
@@ -192,7 +220,18 @@ async fn reply(State(app): State<App>, request: Request) -> Response {
     if let Some(location) = reply.location {
         response = response.header("location", location);
     }
-    response.body(Body::from(reply.body)).unwrap()
+    let body = if !reply.raw && reply.status == 200 && name.is_some() {
+        match serde_json::from_str::<Value>(&reply.body) {
+            Ok(result) => {
+                json!({"protocol":1,"request_id":REQUEST_ID,"command":name,"result":result})
+                    .to_string()
+            }
+            Err(_) => reply.body,
+        }
+    } else {
+        reply.body
+    };
+    response.body(Body::from(body)).unwrap()
 }
 
 pub fn bare() -> Command {
@@ -200,6 +239,7 @@ pub fn bare() -> Command {
     command
         .env_remove("GROVE_ENDPOINT")
         .env_remove("GROVE_OPERATOR_TOKEN")
+        .env_remove("GROVE_TOKEN")
         .env_remove("FILEGATE_DATABASE_URL")
         .env_remove("DATABASE_URL")
         .env_remove("FILEGATE_MASTER_KEY")
@@ -236,17 +276,4 @@ pub fn usage() -> Value {
 
 pub fn storage() -> Value {
     json!({"id":"r2","kind":"s3","force_relay":false,"root_path":null,"endpoint":"https://storage.example","public_endpoint":"https://public.example","region":"auto","bucket":"data","force_path_style":true,"access_key":"public-access-key","capacity_bytes":0,"secret_key":"DO-NOT-PRINT","secret_key_ciphertext":"DO-NOT-PRINT","enc_key_id":"DO-NOT-PRINT"})
-}
-
-pub fn status_replies() -> Vec<(&'static str, Reply)> {
-    vec![
-        (
-            "/",
-            Reply::json(json!({"name":"filegate","version":"0.3.10"})),
-        ),
-        ("/healthz", Reply::json(json!({"status":"ok"}))),
-        ("/readyz", Reply::json(json!({"status":"ready"}))),
-        ("/api/admin/v1/usage", Reply::json(json!([usage()]))),
-        ("/api/admin/v1/clients", Reply::json(json!(["notegate"]))),
-    ]
 }

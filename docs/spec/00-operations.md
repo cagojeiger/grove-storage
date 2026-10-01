@@ -50,7 +50,7 @@ sequenceDiagram
 | 모드 | 바이트 경로 | 크기·확정 조건 |
 |---|---|---|
 | S3 직결 | 전송 주체 ↔ 외부 저장소 | commit/관찰 시 검증; 발급된 URL은 vendor TTL까지 유효 |
-| fs·force_relay | 전송 주체 ↔ FileGate ↔ 저장소 | 스트림 크기·MD5 계측 후 확정 |
+| S3 force_relay | 전송 주체 ↔ FileGate ↔ S3 저장소 | 스트림 크기·MD5 계측 후 확정 |
 | blobs 인증 | `/blobs/{lease}?s=...` | lease secret·상태·만료 |
 | blobs Content-Length | 필수 | 누락 411, 선언과 불일치 400, 초과 413 |
 | 단일 blobs PUT 소유권 | 수신 전 file→lease 행 잠금 | 수신·저장·실측 기록 동안 commit/회수와 직렬화; 완료 시 TTL 15분 갱신 |
@@ -58,12 +58,11 @@ sequenceDiagram
 | 단일 blobs PUT 재전송 | pending 상태에서 같은 크기·MD5는 200 | 성공한 바이트는 유지; 다른 내용은 409, 새 파일로 생성 |
 | 선언 MD5 불일치 | 물리 저장 전 400 | 같은 URL로 올바른 내용 재시도 |
 | 브라우저 | 설정된 CORS allowlist | preflight 처리 |
-| fs 쓰기 | 같은 filesystem의 임시 파일 → rename | 원자적 이름 전환 |
 
 파일명 표현은 RFC 5987로 인코딩한다. 서비스 URL은 서비스가 소유하고,
 발급된 접근 URL을 유효기간 내 전달한다.
 
-단일 중계 PUT과 fs part 승격은 파드당 4개의 DB claim 슬롯을 공유한다.
+단일 중계 PUT은 파드당 4개의 DB claim 슬롯을 사용한다.
 단일 PUT은 수신 동안 연결 하나를 점유한다. 요청 취소 시 트랜잭션을 롤백하고,
 처음 업로드의 물리 저장 후 DB 기록이 실패하면 실측 없이 pending으로 남아
 재전송 또는 만료 회수한다. 확정 이후 중계 PUT은 기존 lease 인증에서 거부한다.
@@ -112,7 +111,7 @@ stateDiagram-v2
 전환한다. 이전 버전은 reclaimed 정리 재시도·lease 보호를 지원하지 않는다.
 이미 구버전이 location을 제거한 고아 객체는 이 변경만으로 복원되지 않는다.
 
-capacity는 등록 기준선이고 실제 filesystem 여유 공간과 구분한다.
+capacity는 등록 기준선이고 외부 S3의 실제 여유 공간 조회값과 구분한다.
 점유는 files·locations에서 조회 시 집계한다. 일별 스냅샷은 UTC 자정 이후 첫 tick의
 관찰을 전날 값으로 기록하며, 늦게 실행된 값은 근사치다. 빠진 날은 비어 있고
 이미 기록한 날은 유지한다.
@@ -121,11 +120,10 @@ capacity는 등록 기준선이고 실제 filesystem 여유 공간과 구분한�
 
 ```text
 S3:   fg/{client}/{yyyy}/{mm}/{file_id}[.ext]
-fs:   fg/{client}/{yyyy}/{mm}/{zz}/{file_id}[.ext]
 temp: .fg-tmp-{lease_id}-{random}
 ```
 
-create 시각은 UTC, `zz`는 file_id 마지막 두 hex다. 확장자는 content_type 허용목록에서
+create 시각은 UTC다. 확장자는 content_type 허용목록에서
 선택한다. 읽기·삭제는 location에 저장한 경로를 사용한다.
 
 | 재료 | 복구 범위 |
@@ -136,5 +134,5 @@ create 시각은 UTC, `zz`는 file_id 마지막 두 hex다. 확장자는 content
 | 서비스 DB | 네이티브 file_id의 업무 의미 |
 
 논리키와 삭제 결정은 물리 파일명에서 복원되지 않으므로 DB·데이터·마스터 키를 함께 보존한다.
-48시간 지난 임시는 sweep 대상으로 삼고, 공유 fs의 multipart 임시는 활성 lease 목록으로
-보호한다. 보호 목록 조회가 실패하면 해당 sweep을 건너뛴다. 일반 고아 객체 감사는 후속 범위다.
+48시간 지난 pod-local 요청 스풀은 sweep 대상으로 삼는다. Multipart 세션과 part는
+외부 S3에 저장하며 DB 복구 원장으로 완료·중단한다. 일반 고아 객체 감사는 후속 범위다.

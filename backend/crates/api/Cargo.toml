@@ -8,6 +8,10 @@ name = "filegate"
 path = "src/main.rs"
 
 [dependencies]
+grove-management-service.workspace = true
+grove-management-command.workspace = true
+grove-management-policy.workspace = true
+rmcp.workspace = true
 crc32fast = "1.5"
 grove-s3-protocol = { workspace = true }
 grove-object-service = { workspace = true }
@@ -33,6 +37,7 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 percent-encoding = { workspace = true }
+rpassword = "7.5.4"
 
 [dev-dependencies]
 # CORS preflight 라우터 테스트용 oneshot (ServiceExt). tower는 axum 경유로

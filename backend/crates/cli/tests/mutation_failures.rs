@@ -10,11 +10,16 @@ fn create(server: &Server) -> std::process::Output {
 
 #[test]
 fn explicit_client_errors_are_not_applied() {
-    for (status, exit) in [(401, 3), (404, 4), (409, 6), (422, 7)] {
+    for (status, exit, code) in [
+        (401, 3, "unauthorized"),
+        (404, 4, "not_found"),
+        (409, 6, "conflict"),
+        (400, 7, "request_rejected"),
+    ] {
         let server = Server::routes(vec![(
             "POST",
-            "/api/admin/v1/clients",
-            Reply::error(status),
+            "client.create",
+            Reply::rejected(status, code, "not_applied"),
         )]);
         let result = envelope(&create(&server), exit);
         assert_eq!(result["error"]["http_status"], status);
@@ -26,19 +31,15 @@ fn explicit_client_errors_are_not_applied() {
 #[test]
 fn server_failure_and_request_timeout_are_unknown_without_retries() {
     for status in [302, 500] {
-        let server = Server::routes(vec![(
-            "POST",
-            "/api/admin/v1/clients",
-            Reply::error(status),
-        )]);
+        let server = Server::routes(vec![("POST", "client.create", Reply::error(status))]);
         let result = envelope(&create(&server), 8);
         assert_eq!(result["error"]["outcome"], "unknown");
         assert_eq!(server.seen().len(), 1);
     }
 
-    let mut delayed = Reply::status(201, json!({"id":"app","storage_id":"archive"}));
+    let mut delayed = Reply::status(200, json!({"id":"app","storage_id":"archive"}));
     delayed.delay_ms = 1200;
-    let server = Server::routes(vec![("POST", "/api/admin/v1/clients", delayed)]);
+    let server = Server::routes(vec![("POST", "client.create", delayed)]);
     let output = server
         .command()
         .args([
@@ -59,15 +60,15 @@ fn server_failure_and_request_timeout_are_unknown_without_retries() {
 }
 
 #[test]
-fn malformed_or_unexpected_success_is_reported_as_applied() {
+fn malformed_or_unexpected_success_is_unknown() {
     for reply in [
-        Reply::status(201, json!({"id":"other","storage_id":"archive"})),
-        Reply::status(201, json!({"unexpected":true})),
-        Reply::status(200, json!({"id":"app","storage_id":"archive"})),
+        Reply::status(200, json!({"id":"other","storage_id":"archive"})),
+        Reply::status(200, json!({"unexpected":true})),
+        Reply::status(201, json!({"id":"app","storage_id":"archive"})),
     ] {
-        let server = Server::routes(vec![("POST", "/api/admin/v1/clients", reply)]);
+        let server = Server::routes(vec![("POST", "client.create", reply)]);
         let result = envelope(&create(&server), 8);
-        assert_eq!(result["error"]["outcome"], "applied");
+        assert_eq!(result["error"]["outcome"], "unknown");
         assert_eq!(server.seen().len(), 1);
     }
 }
@@ -81,8 +82,8 @@ fn successful_mutation_with_broken_output_preserves_exit_eight() {
 
     let server = Server::routes(vec![(
         "POST",
-        "/api/admin/v1/clients",
-        Reply::status(201, json!({"id":"app","storage_id":"archive"})),
+        "client.create",
+        Reply::status(200, json!({"id":"app","storage_id":"archive"})),
     )]);
     let (writer, reader) = UnixStream::pair().unwrap();
     drop(reader);

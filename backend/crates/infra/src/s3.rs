@@ -127,8 +127,7 @@ fn client(spec: &S3StorageSpec, address: Address) -> S3Storage {
 /// filegate는 자기 버킷만 다룬다 — 버킷 프로비저닝은 운영자 몫이다. 버킷이
 /// 없거나 접근 권한이 없으면 실패한다 (등록 거부 또는 부팅 중단, ADR 001).
 /// head_bucket이 존재와 기본 접근을, list_multipart_uploads가 응답 유실 복구에
-/// 필요한 조회 권한을 확인한다. (fs adapter는 경로 존재·쓰기 가능으로 같은
-/// 검증을 한다 — storage 모델마다 방식이 다르다.)
+/// 필요한 조회 권한을 확인한다.
 pub async fn connect(spec: &S3StorageSpec) -> anyhow::Result<S3Storage> {
     let storage = client(spec, Address::Internal);
     storage

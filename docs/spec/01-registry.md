@@ -4,6 +4,43 @@
 - 근거: [ADR 004](../adr/004-config-layers.md)
 - 관리 CLI: [spec 04](04-cli.md) (gscli 조회·변경 구현)
 
+Product scope: phase one supports external S3-compatible backends only
+([ADR 007](../adr/007-grove-storage-foundation.md#phase-one-supported-backends)).
+Console, CLI, MCP and legacy REST accept S3 create/replace requests only.
+Migration `0017` makes the resource registry S3-only and removes `root_path`.
+It aborts if any FS row remains, preserving the old schema and data for explicit
+migration. S3 transfer spooling remains separate from filesystem storage support.
+
+## Resource database boundary
+
+```text
+Registry:  storages <- clients <- client_keys / s3_credentials
+Objects:   clients <- files -> locations -> storages
+Names:     (client, logical key) -> s3_keys -> files
+Uploads:   files <- leases <- lease_parts
+           files <- s3_uploads / native_multipart_completions
+History:   lease_history / usage_snapshot (independent ID snapshots)
+```
+
+| Scope | S3-only contract |
+|---|---|
+| Resource tables | Existing 13 tables retain their responsibilities |
+| storages | kind=s3; required S3 fields; no root_path or FS-specific checks |
+| Placement | Client selects one Storage; locations preserves each object's actual location |
+| Physical keys | Existing object_key values and new S3 key generation remain unchanged |
+| Protocols | Native and S3 APIs retain their existing contracts |
+| Relay | force_relay and temporary spooling remain available |
+| Management | Account, token, session and management-history tables remain unchanged |
+| Response compatibility | Management DTOs keep root_path=null; this is not a DB column |
+
+Apply the migration with old writers stopped and a verified backup of the DB and
+encryption keys. FS rows require an explicit data migration before this step.
+For the later FileGate cutover, drain or reconcile uploads and account for already
+issued presigned URLs, which can continue to write to external S3 after shutdown.
+Validate object IDs, locations, logical keys, encrypted credentials and recovery
+rows before reopening traffic. Application rollback requires the matching old
+schema/backup; the previous binary is not supported on the S3-only schema.
+
 ## 등록 관계
 
 ```mermaid
@@ -31,19 +68,18 @@ PostgreSQL이 정본이고 운영자 API가 변경 경계다. `gscli`과 API 클
 | 조건 | 계약 |
 |---|---|
 | id | 운영자가 지정한 안정 슬러그, 생성 후 고정 |
-| fs | 준비된 root_path·capacity_bytes |
 | S3 | endpoint·public_endpoint·region·bucket·자격증명 |
 | 중계 storage | 서버에 FILEGATE_PUBLIC_URL 설정 |
 | 등록·부팅 | 저장소 접근 검증 |
 | client 배치 | 생성 시 storage_id 하나 지정 |
 | storage 삭제 | client·location 참조가 정리된 뒤 수행 |
 | storage 주소 갱신 | location이 남으면 주소 변경은 409; 없으면 갱신 |
-| 주소 필드 | kind·root_path·endpoint·public_endpoint·region·bucket·force_path_style |
+| 주소 필드 | endpoint·public_endpoint·region·bucket·force_path_style |
 | 사용 중 허용 갱신 | 자격증명·암호 키 회전, capacity_bytes·force_relay |
 | client 삭제 | 파일 정리 후 수행, 키·S3 자격증명·논리키는 cascade |
 
-현재 fs 검증은 디렉터리 존재·쓰기 가능 확인이다. mount 식별·상실 정책은
-[Grove 경계](../adr/007-grove-storage-foundation.md)에서 추가로 정한다.
+독립 filesystem 노드의 mount 식별·상실 정책은
+[Grove 경계](../adr/007-grove-storage-foundation.md)의 2차 범위다.
 
 주소 보호는 파일 크기나 active 상태가 아닌 location 존재로 판단한다. pending·0바이트·
 purge 대기 파일도 포함한다. 주소는 저장된 문자열을 비교하며, 같은 저장소를 가리키는

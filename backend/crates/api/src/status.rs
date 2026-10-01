@@ -19,7 +19,7 @@ pub async fn run() -> anyhow::Result<ExitCode> {
     .await?;
 
     // 부팅과 같은 재검증을 storage별로(abort 없이) 돌린다.
-    let checks = crate::admin::check_registered(&pool, &crypto).await?;
+    let checks = crate::storage_registration::check_registered(&pool, &crypto).await?;
     let usage = filegate_db::usage::by_storage(&pool).await?;
     let clients = filegate_db::registry::list_clients(&pool).await?;
     pool.close().await;

@@ -5,16 +5,16 @@
 
 use sqlx::PgPool;
 
-/// storages 행. 종류(kind)가 s3/fs를 가르고, 종류별 필수는 DB CHECK가
-/// 집행한다 (0002). s3 시크릿은 암호문 컬럼 셋으로만 존재 — 복호는
-/// core::Crypto가 행의 enc_key_id 라벨로 한다 (spec 01). fs는 시크릿이
-/// 없는 storage다 — root_path가 접근 계약의 전부.
-#[derive(Clone, sqlx::FromRow)]
+/// Control-plane routes reserve these names from the S3 bucket namespace.
+pub const RESERVED_CLIENT_IDS: &[&str] = &["api", "blobs", "healthz", "readyz"];
+
+/// S3 registry row. Required connection fields are enforced by the database;
+/// provider secrets remain encrypted until the backend adapter resolves them.
+#[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct StorageRow {
     pub id: String,
     pub kind: String,
     pub force_relay: bool,
-    pub root_path: Option<String>,
     pub endpoint: Option<String>,
     pub public_endpoint: Option<String>,
     pub region: Option<String>,
@@ -39,21 +39,23 @@ impl std::fmt::Debug for StorageRow {
     }
 }
 
-pub(crate) const STORAGE_COLUMNS: &str = "id, kind, force_relay, root_path, endpoint, public_endpoint, region, bucket, \
+pub(crate) const STORAGE_COLUMNS: &str = "id, kind, force_relay, endpoint, public_endpoint, region, bucket, \
      force_path_style, access_key, secret_key_ciphertext, secret_key_nonce, enc_key_id, \
      capacity_bytes";
 
-pub async fn insert_storage(pool: &PgPool, row: &StorageRow) -> Result<(), sqlx::Error> {
+pub async fn insert_storage<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    row: &StorageRow,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO storages (id, kind, force_relay, root_path, endpoint, public_endpoint, \
+        "INSERT INTO storages (id, kind, force_relay, endpoint, public_endpoint, \
          region, bucket, force_path_style, access_key, secret_key_ciphertext, secret_key_nonce, \
          enc_key_id, capacity_bytes) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
     )
     .bind(&row.id)
     .bind(&row.kind)
     .bind(row.force_relay)
-    .bind(&row.root_path)
     .bind(&row.endpoint)
     .bind(&row.public_endpoint)
     .bind(&row.region)
@@ -76,6 +78,15 @@ pub enum UpdateStorageOutcome {
     LocationInUse,
 }
 
+pub fn storage_address_changed(current: &StorageRow, row: &StorageRow) -> bool {
+    current.kind != row.kind
+        || current.endpoint != row.endpoint
+        || current.public_endpoint != row.public_endpoint
+        || current.region != row.region
+        || current.bucket != row.bucket
+        || current.force_path_style != row.force_path_style
+}
+
 /// Serialize address replacement with file reservation. Credential rotation is
 /// allowed while locations exist; physical addressing remains stable.
 pub async fn update_storage(
@@ -83,43 +94,54 @@ pub async fn update_storage(
     row: &StorageRow,
 ) -> Result<UpdateStorageOutcome, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let current: Option<StorageRow> = sqlx::query_as(&format!(
+    let outcome = update_storage_in(&mut tx, row).await?;
+    if outcome == UpdateStorageOutcome::Updated {
+        tx.commit().await?;
+    }
+    Ok(outcome)
+}
+
+pub async fn lock_storage(
+    connection: &mut sqlx::PgConnection,
+    id: &str,
+) -> Result<Option<StorageRow>, sqlx::Error> {
+    sqlx::query_as(&format!(
         "SELECT {STORAGE_COLUMNS} FROM storages WHERE id = $1 FOR UPDATE"
     ))
-    .bind(&row.id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    .bind(id)
+    .fetch_optional(connection)
+    .await
+}
+
+/// The caller owns the transaction, including any audit and the final commit.
+pub async fn update_storage_in(
+    connection: &mut sqlx::PgConnection,
+    row: &StorageRow,
+) -> Result<UpdateStorageOutcome, sqlx::Error> {
+    let current = lock_storage(connection, &row.id).await?;
     let Some(current) = current else {
         return Ok(UpdateStorageOutcome::NotFound);
     };
-    let address_changed = current.kind != row.kind
-        || current.root_path != row.root_path
-        || current.endpoint != row.endpoint
-        || current.public_endpoint != row.public_endpoint
-        || current.region != row.region
-        || current.bucket != row.bucket
-        || current.force_path_style != row.force_path_style;
-    if address_changed {
+    if storage_address_changed(&current, row) {
         // Read after the lock wait so a just-committed reservation is visible.
         let in_use: bool =
             sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM locations WHERE storage_id = $1)")
                 .bind(&row.id)
-                .fetch_one(&mut *tx)
+                .fetch_one(&mut *connection)
                 .await?;
         if in_use {
             return Ok(UpdateStorageOutcome::LocationInUse);
         }
     }
     sqlx::query(
-        "UPDATE storages SET kind = $2, force_relay = $3, root_path = $4, endpoint = $5, \
-         public_endpoint = $6, region = $7, bucket = $8, force_path_style = $9, access_key = $10, \
-         secret_key_ciphertext = $11, secret_key_nonce = $12, enc_key_id = $13, \
-         capacity_bytes = $14, updated_at = now() WHERE id = $1",
+        "UPDATE storages SET kind = $2, force_relay = $3, endpoint = $4, \
+         public_endpoint = $5, region = $6, bucket = $7, force_path_style = $8, access_key = $9, \
+         secret_key_ciphertext = $10, secret_key_nonce = $11, enc_key_id = $12, \
+         capacity_bytes = $13, updated_at = now() WHERE id = $1",
     )
     .bind(&row.id)
     .bind(&row.kind)
     .bind(row.force_relay)
-    .bind(&row.root_path)
     .bind(&row.endpoint)
     .bind(&row.public_endpoint)
     .bind(&row.region)
@@ -130,13 +152,15 @@ pub async fn update_storage(
     .bind(&row.secret_key_nonce)
     .bind(&row.enc_key_id)
     .bind(row.capacity_bytes)
-    .execute(&mut *tx)
+    .execute(connection)
     .await?;
-    tx.commit().await?;
     Ok(UpdateStorageOutcome::Updated)
 }
 
-pub async fn get_storage(pool: &PgPool, id: &str) -> Result<Option<StorageRow>, sqlx::Error> {
+pub async fn get_storage<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+) -> Result<Option<StorageRow>, sqlx::Error> {
     sqlx::query_as(&format!(
         "SELECT {STORAGE_COLUMNS} FROM storages WHERE id = $1"
     ))
@@ -146,7 +170,9 @@ pub async fn get_storage(pool: &PgPool, id: &str) -> Result<Option<StorageRow>, 
 }
 
 /// 부팅 재검증과 목록 조회가 함께 쓴다. 등록부는 소수 행이라 무계 조회다.
-pub async fn list_storages(pool: &PgPool) -> Result<Vec<StorageRow>, sqlx::Error> {
+pub async fn list_storages<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+) -> Result<Vec<StorageRow>, sqlx::Error> {
     sqlx::query_as(&format!(
         "SELECT {STORAGE_COLUMNS} FROM storages ORDER BY id"
     ))
@@ -158,16 +184,27 @@ pub async fn list_storages(pool: &PgPool) -> Result<Vec<StorageRow>, sqlx::Error
 /// 가리키거나(storage_id) 실물(location)이 남은 storage는 FK가 거부한다 —
 /// 참조가 있는 한 등록부에서 사라질 수 없다.
 pub async fn delete_storage(pool: &PgPool, id: &str) -> Result<(), sqlx::Error> {
+    delete_storage_rows(pool, id).await.map(|_| ())
+}
+
+pub async fn delete_storage_rows<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+) -> Result<u64, sqlx::Error> {
     sqlx::query("DELETE FROM storages WHERE id = $1")
         .bind(id)
         .execute(pool)
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected())
 }
 
 // ---- clients ----
 
-pub async fn insert_client(pool: &PgPool, id: &str, storage_id: &str) -> Result<(), sqlx::Error> {
+pub async fn insert_client<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+    storage_id: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT INTO clients (id, storage_id) VALUES ($1, $2)")
         .bind(id)
         .bind(storage_id)
@@ -184,14 +221,17 @@ pub async fn client_exists(pool: &PgPool, id: &str) -> Result<bool, sqlx::Error>
 }
 
 /// 클라이언트가 소유한 storage id (없는 클라이언트면 None).
-pub async fn client_storage(pool: &PgPool, id: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn client_storage<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+) -> Result<Option<String>, sqlx::Error> {
     sqlx::query_scalar("SELECT storage_id FROM clients WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await
 }
 
-pub async fn list_clients(pool: &PgPool) -> Result<Vec<String>, sqlx::Error> {
+pub async fn list_clients<'e>(pool: impl sqlx::PgExecutor<'e>) -> Result<Vec<String>, sqlx::Error> {
     sqlx::query_scalar("SELECT id FROM clients ORDER BY id")
         .fetch_all(pool)
         .await
@@ -200,17 +240,24 @@ pub async fn list_clients(pool: &PgPool) -> Result<Vec<String>, sqlx::Error> {
 /// 멱등 삭제. file(location)이 남아 있으면 FK가 거부한다. 키·자격증명·논리
 /// 키 매핑은 소유물이라 함께 진다 (CASCADE).
 pub async fn delete_client(pool: &PgPool, id: &str) -> Result<(), sqlx::Error> {
+    delete_client_rows(pool, id).await.map(|_| ())
+}
+
+pub async fn delete_client_rows<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    id: &str,
+) -> Result<u64, sqlx::Error> {
     sqlx::query("DELETE FROM clients WHERE id = $1")
         .bind(id)
         .execute(pool)
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected())
 }
 
 // ---- client_keys ----
 
-pub async fn insert_client_key(
-    pool: &PgPool,
+pub async fn insert_client_key<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
     client_id: &str,
     key_hash: &str,
 ) -> Result<(), sqlx::Error> {
@@ -249,7 +296,10 @@ pub async fn client_id_for_key_hash(
         .await
 }
 
-pub async fn list_client_keys(pool: &PgPool, client_id: &str) -> Result<Vec<String>, sqlx::Error> {
+pub async fn list_client_keys<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    client_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
     sqlx::query_scalar("SELECT key_hash FROM client_keys WHERE client_id = $1 ORDER BY key_hash")
         .bind(client_id)
         .fetch_all(pool)
@@ -261,12 +311,22 @@ pub async fn delete_client_key(
     client_id: &str,
     key_hash: &str,
 ) -> Result<(), sqlx::Error> {
+    delete_client_key_rows(pool, client_id, key_hash)
+        .await
+        .map(|_| ())
+}
+
+pub async fn delete_client_key_rows<'e>(
+    pool: impl sqlx::PgExecutor<'e>,
+    client_id: &str,
+    key_hash: &str,
+) -> Result<u64, sqlx::Error> {
     sqlx::query("DELETE FROM client_keys WHERE key_hash = $1 AND client_id = $2")
         .bind(key_hash)
         .bind(client_id)
         .execute(pool)
         .await
-        .map(|_| ())
+        .map(|result| result.rows_affected())
 }
 
 // ---- 쓰기 거부 분류 ----

@@ -34,7 +34,7 @@ args = sys.argv[1:]
 assert args[args.index('--proto') + 1] == '=https'
 assert args[args.index('--proto-redir') + 1] == '=https'
 url = next(a for a in args if a.startswith('https://'))
-assert url.startswith('https://github.com/cagojeiger/filegate/releases/download/v1.2.3/')
+assert url.startswith('https://github.com/cagojeiger/grove-storage/releases/download/v1.2.3/')
 with open(os.environ['TEST_LOG'], 'a') as log:
     log.write(url + '\\n')
 shutil.copyfile(pathlib.Path(os.environ['TEST_ASSETS']) / url.rsplit('/', 1)[1], args[args.index('--output') + 1])
@@ -153,6 +153,13 @@ esac
         receipt = json.loads((self.bin / 'gscli-install-receipt.json').read_text())
         self.assertEqual(receipt['schema_version'], 1)
         self.assertEqual(receipt['managed_by'], 'gscli-installer')
-        self.assertEqual(receipt['repository'], 'cagojeiger/filegate')
+        self.assertEqual(receipt['repository'], 'cagojeiger/grove-storage')
         self.assertEqual(Path(receipt['install_path']), self.destination.resolve())
         self.assertNotIn('installed_version', receipt)
+        receipt['repository'] = 'cagojeiger/filegate'
+        (self.bin / 'gscli-install-receipt.json').write_text(json.dumps(receipt))
+        result = self.run_installer('--version', version)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        migrated = json.loads((self.bin / 'gscli-install-receipt.json').read_text())
+        self.assertEqual(migrated['repository'], 'cagojeiger/grove-storage')
+        self.assertEqual(self.destination.read_bytes(), data)

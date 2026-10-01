@@ -1,4 +1,4 @@
-"""Request integrity and unsupported conditional writes on a disposable server."""
+"""Request integrity and conditional writes on a disposable server."""
 
 import base64
 import hashlib
@@ -15,7 +15,8 @@ from botocore.exceptions import ClientError
 def check_integrity(client, credential, endpoint, opener):
     failures = []
     key = "integrity-contract"
-    for options, expected in [({"IfNoneMatch": "*"}, "NotImplemented"),
+    for options, expected in [({"IfNoneMatch": "*"}, "PreconditionFailed"),
+                              ({"IfNoneMatch": "etag"}, "NotImplemented"),
                               ({"ContentMD5": "AAAAAAAAAAAAAAAAAAAAAA=="}, "BadDigest"),
                               ({"ChecksumCRC32": "AAAAAA=="}, "BadDigest"),
                               ({"ContentMD5": "invalid-base64"}, "InvalidDigest"),

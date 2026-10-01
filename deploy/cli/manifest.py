@@ -29,7 +29,7 @@ def build_manifest(directory, version):
     return {
         "schema_version": 1,
         "version": version,
-        "repository": "cagojeiger/filegate",
+        "repository": "cagojeiger/grove-storage",
         "assets": assets,
     }
 

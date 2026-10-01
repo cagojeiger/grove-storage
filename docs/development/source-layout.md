@@ -1,99 +1,120 @@
 # 소스 구조
 
+기준: S3-only 리소스 리팩토링 `520e172`. 완료·미검증 범위는 [마감 점검](refactor-checkpoint.md)을 따른다.
+
+## 파일 트리
+
 ```text
 backend/crates/
-├── s3-protocol/           S3 XML·SigV4 순수 프로토콜 계약
-│   ├── src/multipart.rs  Complete XML 구조·엔티티·namespace 검증
-│   ├── src/completion.rs 완료 목록·원장 ETag·비최종 part 최소 크기 검증
-│   ├── src/signing.rs    서명 계산·raw query 정렬
-│   ├── src/auth.rs       scope·서명 헤더·만료 범위·본문 해시 검증
-│   ├── src/integrity.rs  checksum 비교·읽기 If-Match·조건 헤더 식별
-│   ├── src/operation.rs  지원 동작 분류·미지원 요청 차단
-│   └── tests/            multipart·completion·signing·operation·auth (서버·DB 독립)
-├── object-service/        grove-object-service: 업로드 준비·실패 보상 조율
-│   ├── src/cleanup.rs     정리 성공 후 메타데이터 확정
-│   ├── src/multipart_create.rs  vendor 생성·ID 기록·relay 준비·실패 보상
-│   └── tests/            cleanup·cleanup_failures·multipart_create
-├── object-policy/         grove-object-policy: 업로드 선언·파트·ETag·완료 복구 판단
-│   └── tests/             geometry·etag·validation·completion·completion_failures
-├── cli/                   gscli: 원격 관리자 API 조회·변경
-│   ├── src/               인자·설정·HTTP·입력·확인·비밀 출력·응답 출력
-│   │   ├── commands/      조회·변경 실행
-│   │   └── update/        업데이트 흐름·다운로드·설치 기록·파일 교체, 분리된 tests/
-│   └── tests/             설정·조회·변경·비밀·실패·status·update 테스트
+├── management-command/          공통 자원 명령·schema·입출력·안정 오류
+│   └── src/catalog.rs          Console·CLI·MCP 명령 정본
+├── management-policy/          Caller·Surface·Action -> Scope 순수 권한
+├── management-service/
+│   ├── src/command.rs          콘솔 전용 계정·토큰·세션·이력 명령
+│   ├── src/dispatch.rs         현재 신원·권한에 맞는 DB 실행
+│   ├── src/resources/          공통 자원 명령·provider probe·변경 조율
+│   ├── src/sessions.rs         비밀번호 로그인·과거 토큰 세션 코드
+│   ├── src/local_accounts.rs  최초 Admin·로컬 계정 복구
+│   ├── src/password_setups.rs 일회성 초기 비밀번호 설정
+│   ├── src/personal_tokens.rs 본인 관리 API 토큰
+│   └── src/logging.rs          bounded best-effort 호출·보안 기록
+├── s3-protocol/                 SigV4·XML·작업 분류·완료 목록·무결성 규칙
+├── object-policy/               업로드 검증·파트 계산·ETag·완료 복구 판단
+├── object-service/
+│   ├── src/cleanup.rs          물리 정리 후 메타데이터 확정
+│   ├── src/multipart_create.rs 생성·ID 기록·실패 보상
+│   ├── src/single_commit.rs    Native 단일 업로드 완료 조율
+│   └── src/multipart_commit.rs Native multipart 완료 조율
 ├── api/src/
-│   ├── admin/              등록부·운영자 인증·usage
-│   ├── s3/                 SigV4·라우팅·객체·multipart
-│   │   ├── object_response.rs Range·응답 헤더 정책
-│   │   ├── integrity.rs    실측값·HTTP 헤더 연결, checksum 오류 응답
-│   │   └── object_response/ Range·응답 헤더 테스트
-│   ├── v1/                 네이티브 파일·multipart·relay
-│   │   └── multipart_create.rs  Native 생성 service의 DB·S3·crypto adapter
-│   ├── blobs.rs            lease URL 바이트 전송
-│   ├── spool.rs            스트림 계측·임시 파일
-│   ├── spool/tests.rs      청크별 누적 해시·네이티브 계측 유지
-│   ├── storage_access.rs   등록부에서 backend 구성·물리 작업
-│   ├── status.rs           현재 로컬 DB·저장소 진단 CLI
-│   └── reconciler/         완료 복구
-│       └── reclaim.rs      만료 회수의 물리 정리·재시도
+│   ├── console_identity/      browser 인증·계정·토큰·세션·이력 adapter
+│   ├── resource_commands.rs   Bearer HTTP -> 공통 자원 실행기
+│   ├── mcp/                   MCP -> 같은 자원 실행기
+│   ├── admin/                 기존 등록부 REST·usage 호환
+│   ├── storage_registration.rs 설정 검증·접근 확인·비밀 암호화
+│   ├── storage_access.rs      등록 설정 -> S3 backend
+│   ├── v1/                    Native HTTP·object-service adapter
+│   ├── s3/                    S3 HTTP·인증·객체/multipart 작업 조율
+│   ├── blobs.rs               lease URL 바이트 전송
+│   ├── spool.rs               스트림 크기·해시 계측
+│   ├── reconciler/            관찰·완료 복구·정리·사용량 스냅샷
+│   └── status.rs              로컬 DB·등록 저장소 진단
 ├── db/
-│   ├── src/files/          파일·lease 상태 전이
-│   │   └── reclaim_cleanup.rs  reclaimed 정리 후보·확정
-│   ├── src/s3_registry/    자격증명·논리키·업로드 세션
-│   ├── migrations/         PostgreSQL 스키마
-│   └── tests/              DB 통합 테스트
-├── infra/src/              fs·외부 S3 I/O
-└── core/src/               설정·암호·해시, multipart는 policy 재노출
+│   ├── src/management/        신원·설정 변경·감사 트랜잭션
+│   ├── src/registry.rs        Storage·Client·서비스 키 등록 정보
+│   ├── src/files/             파일·위치·lease 상태 전이
+│   ├── src/s3_registry/       S3 자격증명·논리키·업로드 세션
+│   ├── migrations/            스키마 변경·업그레이드 전제
+│   └── tests/                 실제 PostgreSQL 정합성·경합·업그레이드
+├── infra/src/
+│   ├── backend.rs             S3 backend 작업
+│   ├── s3.rs                  vendor SDK·presign·바이트 I/O
+│   └── temp_spool.rs          전송용 임시 파일·정리
+├── core/                       환경 설정·암호·해시·기존 경로 재노출
+└── cli/                        gscli HTTP·출력·비밀 전달·자체 업데이트
+frontend/web/src/
+├── app/ · auth/ · api/          탐색·로그인·HTTP 계약
+└── features/
+    ├── overview/ · storages/ · clients/ · metadata/
+    └── access/ · activity/ · settings/   Accounts·이력·자기 세션
+scripts/
+├── e2e-cli.py                  격리 DB·실제 서버 CLI 검증
+├── e2e-s3.py                   MinIO SDK 계약 검증
+├── e2e-s3-recovery.py          응답 유실·재시작·커밋 거부
+├── e2e-notegate.py             실제 NoteGate 핸들러 연결
+└── e2e-notegate-browser.py     NoteGate 서버·UI·로컬 OIDC·바이트 검증
 ```
 
-## 책임
+`output/`은 과거 미리보기 산출물이며 실행 콘솔은 `frontend/web`이다.
+트리는 주요 모듈만 표시한다. 전체 workspace 구성은 [Cargo.toml](../../Cargo.toml)이 정본이다.
 
-| 모듈 | 입력 → 결과 | 정합성 경계 |
+## 책임과 계약
+
+| 경계 | 소유 책임 | 유지할 조건 |
 |---|---|---|
-| `object-service/cleanup` | 물리 정리 → 조건부 DB 확정 | 정리 실패 시 DB 작업 호출 생략; 원자성은 DB 소유 |
-| `object-service/multipart_create` | 예약된 업로드 → vendor·relay 준비 | 실패 시 알려진 upload ID로 보상, 원래 오류 유지 |
-| `api/routes`, `api/admin` | HTTP → 인증된 요청 | 표면별 인증·예약 경로 |
-| `api/s3/auth` | 원본 URI·헤더 → client | SigV4 검증 |
-| `api/s3/object_response` | Range·쿼리 → 응답 정책 | 인코딩·헤더 검증 |
-| `api/s3/handlers`, `multipart` | 인증된 요청 → 저장·확정 | DB 소유권 → 물리 I/O → DB 확정 |
-| `db/files`, `db/s3_registry/uploads` | 전이 요청 → 조건부 결과 | 행 락·트랜잭션 |
-| `db/s3_registry/keys` | 논리키 교체 → 옛 파일 detach | 호출자의 확정 트랜잭션에 참여 |
-| `infra/fs`, `infra/s3` | 물리 주소 → 바이트 I/O | filesystem·vendor 계약 |
-| `api/reconciler` | DB 후보·실물 관찰 → 복구 | 보존된 소유권·재시도 |
-| `api/status` | 로컬 Config → DB·저장소 접근·요약 | HTTP 독립, 부팅과 같은 storage 검사 |
-| `cli` | 운영자 인자 → 관리자 HTTP API → table·JSON | DB 의존성 없음, 기존 서버·로컬 status와 분리 |
-| `cli/update` | 공식 Release → 검증된 실행 파일 | 서버 인증 독립, 설치·업데이트의 동일 잠금·교체 |
-| `object-policy` | 값 → 업로드 검증·파트 계산·ETag·복구 결정 | HTTP·DB·런타임·환경 설정 독립 |
-| `core` | 환경 설정·암호·키 해시 | 기존 multipart import 경로는 policy 재노출 |
+| Management | 계정·Storage·Client·키·metadata 설정과 감사 | 현재 신원 재확인·삭제/주소 변경 guard·감사와 변경의 원자성 |
+| Object Service | 설정 조회·파일 수명주기·복구 조율 | 물리 작업 전후 상태·lease·정리 정보 보존 |
+| Transfer | 외부 S3 바이트 이동·관찰 | direct presign은 Client↔S3, relay는 Grove 경유 |
+| DB | 락·상태 전이·논리키 교체·사용량 | 파일 확정과 옛 파일 detach를 같은 트랜잭션에서 처리 |
+| HTTP/MCP | 입력·인증 envelope·응답 | Console cookie/CSRF와 CLI/MCP Bearer 분리 |
+| Policy/Protocol | 순수 값·권한·프로토콜 판단 | DB·서버 없이 독립 테스트 |
 
-`uploads`의 크기보다 상태 전이의 원자성을 우선한다. 논리키 교체와 옛 파일
-detach는 같은 트랜잭션을 공유한다.
+서비스 추출은 실패 순서와 보상 경계를 기준으로 한다. S3 multipart의 I/O 조율 일부는
+`api/s3/multipart.rs`에 남아 있고, Native 완료는 object-service를 사용한다.
+
+## 이름과 저장
+
+| 개념 | 현재 의미 |
+|---|---|
+| Account / Token | 관리 주체 / 이름 있는 관리 자격증명; DB `management.accounts`·`credentials` |
+| 로컬 Admin | DB 계정; 서버 로컬 초기화·복구, 콘솔 비밀번호 로그인 |
+| Admin / Writer / Reader | 관리 역할; Client 파일 접근 권한과 별개 |
+| Client | Native 서비스 키·S3 자격증명으로 파일 API를 쓰는 소비자 |
+| Storage | 외부 S3 저장소; 등록 용량·endpoint·provider 비밀·metadata |
+| `root_path` | 응답 호환용 null; migration 0017 이후 DB 열·FS backend 없음 |
+| `temp_spool` | 전송 버퍼; 등록 가능한 저장소와 별개 |
+| 서버 / CLI 이름 | `filegate`·`FILEGATE_*` / `gscli`·`GROVE_*` 유지 |
+| `master_configuration`, `root_sessions` | 과거 migration의 테이블; 현재 서비스·HTTP 진입점 없음 |
+
+명령 수는 [catalog.rs](../../backend/crates/management-command/src/catalog.rs)를 따른다.
+계정/토큰 관리는 콘솔 전용 내부 Command이며 CLI/MCP 자원 catalog와 별개다.
 
 ## 검증 위치
 
-| 범위 | 테스트 |
-|---|---|
-| S3 XML·서명 계산 | `cargo test -p grove-s3-protocol --locked` |
-| S3 SDK·실제 HTTP 계약 | `scripts/e2e-s3.py --backend fs|minio` (boto3, 격리 DB·서버); MinIO 수명·중지/복구는 `s3_backend_fixture.py` |
-| S3 완료 응답 유실 | `scripts/e2e-s3-recovery.py`; `s3_fault_proxy.py`가 MinIO Complete 응답을 끊고 실제 Reconciler 복구 확인 |
-| 응답 유실 후 프로세스 재시작 | 같은 스크립트의 `--restart`; SIGKILL·새 PID·동일 DB로 복구 확인 |
-| DB 커밋 거부 후 복구 | 같은 스크립트의 `--db-failure`; `s3_db_fault.py`가 격리 DB의 deferred trigger로 커밋 실패 주입 |
-| 실제 콘솔 | `frontend/web/src`: app·auth·api·design·features/overview |
-| 콘솔 테스트 | `frontend/web/tests`: 전송 단위·mock UI·실제 HTTPS 세션; `scripts/e2e-console.py`가 격리 환경 구성 |
-| 정리 실행 순서·실패·재시도 | `object-service/tests/{cleanup,cleanup_failures}.rs`; `cargo test -p grove-object-service --locked` |
-| 순수 업로드 규칙 | `object-policy/tests/{geometry,etag,validation}.rs`; `cargo test -p grove-object-policy --locked` |
-| 완료 복구 판단·관찰 실패 | `object-policy/tests/{completion,completion_failures}.rs` |
-| 조합 라우팅·인증·CORS | `api/src/routes/tests.rs` |
-| S3 서명·쿼리 | `s3-protocol/tests/auth.rs`, `api/src/s3/auth/tests.rs`, `s3/mod.rs`; 실제 요청은 `scripts/s3_auth_cases.py` |
-| Range·응답 헤더 | `api/src/s3/object_response/tests.rs` |
-| 파일 상태·동시성·GC | `db/tests/file_*`, `native_multipart_completion.rs` |
-| S3 원자적 교체·완료·회수 | `db/tests/s3_*` |
-| filesystem 조립·임시 보호 | `infra/src/fs.rs` |
-| 현재 CLI 표현 | `api/src/status.rs` (바이트·용량 2개) |
-| 원격 CLI 조회·상태 | `cli/tests/{config,reads,failures,status}.rs`, `cli/src/output_tests.rs` |
-| 원격 CLI 변경 | `cli/tests/{inputs,storage_writes,identity_writes,confirmations,secrets,mutation_failures}.rs` |
-| CLI·서버 응답 계약 | `scripts/e2e-cli.py` (CI, 격리 DB·실제 서버) |
-| CLI 설치·릴리스 계약 | `deploy/tests/test_{installer,manifest,version}.py` |
-| 실제 바이트 경로 | `scripts/e2e-*.sh`, `scripts/s3-capture.py` |
+경로는 `backend/crates/` 기준이다. 실행 결과와 환경은 [S3 호환성 점검](s3-compatibility-review.md),
+기본 실행 명령은 [기술·운영](../stack/README.md#검증)을 따른다.
 
-실행 명령은 [기술·운영](../stack/README.md#검증)을 따른다.
+| 계약 | 테스트 위치 |
+|---|---|
+| 순수 규칙 | `s3-protocol/tests`, `object-policy/tests`, `management-policy/tests` |
+| 완료·보상 순서 | `object-service/tests`의 single/multipart commit·cleanup·실패 테스트 |
+| 관리 명령 schema·DTO | `management-command/tests` |
+| 권한·감사 실패·신원 잠금 | `management-service/tests`, `db/tests/management_*` |
+| 등록부 변경·기존 REST 호환 | `api/src/resource_commands/tests/legacy_contract`, `management-service/tests/resource_writes` |
+| 등록 검증·S3-only | `api/src/storage_registration/tests.rs`, `db/tests/s3_only_upgrade.rs` |
+| 상태·GC·조건부 PUT·복구 | `db/tests/file_*`, `db/tests/s3_*`, `api/src/reconciler` |
+| 브라우저 인증·표면 분리 | `api/src/console_identity/tests`, `api/src/mcp/tests`, `api/src/routes/tests.rs` |
+| 임시 파일·계측 | `infra/src/temp_spool.rs`, `api/src/spool/tests.rs` |
+| CLI 출력·변경·업데이트 | `cli/tests`, `cli/src/update`, `scripts/e2e-cli.py` |
+| UI | `frontend/web/tests`; fixture 화면과 실서버 검증을 구분 |
+
+Management의 다음 변경 순서는 [준비 계획](management-review.md)에 모은다.

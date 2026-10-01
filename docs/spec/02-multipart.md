@@ -33,10 +33,9 @@
 |---|---|---|
 | S3 직결 | vendor part URL, upload_id를 lease에 기록 | ListParts 대조 → vendor Complete |
 | S3 중계 | 스풀 계측 → vendor UploadPart | 원장 대조 → vendor Complete |
-| fs | 스풀 계측 → claim → 고정 offset에 기록 | 검증 → 조립 파일 rename |
 
-fs의 offset은 `(N-1) × part_size`다. 서로 다른 part는 별도 범위에 쓰며,
-같은 part는 DB claim이 보호한다. 중계 secret은 마스터 키와 lease id에서 파생한다.
+중계 part는 DB claim과 heartbeat로 소유권을 보호한다.
+중계 secret은 마스터 키와 lease id에서 파생한다.
 해당 키를 PREV에서도 제거한 뒤 재발급하면 409가 되어 새 업로드로 시작한다.
 
 ## 완료와 복구
@@ -59,7 +58,7 @@ stateDiagram-v2
 | 새 part·generic 회수 | 완료 소유 행으로 직렬화 |
 | 직결 UploadPart | vendor Complete가 검증한 part 번호·ETag 목록으로 직렬화 |
 | 복구 시점 | heartbeat가 끝나고 lease가 만료된 뒤 |
-| 예상 실물 일치 | DB 확정 재시도; fs는 크기, S3는 크기·ETag 대조 |
+| 예상 실물 일치 | S3 크기·ETag 대조 후 DB 확정 재시도 |
 | 실물 없음 | 완료 소유권 해제·lease 갱신, commit 재시도 |
 | 실물 불일치 | cleaning 선점·물리 정리 성공 뒤 reclaimed |
 | 정리 실패 | completion·location·lease·upload_id 보존 |
@@ -79,5 +78,5 @@ part 허용·heartbeat·최종 확정은 잠금 대기 후의 현재 상태로 �
 | 완료·회수 경합, 새 part 차단, 재개·정리, GC | db/tests/native_multipart_completion.rs |
 | 잠금 대기 중 소유권 변경 | db/tests/native_multipart_completion/ |
 | S3 중계 part·완료 직렬화 | db/tests의 S3 multipart 테스트 |
-| 실제 fs·S3 바이트 동등성 | scripts/e2e-multipart.sh |
+| S3 직결·중계 바이트 동등성 | scripts/e2e-relay-upload.py, scripts/native_multipart_cases.py |
 | part 내부 오프셋 재개·전체 CRC 합성 | 후속 범위 |

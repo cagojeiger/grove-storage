@@ -5,8 +5,6 @@ mod clients;
 mod storages;
 mod usage;
 
-pub use storages::{check_registered, verify_registered};
-
 use axum::Router;
 use axum::routing::get;
 

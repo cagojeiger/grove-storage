@@ -15,7 +15,7 @@ import urllib.request
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
-def check(endpoint, directory, database, backend=None):
+def check(endpoint, directory, database, backend):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     key = "relay-regression-key"
 
@@ -50,11 +50,8 @@ def check(endpoint, directory, database, backend=None):
             time.sleep(0.1)
 
     admin = HARNESS["TOKEN"]
-    root = Path(directory) / "objects"
-    root.mkdir()
-    spec = ({"kind": "fs", "root_path": str(root), "capacity_bytes": 1000000}
-            if backend is None else {**backend.spec, "force_relay": True})
-    request("POST", "/api/admin/v1/storages", {"id": "relay", **spec}, admin, 201)
+    request("POST", "/api/admin/v1/storages",
+            {"id": "relay", **backend.spec, "force_relay": True}, admin, 201)
     request("POST", "/api/admin/v1/clients", {"id": "relay", "storage_id": "relay"}, admin, 201)
     request("POST", "/api/admin/v1/clients/relay/keys",
         {"key_hash": "sha256:" + hashlib.sha256(key.encode()).hexdigest()}, admin, 201)
@@ -64,8 +61,6 @@ def check(endpoint, directory, database, backend=None):
 
     def physical(file_id):
         object_key = sql(f"SELECT object_key FROM locations WHERE file_id = '{file_id}'")
-        if backend is None:
-            return (root / object_key).read_bytes()
         response = backend.vendor.get_object(Bucket=backend.spec["bucket"], Key=object_key)
         try:
             return response["Body"].read()
@@ -137,15 +132,15 @@ def check(endpoint, directory, database, backend=None):
     assert sql(f"SELECT etag FROM files WHERE id = '{file_id}'") == hashlib.md5(b"modified").hexdigest()
     print("PASS physical success with DB commit failure remains unmeasured and permits consistent retry")
 
+    from native_multipart_cases import check_multipart
+    check_multipart(request, put, opener, endpoint, backend, admin)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", choices=["fs", "minio"], default="fs")
-    args = parser.parse_args()
-    if args.backend == "minio":
-        from s3_backend_fixture import minio_backend
-        with minio_backend() as backend:
-            HARNESS["main"](lambda endpoint, directory, database: check(endpoint, directory, database, backend),
-                            with_database=True, reconciler_interval=3600)
-    else:
-        HARNESS["main"](check, with_database=True, reconciler_interval=3600)
+    parser.add_argument("--backend", choices=["minio"], default="minio")
+    parser.parse_args()
+    from s3_backend_fixture import minio_backend
+    with minio_backend() as backend:
+        HARNESS["main"](lambda endpoint, directory, database: check(endpoint, directory, database, backend),
+                        with_database=True, reconciler_interval=3600, multipart=True)

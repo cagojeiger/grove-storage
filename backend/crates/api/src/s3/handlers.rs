@@ -1,12 +1,12 @@
 //! S3 객체 I/O와 파일·논리키 확정을 조율한다.
-//! 응답 프로토콜은 object_response, 물리 접근은 storage_access·infra가 담당한다.
+//! 응답 프로토콜은 object_response, 설정 해석은 storage_access, 물리 I/O는 infra가 담당한다.
 
 use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use filegate_db::files::{self, CreateOutcome, CreateSpec};
 use filegate_db::s3_registry as s3reg;
-use filegate_infra::{Address, fs as fs_backend, s3_open_read, s3_open_read_range};
+use filegate_infra::{Address, s3_open_read, s3_open_read_range, temp_spool};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -19,7 +19,8 @@ use super::xml::{no_such_key, xml_error, xml_internal, xml_storage_error};
 use crate::lease::{WRITE_LEASE_TTL, run_with_completion_heartbeat};
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
-use crate::storage_access::{CommitErr, StorageBackend, backend_from_row, commit_temp_to_backend};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::commit_temp_to_backend;
 use grove_object_policy::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
 
 // ── PutObject ────────────────────────────────────────────────
@@ -74,9 +75,14 @@ pub(super) async fn put_object(
         lease_ttl_secs: WRITE_LEASE_TTL.as_secs() as i64,
         part_size: None,
     };
-    let created = match s3reg::create_upload(&state.pool, spec, key)
-        .await
-        .map_err(|e| xml_internal("create", e))?
+    let created = match s3reg::create_upload(
+        &state.pool,
+        spec,
+        key,
+        headers.contains_key("if-none-match"),
+    )
+    .await
+    .map_err(|e| xml_internal("create", e))?
     {
         CreateOutcome::Created(created) => *created,
         // 인증된 클라이언트는 등록부에 있다 (자격증명 FK) — 도달하지 않는다.
@@ -93,9 +99,9 @@ pub(super) async fn put_object(
         .map_err(|e| xml_internal("backend", e))?;
     // S3 중계는 공유 임시 볼륨에 스풀한다 — 슬롯이 없으면 대기(백프레셔)해
     // 동시 스풀 볼륨 고갈을 막는다. 스코프 종료 시 자동 반납된다.
-    let _spool_slot = spool::acquire_spool_slot(&backend, &state.spool_slots).await;
+    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
     let temp_name = format!("s3-{}", created.file_id);
-    let (temp_path, file) = fs_backend::begin_write(&spool_root(&backend), &temp_name)
+    let (temp_path, file) = temp_spool::begin_write(&spool_root(), &temp_name)
         .await
         .map_err(|e| xml_internal("spool", e))?;
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
@@ -108,7 +114,7 @@ pub(super) async fn put_object(
         };
     let written = measured.written;
     if written != content_length {
-        fs_backend::abort_write(&temp_path).await;
+        temp_spool::abort_write(&temp_path).await;
         return Err(xml_error(
             StatusCode::BAD_REQUEST,
             "IncompleteBody",
@@ -116,14 +122,14 @@ pub(super) async fn put_object(
         ));
     }
     if let Err(error) = super::integrity::verify(headers, &measured) {
-        fs_backend::abort_write(&temp_path).await;
+        temp_spool::abort_write(&temp_path).await;
         return Err(error);
     }
     let md5_hex = measured.md5_hex;
 
     use tokio::io::AsyncWriteExt as _;
     if let Err(error) = writer.flush().await {
-        fs_backend::abort_write(&temp_path).await;
+        temp_spool::abort_write(&temp_path).await;
         return Err(xml_internal("spool flush", error));
     }
     let file = writer.into_inner();
@@ -151,7 +157,7 @@ pub(super) async fn put_object(
             | s3reg::CompletionClaim::Unavailable,
         ) => {
             drop(file);
-            fs_backend::abort_write(&temp_path).await;
+            temp_spool::abort_write(&temp_path).await;
             return Err(xml_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "ServiceUnavailable",
@@ -160,13 +166,12 @@ pub(super) async fn put_object(
         }
         Err(error) => {
             drop(file);
-            fs_backend::abort_write(&temp_path).await;
+            temp_spool::abort_write(&temp_path).await;
             return Err(xml_internal("claim completion", error));
         }
     }
 
-    // fs는 로컬/마운트 IO → internal(500), 원격 게이트웨이(s3)만 503 —
-    // blobs·spool과 같은 백엔드별 구분. abort 순서는 헬퍼가 쥔다.
+    // Provider failures keep the S3 gateway error mapping; the helper releases the spool.
     let committed = run_with_completion_heartbeat(
         &state.pool,
         created.file_id,
@@ -189,10 +194,7 @@ pub(super) async fn put_object(
         ));
     };
     if let Err(error) = committed {
-        return Err(match error {
-            CommitErr::Fs(error) => xml_internal("fs commit", error),
-            CommitErr::Storage(error) => xml_storage_error("s3 upload", error),
-        });
+        return Err(xml_storage_error("s3 upload", error));
     }
 
     // 확정 — pending→active, lease 정산, key 매핑, overwrite detach가 한
@@ -204,6 +206,13 @@ pub(super) async fn put_object(
             .map_err(|e| xml_internal("finalize", e))?
         {
             s3reg::FinalizeOutcome::Finalized { displaced } => displaced,
+            s3reg::FinalizeOutcome::PreconditionFailed => {
+                return Err(xml_error(
+                    StatusCode::PRECONDITION_FAILED,
+                    "PreconditionFailed",
+                    "the specified key already exists",
+                ));
+            }
             s3reg::FinalizeOutcome::NotPending => {
                 return Err(xml_error(
                     StatusCode::SERVICE_UNAVAILABLE,
@@ -295,39 +304,24 @@ pub(super) async fn get_object(
     };
 
     type Reader = Box<dyn tokio::io::AsyncRead + Send + Unpin>;
-    let opened: anyhow::Result<Option<(Reader, i64)>> = match (&backend, span) {
-        (StorageBackend::Fs { root }, None) => fs_backend::open_read(root, &file.object_key)
-            .await
-            .map(|found| found.map(|(reader, len)| (Box::new(reader) as Reader, len))),
-        (StorageBackend::Fs { root }, Some((start, end))) => {
-            fs_backend::open_read_range(root, &file.object_key, start, end)
+    let spec = &backend.spec;
+    let opened: anyhow::Result<Option<(Reader, i64)>> = {
+        let storage = state
+            .s3_clients
+            .get(&file.storage.id, spec, Address::Internal);
+        match span {
+            None => s3_open_read(&storage, &file.object_key)
                 .await
-                .map(|found| found.map(|(reader, len)| (Box::new(reader) as Reader, len)))
-        }
-        (StorageBackend::S3 { spec, .. }, span) => {
-            let storage = state
-                .s3_clients
-                .get(&file.storage.id, spec, Address::Internal);
-            match span {
-                None => s3_open_read(&storage, &file.object_key)
-                    .await
-                    .map(|found| found.map(|(reader, len)| (Box::new(reader) as Reader, len))),
-                Some((start, end)) => s3_open_read_range(&storage, &file.object_key, start, end)
-                    .await
-                    .map(|found| found.map(|(reader, len)| (Box::new(reader) as Reader, len))),
-            }
+                .map(|found| found.map(|(reader, len)| (Box::new(reader) as Reader, len))),
+            Some((start, end)) => s3_open_read_range(&storage, &file.object_key, start, end)
+                .await
+                .map(|found| found.map(|(reader, len)| (Box::new(reader) as Reader, len))),
         }
     };
     let (reader, len) = match opened {
         Ok(Some(found)) => found,
         Ok(None) => return Err(no_such_key()),
-        // 백엔드별 구분: fs는 로컬/마운트 IO(500), s3는 원격 게이트웨이(503).
-        Err(error) => {
-            return Err(match backend {
-                StorageBackend::Fs { .. } => xml_internal("open read", error),
-                StorageBackend::S3 { .. } => xml_storage_error("open read", error),
-            });
-        }
+        Err(error) => return Err(xml_storage_error("open read", error)),
     };
 
     // 다운로드 관찰 — lease 원장 한 줄 (ADR 002, 네이티브와 한 장부).

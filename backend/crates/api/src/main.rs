@@ -4,15 +4,21 @@
 mod admin;
 mod admin_auth;
 mod blobs;
+mod console_identity;
 mod cors;
 mod error;
 mod lease;
+mod local_accounts;
+mod logging;
+mod mcp;
 mod reconciler;
+mod resource_commands;
 mod routes;
 mod s3;
 mod spool;
 mod status;
 mod storage_access;
+mod storage_registration;
 mod v1;
 
 use std::io;
@@ -31,6 +37,7 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
         }
         Some("status") => status::run().await,
         Some("admin") => admin_auth::cli::run().await,
+        Some("account") => local_accounts::run().await,
         Some("--help") | Some("-h") | Some("help") => {
             print_usage();
             Ok(std::process::ExitCode::SUCCESS)
@@ -49,7 +56,8 @@ fn print_usage() {
          USAGE:\n    \
          filegate [serve]   서버를 기동한다 (기본)\n    \
          filegate status    배포 상태를 점검하고 요약을 출력한다\n    \
-         filegate admin     관리자 초기화 및 토큰 관리"
+         filegate admin     관리자 초기화 및 토큰 관리\n    \
+         filegate account   Initialize or recover a local password account"
     );
 }
 
@@ -75,8 +83,11 @@ async fn serve() -> anyhow::Result<()> {
     filegate_db::migrate(&pool).await?;
     anyhow::ensure!(
         !config.security.operator_tokens.is_empty()
-            || filegate_db::admin_auth::initialized(&pool).await?,
-        "administrator not initialized; run filegate admin init or configure FILEGATE_OPERATOR_TOKENS"
+            || filegate_db::admin_auth::initialized(&pool).await?
+            || filegate_db::management::passwords::initialized(&pool)
+                .await
+                .map_err(|_| anyhow::anyhow!("management initialization check failed"))?,
+        "administrator not initialized; run filegate account init or filegate admin init for legacy authentication"
     );
     info!(
         event = "db.connected",
@@ -84,7 +95,7 @@ async fn serve() -> anyhow::Result<()> {
     );
 
     // 등록된 storage 접근 재검증 — 실패하면 부팅 중단 (ADR 001).
-    admin::verify_registered(&pool, &crypto).await?;
+    storage_registration::verify_registered(&pool, &crypto).await?;
 
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
     info!(event = "server.listening", addr = %config.server.bind_addr);
@@ -109,8 +120,8 @@ async fn serve() -> anyhow::Result<()> {
         multipart_threshold: config.server.multipart_threshold_bytes,
         part_size: config.server.part_size_bytes,
         s3_clients,
-        part_promotions: std::sync::Arc::new(tokio::sync::Semaphore::new(
-            blobs::PART_PROMOTION_LIMIT,
+        single_upload_claims: std::sync::Arc::new(tokio::sync::Semaphore::new(
+            blobs::SINGLE_UPLOAD_CLAIM_LIMIT,
         )),
         spool_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(
             spool::SPOOL_CONCURRENCY_LIMIT,
@@ -187,11 +198,5 @@ impl ShutdownSignals {
 }
 
 fn init_tracing(format: LogFormat) {
-    let builder = tracing_subscriber::fmt().with_env_filter(
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-    );
-    match format {
-        LogFormat::Json => builder.json().init(),
-        LogFormat::Pretty => builder.init(),
-    }
+    logging::init(format);
 }

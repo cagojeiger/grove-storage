@@ -14,7 +14,6 @@ fn s3_row(id: &str) -> StorageRow {
         id: id.to_owned(),
         kind: "s3".to_owned(),
         force_relay: false,
-        root_path: None,
         endpoint: Some("http://minio:9000".to_owned()),
         public_endpoint: Some("http://minio:9000".to_owned()),
         region: Some("us-east-1".to_owned()),
@@ -44,7 +43,7 @@ pub async fn open_multipart(pool: &PgPool) -> CreatedFile {
         // part_size는 크기-비선언이라 실제 기하가 아니라 multipart 표식이다.
         part_size: Some(64 * 1024 * 1024),
     };
-    match s3::create_upload(pool, spec, KEY).await.unwrap() {
+    match s3::create_upload(pool, spec, KEY, false).await.unwrap() {
         CreateOutcome::Created(created) => *created,
         CreateOutcome::NoClient => panic!("expected Created, got NoClient"),
     }

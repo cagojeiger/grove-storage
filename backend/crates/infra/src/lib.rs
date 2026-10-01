@@ -1,11 +1,10 @@
-//! 외부 시스템 연결 — storage adapter 둘 (ADR 001).
-//!
-//! s3: S3 호환 (직결 presign + 중계 뒷단). fs: 로컬/NFS (항상 중계).
-//! 두 adapter는 같은 동사(검증·읽기·쓰기·삭제)를 제공하고, 모드 판정은
-//! api의 storage_access가 한다.
+//! S3 provider I/O and disposable local transfer spools.
+//! Backend operations consume resolved settings; registry writes, authorization,
+//! and object metadata transitions belong to their callers.
 
-pub mod fs;
+pub mod backend;
 mod s3;
+pub mod temp_spool;
 
 pub use s3::{
     Address, S3ClientCache, S3Storage, S3StorageSpec, abort_multipart as s3_abort_multipart,

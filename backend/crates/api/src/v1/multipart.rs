@@ -12,6 +12,7 @@ use filegate_infra::Address;
 use grove_object_policy::multipart::{
     composite_etag, part_count, part_expected_size, part_number_ok,
 };
+use grove_object_service::multipart_commit::{self, CommitError, MultipartCommit};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -21,7 +22,8 @@ use super::relay::relay_base;
 use crate::error::{ApiError, bad_request, conflict, internal, not_found};
 use crate::lease::{WRITE_LEASE_TTL, run_with_native_completion_heartbeat};
 use crate::routes::AppState;
-use crate::storage_access::{StorageBackend, backend_from_row};
+use crate::storage_access::backend_from_row;
+use filegate_infra::backend::StorageBackend;
 
 /// multipart 확정 (spec 02): 중계는 원장(part 실측), 직결은 벤더 ListParts를
 /// 대조해 완성한다. 미완성이면 400과 함께 pending에 남는다.
@@ -33,49 +35,75 @@ pub(super) async fn commit(
     part_size: i64,
     backend: &StorageBackend,
 ) -> Result<Response, ApiError> {
-    let Some(files::WriteLease {
-        lease_id,
-        upload_id,
-        ..
-    }) = files::write_lease(&state.pool, file_id).await?
+    let Some(files::WriteLease { upload_id, .. }) =
+        files::write_lease(&state.pool, file_id).await?
     else {
         return Err(internal("multipart file has no write lease"));
     };
 
-    let Some(prepared) = prepare_completion(
+    let completed = multipart_commit::commit(&Completion {
         state,
         file_id,
         file,
         part_size,
+        upload_id: upload_id.as_deref(),
         backend,
-        upload_id.as_deref(),
-    )
-    .await?
-    else {
-        return committed_or_conflict(state, client, file_id).await;
-    };
-    let physical_complete = complete_backend(
-        state,
-        file,
-        lease_id,
-        upload_id.as_deref(),
-        backend,
-        &prepared,
-    );
-    let Some(etag) =
-        run_with_native_completion_heartbeat(&state.pool, file_id, physical_complete).await
-    else {
-        return Err(conflict(
+    })
+    .await;
+    match completed {
+        Ok(Some(etag)) => {
+            tracing::info!(event = "file.committed", file = %file_id, client = %client.0, multipart = true);
+            Ok(committed_response(file_id, etag))
+        }
+        Ok(None) => committed_or_conflict(state, client, file_id).await,
+        Err(CommitError::Operation(error)) => Err(error),
+        Err(CommitError::OwnershipLost) => Err(conflict(
             "multipart completion ownership was lost; retry commit",
-        ));
-    };
-    let etag = etag?;
-
-    if files::finalize_completion(&state.pool, file_id, &etag).await? {
-        tracing::info!(event = "file.committed", file = %file_id, client = %client.0, multipart = true);
-        return Ok(committed_response(file_id, etag));
+        )),
     }
-    committed_or_conflict(state, client, file_id).await
+}
+
+struct Completion<'a> {
+    state: &'a AppState,
+    file_id: Uuid,
+    file: &'a files::FileAccess,
+    part_size: i64,
+    upload_id: Option<&'a str>,
+    backend: &'a StorageBackend,
+}
+
+impl MultipartCommit for Completion<'_> {
+    type Error = ApiError;
+    type Prepared = PreparedCompletion;
+
+    async fn prepare(&self) -> Result<Option<PreparedCompletion>, ApiError> {
+        prepare_completion(
+            self.state,
+            self.file_id,
+            self.file,
+            self.part_size,
+            self.backend,
+            self.upload_id,
+        )
+        .await
+    }
+
+    async fn complete(&self, prepared: &PreparedCompletion) -> Result<Option<String>, ApiError> {
+        let physical = complete_backend(
+            self.state,
+            self.file,
+            self.upload_id,
+            self.backend,
+            prepared,
+        );
+        run_with_native_completion_heartbeat(&self.state.pool, self.file_id, physical)
+            .await
+            .transpose()
+    }
+
+    async fn finalize(&self, etag: &str) -> Result<bool, ApiError> {
+        Ok(files::finalize_completion(&self.state.pool, self.file_id, etag).await?)
+    }
 }
 
 struct PreparedCompletion {
@@ -95,7 +123,7 @@ async fn prepare_completion(
 ) -> Result<Option<PreparedCompletion>, ApiError> {
     let count = part_count(file.declared_size, part_size);
     let ledger = match backend {
-        StorageBackend::S3 {
+        StorageBackend {
             spec,
             force_relay: false,
         } => {
@@ -141,7 +169,7 @@ async fn prepare_completion(
 
     if matches!(
         backend,
-        StorageBackend::S3 {
+        StorageBackend {
             force_relay: false,
             ..
         }
@@ -176,37 +204,28 @@ async fn prepare_completion(
 async fn complete_backend(
     state: &AppState,
     file: &files::FileAccess,
-    lease_id: Uuid,
     upload_id: Option<&str>,
     backend: &StorageBackend,
     prepared: &PreparedCompletion,
 ) -> Result<String, ApiError> {
-    match backend {
-        StorageBackend::S3 { spec, .. } => {
-            let upload_id =
-                upload_id.ok_or_else(|| internal("multipart lease has no upload id"))?;
-            let storage = state
-                .s3_clients
-                .get(&file.storage.id, spec, Address::Internal);
-            let vendor_etag = filegate_infra::s3_complete_multipart(
-                &storage,
-                &file.object_key,
-                upload_id,
-                &prepared.parts,
-            )
-            .await
-            .map_err(ApiError::Storage)?;
-            if !vendor_etag.eq_ignore_ascii_case(&prepared.expected_etag) {
-                return Err(ApiError::Storage(anyhow::anyhow!(
-                    "vendor multipart etag does not match the part ledger"
-                )));
-            }
-        }
-        StorageBackend::Fs { root } => {
-            let temp = filegate_infra::fs::multipart_temp(root, &lease_id.to_string());
-            filegate_infra::fs::commit_path(root, &temp, &file.object_key)
-                .await
-                .map_err(internal)?;
+    let spec = &backend.spec;
+    {
+        let upload_id = upload_id.ok_or_else(|| internal("multipart lease has no upload id"))?;
+        let storage = state
+            .s3_clients
+            .get(&file.storage.id, spec, Address::Internal);
+        let vendor_etag = filegate_infra::s3_complete_multipart(
+            &storage,
+            &file.object_key,
+            upload_id,
+            &prepared.parts,
+        )
+        .await
+        .map_err(ApiError::Storage)?;
+        if !vendor_etag.eq_ignore_ascii_case(&prepared.expected_etag) {
+            return Err(ApiError::Storage(anyhow::anyhow!(
+                "vendor multipart etag does not match the part ledger"
+            )));
         }
     }
     Ok(prepared.expected_etag.clone())
@@ -284,7 +303,7 @@ pub(super) async fn parts(
     let backend = backend_from_row(&state.crypto, &file.storage)?;
     let mut out = Vec::with_capacity(body.parts.len());
     match &backend {
-        StorageBackend::S3 {
+        StorageBackend {
             spec,
             force_relay: false,
         } => {

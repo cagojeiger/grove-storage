@@ -1,45 +1,9 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::PathBuf;
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum StorageKind {
-    S3,
-    Fs,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Storage {
-    pub id: String,
-    pub kind: StorageKind,
-    pub force_relay: bool,
-    pub root_path: Option<String>,
-    pub endpoint: Option<String>,
-    pub public_endpoint: Option<String>,
-    pub region: Option<String>,
-    pub bucket: Option<String>,
-    pub force_path_style: bool,
-    pub access_key: Option<String>,
-    pub capacity_bytes: i64,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Client {
-    pub id: String,
-    pub storage_id: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct ClientKey {
-    pub client_id: String,
-    pub key_hash: String,
-}
-
-#[derive(Deserialize)]
-pub struct IssuedCredential {
-    pub access_key_id: String,
-    pub secret_key: String,
-}
+pub use grove_management_command::model::{
+    Client, ClientKey, ClientUsage, Deleted, Snapshot, Storage, StorageUsage,
+};
 
 #[derive(Serialize)]
 pub struct CredentialDelivery {
@@ -50,56 +14,6 @@ pub struct CredentialDelivery {
 }
 
 #[derive(Serialize)]
-pub struct Deleted {
-    pub resource: &'static str,
-    pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_id: Option<String>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct StorageUsage {
-    pub storage_id: String,
-    pub kind: StorageKind,
-    pub capacity_bytes: i64,
-    pub reserved_bytes: i64,
-    pub active_bytes: i64,
-    pub purge_pending_bytes: i64,
-    pub remaining_bytes: i64,
-    pub reserved_files: i64,
-    pub active_files: i64,
-    pub purge_pending_files: i64,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct ClientUsage {
-    pub client_id: String,
-    pub storage_id: String,
-    pub active_files: i64,
-    pub active_bytes: i64,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Snapshot {
-    pub day: String,
-    pub storage_id: String,
-    pub client_id: String,
-    pub active_bytes: i64,
-    pub active_files: i64,
-}
-
-#[derive(Deserialize)]
-pub struct Identity {
-    pub name: String,
-    pub version: String,
-}
-
-#[derive(Deserialize)]
-pub struct Health {
-    pub status: String,
-}
-
-#[derive(Serialize)]
 #[serde(untagged)]
 pub enum Data {
     Update(crate::update::UpdateResult),
@@ -107,12 +21,14 @@ pub enum Data {
     Strings(Vec<String>),
     Storages(Vec<Storage>),
     Storage(Storage),
+    StorageConnection(grove_management_command::model::StorageConnection),
     Client(Client),
+    Metadata(grove_management_command::model::ResourceMetadata),
     ClientKey(ClientKey),
     CredentialDelivery(CredentialDelivery),
     Deleted(Deleted),
     StorageUsage(Vec<StorageUsage>),
     ClientUsage(Vec<ClientUsage>),
     History(Vec<Snapshot>),
-    Status(crate::status::Status),
+    Status(grove_management_command::model::Status),
 }

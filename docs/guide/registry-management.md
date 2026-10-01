@@ -1,20 +1,22 @@
 # 등록부 운영
 
-`gscli`은 `/api/admin/v1`을 호출하고 PostgreSQL 등록부를 변경한다.
+`gscli`은 `/api/admin/commands/v1`을 호출하고 PostgreSQL 등록부를 변경한다.
+User 관리 토큰(`gsm_`)을 사용한다. 이전 운영자 토큰 전환은 별도 절차이며,
+새 관리 명령 API를 지원하지 않는 서버에는 이전 CLI를 사용한다.
 배포 설정과 서비스 비밀 전달은 GitOps·Vault가 계속 소유한다.
 
 ## 연결
 
 ```sh
 export GROVE_ENDPOINT=https://filegate.example.com
-export GROVE_OPERATOR_TOKEN="$(cat /path/to/operator-token)"
+export GROVE_TOKEN="$(cat /path/to/management-token)"
 gscli status
 ```
 
 | 입력 | 우선순위·형식 |
 |---|---|
 | endpoint | `--endpoint` → `GROVE_ENDPOINT` |
-| token | `--token-file` → `GROVE_OPERATOR_TOKEN` |
+| token | `--token-file` → `GROVE_TOKEN` (새 관리 토큰만 허용) |
 | 출력 | `--output table|json`, 기본 table |
 | 제한시간 | `--timeout SECONDS`, 기본 30 |
 
@@ -92,7 +94,7 @@ CLI는 변경 요청을 자동 재시도하지 않는다. 오류의 `outcome`이
 |---|---|---|
 | `not_applied` | 서버가 거부했거나 요청 전에 중단 | 입력 수정 후 재실행 |
 | `unknown` | 단절·timeout·redirect·5xx로 결과 미확정 | list/show로 확인 후 결정 |
-| `applied` | 성공 응답 뒤 해석·비밀 저장·출력 실패 | 현재 등록 상태를 확인하고 후속 정리 |
+| `applied` | 변경 확정 뒤 비밀 저장·출력 실패 | 현재 등록 상태를 확인하고 후속 정리 |
 
 ## Terraform 이관
 

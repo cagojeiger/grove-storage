@@ -8,7 +8,6 @@ mod input;
 mod model;
 mod output;
 mod secret;
-mod status;
 mod update;
 
 use std::process::ExitCode;

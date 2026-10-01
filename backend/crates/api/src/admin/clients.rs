@@ -8,7 +8,9 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use filegate_db::registry;
-use serde::{Deserialize, Serialize};
+use grove_management_command::model::{Client as ClientOut, ClientKey as ClientKeyOut};
+use grove_management_service::resources::PreparedCredential;
+use serde::Deserialize;
 
 use crate::error::{ApiError, bad_request, not_found};
 use crate::routes::AppState;
@@ -20,20 +22,8 @@ pub(super) struct ClientCreateBody {
     storage_id: String,
 }
 
-#[derive(Serialize)]
-struct ClientOut {
-    id: String,
-    storage_id: String,
-}
-
 #[derive(Deserialize)]
 pub(super) struct ClientKeyCreateBody {
-    key_hash: String,
-}
-
-#[derive(Serialize)]
-struct ClientKeyOut {
-    client_id: String,
     key_hash: String,
 }
 
@@ -148,44 +138,23 @@ pub(super) async fn key_delete(
 
 // ---- S3 표면 자격증명 (spec 03) ----
 
-#[derive(Serialize)]
-struct S3CredentialOut {
-    access_key_id: String,
-    /// 암호화되어 저장되므로(마이그레이션 0004, AAD=access_key_id) 원문은
-    /// 이 발급 응답에서 딱 한 번 나간다 — client 키·relay URL과 같은 원칙.
-    secret_key: String,
-}
-
 pub(super) async fn s3_credential_create(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
 ) -> Result<Response, ApiError> {
-    // access key id는 공개 식별자, secret은 별도 고엔트로피 랜덤이다 (spec 03).
-    let access_key_id = filegate_core::generate_access_key_id();
-    let secret_key = filegate_core::generate_url_secret();
-    // storage 벤더 시크릿과 같은 기계로 암호화 저장 — AAD=access_key_id.
-    let encrypted = state.crypto.encrypt(
-        &access_key_id,
-        &filegate_core::SecretString::from(secret_key.clone()),
-    )?;
+    let prepared = PreparedCredential::new(&state.crypto)?;
+    let key = prepared.encrypted();
     filegate_db::s3_registry::insert_credential(
         &state.pool,
-        &access_key_id,
+        key.access_key_id,
         &client_id,
-        &encrypted.ciphertext,
-        &encrypted.nonce,
-        state.crypto.active_key_id(),
+        key.ciphertext,
+        key.nonce,
+        key.enc_key_id,
     )
     .await?;
-    tracing::info!(event = "s3_credential.registered", client = %client_id, access_key = %access_key_id);
-    Ok((
-        StatusCode::CREATED,
-        Json(S3CredentialOut {
-            access_key_id,
-            secret_key,
-        }),
-    )
-        .into_response())
+    tracing::info!(event = "s3_credential.registered", client = %client_id, access_key = %key.access_key_id);
+    Ok((StatusCode::CREATED, Json(prepared.into_output())).into_response())
 }
 
 pub(super) async fn s3_credential_list(

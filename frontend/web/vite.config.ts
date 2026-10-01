@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { consoleHeaders } from "./security-headers.mjs";
 
 export default defineConfig(() => {
   const target = process.env.GROVE_DEV_API ?? "http://127.0.0.1:8080";
@@ -11,19 +12,45 @@ export default defineConfig(() => {
   return {
     base: "/api/admin/console/",
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            if (
+              /\/node_modules\/@mui\/x-(charts|charts-vendor|internal-gestures)\//.test(
+                id,
+              )
+            )
+              return "mui-x-charts";
+            if (id.includes("/node_modules/@mui/x-internals/"))
+              return "mui-x-shared";
+            if (/\/node_modules\/@mui\/x-(data-grid|virtualizer)\//.test(id))
+              return "mui-x-grid";
+            if (/\/node_modules\/@(mui|emotion)\//.test(id)) return "mui-core";
+            if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id))
+              return "react-runtime";
+            if (id.includes("node_modules")) return "vendor";
+          },
+        },
+      },
+    },
     server: {
       host: "127.0.0.1",
       port: 5173,
       strictPort: true,
+      cors: false,
+      // Vite injects React refresh scripts/styles and opens an HMR websocket.
+      headers: consoleHeaders(true),
       https:
         key && cert
           ? { key: readFileSync(key), cert: readFileSync(cert) }
           : undefined,
       proxy: Object.fromEntries(
-        ["/api/admin/v1", "/readyz"].map((path) => [
-          path,
-          { target, changeOrigin: false },
-        ]),
+        [
+          "/api/admin/identity/v1",
+          "/api/admin/console-commands/v1",
+          "/readyz",
+        ].map((path) => [path, { target, changeOrigin: false }]),
       ),
     },
   };

@@ -120,15 +120,14 @@ async fn credentials_capacity_and_relay_can_change_with_locations(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn filesystem_root_is_protected(pool: PgPool) {
+async fn filesystem_conversion_is_rejected_without_changing_storage(pool: PgPool) {
     lifecycle::wire(&pool, 1000).await;
-    sqlx::query("UPDATE storages SET kind='fs', root_path='/data', endpoint=NULL, public_endpoint=NULL, region=NULL, bucket=NULL, force_path_style=false, access_key=NULL, secret_key_ciphertext=NULL, secret_key_nonce=NULL, enc_key_id=NULL WHERE id='s'")
-        .execute(&pool).await.unwrap();
-    lifecycle::create_ok(&pool, 10).await;
     let mut row = registry::get_storage(&pool, "s").await.unwrap().unwrap();
-    row.root_path = Some("/different".into());
+    let before = row.clone();
+    row.kind = "fs".into();
+    assert!(registry::update_storage(&pool, &row).await.is_err());
     assert_eq!(
-        registry::update_storage(&pool, &row).await.unwrap(),
-        Outcome::LocationInUse
+        registry::get_storage(&pool, "s").await.unwrap().unwrap(),
+        before
     );
 }

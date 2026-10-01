@@ -4,15 +4,56 @@ use filegate_db::{files, registry};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn filesystem_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
+async fn s3_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
+    use axum::{Router, http::StatusCode};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
     let state = crate::routes::tests::test_state();
-    let root = std::env::temp_dir().join(format!("grove-reclaim-{}", uuid::Uuid::new_v4()));
-    tokio::fs::create_dir_all(&root).await.unwrap();
-    sqlx::query(
-        "INSERT INTO storages (id, kind, root_path, capacity_bytes) VALUES ('s', 'fs', $1, 1000)",
+    let failing = Arc::new(AtomicBool::new(true));
+    let deleted = Arc::new(AtomicUsize::new(0));
+    let fail = failing.clone();
+    let count = deleted.clone();
+    let provider = Router::new().fallback(move |request: axum::extract::Request| {
+        let fail = fail.clone();
+        let count = count.clone();
+        async move {
+            assert_eq!(request.method(), "DELETE");
+            if fail.load(Ordering::SeqCst) {
+                return StatusCode::FORBIDDEN;
+            }
+            count.fetch_add(1, Ordering::SeqCst);
+            StatusCode::NO_CONTENT
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, provider).await.unwrap();
+    });
+    let secret = state
+        .crypto
+        .encrypt("s", &"provider-secret".to_owned().into())
+        .unwrap();
+    registry::insert_storage(
+        &pool,
+        &registry::StorageRow {
+            id: "s".into(),
+            kind: "s3".into(),
+            force_relay: false,
+            endpoint: Some(endpoint.clone()),
+            public_endpoint: Some(endpoint),
+            region: Some("local".into()),
+            bucket: Some("objects".into()),
+            force_path_style: true,
+            access_key: Some("key".into()),
+            secret_key_ciphertext: Some(secret.ciphertext),
+            secret_key_nonce: Some(secret.nonce),
+            enc_key_id: Some(state.crypto.active_key_id().into()),
+            capacity_bytes: 1000,
+        },
     )
-    .bind(root.to_str().unwrap())
-    .execute(&pool)
     .await
     .unwrap();
     registry::insert_client(&pool, "c", "s").await.unwrap();
@@ -45,11 +86,9 @@ async fn filesystem_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
             .unwrap()
     );
 
-    // remove_file cannot delete a directory: exercise the real fs adapter error.
-    let object = root.join(&file.object_key);
-    tokio::fs::create_dir_all(&object).await.unwrap();
+    // A provider denial must retain recovery metadata and the write lease.
     super::recover(&pool, &state.crypto, &state.s3_clients).await;
-    assert!(object.is_dir());
+    assert_eq!(deleted.load(Ordering::SeqCst), 0);
     assert_eq!(
         files::reclaim_cleanup_candidates(&pool, 20)
             .await
@@ -60,10 +99,9 @@ async fn filesystem_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
     assert_eq!(files::prune_terminal_leases(&pool, 0, 20).await.unwrap(), 0);
 
     // Repair the backend, then run the same worker again without changing the DB.
-    tokio::fs::remove_dir(&object).await.unwrap();
-    tokio::fs::write(&object, b"remaining").await.unwrap();
+    failing.store(false, Ordering::SeqCst);
     super::recover(&pool, &state.crypto, &state.s3_clients).await;
-    assert!(!object.exists());
+    assert_eq!(deleted.load(Ordering::SeqCst), 1);
     assert!(
         files::reclaim_cleanup_candidates(&pool, 20)
             .await
@@ -71,5 +109,6 @@ async fn filesystem_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
             .is_empty()
     );
     super::recover(&pool, &state.crypto, &state.s3_clients).await;
-    tokio::fs::remove_dir_all(&root).await.unwrap();
+    assert_eq!(deleted.load(Ordering::SeqCst), 1);
+    task.abort();
 }
