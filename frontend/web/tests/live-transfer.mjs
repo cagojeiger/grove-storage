@@ -28,8 +28,8 @@ export async function transferChecks(page, { endpoint, origin, minio }, token) {
 
   await page.goto(`${origin}/api/admin/console/#clients/console-client`);
   const fields = page.getByRole("region", { name: "Client details" });
-  await expect(fields.getByText("Active files", { exact: true }).locator("..").getByText("1", { exact: true })).toBeVisible();
-  await expect(fields.getByText("Active data", { exact: true }).locator("..").getByText("64 KiB", { exact: true })).toBeVisible();
+  await expect(fields.getByText("Stored files", { exact: true }).locator("..").getByText("1", { exact: true })).toBeVisible();
+  await expect(fields.getByText("Stored data", { exact: true }).locator("..").getByText("64 KiB", { exact: true })).toBeVisible();
   await page.goto(`${origin}/api/admin/console/#`);
   await expect(page.getByRole("table", { name: "Storage usage" }).getByRole("row").filter({ hasText: "console-live" })).toContainText("64 KiB");
   console.log("PASS actual presigned MinIO PUT/GET byte equality, commit and Console usage (1 file, 64 KiB)");

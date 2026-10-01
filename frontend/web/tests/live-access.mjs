@@ -60,6 +60,8 @@ export async function accessChecks(
   await page
     .getByRole("link", { name: "Console test owner", exact: true })
     .click();
+  await expect(page.getByRole("button", { name: "Issue setup link", exact: true })).toBeDisabled();
+  await expect(page.getByText("Password configured", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Disable", exact: true }).click();
   await page.getByLabel("Confirm account name").fill("Console test owner");
   await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
@@ -67,27 +69,31 @@ export async function accessChecks(
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
-  await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel(/^Name\s*\*?$/).fill("Recovery admin");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByLabel(/^Display name\s*\*?$/).fill("Recovery admin");
   await page.getByLabel(/^Username\s*\*?$/).fill("recovery-admin");
   await page.getByLabel(/^Role\s*\*?$/).selectOption("admin");
   await page.getByLabel("Your current password").fill(currentPassword);
-  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create account" }).click();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "Recovery admin", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Issue setup link", exact: true }).click();
+  await expect(page.getByLabel("Username")).toHaveValue("recovery-admin");
+  await expect(page.getByLabel("Username")).toHaveAttribute("readonly", "");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   const userId = await page.locator('dl[aria-label="Account details"] dd').first().innerText();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Recovery fixture");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   const oldToken = await takeToken(page);
   await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
-  await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel(/^Name\s*\*?$/).fill("CLI backup");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByLabel(/^Display name\s*\*?$/).fill("CLI backup");
   await page.getByLabel(/^Username\s*\*?$/).fill("cli-backup");
   await page.getByLabel(/^Role\s*\*?$/).selectOption("writer");
   await page.getByLabel("Your current password").fill(currentPassword);
-  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create account" }).click();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "CLI backup", exact: true })).toBeVisible();

@@ -148,12 +148,12 @@ try {
   await page.getByRole("heading", { name: "Console test owner", exact: true }).waitFor();
   console.log("PASS real local recovery, password login, password change and re-login");
   await page.getByRole("link", { name: "Accounts", exact: true }).click();
-  await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel(/^Name\s*\*?$/).fill("Setup recipient");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByLabel(/^Display name\s*\*?$/).fill("Setup recipient");
   await page.getByLabel(/^Username\s*\*?$/).fill("recipient");
   await page.getByLabel(/^Role\s*\*?$/).selectOption("reader");
   await page.getByLabel("Your current password").fill(replacement);
-  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create account" }).click();
   const setupLink = await page.getByRole("textbox", { name: "Setup link", exact: true }).inputValue();
   assert.match(setupLink, /#set-password\/gsps_[a-f0-9]{64}$/);
   await page.getByLabel("I have saved this setup link.").check();
@@ -179,7 +179,7 @@ try {
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
     await recipient.locator('button[aria-label="Account menu"]').click();
     await recipient.getByRole("menuitem", { name: "My account" }).click();
-    await recipient.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();
+    await recipient.getByRole("region", { name: "Management API tokens" }).getByRole("button", { name: "Issue token" }).click();
     await recipient.getByLabel(/^Label\s*\*?$/).fill("Reader CLI");
     await recipient.getByLabel("Expires in days").fill("1");
     await recipient.getByRole("dialog").getByLabel("Current password").fill(recipientPassword);
@@ -235,7 +235,7 @@ try {
     await recipient.getByRole("button", { name: "Revoke Reader CLI" }).click();
     await recipient.getByRole("checkbox", { name: "Revoke Reader CLI" }).check();
     await recipient.getByRole("button", { name: "Revoke", exact: true }).click();
-    await recipient.getByRole("region", { name: "My API tokens" }).getByText("Revoked").waitFor();
+    await recipient.getByRole("region", { name: "Management API tokens" }).getByText("Revoked").waitFor();
     assert.equal(await readerStatus(), 401);
     assert.notEqual(readerCli().status, 0);
     assert.equal((await readerMcp()).status, 401);

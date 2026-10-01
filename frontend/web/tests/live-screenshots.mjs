@@ -36,7 +36,7 @@ export async function captureConsole(page, origin, directory) {
       } else if (name === "usage") {
         await expect(
           page
-            .getByLabel("Active data by day", { exact: true })
+            .getByLabel("Stored data by day", { exact: true })
             .locator(".MuiLineChart-mark")
             .first(),
         ).toBeVisible();
@@ -66,7 +66,7 @@ export async function captureConsole(page, origin, directory) {
           page.getByRole("heading", { name: "My sessions", exact: true }),
         ).toBeVisible();
         await expect(
-          page.getByRole("list", { name: "My API tokens", exact: true }),
+          page.getByRole("list", { name: "Management API tokens", exact: true }),
         ).toBeAttached();
         await expect(
           page
@@ -85,6 +85,8 @@ export async function captureConsole(page, origin, directory) {
       await expect(
         page.getByRole("status").filter({ hasText: /Loading/ }),
       ).toHaveCount(0);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       await page.screenshot({
         path: join(output, `${name}-${mode}.png`),
         fullPage: true,
