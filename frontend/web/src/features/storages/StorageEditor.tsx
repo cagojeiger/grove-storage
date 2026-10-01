@@ -11,7 +11,7 @@ import {
   Stack,
 } from "@mui/material";
 
-import { FormEvent, useId, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { ApiError } from "../../api/http";
@@ -40,6 +40,11 @@ export function StorageEditor({
   const titleId = useId();
   const capacity = capacityInput(storage?.capacity_bytes ?? 0);
   const pending = useRef(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unknown, setUnknown] = useState(false);
@@ -71,7 +76,7 @@ export function StorageEditor({
         spec: body,
       });
       await refreshStorages(cache);
-      onSaved(id);
+      if (mounted.current) onSaved(id);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         clearSession(cache);

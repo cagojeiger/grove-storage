@@ -43,6 +43,7 @@ export function KeyDialog({
   const [saved, setSaved] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [copyError, setCopyError] = useState("");
+  const [copyNotice, setCopyNotice] = useState("");
   const deleting = "key" in action;
   const title = {
     "s3-create": "Create S3 credential",
@@ -117,12 +118,16 @@ export function KeyDialog({
                       aria-label={`Copy ${item.name}`}
                       onClick={() => {
                         setCopyError("");
+                        setCopyNotice("");
+                        if (!navigator.clipboard) {
+                          setCopyError("Copy unavailable. Select the key to copy it.");
+                          return;
+                        }
                         void navigator.clipboard
                           .writeText(item.value)
-                          .catch(() =>
-                            setCopyError(
-                              "Copy failed. Select the key to copy it.",
-                            ),
+                          .then(
+                            () => setCopyNotice(`${item.name} copied.`),
+                            () => setCopyError("Copy failed. Select the key to copy it."),
                           );
                       }}
                     >
@@ -132,6 +137,7 @@ export function KeyDialog({
                 </Stack>
               ))}
               {copyError && <Alert severity="error">{copyError}</Alert>}
+              {copyNotice && <Typography role="status" variant="body2">{copyNotice}</Typography>}
               <FormControlLabel
                 control={
                   <Checkbox

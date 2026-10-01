@@ -56,13 +56,20 @@ export function PasswordSetupIssue({ account }: { account: Account }) {
         </Typography>
         <Button
           startIcon={<Link2 size={16} />}
-          disabled={!account.is_active || Boolean(account.deleted_at)}
+          disabled={account.password_ready || !account.is_active || Boolean(account.deleted_at)}
           onClick={() => setOpen(true)}
         >
           Issue setup link
         </Button>
       </Stack>
-      {open && <SetupDialog account={account} onClose={() => setOpen(false)} />}
+      {account.password_ready && (
+        <Typography variant="body2" color="text.secondary">
+          Password configured
+        </Typography>
+      )}
+      {open && !account.password_ready && account.is_active && !account.deleted_at && (
+        <SetupDialog account={account} onClose={() => setOpen(false)} />
+      )}
     </Stack>
   );
 }
@@ -228,11 +235,13 @@ function SetupDialog({
               <Stack spacing={3}>
                 <TextField
                   name="username"
+                  defaultValue={account.username ?? ""}
                   disabled={pending || unknown}
                   autoComplete="off"
                   required
                   label={"Username"}
                   slotProps={{
+                    input: { readOnly: Boolean(account.username) },
                     htmlInput: {
                       minLength: 3,
                       maxLength: 64,

@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { accessMock, otherUser } from "./access-fixture";
+import { accessMock, otherUser, owner } from "./access-fixture";
 
 const root = "/api/admin/console/";
 const token = `gsps_${"b".repeat(64)}`;
 const issued = { account_id: otherUser.id, username: "writer", expires_at: "2099-01-01T00:00:00Z", token };
 
 test("Admin issues a one-time setup link without persisting its secret", async ({ page }) => {
-  await accessMock(page);
+  await accessMock(page, [owner, { ...otherUser, password_ready: false }]);
   let body: unknown;
   await page.route(`**/api/admin/identity/v1/accounts/${otherUser.id}/password-setup`, async (route) => {
     body = route.request().postDataJSON();
@@ -14,7 +14,8 @@ test("Admin issues a one-time setup link without persisting its secret", async (
   });
   await page.goto(`${root}#accounts/${otherUser.id}`);
   await page.getByRole("button", { name: "Issue setup link" }).click();
-  await page.getByLabel("Username").fill("writer");
+  await expect(page.getByLabel("Username")).toHaveValue("writer");
+  await expect(page.getByLabel("Username")).toHaveAttribute("readonly", "");
   await page.getByLabel("Current password").fill("private-admin-password");
   await page.getByRole("button", { name: "Issue link" }).click();
   await expect.poll(() => body).toEqual({ username: "writer", current_password: "private-admin-password" });
@@ -26,6 +27,20 @@ test("Admin issues a one-time setup link without persisting its secret", async (
   await page.getByRole("button", { name: "Done" }).click();
   await expect(link).toHaveCount(0);
 });
+
+for (const account of [
+  owner,
+  { ...otherUser, password_ready: false, is_active: false },
+  { ...otherUser, password_ready: false, deleted_at: "2026-10-01T00:00:00Z" },
+]) {
+  test(`setup is unavailable for ${account.password_ready ? "initialized" : account.deleted_at ? "deleted" : "disabled"} accounts`, async ({ page }) => {
+    const { writes } = await accessMock(page, account.id === owner.id ? [account] : [owner, account]);
+    await page.goto(`${root}#accounts/${account.id}`);
+    await expect(page.getByRole("button", { name: "Issue setup link" })).toBeDisabled();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(writes).toEqual([]);
+  });
+}
 
 test("recipient consumes setup link and returns to password sign-in", async ({ page }) => {
   let completions = 0;

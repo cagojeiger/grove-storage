@@ -84,7 +84,7 @@ for (const mode of ["light", "dark"]) {
     test(`${kind} confirmation stays visible on short mobile in ${mode}`, async ({
       page,
     }) => {
-      await accessMock(page);
+      await accessMock(page, [{ ...owner, password_ready: kind !== "setup link" }]);
       await page.setViewportSize({ width: 320, height: 480 });
       await page.goto(`/api/admin/console/#accounts/${owner.id}`);
       await page.getByLabel("Theme").selectOption(mode);
@@ -108,7 +108,7 @@ for (const mode of ["light", "dark"]) {
         await page
           .getByRole("button", { name: "Issue setup link", exact: true })
           .click();
-        await page.getByLabel(/^Username/).fill("owner");
+        await expect(page.getByLabel(/^Username/)).toHaveValue("owner");
         await page
           .getByLabel("Current password")
           .fill("a private admin password");
