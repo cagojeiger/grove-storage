@@ -1,8 +1,8 @@
 # spec 09: 공통 자원 명령 계약
 
-- 상태: `grove-management-command` + 조회 11개·변경 9개 실행기 + Bearer HTTP 구현.
-- CLI의 원격 20개 명령과 MCP 20개 tool을 같은 실행기에 연결했다. [MCP 전송 계약](10-management-mcp.md).
-- 권한·신원·감사: [spec 08](08-management-plane.md). 현행 CLI: [spec 04](04-cli.md).
+- 상태: `grove-management-command` + 조회 13개·변경 11개 실행기 + Bearer HTTP 구현.
+- CLI의 원격 24개 명령과 MCP 24개 tool을 같은 실행기에 연결했다. [MCP 전송 계약](10-management-mcp.md).
+- 현행 인증: [spec 11](11-local-management-auth.md). 권한·감사 경계: [spec 08](08-management-plane.md). CLI: [spec 04](04-cli.md).
 
 ## 구성
 
@@ -43,7 +43,7 @@ Content-Type: application/json
 
 | 항목 | 현재 계약 |
 |---|---|
-| 지원 범위 | 조회 11개·변경 9개, catalog의 20개 전체 |
+| 지원 범위 | 조회 13개·변경 11개, catalog의 24개 전체 |
 | 성공 | 200 `{protocol:1, request_id, command, result}`; result는 공통 typed Output |
 | 실패 | `{protocol:1, request_id, error:{code,outcome}}`; commit 전 거부는 `not_applied`, 변경 commit 실패는 `unavailable/unknown` |
 | HTTP 코드 | unauthorized 401, forbidden 403, not_found 404, conflict 409, unavailable 503; 입력/protocol/명령/접근 검사 거부는 400 |
@@ -65,9 +65,9 @@ CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 
 
 ### 브라우저 전송
 
-`POST /api/admin/console-commands/v1`은 같은 20개 명령과 응답 계약을 사용한다.
-User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 실행기에 연결하며
-표면은 서버가 `console`로 지정한다. Bearer·master 설정 세션·기존 운영자 쿠키는 거부한다.
+`POST /api/admin/console-commands/v1`은 같은 24개 명령과 응답 계약을 사용한다.
+비밀번호 로그인 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 실행기에 연결하며
+표면은 서버가 `console`로 지정한다. Bearer·기존 운영자 쿠키는 거부한다.
 진입 guard의 401/403은 신원 API 오류 형식이고 실행기 진입 후 오류는 공통 envelope다.
 현재 UI는 개요·저장소·Clients·서비스 키 명령을 연결한다. 신원/이력은 별도 세션 API에 유지한다.
 
@@ -78,11 +78,15 @@ User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 
 | `status` | `{}` | Status | ReadResources | 조회 |
 | `storage.list` | `{}` | Storage[] | ReadResources | 조회 |
 | `storage.show` | id | Storage | ReadResources | 조회 |
+| `storage.metadata.show` | id | ResourceMetadata | ReadResources | 조회 |
+| `storage.metadata.replace` | id, metadata | ResourceMetadata | WriteResources | 변경 |
 | `storage.test` | id | StorageConnection `{id,state:"ok"}` | ReadResources | 조회·외부 probe |
 | `storage.create`, `storage.replace` | id, spec | Storage | WriteResources | 변경 |
 | `storage.delete` | id | Deleted | WriteResources | 변경 |
 | `client.list` | `{}` | string[] | ReadResources | 조회 |
 | `client.show` | id | Client | ReadResources | 조회 |
+| `client.metadata.show` | id | ResourceMetadata | ReadResources | 조회 |
+| `client.metadata.replace` | id, metadata | ResourceMetadata | WriteResources | 변경 |
 | `client.create` | id, storage_id | Client | WriteResources | 변경 |
 | `client.delete` | id | Deleted | WriteResources | 변경 |
 | `credential.list` | client_id | string[] | ManageServiceCredentials | 조회 |
@@ -95,8 +99,12 @@ User 세션 쿠키·정확한 Origin·`X-Grove-CSRF: 1`을 검사한 뒤 같은 
 | `usage.clients` | `{}` | ClientUsage[] | ReadResources | 조회 |
 | `usage.history` | days (기본 90) | Snapshot[] | ReadResources | 조회 |
 
-20개 명령은 조회 11개·변경 9개다. User·role·관리 토큰·관리 이력은
+24개 명령은 조회 13개·변경 11개다. Account·role·관리 토큰·관리 이력은
 콘솔 세션 API의 별도 계약이다. `credential`은 Client의 S3 서비스 키를 뜻한다.
+
+Metadata는 문자열 값만 가진 JSON object이며 구분자 공백을 포함한 정규화 JSON은 최대 8 KiB다.
+키·값의 NUL은 거부한다. replace는 전체 교체이고 `{}`는 비우기다.
+Metadata 원문은 관리 감사에 저장하지 않는다.
 
 ### Client·서비스 키 변경 (4b-1)
 
@@ -135,15 +143,15 @@ identity lock → 인증·권한·입력·교체 대상 확인 → 읽기 transa
 | 원자성 | DB 변경·감사만 같은 transaction; 접근 검사는 시점 관찰이며 외부 I/O의 rollback·지속 가용성과 구분 |
 
 서비스는 접근 검사 함수를 주입받는다. 서비스 테스트는 제어 가능한 검사 대역으로 경합을
-검증하고, API 테스트는 로컬 HTTP S3 대역과 FS 등록 거부를 확인한다. 기존 FS 행의
-부팅·status·runtime 검증은 이관 전 호환성 테스트로 유지한다.
+검증하고, API 테스트는 로컬 HTTP S3 대역과 FS 등록 거부를 확인한다.
+현행 backend는 S3-only이며 migration `0017`은 FS 행이 남으면 중단한다.
 
 ## 검증과 비밀
 
 | 경계 | 검사·보장 |
 |---|---|
 | 입력 구조 | object만 허용; 알 수 없는 필드 거부; storage spec도 동일 |
-| Backend | Storage create/replace accept only S3 (default); read responses retain legacy FS |
+| Backend | S3-only; 조회 DTO의 호환 필드 `root_path`는 null이며 FS 실행을 의미하지 않음 |
 | 값 | ID의 빈 값·dot segment·제어 문자 거부, history 1–3650, 용량 0 이상 |
 | 서비스 키 | Native key는 `sha256:` + 소문자 hex 64자; S3 access ID는 소문자 영숫자 8–64자 |
 | 서비스 검증 | 생성 slug·예약 Client명·S3 필수 필드·URL·접근 probe·참조/삭제 조건 |
@@ -181,17 +189,17 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 
 | 위치 | 검증 대상 |
 |---|---|
-| `management-command/tests/catalog.rs` | 20개 명령·권한·효과·CLI/MCP 정책 동등성·schema 구조 |
+| `management-command/tests/catalog.rs` | 24개 명령·권한·효과·CLI/MCP 정책 동등성·schema 구조 |
 | `management-command/tests/inputs.rs` | 필수/미지원 필드·경계값·기본값·hash 입력 |
 | `management-command/tests/outputs.rs` | wire fixture 왕복·비밀 필드 제거·진단 redaction |
 | `management-command/tests/errors.rs` | protocol 거부 순서·안정 코드·적용 결과 분리 |
 | `cli/tests/command_contract.rs` | 실제 clap 원격 명령과 catalog의 일대일 대응 |
 | `cli/tests/` | command HTTP·protocol/명령/대상 ID 검증·JSON·설정 우선순위·비밀 파일·변경 결과·단일 status |
-| `scripts/e2e-cli.py` | 실제 CLI/서버/PG의 20개 명령·기존 REST 결과 비교·User·User 강등·폐기·감사·비밀 제외 |
-| `api/src/mcp/tests/`, `scripts/e2e-mcp.py` | 20개 tool schema·실제 HTTP/CLI 결과·MCP 감사·owner·폐기·rollback·unknown·서버 비밀 로그 제외 |
+| `scripts/e2e-cli.py` | 실제 CLI/서버/PG의 등록부 수명주기·기존 REST 결과 비교·Account 강등·폐기·감사·비밀 제외 |
+| `api/src/mcp/tests/`, `scripts/e2e-mcp.py` | 24개 tool schema·실제 HTTP/CLI 결과·MCP 감사·owner·폐기·rollback·unknown·서버 비밀 로그 제외 |
 | `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·User 현재 역할·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
 | `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
-| `api/src/resource_commands/tests/` | 조회 11개·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
+| `api/src/resource_commands/tests/` | 조회·metadata·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
 | 같은 경로의 `writes.rs`, `write_failures.rs` | 4개 PG HTTP 테스트: 변경 왕복·기존 키 조회/인증·409/400·감사 rollback·원문 없는 unknown |
 | `management-service/tests/storage_writes.rs` + `storage_writes/` | 8개 PG 테스트: 변경 3개·참조·probe 중 폐기/User 강등·참조 경합·감사 rollback·unknown |
 | `api/src/resource_commands/tests/storage*.rs` | PG HTTP 테스트: FS 등록/교체 거부·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |

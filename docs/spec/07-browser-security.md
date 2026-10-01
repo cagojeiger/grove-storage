@@ -2,8 +2,8 @@
 
 - 상태: 콘솔은 로컬 ID·비밀번호 세션을 사용한다. 브라우저 보안 경계는 유지하며 운영 호스팅 검증은 별도다. 이전 master 흐름 기록은 현행 인증 계약이 아니다.
 - 현행 로그인·복구·CLI/MCP 권한은 [spec 11](11-local-management-auth.md)을 따른다.
-- 선행 계약: [관리자 인증](05-admin-auth.md), [콘솔](06-console.md).
-- 새 User 세션 HTTP·신원/진입 경계: [spec 08](08-management-plane.md#user-세션-http-3a).
+- 콘솔 화면: [spec 06](06-console.md). 이전 운영자 REST 인증: [spec 05](05-admin-auth.md).
+- 관리 책임·권한 경계: [spec 08](08-management-plane.md).
 
 ## Origin 분리
 
@@ -78,35 +78,35 @@ MUI/Emotion은 같은 nonce로 style 요소를 삽입한다. nonce 없는 inline
 
 헤더는 정적 HTML 응답에 실려야 한다. API 응답에만 CSP를 붙이거나 HTML meta만 사용하는
 것으로 frame-ancestors를 대신할 수 없다. 운영 ingress의 실제 응답 헤더를 배포 후 확인한다.
-로컬 HTTP 샘플 서버는 인증을 모사한다. 새 User 세션의 브라우저 근거는 HTTPS fixture다.
-새 User/master 세션과 신원/이력 API는 PG+HTTP 라우터로 검증했다.
-신원 변경은 Admin User 세션으로 제한하며 Bearer/master·cross-origin 요청의 거부를 확인한다.
-새 User 쿠키·CSRF·폐기·역할 강등·용도별 User 토큰 로그인는 실제 HTTPS UI에서 검증했다.
+로컬 HTTP 샘플 서버는 인증을 모사한다. 실제 인증의 브라우저 근거는
+`scripts/e2e-console.py`의 HTTPS·Rust 서버·PostgreSQL fixture다.
+신원 변경은 Admin 비밀번호 세션으로 제한하며 Bearer·cross-origin 요청을 거부한다.
+비밀번호 로그인·설정 링크·쿠키·CSRF·폐기·역할 강등은 실제 HTTPS UI에서 검증한다.
 
-## master·개인 토큰 로그인 완료 조건 (설계)
+## 로컬 비밀번호 인증 계약
 
 | 기능 | 구현·검증 조건 |
 |---|---|
-| 최초 설정 | master 설정 세션으로 첫 Admin 생성; 동시 초기화 테스트 |
+| 최초 설정 | 서버 운영자가 `filegate account init`으로 첫 Admin 생성; 브라우저는 일반 로그인 사용 |
 | 로그인 | 공통 실패 응답·공유 rate limit; 인증 성공 시 새 세션 발급 |
-| 폼 | master/개인 토큰 입력·붙여넣기, 로그인 제출 시 원문 제거; 활성 User 토큰 로그인 |
-| 폐기 | 원본 개인 토큰 폐기 후 연결 세션 거부; 계정 비활성화·역할 변경 즉시 후속 요청에 반영 |
-| 분실 복구 | 별도 master 복구 흐름·명시적 대상/영향 확인; 설정 세대 변경 시 master 세션 무효화 |
+| 폼 | ID·비밀번호 입력·붙여넣기·password manager 지원; 관리 토큰은 CLI/MCP에 사용 |
+| 폐기 | 계정 비활성화·역할 변경을 후속 요청에 반영; 관리 토큰과 브라우저 세션은 별도 수명주기 |
+| 분실 복구 | 서버의 `filegate account recover`; 대상 비밀번호 변경과 세션·관리 토큰 폐기 |
 | 세션 관리 | 목록·현재 세션 표시·개별/전체 종료; 세션 원문 조회 대신 공개 ID 사용 |
 | 권한 | User·role·진입 경계를 서버에서 집행; Admin Bearer의 신원 API 호출도 거부 |
-| master 제한 | 설정/복구 세션으로 일반 자원·이력 API 호출 거부 |
+| 설정 링크 | 비밀번호 미설정 계정에 단일 사용 challenge 발급; 로그인 세션과 별개 |
 
 ## 검증과 남은 범위
 
 | 검증 | 상태 |
 |---|---|
-| 307/308가 로그인 token body를 재전송하는 현상 | 수정 전 재현, 수정 후 후속 요청 0건 |
+| 307/308 로그인 본문 재전송 방지 | `redirect: error`; 브라우저 회귀 테스트에서 후속 요청 0건 |
 | 빌드 화면 인라인 script·외부 connect·iframe 차단 | `tests/browser-security.spec.ts` 실제 Chromium 검증 |
 | 로그인·401·secret 제거·CRUD·반응형 | 기존 Playwright suite에 함께 실행 |
 | 파일 HTML을 관리 origin에서 열 수 있는 배포 조건 | 코드·계약에서 확인한 조건부 위험; 운영 ingress는 이번 점검 범위 밖 |
 | 운영 호스트 경로 제한·TLS·응답 헤더 | 배포 완료 조건; 미검증 |
-| User 로그인·자원 UI·역할·폐기 | 이전 단계의 실제 HTTPS·PG·fs/MinIO fixture 기록; 현재 backend는 S3-only |
-| master UI·세션 관리·다중 탭 복원 | 후속 인증 화면 단계의 필수 회귀 테스트 |
+| 비밀번호 로그인·자원 UI·역할·폐기 | 실제 HTTPS·PG·MinIO fixture; 현재 backend는 S3-only |
+| 다중 탭 복원 | 배포 전 세션 재검증·민감 화면 복원 경로를 별도 확인 |
 | OAuth2 Proxy·기계용 API 분리 | 배포 전 401/403, Bearer 보존, 신원 API 우회 거부 검증 |
 
 근거: [OWASP CSP](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html),

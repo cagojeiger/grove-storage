@@ -1,6 +1,6 @@
 # spec 04: 원격 관리 CLI
 
-- 구현: `gscli` 원격 20개 명령 → [공통 명령 API](09-management-commands.md), User 관리 토큰.
+- 구현: `gscli` 원격 24개 명령 → [공통 명령 API](09-management-commands.md), Account 관리 토큰.
 - 유지: 명령 이름·table/JSON·변경 확인·비밀 파일·수동 update.
 - 후속: 연결 profile·운영 인증 이관. 권한·콘솔 전용 경계는 [spec 08](08-management-plane.md).
 
@@ -30,7 +30,7 @@ filegate status → 로컬 DB·복호 키·저장소 probe
 
 | CLI | MCP |
 |---|---|
-| 20개 → 공통 schema·명령명·권한·결과 | 같은 20개 tool·실행기, 실제 HTTP/CLI 결과 대조 |
+| 24개 → 공통 schema·명령명·권한·결과 | 같은 24개 tool·실행기, 실제 HTTP/CLI 결과 대조 |
 | User 토큰 → 서버가 현재 권한 판정 | 같은 토큰·현재 권한; [전송·비밀 전달 차이](10-management-mcp.md) |
 | HTTP 호출의 서버 surface는 `resource_api` | MCP 진입점은 서버가 `mcp`로 기록 |
 
@@ -46,11 +46,13 @@ gscli
 ├── storage
 │   ├── list / show ID
 │   ├── test ID
+│   ├── metadata show ID / replace ID --from PATH [--yes]
 │   ├── create ID --from PATH
 │   ├── replace ID --from PATH [--yes]
 │   └── delete ID [--yes]
 ├── client
 │   ├── list / show ID
+│   ├── metadata show ID / replace ID --from PATH [--yes]
 │   ├── create ID --storage STORAGE_ID
 │   └── delete ID [--yes]
 ├── credential
@@ -111,8 +113,9 @@ CLI의 이전 `/`, `/healthz`, `/readyz`, `/usage`, `/clients` 5회 호출은 �
 | 응답 크기 | 최대 8 MiB |
 | 로컬 설정 | cwd `.env` 자동 로딩·토큰 원문 인자 없이 명시적 환경변수/파일 사용 |
 
-최초 Admin은 master의 콘솔 설정 API로 만들고, 이후 User 토큰은 콘솔 세션 API로
-발급한다. 화면 연결은 후속이다. API 앞단 proxy는 이 Bearer 경로와 콘솔 OAuth 인증 경계를 분리한다.
+최초 Admin은 서버의 `filegate account init`으로 만든다. 비밀번호로 콘솔에 로그인한 뒤
+Accounts 또는 My account에서 관리 토큰을 발급한다. [현행 인증 계약](11-local-management-auth.md).
+API 앞단 proxy는 이 Bearer 경로와 콘솔 OAuth 인증 경계를 분리한다.
 연결 profile·OS 키체인은 후속이다. `serve`의 기존 환경변수와 `.env` 로딩은 유지한다.
 
 ## 출력과 종료
@@ -165,8 +168,8 @@ help·결과는 stdout, 프롬프트·진단은 stderr다. 파서 오류는 stde
 
 | 단계 | 상태·검증 |
 |---|---|
-| CLI adapter (4c-1) | 20개 typed 명령·User 토큰·wire/outcome 검증·비밀/확인/출력 회귀 |
-| 실제 CLI E2E | 임시 PG·서버·CLI에서 master 설정·User 발급·20개 명령·기존 REST 조회 비교·User 역할·폐기·관리 audit |
+| CLI adapter | 24개 typed 명령·Account 토큰·wire/outcome 검증·비밀/확인/출력 회귀 |
+| 실제 CLI E2E | 임시 PG·서버·CLI에서 비밀번호 로그인·관리 토큰 발급·등록부 수명주기·기존 REST 조회 비교·역할·폐기·관리 audit; metadata 조회는 MCP E2E에서 CLI와 대조 |
 | MCP adapter (4c-2) | 같은 명령 schema·결과·거부·실제 HTTP 전송 검증 |
 | 운영 이관 | 후속: DB backup·기존 인증 매핑·proxy·소비자 호환·롤백 |
 

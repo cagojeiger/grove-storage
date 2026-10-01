@@ -54,7 +54,7 @@ It initializes the first Admin through a server-local command against an empty d
 | Username/password login/logout, role, session restore, password change and 401 handling | Production deployment |
 | Admin-only Users, roles, enable/disable/delete, token issue/revoke | Remove legacy account creation path |
 | Atomic account creation and one-time password setup link, pending/ready status, recipient setup and Reader sign-in | OIDC integration |
-| Storage list/detail, S3 create/replace/delete, legacy FS read-only detail, conflict guards | Standalone draft connection test |
+| Storage list/detail, S3 create/replace/delete, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
 | API readiness, client/storage counts, per-storage/client usage and daily snapshot chart/table | Server-paged large usage histories |
 | Activity: audit, command history, security events; actor/token filters, scoped cursor paging and event details | Resource/date filters |

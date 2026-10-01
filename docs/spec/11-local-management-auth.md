@@ -41,15 +41,15 @@ Sign in                         Set password (one-time setup)
 
 Console
 +------------------+-----------------------------------------------+
-| Overview         | Accounts                       [+ Add account] |
-| Resources        | Search [          ]  Status [Active v]         |
-|   Storage        | Name       Username    Role      Status        |
-|   Clients        | Heeyong    heeyong     Admin     Active        |
-| Management       | Backup     backup      Writer    Pending setup |
-|   Accounts       |                         [<] 1 / ... [>]         |
+| Overview         | Accounts                    [+ Create account] |
+| Resources        | Search [      ] Role [All v] Status [Current v] |
+|   Storage        | Account                 Role     Status        |
+|   Clients        | Heeyong                 Admin    Active        |
+| Management       | Backup                  Writer   Pending setup |
+|   Accounts       | Rows [50 v]       2 on this page    [<] [>]     |
 |   Activity       |                                               |
 +------------------+-----------------------------------------------+
-| Header account menu --> My account: Profile | Tokens | Sessions   |
+| Sidebar account menu --> My account: Profile | Tokens | Sessions  |
 |                     --> Security: Change password                |
 +------------------------------------------------------------------+
 ```
@@ -57,9 +57,10 @@ Console
 | Flow | UX / server result |
 |---|---|
 | First installation | Operator initializes an admin with hidden password input; browser uses normal Sign in |
-| Add account | Admin enters username, display name and role; one-time setup link is shown once |
-| First password | Recipient opens setup link, chooses password, then signs in normally |
-| Expired/used setup | Generic unavailable link state; admin can issue a replacement |
+| Create account | Admin enters username, display name and role; one-time setup link is shown once |
+| First password | Recipient opens setup link, confirms the read-only reserved username, chooses password, then signs in normally |
+| Expired/used setup | Generic unavailable link state; replacement is available only while the account has no password |
+| Password already configured | Setup-link action is disabled; use password change or operator recovery |
 | Change password | Current/new/confirmation; all sessions revoked; normal sign-in follows |
 | Forgotten password | Recovery help points to server operator; local recovery revokes sessions and API tokens |
 | Issue token | Name and expiry; secret displayed once; UI provides CLI/MCP connection snippets |

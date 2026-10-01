@@ -2,6 +2,7 @@
 
 - 상태: 로컬 구현·검증. 운영 배포·proxy 검증은 별도.
 - 명령 정본: [spec 09](09-management-commands.md). 권한·감사: [spec 08](08-management-plane.md).
+- 현행 로그인·관리 토큰 발급: [spec 11](11-local-management-auth.md).
 - 전송: 공식 Rust SDK `rmcp 3.4.1`, stateless Streamable HTTP.
 
 ## 연결
@@ -37,7 +38,7 @@ MCP 클라이언트의 HTTP Bearer 설정에 토큰을 공급한다. `GROVE_TOKE
 
 | 경계 | CLI | MCP |
 |---|---|---|
-| 명령 | 원격 20개 | 동일한 20개 tool; `storage.list`, `client-key.register` 등 이름 그대로 |
+| 명령 | 원격 24개 | 동일한 24개 tool; `storage.list`, `client-key.register` 등 이름 그대로 |
 | 입력 | 인자/파일 → 공통 typed 입력 | tools/list의 inputSchema → 같은 decode/검증 |
 | 권한 | 현재 User·User 역할 | 동일 |
 | 실행 | 공통 resource service | 동일 |
@@ -86,9 +87,9 @@ tool annotation은 클라이언트 힌트이며 서버의 권한·참조 제약�
 | Origin·protocol 거부 | HTTP 진단 범위; 자원 변경·감사 생성 없음 |
 | SDK 로그 | payload가 포함될 수 있는 `rmcp` target 전체를 항상 제외; RUST_LOG보다 우선 |
 | 운영 관찰 | 기존 request.end와 공통 command_invocations·audit_events·security_events |
-| 순수 테스트 | 20개 schema·이름·annotation·출력 참조, SDK 로그 차단 |
+| 순수 테스트 | 24개 schema·이름·annotation·출력 참조, SDK 로그 차단 |
 | PG HTTP 테스트 | CLI API 결과 대조·권한·owner·폐기·경계·감사 rollback·unknown |
-| 실제 프로세스 | `scripts/e2e-mcp.py`: 20개 도구·CLI 결과·토큰별 audit·폐기·비밀 없는 서버 로그 |
+| 실제 프로세스 | `scripts/e2e-mcp.py`: 24개 도구·CLI 결과·토큰별 audit·폐기·비밀 없는 서버 로그 |
 
 로컬 E2E는 MCP HTTP 요청과 실제 서버/PG를 사용한다. 외부 MCP 앱 연결·운영 TLS·OAuth2
 Proxy·S3 Provider 실제 전송은 별도 검증이다.
