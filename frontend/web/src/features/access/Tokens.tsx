@@ -57,14 +57,14 @@ export function Tokens({ account }: { account: Account }) {
     getNextPageParam: (page) => page.next_before ?? undefined,
   });
   return (
-    <Stack component="section" aria-label="Management tokens" spacing={2}>
+    <Stack component="section" aria-label="Management API tokens" spacing={2}>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
         sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
       >
         <Typography component="h2" variant="h6">
-          Management tokens
+          Management API tokens
         </Typography>
         <Button
           startIcon={<KeyRound size={16} />}
@@ -87,13 +87,12 @@ export function Tokens({ account }: { account: Account }) {
         </Alert>
       ) : (
         <>
-          <List disablePadding aria-label="Management tokens">
+          <List disablePadding aria-label="Management API tokens">
             {query.data.pages
               .flatMap((p) => p.items)
               .map((token) => (
                 <ListItem
                   key={token.id}
-                  divider
                   disableGutters
                   secondaryAction={
                     <Tooltip title={`Revoke ${token.label}`}>
@@ -115,11 +114,18 @@ export function Tokens({ account }: { account: Account }) {
                     sx={{ overflowWrap: "anywhere" }}
                     slotProps={{ secondary: { component: "div" } }}
                     secondary={
-                      <Stack spacing={0.5}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        useFlexGap
+                        sx={{ flexWrap: "wrap", alignItems: { sm: "center" } }}
+                      >
                         <Typography variant="body2">
                           {token.token_prefix}
                         </Typography>
-                        <Typography variant="body2">{token.id}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {token.id}
+                        </Typography>
                         <Link href={activityLink(account.id, token.id)}>
                           View token actions
                         </Link>
@@ -192,7 +198,7 @@ function TokenDialog({
     <Dialog
       open
       fullWidth
-      maxWidth="sm"
+      maxWidth={issued ? "sm" : "xs"}
       fullScreen={fullScreen}
       aria-labelledby={titleId}
       onClose={(_event, reason) => {
@@ -201,13 +207,17 @@ function TokenDialog({
     >
       <DialogTitle id={titleId}>
         {issued
-          ? "Save token"
+          ? "API token created"
           : target === "issue"
             ? "Issue management token"
             : "Revoke token"}
       </DialogTitle>
       {issued ? (
-        <IssuedToken value={issued} onDone={onClose} />
+        <IssuedToken
+          value={issued}
+          accountName={account.display_name}
+          onDone={onClose}
+        />
       ) : (
         <>
           <DialogContent dividers>

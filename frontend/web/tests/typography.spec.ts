@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"]) {
       );
     }
     await expect(
-      page.getByRole("button", { name: "Create user", exact: true }),
+      page.getByRole("button", { name: "Create account", exact: true }),
     ).toHaveCSS("font-family", /^-apple-system,/);
   });
 

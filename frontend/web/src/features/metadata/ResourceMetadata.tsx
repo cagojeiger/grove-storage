@@ -177,7 +177,8 @@ function MetadataEditor({
               setText(event.target.value);
               setValidation("");
             }}
-            rows={12}
+            minRows={4}
+            maxRows={12}
             autoComplete="off"
             disabled={state.busy || state.unknown}
             label="Metadata JSON"

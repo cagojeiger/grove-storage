@@ -90,6 +90,7 @@ export function KeyDialog({
         <>
           <DialogContent dividers>
             <Stack spacing={3}>
+              <Alert severity="warning">These credentials are shown only once.</Alert>
               {issued.map((item) => (
                 <Stack
                   key={item.name}
@@ -98,6 +99,7 @@ export function KeyDialog({
                   sx={{ alignItems: "center" }}
                 >
                   <TextField
+                    fullWidth
                     label={item.name}
                     value={item.value}
                     autoComplete="off"
@@ -130,24 +132,21 @@ export function KeyDialog({
                 </Stack>
               ))}
               {copyError && <Alert severity="error">{copyError}</Alert>}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={saved}
+                    onChange={(e) => setSaved(e.target.checked)}
+                  />
+                }
+                label={"I have saved these keys. Secrets are shown only once."}
+              />
             </Stack>
           </DialogContent>
-          <DialogActions
-            sx={{ flexDirection: "column", alignItems: "stretch", gap: 1 }}
-          >
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={saved}
-                  onChange={(e) => setSaved(e.target.checked)}
-                />
-              }
-              label={"I have saved these keys. Secrets are shown only once."}
-            />
+          <DialogActions>
             <Button
               type="button"
               variant="contained"
-              sx={{ alignSelf: "flex-end" }}
               disabled={!saved}
               onClick={onClose}
             >

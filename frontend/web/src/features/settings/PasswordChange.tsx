@@ -101,6 +101,7 @@ export function PasswordChange() {
         />
         {error && <Alert severity="error">{error}</Alert>}
         <Button
+          sx={{ alignSelf: { sm: "flex-start" } }}
           variant="contained"
           type="submit"
           disabled={pending}

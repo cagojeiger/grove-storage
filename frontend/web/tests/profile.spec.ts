@@ -16,12 +16,12 @@ test("password user edits own display name without changing username or role", a
   await expect(page.getByRole("heading", { name: "Home administrator" })).toBeVisible();
   await expect(page.getByText("owner", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit my name" }).click();
-  await page.getByRole("dialog").getByLabel("Name").fill("Profile display");
+  await page.getByRole("dialog").getByLabel("Display name").fill("Profile display");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Profile display" })).toBeVisible();
   await expect(page.getByText("owner", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit my name" }).click();
-  await page.getByRole("dialog").getByLabel("Name").fill("Home administrator");
+  await page.getByRole("dialog").getByLabel("Display name").fill("Home administrator");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Home administrator" })).toBeVisible();
 });

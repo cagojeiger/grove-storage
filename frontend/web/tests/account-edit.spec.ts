@@ -8,12 +8,12 @@ test("rename trims the label while preserving account identity", async ({ page }
   const mock = await accessMock(page);
   await page.goto(detail);
   await page.getByRole("button", { name: "Edit name", exact: true }).click();
-  await expect(page.getByLabel(/^Name\s*\*?$/)).toHaveValue(owner.display_name);
+  await expect(page.getByLabel(/^Display name\s*\*?$/)).toHaveValue(owner.display_name);
   const confirm = page.getByRole("dialog").getByRole("button", { name: "Save name", exact: true });
   await expect(confirm).toBeDisabled();
-  await page.getByLabel(/^Name\s*\*?$/).fill("   ");
+  await page.getByLabel(/^Display name\s*\*?$/).fill("   ");
   await expect(confirm).toBeDisabled();
-  await page.getByLabel(/^Name\s*\*?$/).fill("  New administrator  ");
+  await page.getByLabel(/^Display name\s*\*?$/).fill("  New administrator  ");
   await confirm.click();
   await expect(page.getByRole("heading", { name: "New administrator", exact: true })).toBeVisible();
   expect(mock.writes.at(-1)?.body).toEqual({ operation: "name", display_name: "New administrator" });
@@ -73,7 +73,7 @@ test("unknown rename outcome blocks resubmission", async ({ page }) => {
   });
   await page.goto(detail);
   await page.getByRole("button", { name: "Edit name", exact: true }).click();
-  await page.getByLabel(/^Name\s*\*?$/).fill("Uncertain");
+  await page.getByLabel(/^Display name\s*\*?$/).fill("Uncertain");
   await page.getByRole("button", { name: "Save name", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("outcome is unknown");
   await expect(page.getByRole("button", { name: "Save name", exact: true })).toBeDisabled();

@@ -53,7 +53,7 @@ test("empty search is not initial setup and roles and size reset pagination", as
   await page.goto(`${base}?q=absent`);
   await expect(page.getByText("No matching accounts.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Set up first Admin" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Create user", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeEnabled();
   await page.goto(base);
   await page.getByLabel("Rows per page").selectOption("20");
   await expect(page.getByText("20 accounts on this page")).toBeVisible();

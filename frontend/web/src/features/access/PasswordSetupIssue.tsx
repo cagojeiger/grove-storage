@@ -82,7 +82,7 @@ export function IssuedSetupLink({
   ).toString();
   return (
     <>
-      <DialogContent>
+      <DialogContent dividers>
         <Stack spacing={3}>
           <Typography>
             Share this link privately with {issued.username}. It is shown once
@@ -118,21 +118,18 @@ export function IssuedSetupLink({
             Copy link
           </Button>
           {copyError && <Alert severity="error">{copyError}</Alert>}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={acknowledged}
+                onChange={(event) => setAcknowledged(event.target.checked)}
+              />
+            }
+            label={"I have saved this setup link."}
+          />
         </Stack>
       </DialogContent>
-      <DialogActions
-        sx={{ flexDirection: "column", alignItems: "stretch" }}
-        disableSpacing
-      >
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
-            />
-          }
-          label={"I have saved this setup link."}
-        />
+      <DialogActions>
         <Button variant="contained" disabled={!acknowledged} onClick={onDone}>
           Done
         </Button>

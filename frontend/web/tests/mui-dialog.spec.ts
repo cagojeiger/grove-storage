@@ -7,13 +7,13 @@ for (const theme of ["light", "dark"]) {
     await accessMock(page);
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
-    await page.getByRole("button", { name: "Create user", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Create user", exact: true });
+    await page.getByRole("button", { name: "Create account", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Create account", exact: true });
     await expect(dialog).toBeVisible();
     const ids = await dialog.locator("[id]").evaluateAll(elements => elements.map(element => element.id));
     expect(new Set(ids).size).toBe(ids.length);
     const cancel = dialog.getByRole("button", { name: "Cancel" });
-    const submit = dialog.getByRole("button", { name: "Create user" });
+    const submit = dialog.getByRole("button", { name: "Create account" });
     await expect(cancel).toBeInViewport();
     await expect(submit).toBeInViewport();
     await dialog.getByLabel("Your current password").scrollIntoViewIfNeeded();
@@ -22,6 +22,6 @@ for (const theme of ["light", "dark"]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await cancel.click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Create user", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeFocused();
   });
 }

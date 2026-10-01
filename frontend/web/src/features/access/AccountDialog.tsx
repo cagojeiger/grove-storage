@@ -102,7 +102,7 @@ export function AccountDialog({
     <Dialog
       open
       fullWidth
-      maxWidth="sm"
+      maxWidth="xs"
       fullScreen={fullScreen}
       aria-labelledby={titleId}
       onClose={(_event, reason) => {
@@ -120,7 +120,7 @@ export function AccountDialog({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  label={"Name"}
+                  label={"Display name"}
                   disabled={state.busy || state.unknown}
                   slotProps={{ htmlInput: { maxLength: 80 } }}
                 />

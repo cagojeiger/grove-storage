@@ -1,5 +1,7 @@
 import {
   Alert,
+  Divider,
+  Typography,
   Stack,
   DialogContent,
   DialogActions,
@@ -91,7 +93,7 @@ export function CreateUserDialog({
     <Dialog
       open
       fullWidth
-      maxWidth="sm"
+      maxWidth={issued ? "sm" : "xs"}
       fullScreen={fullScreen}
       aria-labelledby={titleId}
       onClose={(_event, reason) => {
@@ -99,7 +101,7 @@ export function CreateUserDialog({
       }}
     >
       <DialogTitle id={titleId}>
-        {issued ? "Save setup link" : "Create user"}
+        {issued ? "Save setup link" : "Create account"}
       </DialogTitle>
       {issued ? (
         <IssuedSetupLink
@@ -119,10 +121,11 @@ export function CreateUserDialog({
               }}
             >
               <Stack spacing={3}>
+                <Typography component="h3" variant="subtitle1">Account details</Typography>
                 <TextField
                   name="display_name"
                   required
-                  label={"Name"}
+                  label={"Display name"}
                   disabled={pending || unknown}
                   slotProps={{ htmlInput: { maxLength: 80 } }}
                 />
@@ -155,6 +158,8 @@ export function CreateUserDialog({
                   <option value="writer">Writer</option>
                   <option value="admin">Admin</option>
                 </TextField>
+                <Divider />
+                <Typography component="h3" variant="subtitle1">Confirm your identity</Typography>
                 <TextField
                   name="current_password"
                   type="password"
@@ -177,7 +182,7 @@ export function CreateUserDialog({
               variant="contained"
               disabled={pending || unknown}
             >
-              {pending ? "Creating..." : "Create user"}
+              {pending ? "Creating..." : "Create account"}
             </Button>
           </DialogActions>
         </>

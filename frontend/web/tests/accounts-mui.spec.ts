@@ -24,7 +24,7 @@ for (const mode of ["light", "dark"]) {
           .locator("[class*='account-toolbar'], .pagination, .overview"),
       ).toHaveCount(0);
       await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Create user" })).toHaveCSS(
+      await expect(page.getByRole("button", { name: "Create account" })).toHaveCSS(
         "background-color",
         mode === "dark" ? "rgb(156, 219, 121)" : "rgb(23, 107, 61)",
       );
@@ -56,13 +56,13 @@ for (const mode of ["light", "dark"]) {
         .getByLabel(/^Label/)
         .fill("CLI-with-a-long-token-label-for-layout");
       await page.getByRole("button", { name: "Issue", exact: true }).click();
-      const dialog = page.getByRole("dialog", { name: "Save token" });
+      const dialog = page.getByRole("dialog", { name: "API token created" });
       await expect(
         dialog.getByRole("button", { name: "Done", exact: true }),
       ).toBeDisabled();
       await dialog.getByRole("checkbox").check();
       await dialog.getByRole("button", { name: "Done", exact: true }).click();
-      const tokens = page.getByRole("list", { name: "Management tokens" });
+      const tokens = page.getByRole("list", { name: "Management API tokens" });
       await expect(tokens.getByRole("listitem")).toHaveCount(1);
       await expect(
         tokens.getByRole("button", { name: /^Revoke CLI/ }),
@@ -116,10 +116,11 @@ for (const mode of ["light", "dark"]) {
           .getByRole("button", { name: "Issue link", exact: true })
           .click();
       }
-      const dialog = page.getByRole("dialog", { name: `Save ${kind}` });
+      const dialog = page.getByRole("dialog", { name: kind === "token" ? "API token created" : `Save ${kind}` });
       const done = dialog.getByRole("button", { name: "Done", exact: true });
       const saved = dialog.getByRole("checkbox");
       await expect(done).toBeInViewport();
+      await saved.scrollIntoViewIfNeeded();
       await expect(saved).toBeInViewport();
       await expect(done).toBeDisabled();
       await expect(

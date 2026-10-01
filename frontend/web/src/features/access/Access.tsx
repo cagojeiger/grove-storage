@@ -6,6 +6,7 @@ import {
   Button,
   Tooltip,
   Typography,
+  Stack,
 } from "@mui/material";
 import { useState } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -118,25 +119,6 @@ export function Access({
               >
                 Change role
               </Button>
-              <Button
-                color={account.is_active ? "error" : "primary"}
-                disabled={Boolean(account.deleted_at)}
-                onClick={() => setAction("active")}
-              >
-                {account.is_active ? "Disable" : "Enable"}
-              </Button>
-              <Tooltip title="Delete account">
-                <span>
-                  <IconButton
-                    color="error"
-                    aria-label="Delete account"
-                    disabled={Boolean(account.deleted_at)}
-                    onClick={() => setAction("delete")}
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
-                </span>
-              </Tooltip>
             </>
           )}
         </>
@@ -199,6 +181,36 @@ export function Access({
             <PasswordSetupIssue key={account.id} account={account} />
             <Divider />
             <Tokens key={account.id} account={account} />
+            <Divider />
+            <Stack component="section" aria-label="Danger zone" spacing={2}>
+              <Typography component="h2" variant="h6">
+                Danger zone
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                sx={{ flexWrap: "wrap" }}
+              >
+                <Button
+                  color={account.is_active ? "error" : "primary"}
+                  variant="outlined"
+                  disabled={Boolean(account.deleted_at)}
+                  onClick={() => setAction("active")}
+                >
+                  {account.is_active ? "Disable" : "Enable"}
+                </Button>
+                <Button
+                  color="error"
+                  variant="outlined"
+                  startIcon={<Trash2 size={16} />}
+                  disabled={Boolean(account.deleted_at)}
+                  onClick={() => setAction("delete")}
+                >
+                  Delete account
+                </Button>
+              </Stack>
+            </Stack>
           </>
         ) : (
           <Typography>

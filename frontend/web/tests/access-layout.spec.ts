@@ -17,7 +17,7 @@ for (const width of [320, 390, 768, 1024, 1440])
         .getByRole("link", { name: /^Home-administrator/ })
         .click();
       await expect(
-        page.getByRole("heading", { name: "Management tokens" }),
+        page.getByRole("heading", { name: "Management API tokens" }),
       ).toBeVisible();
       expect(
         await page.evaluate(

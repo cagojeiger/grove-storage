@@ -45,6 +45,7 @@ export function previewIdentity(json, history) {
   }
   issue(owner, "Preview CLI token");
   function session() {
+    if (current && Date.now() >= Date.parse(signedInAt) + 8 * 60 * 60 * 1000) current = null;
     const user = accounts.get(current?.account_id);
     if (
       !user?.is_active ||
@@ -93,7 +94,6 @@ export function previewIdentity(json, history) {
       };
       if (path === "/session") {
         if (method === "POST") {
-          signedInAt = new Date().toISOString();
           const match = [...passwords].find(([id, login]) =>
             login.username === body.username && login.password === body.password &&
             accounts.get(id)?.is_active && !accounts.get(id)?.deleted_at);
@@ -103,6 +103,7 @@ export function previewIdentity(json, history) {
             return true;
           }
           current = { account_id: match[0], session_id: randomUUID() };
+          signedInAt = new Date().toISOString();
           history.record("security", session(), { event_type: "login.succeeded", reason_code: "password" });
         }
         if (method === "DELETE") {

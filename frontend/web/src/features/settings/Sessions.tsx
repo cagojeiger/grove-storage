@@ -330,7 +330,7 @@ function EditProfile({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 required
-                label={"Name"}
+                label={"Display name"}
                 disabled={action.busy || action.unknown}
                 slotProps={{ htmlInput: { maxLength: 80 } }}
               />

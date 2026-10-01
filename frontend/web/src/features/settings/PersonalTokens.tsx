@@ -60,14 +60,14 @@ export function PersonalTokens({
   });
   const rows = query.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <Stack component="section" aria-label="My API tokens" spacing={2}>
+    <Stack component="section" aria-label="Management API tokens" spacing={2}>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
         sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
       >
         <Typography component="h2" variant="h6">
-          My API tokens
+          Management API tokens
         </Typography>
         <Button
           type="submit"
@@ -89,11 +89,10 @@ export function PersonalTokens({
         </Alert>
       ) : (
         <>
-          <List disablePadding aria-label="My API tokens">
+          <List disablePadding aria-label="Management API tokens">
             {rows.map((token) => (
               <ListItem
                 key={token.id}
-                divider
                 disableGutters
                 secondaryAction={
                   <Tooltip title={`Revoke ${token.label}`}>
@@ -115,11 +114,18 @@ export function PersonalTokens({
                   sx={{ overflowWrap: "anywhere" }}
                   slotProps={{ secondary: { component: "div" } }}
                   secondary={
-                    <Stack spacing={0.5}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      useFlexGap
+                      sx={{ flexWrap: "wrap", alignItems: { sm: "center" } }}
+                    >
                       <Typography variant="body2">
                         {token.token_prefix}
                       </Typography>
-                      <Typography variant="body2">{token.id}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {token.id}
+                      </Typography>
                       <Typography variant="body2">
                         {token.revoked_at
                           ? "Revoked"
@@ -241,7 +247,7 @@ function PersonalTokenDialog({
     <Dialog
       open
       fullWidth
-      maxWidth="sm"
+      maxWidth={issued ? "sm" : "xs"}
       fullScreen={fullScreen}
       aria-labelledby={titleId}
       onClose={(_event, reason) => {
@@ -250,7 +256,7 @@ function PersonalTokenDialog({
     >
       <DialogTitle id={titleId}>
         {issued
-          ? "Save token"
+          ? "API token created"
           : target === "issue"
             ? "Issue API token"
             : "Revoke API token"}

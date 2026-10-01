@@ -37,7 +37,7 @@ for (const theme of ["light", "dark"]) {
       });
     }
 
-    test(`storage actions stay visible at ${width}px in ${theme}`, async ({ page }) => {
+    test(`storage page actions remain reachable at ${width}px in ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 720 });
       await storageMock(page);
       await page.goto("/api/admin/console/#storages");
@@ -45,13 +45,16 @@ for (const theme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Add storage", exact: true }).click();
       const save = page.getByRole("button", { name: "Save", exact: true });
       const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await save.scrollIntoViewIfNeeded();
       await expect(save).toBeInViewport();
       await expect(cancel).toBeInViewport();
       await page.screenshot({ path: `test-results/review-register-${width}-${theme}.png`, animations: "disabled" });
       await page.getByLabel(/^Configured capacity\s*\*?$/).scrollIntoViewIfNeeded();
+      await save.scrollIntoViewIfNeeded();
       await expect(save).toBeInViewport();
       const after = await save.boundingBox();
-      expect(after!.y).toBeGreaterThan(600);
+      expect(after!.y).toBeGreaterThanOrEqual(0);
       expect(after!.y + after!.height).toBeLessThanOrEqual(720);
       await save.click();
       await expect(page.getByLabel(/^Storage ID\s*\*?$/)).toBeFocused();

@@ -8,16 +8,16 @@ test("create a User without Agent or owner fields", async ({ page }) => {
   await expect(
     page.getByRole("link", { name: "Agents", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Create user", exact: true }).click();
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
   await expect(page.getByLabel(/^Owner\s*\*?$/)).toHaveCount(0);
   await expect(page.getByLabel(/^Role\s*\*?$/).locator("option")).toHaveText([
     "Reader", "Writer", "Admin",
   ]);
-  await page.getByLabel(/^Name\s*\*?$/).fill("Writer");
+  await page.getByLabel(/^Display name\s*\*?$/).fill("Writer");
   await page.getByLabel(/^Username\s*\*?$/).fill("writer");
   await page.getByLabel(/^Role\s*\*?$/).selectOption("writer");
   await page.getByLabel("Your current password").fill("a private admin password");
-  await page.getByRole("dialog").getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("textbox", { name: "Setup link", exact: true })).toBeVisible();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
@@ -44,7 +44,7 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   expect((await sent).headers()["x-grove-csrf"]).toBe("1");
   await expect(
-    page.getByRole("textbox", { name: "Issued token", exact: true }),
+    page.getByLabel("Issued token", { exact: true }),
   ).toHaveValue(rawToken);
   await expect(
     page.getByRole("button", { name: "Done", exact: true }),
@@ -61,7 +61,7 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
     .check();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(
-    page.getByRole("textbox", { name: "Issued token", exact: true }),
+    page.getByLabel("Issued token", { exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Revoke CLI automation" }).click();
   await expect(

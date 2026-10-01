@@ -79,15 +79,15 @@ test("creation opens the returned account even outside the loaded page", async (
     }),
   );
   await page.goto(base);
-  await page.getByRole("button", { name: "Create user", exact: true }).click();
-  await page.getByLabel(/^Name\s*\*?$/).fill("New account");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await page.getByLabel(/^Display name\s*\*?$/).fill("New account");
   await page.getByLabel(/^Username\s*\*?$/).fill("new.account");
   await page
     .getByLabel("Your current password")
     .fill("a private admin password");
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Create user" })
+    .getByRole("button", { name: "Create account" })
     .click();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
@@ -109,7 +109,7 @@ test("missing accounts show a route back and mismatched responses show no tokens
   await expect(page.getByRole("alert")).toContainText("Account unavailable");
   await page.getByRole("link", { name: "Back to accounts" }).click();
   await expect(
-    page.getByRole("button", { name: "Create user", exact: true }),
+    page.getByRole("button", { name: "Create account", exact: true }),
   ).toBeVisible();
   await page.route(`**/v1/accounts/${owner.id}`, (route) =>
     route.fulfill({ json: otherUser }),

@@ -59,6 +59,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
             }}
           >
             <TextField
+            size="small"
               label="Search accounts"
               key={listing.search}
               name="search"
@@ -77,6 +78,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
         </Grid>
         <Grid size={{ xs: 6, md: 2 }}>
           <TextField
+            size="small"
             value={listing.role}
             onChange={(e) =>
               listing.update({
@@ -98,6 +100,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
         </Grid>
         <Grid size={{ xs: 6, md: 2 }}>
           <TextField
+            size="small"
             value={listing.status}
             onChange={(e) => listing.update({ status: e.target.value })}
             label={"Status"}
@@ -121,7 +124,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
             disabled={!data || query.isError}
             onClick={onCreate}
           >
-            Create user
+            Create account
           </Button>
         </Grid>
       </Grid>
@@ -198,10 +201,11 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
         sx={{ alignItems: { sm: "center" } }}
       >
         <TextField
+            size="small"
           sx={{ width: { sm: 120 } }}
           value={listing.limit}
           onChange={(e) => listing.update({ limit: e.target.value })}
-          label={"Rows"}
+          label={"Rows per page"}
           select
           slotProps={{
             htmlInput: { "aria-label": "Rows per page" },

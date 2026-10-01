@@ -15,7 +15,7 @@ async function signIn(page: import("@playwright/test").Page) {
   if ((page.viewportSize()?.width ?? 1280) < 900) await page.getByRole("button", { name: "Open navigation" }).click();
   await page.locator('button[aria-label="Account menu"]').click();
   await page.getByRole("menuitem", { name: "My account" }).click();
-  await expect(page.getByRole("heading", { name: "My API tokens" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Management API tokens" })).toBeVisible();
 }
 
 test("preview password session lasts eight hours", async ({ page }) => {
@@ -30,7 +30,7 @@ test("preview password session lasts eight hours", async ({ page }) => {
 
 test("password user manages only own API tokens", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();
+  await page.getByRole("region", { name: "Management API tokens" }).getByRole("button", { name: "Issue token" }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Laptop CLI");
   await page.getByLabel("Expires in days").fill("7");
   await page.getByRole("dialog").getByLabel("Current password").fill("wrong password");
@@ -41,16 +41,16 @@ test("password user manages only own API tokens", async ({ page }) => {
   await page.getByLabel("Expires in days").fill("7");
   await page.getByRole("dialog").getByLabel("Current password").fill(password);
   await page.getByRole("button", { name: "Issue", exact: true }).click();
-  const token = await page.getByRole("textbox", { name: "Issued token" }).inputValue();
+  const token = await page.getByLabel("Issued token", { exact: true }).inputValue();
   expect(token).toMatch(/^gsm_[a-f0-9]{64}$/);
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain(token);
   await page.getByLabel("I have saved this token. It is shown only once.").check();
   await page.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByRole("region", { name: "My API tokens" }).getByText("Laptop CLI")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Management API tokens" }).getByText("Laptop CLI")).toBeVisible();
   await page.getByRole("button", { name: "Revoke Laptop CLI" }).click();
   await page.getByRole("checkbox", { name: "Revoke Laptop CLI" }).check();
   await page.getByRole("button", { name: "Revoke", exact: true }).click();
-  await expect(page.getByRole("region", { name: "My API tokens" }).getByText("Revoked")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Management API tokens" }).getByText("Revoked")).toBeVisible();
 });
 
 for (const width of [320, 1440]) for (const theme of ["light", "dark"])
@@ -58,7 +58,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"])
     await page.setViewportSize({ width, height: 900 });
     await signIn(page);
     await page.getByLabel("Theme").selectOption(theme);
-    await page.getByRole("region", { name: "My API tokens" }).getByRole("button", { name: "Issue token" }).click();
+    await page.getByRole("region", { name: "Management API tokens" }).getByRole("button", { name: "Issue token" }).click();
     await expect(page.getByLabel("Expires in days")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/personal-tokens-${width}-${theme}.png`, fullPage: true });
