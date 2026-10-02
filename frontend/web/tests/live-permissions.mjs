@@ -82,6 +82,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     assert(calls.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
     assert.equal(await page.evaluate(async () => (await fetch("/api/admin/identity/v1/history/security")).status), 403);
     await page.goto(`${origin}/api/admin/console/#settings`);
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(page.getByRole("button", { name: "Revoke current session", exact: true })).toBeVisible();
     console.log("PASS real role demotion, Reader read-only UI/server, password login and console audit");
   } finally { await context.close(); }

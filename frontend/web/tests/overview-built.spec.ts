@@ -24,6 +24,8 @@ test("built Overview draws unselected branches on first load, reload and return"
   await expect(
     page.getByRole("heading", { name: "Connections", exact: true }),
   ).toBeVisible();
+  await expect(page.getByText(/^Remaining capacity /)).toHaveCount(0);
+  await expect(page.getByText("1 TiB remaining", { exact: true }).first()).toBeVisible();
   await expect(page.locator(".connection-paths path")).toHaveCount(2);
   await expect(page.locator(".connection-paths path.selected")).toHaveCount(0);
   await page.reload();

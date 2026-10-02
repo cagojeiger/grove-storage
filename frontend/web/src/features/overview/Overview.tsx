@@ -51,7 +51,6 @@ export function Overview() {
       | "active_bytes"
       | "active_files"
       | "capacity_bytes"
-      | "remaining_bytes"
       | "reserved_bytes"
       | "purge_pending_bytes",
   ) => data?.usage.reduce((total, row) => total + row[key], 0) ?? 0;
@@ -149,9 +148,6 @@ export function Overview() {
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Pending cleanup {bytes(sum("purge_pending_bytes"))}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Remaining capacity {bytes(sum("remaining_bytes"))}
                 </Typography>
               </Stack>
               <Connections

@@ -104,6 +104,7 @@ test("sessions page confirms revocation and signs out when revoking the current 
     return route.fulfill({ json: { changed: true } });
   });
   await page.goto("/api/admin/console/#settings");
+  await page.getByRole("tab", { name: "Sessions", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Revoke session expired", exact: true }),
   ).toBeDisabled();
@@ -145,6 +146,7 @@ test("unknown revocation is never retried for a password session", async ({
     return r.abort();
   });
   await page.goto("/api/admin/console/#settings");
+  await page.getByRole("tab", { name: "Sessions", exact: true }).click();
   await page.getByRole("button", { name: "Revoke current session" }).click();
   await page.getByRole("button", { name: "Confirm revoke" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "outcome is unknown" })).toBeVisible();
@@ -167,6 +169,7 @@ for (const pageName of ["activity", "settings"])
       r.fulfill({ json: { items: [{}], next_before: null } }),
     );
     await page.goto(`/api/admin/console/#${pageName}`);
+    if (pageName === "settings") await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
     await page.route(url, (r) => r.fulfill({ status: 401, json: {} }));
     await page

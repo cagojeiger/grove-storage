@@ -36,6 +36,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     const other = await context.newPage();
     await other.goto(`${origin}/api/admin/console/#settings`);
     await loginWithPassword(other, "owner", ownerPassword);
+    await other.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(
       other.getByRole("heading", { name: "My sessions", exact: true }),
     ).toBeVisible();
@@ -45,6 +46,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
           .session_id,
     );
     await page.goto(`${origin}/api/admin/console/#settings`);
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await page
       .getByRole("button", { name: `Revoke session ${otherId}`, exact: true })
       .click();

@@ -64,18 +64,19 @@ export async function captureConsole(page, origin, directory) {
             exact: true,
           }),
         ).toBeVisible();
-        await expect(
-          page.getByRole("heading", { name: "My sessions", exact: true }),
-        ).toBeVisible();
+        await page.getByRole("tab", { name: "API tokens", exact: true }).click();
         await expect(
           page.getByRole("list", { name: "Management API tokens", exact: true }),
         ).toBeAttached();
+        await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "My sessions", exact: true })).toBeVisible();
         await expect(
           page
             .getByRole("list", { name: "My sessions", exact: true })
             .getByRole("listitem")
             .first(),
         ).toBeVisible();
+        await page.getByRole("tab", { name: "Profile", exact: true }).click();
       } else if (name === "security") {
         await expect(page.getByLabel("Current password")).toBeVisible();
       } else {

@@ -42,6 +42,8 @@ import { useAction } from "../access/useAction";
 import { time } from "../../design/format";
 import { PersonalTokens } from "./PersonalTokens";
 import { Page } from "../../app/Page";
+import { DetailSections } from "../../app/DetailSections";
+import { useRoute } from "../../app/navigation";
 
 type LoginSession = {
   id: string;
@@ -62,6 +64,9 @@ function isSession(v: unknown): v is LoginSession {
   );
 }
 export function Sessions({ session }: { session: Session }) {
+  const route = useRoute();
+  const sessionsSelected =
+    new URLSearchParams(route.split("?")[1]).get("tab") === "sessions";
   const cache = useQueryClient();
   const [selected, setSelected] = useState<LoginSession | null>(null);
   const [editing, setEditing] = useState(false);
@@ -74,6 +79,7 @@ export function Sessions({ session }: { session: Session }) {
   });
   const query = useInfiniteQuery({
     queryKey: ["sessions", session.session_id],
+    enabled: sessionsSelected,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
       identityPage("/me/sessions", isSession, pageParam, signal),
@@ -85,186 +91,236 @@ export function Sessions({ session }: { session: Session }) {
     <Page
       title="My account"
       actions={
-        <Tooltip title="Refresh sessions">
-          <span>
-            <IconButton
-              aria-label="Refresh sessions"
-              disabled={query.isFetching}
-              onClick={() => void query.refetch()}
-            >
-              <RefreshCw size={18} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        sessionsSelected && (
+          <Tooltip title="Refresh sessions">
+            <span>
+              <IconButton
+                aria-label="Refresh sessions"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                <RefreshCw size={18} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )
       }
     >
-      {passwordSession && profile.isPending && (
-        <Typography role="status">Loading profile...</Typography>
-      )}
-      {passwordSession && profile.isError && (
-        <Alert severity="error">
-          {message(profile.error)}{" "}
-          <Button type="submit" onClick={() => void profile.refetch()}>
-            Retry
-          </Button>
-        </Alert>
-      )}
-      {profile.data && (
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{ alignItems: "center", justifyContent: "space-between" }}
-        >
-          <Typography
-            component="h2"
-            variant="h6"
-            sx={{ overflowWrap: "anywhere", minWidth: 0 }}
-          >
-            {profile.data.display_name}
-          </Typography>
-          <Tooltip title="Edit my name">
-            <IconButton
-              aria-label="Edit my name"
-              onClick={() => setEditing(true)}
-            >
-              <Pencil size={16} />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      )}
-      <Grid container component="dl" spacing={3}>
-        {[
-          ...(profile.data ? [["Username", profile.data.username]] : []),
-          ["Account", session.user_id],
-          ["Role", session.role],
-        ].map(([label, value]) => (
-          <Grid key={label} size={{ xs: 12, sm: 6 }}>
-            <Typography component="dt" variant="body2" color="text.secondary">
-              {label}
-            </Typography>
-            <Typography component="dd" sx={{ m: 0, overflowWrap: "anywhere" }}>
-              {value}
-            </Typography>
-          </Grid>
-        ))}
-      </Grid>
-      {editing && profile.data && (
-        <EditProfile
-          account={profile.data}
-          onClose={() => setEditing(false)}
-          onSaved={async () => {
-            await cache.invalidateQueries({ queryKey: ["me", "profile"] });
-          }}
-        />
-      )}
-      {passwordSession && (
-        <Stack component="section" aria-label="Security" spacing={2}>
-          <Divider />
-          <Typography component="h2" variant="h6">
-            Security
-          </Typography>
-          <Link href="#settings/security">Change password</Link>
-        </Stack>
-      )}
-      <Divider />
-      {passwordSession && <PersonalTokens session={session} />}
-      <Divider />
-      <Stack component="section" aria-label="My sessions" spacing={2}>
-        <Typography component="h2" variant="h6">
-          My sessions
-        </Typography>
-        {query.isPending ? (
-          <Typography role="status">Loading sessions...</Typography>
-        ) : query.isError ? (
-          <Alert severity="error">{message(query.error)}</Alert>
-        ) : (
-          <>
-            <List disablePadding aria-label="My sessions">
-              {rows.map((row) => {
-                const current = row.id === session.session_id;
-                const state = row.revoked_at
-                  ? "Revoked"
-                  : Date.parse(row.expires_at) <= Date.now()
-                    ? "Expired"
-                    : "Active";
-                return (
-                  <ListItem
-                    key={row.id}
-                    divider
-                    disableGutters
-                    secondaryAction={
-                      <Tooltip
-                        title={
-                          current
-                            ? "Revoke current session"
-                            : `Revoke session ${row.id}`
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            edge="end"
-                            color="error"
-                            aria-label={
-                              current
-                                ? "Revoke current session"
-                                : `Revoke session ${row.id}`
-                            }
-                            disabled={state !== "Active"}
-                            onClick={() => setSelected(row)}
-                          >
-                            <LogOut size={17} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    }
+      <DetailSections
+        label="My account sections"
+        sections={[
+          {
+            value: "profile",
+            label: "Profile",
+            content: (
+              <Stack spacing={3}>
+                {passwordSession && profile.isPending && (
+                  <Typography role="status">Loading profile...</Typography>
+                )}
+                {passwordSession && profile.isError && (
+                  <Alert severity="error">
+                    {message(profile.error)}{" "}
+                    <Button
+                      type="submit"
+                      onClick={() => void profile.refetch()}
+                    >
+                      Retry
+                    </Button>
+                  </Alert>
+                )}
+                {profile.data && (
+                  <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
                   >
-                    <ListItemText
-                      primary={current ? "Current session" : "Browser session"}
-                      sx={{ overflowWrap: "anywhere" }}
-                      slotProps={{ secondary: { component: "div" } }}
-                      secondary={
-                        <Stack spacing={0.5}>
-                          <Typography
-                            component="code"
-                            variant="body2"
-                            sx={{ fontFamily: "monospace" }}
+                    <Typography
+                      component="h2"
+                      variant="h6"
+                      sx={{ overflowWrap: "anywhere", minWidth: 0 }}
+                    >
+                      {profile.data.display_name}
+                    </Typography>
+                    <Tooltip title="Edit my name">
+                      <IconButton
+                        aria-label="Edit my name"
+                        onClick={() => setEditing(true)}
+                      >
+                        <Pencil size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                )}
+                <Grid container component="dl" spacing={3}>
+                  {[
+                    ...(profile.data
+                      ? [["Username", profile.data.username]]
+                      : []),
+                    ["Account", session.user_id],
+                    ["Role", session.role],
+                  ].map(([label, value]) => (
+                    <Grid key={label} size={{ xs: 12, sm: 6 }}>
+                      <Typography
+                        component="dt"
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        {label}
+                      </Typography>
+                      <Typography
+                        component="dd"
+                        sx={{ m: 0, overflowWrap: "anywhere" }}
+                      >
+                        {value}
+                      </Typography>
+                    </Grid>
+                  ))}
+                </Grid>
+                {editing && profile.data && (
+                  <EditProfile
+                    account={profile.data}
+                    onClose={() => setEditing(false)}
+                    onSaved={async () => {
+                      await cache.invalidateQueries({
+                        queryKey: ["me", "profile"],
+                      });
+                    }}
+                  />
+                )}
+                {passwordSession && (
+                  <Stack component="section" aria-label="Security" spacing={2}>
+                    <Divider />
+                    <Typography component="h2" variant="h6">
+                      Security
+                    </Typography>
+                    <Link href="#settings/security">Change password</Link>
+                  </Stack>
+                )}
+              </Stack>
+            ),
+          },
+          ...(passwordSession
+            ? [
+                {
+                  value: "tokens",
+                  label: "API tokens",
+                  content: <PersonalTokens session={session} />,
+                },
+              ]
+            : []),
+          {
+            value: "sessions",
+            label: "Sessions",
+            content: (
+              <Stack component="section" aria-label="My sessions" spacing={2}>
+                <Typography component="h2" variant="h6">
+                  My sessions
+                </Typography>
+                {query.isPending ? (
+                  <Typography role="status">Loading sessions...</Typography>
+                ) : query.isError ? (
+                  <Alert severity="error">{message(query.error)}</Alert>
+                ) : (
+                  <>
+                    <List disablePadding aria-label="My sessions">
+                      {rows.map((row) => {
+                        const current = row.id === session.session_id;
+                        const state = row.revoked_at
+                          ? "Revoked"
+                          : Date.parse(row.expires_at) <= Date.now()
+                            ? "Expired"
+                            : "Active";
+                        return (
+                          <ListItem
+                            key={row.id}
+                            divider
+                            disableGutters
+                            secondaryAction={
+                              <Tooltip
+                                title={
+                                  current
+                                    ? "Revoke current session"
+                                    : `Revoke session ${row.id}`
+                                }
+                              >
+                                <span>
+                                  <IconButton
+                                    edge="end"
+                                    color="error"
+                                    aria-label={
+                                      current
+                                        ? "Revoke current session"
+                                        : `Revoke session ${row.id}`
+                                    }
+                                    disabled={state !== "Active"}
+                                    onClick={() => setSelected(row)}
+                                  >
+                                    <LogOut size={17} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            }
                           >
-                            {row.id}
-                          </Typography>
-                          <Typography variant="body2">
-                            {row.credential_id
-                              ? `Token: ${row.credential_id}`
-                              : "Password sign-in"}
-                          </Typography>
-                          <Typography variant="body2">{state}</Typography>
-                          <Typography variant="body2">
-                            Created {time(row.created_at)}
-                          </Typography>
-                          <Typography variant="body2">
-                            Expires {time(row.expires_at)}
-                          </Typography>
-                        </Stack>
-                      }
-                    />
-                  </ListItem>
-                );
-              })}
-            </List>
-            {!rows.length && (
-              <Typography color="text.secondary">No sessions found.</Typography>
-            )}
-            {query.hasNextPage && (
-              <Button
-                type="submit"
-                disabled={query.isFetching}
-                onClick={() => void query.fetchNextPage()}
-              >
-                {query.isFetching ? "Loading..." : "Load more"}
-              </Button>
-            )}
-          </>
-        )}
-      </Stack>
+                            <ListItemText
+                              primary={
+                                current ? "Current session" : "Browser session"
+                              }
+                              sx={{ overflowWrap: "anywhere" }}
+                              slotProps={{ secondary: { component: "div" } }}
+                              secondary={
+                                <Stack spacing={0.5}>
+                                  <Typography
+                                    component="code"
+                                    variant="body2"
+                                    sx={{ fontFamily: "monospace" }}
+                                  >
+                                    {row.id}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {row.credential_id
+                                      ? `Token: ${row.credential_id}`
+                                      : "Password sign-in"}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {state}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    Created {time(row.created_at)}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    Expires {time(row.expires_at)}
+                                  </Typography>
+                                </Stack>
+                              }
+                            />
+                          </ListItem>
+                        );
+                      })}
+                    </List>
+                    {!rows.length && (
+                      <Typography color="text.secondary">
+                        No sessions found.
+                      </Typography>
+                    )}
+                    {query.hasNextPage && (
+                      <Button
+                        type="submit"
+                        disabled={query.isFetching}
+                        onClick={() => void query.fetchNextPage()}
+                      >
+                        {query.isFetching ? "Loading..." : "Load more"}
+                      </Button>
+                    )}
+                  </>
+                )}
+              </Stack>
+            ),
+          },
+        ]}
+      />
       {selected && (
         <RevokeSession
           row={selected}

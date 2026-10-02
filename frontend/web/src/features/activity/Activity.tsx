@@ -174,6 +174,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           }}
         >
           <TextField
+            size="small"
             name="account_id"
             defaultValue={params.get("account_id") ?? ""}
             autoComplete="off"
@@ -183,6 +184,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
             }}
           />
           <TextField
+            size="small"
             name="credential_id"
             defaultValue={params.get("credential_id") ?? ""}
             autoComplete="off"
@@ -191,7 +193,9 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
               htmlInput: { pattern: uuidPattern, spellCheck: false },
             }}
           />
-          <Button type="submit">Apply</Button>
+          <Button type="submit" variant="outlined">
+            Apply
+          </Button>
         </Stack>
       )}
       {denied ? (
@@ -264,7 +268,9 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                             color="text.secondary"
                             sx={{ mt: 0.5 }}
                           >
-                            {actor(event.context)}
+                            <Tooltip title={actor(event.context)}>
+                              <span>{actorLabel(event)}</span>
+                            </Tooltip>
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             {event.context.surface}
@@ -276,7 +282,9 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                       <>
                         <TableCell>{eventResult(event)}</TableCell>
                         <TableCell>
-                          {actor(event.context)}
+                          <Tooltip title={actor(event.context)}>
+                            <span>{actorLabel(event)}</span>
+                          </Tooltip>
                           <Typography variant="body2" color="text.secondary">
                             {event.context.surface}
                           </Typography>
@@ -318,7 +326,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           }}
         >
           <DialogTitle id={titleId}>{"Event details"}</DialogTitle>
-          <DialogContent>
+          <DialogContent dividers>
             <Grid container component="dl" spacing={3}>
               {Object.entries({
                 Event: eventName(selected),
@@ -373,4 +381,11 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       )}
     </Page>
   );
+}
+
+function actorLabel(event: Event) {
+  const value = actor(event.context);
+  return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value)
+    ? `${value.slice(0, 8)}...${value.slice(-4)}`
+    : value;
 }

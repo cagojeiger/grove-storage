@@ -15,6 +15,7 @@ async function signIn(page: import("@playwright/test").Page) {
   if ((page.viewportSize()?.width ?? 1280) < 900) await page.getByRole("button", { name: "Open navigation" }).click();
   await page.locator('button[aria-label="Account menu"]').click();
   await page.getByRole("menuitem", { name: "My account" }).click();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Management API tokens" })).toBeVisible();
 }
 

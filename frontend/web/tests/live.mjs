@@ -179,6 +179,7 @@ try {
     await expect(recipient.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
     await recipient.locator('button[aria-label="Account menu"]').click();
     await recipient.getByRole("menuitem", { name: "My account" }).click();
+    await recipient.getByRole("tab", { name: "API tokens", exact: true }).click();
     await recipient.getByRole("region", { name: "Management API tokens" }).getByRole("button", { name: "Issue token" }).click();
     await recipient.getByLabel(/^Label\s*\*?$/).fill("Reader CLI");
     await recipient.getByLabel("Expires in days").fill("1");
