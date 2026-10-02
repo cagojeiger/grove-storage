@@ -125,7 +125,8 @@ async function response(req, res) {
       return storages.has(storageId) ? success(storages.get(storageId)) : failure(404, "not_found");
     if (command === "storage.delete") {
       if (!storages.has(storageId)) return failure(404, "not_found");
-      if (storageId === "home-archive" || clients.references(storageId)) return failure(409, "conflict");
+      const counters = usage(storages.get(storageId));
+      if (clients.references(storageId) || ["active_files", "reserved_files", "purge_pending_files", "active_bytes", "reserved_bytes", "purge_pending_bytes"].some((key) => counters[key] > 0)) return failure(409, "conflict");
       storages.delete(storageId);
       return success({ resource: "storage", id: storageId }, { resource_type: "storage", resource_id: storageId, metadata: {} });
     }
