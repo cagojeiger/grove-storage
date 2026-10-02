@@ -23,7 +23,7 @@ test("create a User without Agent or owner fields", async ({ page }) => {
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Writer", exact: true })).toBeVisible();
-  await expect(page.getByText("Pending setup", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tabpanel").getByText("Pending setup", { exact: true })).toBeVisible();
   expect(writes.map((w) => w.body)).toEqual([
     { kind: "user_with_password_setup", display_name: "Writer", role: "writer", username: "writer", current_password: "a private admin password" },
   ]);
@@ -37,6 +37,7 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
   await page
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("CLI automation");
   await page.getByLabel("Expires in days").fill("7");
@@ -81,6 +82,7 @@ test("last Admin conflict remains visible; destructive change requires name", as
   await page
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page
     .getByRole("button", { name: "Delete account", exact: true })
     .click();
@@ -115,6 +117,7 @@ for (const failure of ["lost", "unknown", "malformed"])
     await page
       .getByRole("link", { name: "Home administrator", exact: true })
       .click();
+    await page.getByRole("tab", { name: "API tokens", exact: true }).click();
     await page
       .getByRole("button", { name: "Issue token", exact: true })
       .click();

@@ -45,6 +45,7 @@ test("previous and next cursors survive reload and reset on filter changes", asy
   await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
   await page.getByLabel("Account status").selectOption("deleted");
   await page.getByRole("row").filter({ hasText: "Deleted" }).getByRole("link", { name: "Account 2", exact: true }).click();
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await expect(page.getByRole("button", { name: "Delete account" })).toBeDisabled();
 });
 

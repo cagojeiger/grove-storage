@@ -60,6 +60,7 @@ export async function accessChecks(
   await page
     .getByRole("link", { name: "Console test owner", exact: true })
     .click();
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await expect(page.getByRole("button", { name: "Issue setup link", exact: true })).toBeDisabled();
   await expect(page.getByText("Password configured", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Disable", exact: true }).click();
@@ -78,11 +79,14 @@ export async function accessChecks(
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "Recovery admin", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page.getByRole("button", { name: "Issue setup link", exact: true }).click();
   await expect(page.getByLabel("Username")).toHaveValue("recovery-admin");
   await expect(page.getByLabel("Username")).toHaveAttribute("readonly", "");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   const userId = await page.locator('dl[aria-label="Account details"] dd').first().innerText();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Recovery fixture");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
@@ -97,6 +101,7 @@ export async function accessChecks(
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("heading", { name: "CLI backup", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("CLI key");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
@@ -143,6 +148,7 @@ export async function accessChecks(
   } finally {
     await recovery.close();
   }
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page
     .getByRole("button", { name: "Delete account", exact: true })
     .click();

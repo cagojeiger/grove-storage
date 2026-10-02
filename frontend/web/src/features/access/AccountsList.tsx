@@ -14,6 +14,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Chip,
+  Divider,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +27,7 @@ import { ApiError, message } from "../../api/http";
 import { isAccountPage, useAccountList } from "./accountList";
 
 export function AccountsList({ onCreate }: { onCreate: () => void }) {
+  const compact = useMediaQuery(useTheme().breakpoints.down("sm"));
   const listing = useAccountList();
   const cache = useQueryClient();
   const query = useQuery({
@@ -43,7 +48,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
   });
   const data = query.data;
   return (
-    <>
+    <Stack spacing={2}>
       <Grid container spacing={2} sx={{ alignItems: "center" }}>
         <Grid size={{ xs: 12, md: 5 }}>
           <Stack
@@ -59,7 +64,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
             }}
           >
             <TextField
-            size="small"
+              size="small"
               label="Search accounts"
               key={listing.search}
               name="search"
@@ -117,7 +122,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
             <option value="all">All statuses</option>
           </TextField>
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 3 }} sx={{ textAlign: { md: "right" } }}>
           <Button
             variant="contained"
             startIcon={<Plus size={16} />}
@@ -128,6 +133,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
           </Button>
         </Grid>
       </Grid>
+      <Divider />
       {query.isPending ? (
         <Typography role="status">Loading accounts...</Typography>
       ) : query.isError ? (
@@ -153,38 +159,64 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data?.items.map((row) => (
-                  <TableRow key={row.id} hover>
-                    <TableCell sx={{ overflowWrap: "anywhere" }}>
-                      <Link
-                        href={listing.href(
-                          `#accounts/${encodeURIComponent(row.id)}`,
+                {data?.items.map((row) => {
+                  const status = row.deleted_at
+                    ? "Deleted"
+                    : !row.is_active
+                      ? "Disabled"
+                      : row.password_ready
+                        ? "Active"
+                        : "Pending setup";
+                  return (
+                    <TableRow key={row.id} hover>
+                      <TableCell sx={{ overflowWrap: "anywhere" }}>
+                        <Link
+                          href={listing.href(
+                            `#accounts/${encodeURIComponent(row.id)}`,
+                          )}
+                        >
+                          {row.display_name}
+                        </Link>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ display: { xs: "none", sm: "block" } }}
+                        >
+                          {row.username ?? "Username not set"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ textTransform: "capitalize" }}>
+                        {compact ? (
+                          row.role
+                        ) : (
+                          <Chip
+                            size="small"
+                            label={row.role}
+                            variant="outlined"
+                          />
                         )}
-                      >
-                        {row.display_name}
-                      </Link>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ display: { xs: "none", sm: "block" } }}
-                      >
-                        {row.id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ textTransform: "capitalize" }}>
-                      {row.role}
-                    </TableCell>
-                    <TableCell>
-                      {row.deleted_at
-                        ? "Deleted"
-                        : !row.is_active
-                          ? "Disabled"
-                          : row.password_ready
-                            ? "Active"
-                            : "Pending setup"}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        {compact ? (
+                          status
+                        ) : (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={
+                              !row.deleted_at &&
+                              row.is_active &&
+                              row.password_ready
+                                ? "success"
+                                : "default"
+                            }
+                            label={status}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -198,10 +230,19 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
-        sx={{ alignItems: { sm: "center" } }}
+        sx={{ alignItems: { sm: "center" }, justifyContent: "flex-end" }}
       >
+        {data && !query.isError && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mr: "auto" }}
+          >
+            {data.items.length} accounts on this page
+          </Typography>
+        )}
         <TextField
-            size="small"
+          size="small"
           sx={{ width: { sm: 120 } }}
           value={listing.limit}
           onChange={(e) => listing.update({ limit: e.target.value })}
@@ -216,11 +257,6 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
             <option key={size}>{size}</option>
           ))}
         </TextField>
-        {data && !query.isError && (
-          <Typography variant="body2" color="text.secondary">
-            {data.items.length} accounts on this page
-          </Typography>
-        )}
         <Stack component="nav" direction="row" aria-label="Account pagination">
           <Tooltip title="Previous page">
             <span>
@@ -254,6 +290,6 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
           </Tooltip>
         </Stack>
       </Stack>
-    </>
+    </Stack>
   );
 }

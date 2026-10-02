@@ -71,6 +71,7 @@ test("pending issuance cannot double-submit and clears the secret after close", 
   await page
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("One request");
   await page.getByRole("dialog").locator("form").evaluate((form) => {
@@ -115,6 +116,7 @@ test("wrong-account issued tokens are rejected as unknown", async ({
   await page
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Wrong account");
   await page.getByRole("button", { name: "Issue", exact: true }).click();

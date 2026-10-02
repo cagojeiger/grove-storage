@@ -1,21 +1,17 @@
 import {
   Alert,
-  Divider,
-  Grid,
   IconButton,
   Button,
   Tooltip,
   Typography,
-  Stack,
 } from "@mui/material";
 import { useState } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Pencil, History, Shield, Trash2 } from "lucide-react";
+import { RefreshCw, Pencil, History } from "lucide-react";
 import { Account, identityRequest, isAccount } from "../../api/identity";
 import { ApiError, message } from "../../api/http";
 import { AccountAction, AccountDialog } from "./AccountDialog";
-import { Tokens } from "./Tokens";
-import { PasswordSetupIssue } from "./PasswordSetupIssue";
+import { AccountWorkspace } from "./AccountWorkspace";
 import { CreateUserDialog } from "./CreateUserDialog";
 import { AccountsList } from "./AccountsList";
 import { useAccountList } from "./accountList";
@@ -112,13 +108,6 @@ export function Access({
                   </IconButton>
                 </span>
               </Tooltip>
-              <Button
-                startIcon={<Shield size={16} />}
-                disabled={Boolean(account.deleted_at)}
-                onClick={() => setAction("role")}
-              >
-                Change role
-              </Button>
             </>
           )}
         </>
@@ -138,80 +127,7 @@ export function Access({
         </Alert>
       ) : selected ? (
         account ? (
-          <>
-            <Grid
-              container
-              component="dl"
-              aria-label="Account details"
-              spacing={3}
-            >
-              {[
-                ["Account ID", account.id],
-                ["Role", account.role],
-                ["Username", account.username ?? "Not set"],
-                [
-                  "Status",
-                  account.deleted_at
-                    ? "Deleted"
-                    : !account.is_active
-                      ? "Disabled"
-                      : account.password_ready
-                        ? "Active"
-                        : "Pending setup",
-                ],
-              ].map(([label, value]) => (
-                <Grid key={label} size={{ xs: 12, sm: 6 }}>
-                  <Typography
-                    component="dt"
-                    variant="body2"
-                    color="text.secondary"
-                  >
-                    {label}
-                  </Typography>
-                  <Typography
-                    component="dd"
-                    sx={{ m: 0, overflowWrap: "anywhere" }}
-                  >
-                    {value}
-                  </Typography>
-                </Grid>
-              ))}
-            </Grid>
-            <Divider />
-            <PasswordSetupIssue key={account.id} account={account} />
-            <Divider />
-            <Tokens key={account.id} account={account} />
-            <Divider />
-            <Stack component="section" aria-label="Danger zone" spacing={2}>
-              <Typography component="h2" variant="h6">
-                Danger zone
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                useFlexGap
-                sx={{ flexWrap: "wrap" }}
-              >
-                <Button
-                  color={account.is_active ? "error" : "primary"}
-                  variant="outlined"
-                  disabled={Boolean(account.deleted_at)}
-                  onClick={() => setAction("active")}
-                >
-                  {account.is_active ? "Disable" : "Enable"}
-                </Button>
-                <Button
-                  color="error"
-                  variant="outlined"
-                  startIcon={<Trash2 size={16} />}
-                  disabled={Boolean(account.deleted_at)}
-                  onClick={() => setAction("delete")}
-                >
-                  Delete account
-                </Button>
-              </Stack>
-            </Stack>
-          </>
+          <AccountWorkspace account={account} onAction={setAction} />
         ) : (
           <Typography>
             Account unavailable.{" "}

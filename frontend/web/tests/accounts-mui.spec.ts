@@ -49,6 +49,7 @@ for (const mode of ["light", "dark"]) {
         "font-size",
         "16px",
       );
+      await page.getByRole("tab", { name: "API tokens", exact: true }).click();
       await page
         .getByRole("button", { name: "Issue token", exact: true })
         .click();
@@ -89,6 +90,7 @@ for (const mode of ["light", "dark"]) {
       await page.goto(`/api/admin/console/#accounts/${owner.id}`);
       await page.getByLabel("Theme").selectOption(mode);
       if (kind === "token") {
+        await page.getByRole("tab", { name: "API tokens", exact: true }).click();
         await page
           .getByRole("button", { name: "Issue token", exact: true })
           .click();
@@ -105,6 +107,7 @@ for (const mode of ["light", "dark"]) {
             },
           }),
         );
+        await page.getByRole("tab", { name: "Security", exact: true }).click();
         await page
           .getByRole("button", { name: "Issue setup link", exact: true })
           .click();

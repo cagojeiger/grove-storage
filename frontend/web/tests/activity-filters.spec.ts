@@ -43,6 +43,7 @@ test("account and revoked token links select their actor filters", async ({ page
   await expect(page.getByLabel("Actor account ID")).toHaveValue(owner.id);
   await expect(page.getByLabel("Used token ID")).toHaveValue("");
   await page.goBack();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("link", { name: "View token actions" }).click();
   await expect(page.getByLabel("Actor account ID")).toHaveValue(owner.id);
   await expect(page.getByLabel("Used token ID")).toHaveValue(tokenId);

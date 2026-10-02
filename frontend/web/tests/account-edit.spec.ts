@@ -27,6 +27,7 @@ test("rename trims the label while preserving account identity", async ({ page }
 test("self demotion requires acknowledgement and refreshes permissions", async ({ page }) => {
   await accessMock(page, [owner, { ...otherUser, role: "admin" }]);
   await page.goto(detail);
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page.getByRole("button", { name: "Change role", exact: true }).click();
   await page.getByLabel(/^Role\s*\*?$/).selectOption("reader");
   const confirm = page.getByRole("dialog").getByRole("button", { name: "Change role", exact: true });
@@ -41,6 +42,7 @@ for (const action of ["Disable", "Delete account"]) {
   test(`self ${action} requires confirmation and ends the session`, async ({ page }) => {
     await accessMock(page, [owner, { ...otherUser, role: "admin" }]);
     await page.goto(detail);
+    await page.getByRole("tab", { name: "Security", exact: true }).click();
     await page.getByRole("button", { name: action, exact: true }).click();
     await page.getByLabel("Confirm account name").fill(owner.display_name);
     const confirm = page.getByRole("dialog").getByRole("button", { name: action === "Disable" ? "Disable account" : action, exact: true });
@@ -55,6 +57,7 @@ for (const action of ["Disable", "Delete account"]) {
 test("other account changes do not claim to end the current session", async ({ page }) => {
   await accessMock(page);
   await page.goto(`/api/admin/console/#accounts/${otherUser.id}`);
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page.getByRole("button", { name: "Disable", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: acknowledgement })).toHaveCount(0);
   await page.getByLabel("Confirm account name").fill(otherUser.display_name);
@@ -93,6 +96,7 @@ for (const width of [320, 768, 1440]) for (const theme of ["light", "dark"]) {
     await accessMock(page);
     await page.goto(detail);
     await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("tab", { name: "Security", exact: true }).click();
     await page.getByRole("button", { name: "Delete account", exact: true }).click();
     await expect(page.getByRole("checkbox", { name: acknowledgement })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

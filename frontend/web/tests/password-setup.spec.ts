@@ -13,6 +13,7 @@ test("Admin issues a one-time setup link without persisting its secret", async (
     await route.fulfill({ json: issued });
   });
   await page.goto(`${root}#accounts/${otherUser.id}`);
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page.getByRole("button", { name: "Issue setup link" }).click();
   await expect(page.getByLabel("Username")).toHaveValue("writer");
   await expect(page.getByLabel("Username")).toHaveAttribute("readonly", "");
@@ -36,6 +37,7 @@ for (const account of [
   test(`setup is unavailable for ${account.password_ready ? "initialized" : account.deleted_at ? "deleted" : "disabled"} accounts`, async ({ page }) => {
     const { writes } = await accessMock(page, account.id === owner.id ? [account] : [owner, account]);
     await page.goto(`${root}#accounts/${account.id}`);
+    await page.getByRole("tab", { name: "Security", exact: true }).click();
     await expect(page.getByRole("button", { name: "Issue setup link" })).toBeDisabled();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(writes).toEqual([]);

@@ -97,6 +97,7 @@ test("creation opens the returned account even outside the loaded page", async (
   await expect(
     page.getByRole("heading", { name: "New account" }),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await expect(page.getByLabel(/^Label\s*\*?$/)).toBeVisible();
 });

@@ -18,6 +18,8 @@ import {
   DialogTitle,
   useMediaQuery,
   useTheme,
+  Chip,
+  Grid,
 } from "@mui/material";
 
 import { useState, useId } from "react";
@@ -67,6 +69,7 @@ export function Tokens({ account }: { account: Account }) {
           Management API tokens
         </Typography>
         <Button
+          variant="contained"
           startIcon={<KeyRound size={16} />}
           disabled={
             !account.is_active || Boolean(account.deleted_at) || query.isError
@@ -94,6 +97,7 @@ export function Tokens({ account }: { account: Account }) {
                 <ListItem
                   key={token.id}
                   disableGutters
+                  divider
                   secondaryAction={
                     <Tooltip title={`Revoke ${token.label}`}>
                       <span>
@@ -114,33 +118,42 @@ export function Tokens({ account }: { account: Account }) {
                     sx={{ overflowWrap: "anywhere" }}
                     slotProps={{ secondary: { component: "div" } }}
                     secondary={
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={1}
-                        useFlexGap
-                        sx={{ flexWrap: "wrap", alignItems: { sm: "center" } }}
+                      <Grid
+                        container
+                        spacing={2}
+                        sx={{ alignItems: "center", mt: 1 }}
                       >
-                        <Typography variant="body2">
-                          {token.token_prefix}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {token.id}
-                        </Typography>
-                        <Link href={activityLink(account.id, token.id)}>
-                          View token actions
-                        </Link>
-                        <Typography variant="body2">
-                          {token.revoked_at
-                            ? "Revoked"
-                            : Date.parse(token.expires_at) <= Date.now()
-                              ? "Expired"
-                              : "Active"}
-                        </Typography>
-                        <Typography variant="body2">
-                          Expires{" "}
-                          {new Date(token.expires_at).toLocaleString("en-US")}
-                        </Typography>
-                      </Stack>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontFamily: "monospace" }}
+                          >
+                            {token.token_prefix}
+                          </Typography>
+                          <Link href={activityLink(account.id, token.id)}>
+                            View token actions
+                          </Link>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 3 }}>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={
+                              token.revoked_at
+                                ? "Revoked"
+                                : Date.parse(token.expires_at) <= Date.now()
+                                  ? "Expired"
+                                  : "Active"
+                            }
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 5 }}>
+                          <Typography variant="body2">
+                            Expires{" "}
+                            {new Date(token.expires_at).toLocaleString("en-US")}
+                          </Typography>
+                        </Grid>
+                      </Grid>
                     }
                   />
                 </ListItem>
@@ -258,6 +271,22 @@ function TokenDialog({
               <Stack spacing={3}>
                 {target === "issue" ? (
                   <>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      <Typography>{account.display_name}</Typography>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={account.role}
+                      />
+                    </Stack>
                     <TextField
                       name="label"
                       disabled={state.busy || state.unknown}

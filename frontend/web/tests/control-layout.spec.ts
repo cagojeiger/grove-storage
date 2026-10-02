@@ -69,6 +69,7 @@ test("account danger controls and confirmation share error color", async ({ page
   await accessMock(page);
   await page.goto(`/api/admin/console/#accounts/${owner.id}`);
   await page.getByLabel("Theme").selectOption("light");
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
   const remove = page.getByRole("button", { name: "Delete account", exact: true });
   await expect(remove).toHaveCSS("color", "rgb(211, 47, 47)");
   await expect(page.getByRole("button", { name: "Disable", exact: true })).toHaveCSS("color", "rgb(211, 47, 47)");

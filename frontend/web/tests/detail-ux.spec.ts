@@ -12,6 +12,7 @@ for (const mode of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/api/admin/console/#accounts/${owner.id}`);
       await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("tab", { name: "API tokens", exact: true }).click();
       await page.getByRole("button", { name: "Issue token", exact: true }).click();
       await page.getByLabel(/^Label/).fill("Deployment automation");
       await page.getByRole("button", { name: "Issue", exact: true }).click();
