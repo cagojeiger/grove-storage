@@ -45,7 +45,7 @@ export function AccountMenu({
         aria-expanded={Boolean(anchor)}
         aria-controls={anchor ? id : undefined}
         onClick={(event) => setAnchor(event.currentTarget)}
-        sx={{ width: "100%", gap: 1.5 }}
+        sx={{ width: "100%", gap: 1.5, flexGrow: 0, flexShrink: 0 }}
       >
         <Avatar>
           <CircleUserRound size={22} />

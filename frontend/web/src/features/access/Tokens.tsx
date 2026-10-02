@@ -5,26 +5,19 @@ import {
   Checkbox,
   FormControlLabel,
   Button,
-  IconButton,
   Alert,
-  Link,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
-  Tooltip,
   Typography,
   Dialog,
   DialogTitle,
   useMediaQuery,
   useTheme,
   Chip,
-  Grid,
 } from "@mui/material";
 
 import { useState, useId } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Trash2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import {
   Account,
   Credential,
@@ -38,6 +31,7 @@ import {
 } from "../../api/identity";
 
 import { message } from "../../api/http";
+import { TokenList } from "./TokenList";
 import { IssuedToken } from "./IssuedToken";
 import { useAction } from "./useAction";
 import { activityLink } from "../activity/filters";
@@ -90,75 +84,11 @@ export function Tokens({ account }: { account: Account }) {
         </Alert>
       ) : (
         <>
-          <List disablePadding aria-label="Management API tokens">
-            {query.data.pages
-              .flatMap((p) => p.items)
-              .map((token) => (
-                <ListItem
-                  key={token.id}
-                  disableGutters
-                  divider
-                  secondaryAction={
-                    <Tooltip title={`Revoke ${token.label}`}>
-                      <span>
-                        <IconButton
-                          edge="end"
-                          aria-label={`Revoke ${token.label}`}
-                          disabled={Boolean(token.revoked_at)}
-                          onClick={() => setDialog(token)}
-                        >
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  }
-                >
-                  <ListItemText
-                    primary={token.label}
-                    sx={{ overflowWrap: "anywhere" }}
-                    slotProps={{ secondary: { component: "div" } }}
-                    secondary={
-                      <Grid
-                        container
-                        spacing={2}
-                        sx={{ alignItems: "center", mt: 1 }}
-                      >
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontFamily: "monospace" }}
-                          >
-                            {token.token_prefix}
-                          </Typography>
-                          <Link href={activityLink(account.id, token.id)}>
-                            View token actions
-                          </Link>
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 3 }}>
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            label={
-                              token.revoked_at
-                                ? "Revoked"
-                                : Date.parse(token.expires_at) <= Date.now()
-                                  ? "Expired"
-                                  : "Active"
-                            }
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 5 }}>
-                          <Typography variant="body2">
-                            Expires{" "}
-                            {new Date(token.expires_at).toLocaleString("en-US")}
-                          </Typography>
-                        </Grid>
-                      </Grid>
-                    }
-                  />
-                </ListItem>
-              ))}
-          </List>
+          <TokenList
+            tokens={query.data.pages.flatMap((page) => page.items)}
+            onRevoke={setDialog}
+            activityHref={(token) => activityLink(account.id, token.id)}
+          />
           {!query.data.pages.some((p) => p.items.length) && (
             <Typography color="text.secondary">No tokens.</Typography>
           )}

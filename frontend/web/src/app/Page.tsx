@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
-import { Box, Button, Container, Stack, Typography } from "@mui/material";
-import { ArrowLeft } from "lucide-react";
+import {
+  Box,
+  Breadcrumbs,
+  Container,
+  Divider,
+  Link,
+  Stack,
+  Typography,
+} from "@mui/material";
 
 export function Page({
   title,
@@ -16,15 +23,17 @@ export function Page({
   return (
     <Container component="main" maxWidth="xl" sx={{ py: 3 }}>
       <Stack spacing={3}>
-        {back && (
-          <Button
-            href={back.href}
-            startIcon={<ArrowLeft size={18} />}
-            sx={{ alignSelf: "flex-start" }}
-          >
-            {back.label}
-          </Button>
-        )}
+        <Breadcrumbs aria-label="Breadcrumb" sx={{ overflowWrap: "anywhere" }}>
+          <Link color="inherit" href="#">
+            Console
+          </Link>
+          {back && (
+            <Link color="inherit" href={back.href}>
+              {back.label}
+            </Link>
+          )}
+          <Typography color="text.primary">{title}</Typography>
+        </Breadcrumbs>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={2}
@@ -41,8 +50,8 @@ export function Page({
             <Box
               sx={{
                 display: "flex",
-                alignItems: "center",
                 gap: 1,
+                alignItems: "center",
                 flexWrap: "wrap",
               }}
             >
@@ -50,6 +59,7 @@ export function Page({
             </Box>
           )}
         </Stack>
+        <Divider />
         {children}
       </Stack>
     </Container>

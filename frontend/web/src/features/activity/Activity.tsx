@@ -17,10 +17,10 @@ import {
   useTheme,
   Alert,
   Box,
-  Grid,
   Stack,
   Tooltip,
-  Dialog,
+  Drawer,
+  Collapse,
   DialogTitle,
   DialogActions,
 } from "@mui/material";
@@ -41,6 +41,7 @@ import {
 } from "./model";
 import { time } from "../../design/format";
 import { activityFilters, uuidPattern } from "./filters";
+import { Details } from "../../app/Details";
 import { Page } from "../../app/Page";
 
 export function Activity({ route, admin }: { route: string; admin: boolean }) {
@@ -152,51 +153,51 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           </Stack>
         )}
       {!denied && (
-        <Stack
-          component="form"
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          id="activity-filters"
-          hidden={!filtersOpen}
-          sx={{
-            display: filtersOpen ? "flex" : "none",
-            alignItems: { sm: "center" },
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
-            const next = new URLSearchParams();
-            for (const key of ["account_id", "credential_id"]) {
-              const value = field(data, key).trim();
-              if (value) next.set(key, value);
-            }
-            window.location.hash = `${path}${next.size ? `?${next}` : ""}`;
-          }}
-        >
-          <TextField
-            size="small"
-            name="account_id"
-            defaultValue={params.get("account_id") ?? ""}
-            autoComplete="off"
-            label={"Actor account ID"}
-            slotProps={{
-              htmlInput: { pattern: uuidPattern, spellCheck: false },
+        <Collapse in={filtersOpen}>
+          <Stack
+            component="form"
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            id="activity-filters"
+            sx={{
+              alignItems: { sm: "center" },
             }}
-          />
-          <TextField
-            size="small"
-            name="credential_id"
-            defaultValue={params.get("credential_id") ?? ""}
-            autoComplete="off"
-            label={"Used token ID"}
-            slotProps={{
-              htmlInput: { pattern: uuidPattern, spellCheck: false },
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              const next = new URLSearchParams();
+              for (const key of ["account_id", "credential_id"]) {
+                const value = field(data, key).trim();
+                if (value) next.set(key, value);
+              }
+              window.location.hash = `${path}${next.size ? `?${next}` : ""}`;
             }}
-          />
-          <Button type="submit" variant="outlined">
-            Apply
-          </Button>
-        </Stack>
+          >
+            <TextField
+              size="small"
+              name="account_id"
+              defaultValue={params.get("account_id") ?? ""}
+              autoComplete="off"
+              label={"Actor account ID"}
+              slotProps={{
+                htmlInput: { pattern: uuidPattern, spellCheck: false },
+              }}
+            />
+            <TextField
+              size="small"
+              name="credential_id"
+              defaultValue={params.get("credential_id") ?? ""}
+              autoComplete="off"
+              label={"Used token ID"}
+              slotProps={{
+                htmlInput: { pattern: uuidPattern, spellCheck: false },
+              }}
+            />
+            <Button type="submit" variant="outlined">
+              Apply
+            </Button>
+          </Stack>
+        </Collapse>
       )}
       {denied ? (
         <Alert severity="error">Admin access required.</Alert>
@@ -315,20 +316,25 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         </>
       )}
       {!denied && selected && !query.isError && (
-        <Dialog
+        <Drawer
           open
-          fullWidth
-          maxWidth="sm"
-          fullScreen={compact}
-          aria-labelledby={titleId}
+          anchor="right"
+          slotProps={{
+            paper: {
+              role: "dialog",
+              "aria-labelledby": titleId,
+              sx: { width: { xs: "100%", sm: 560 } },
+            },
+          }}
           onClose={(_event, reason) => {
             if (reason === "escapeKeyDown") setSelected(null);
           }}
         >
           <DialogTitle id={titleId}>{"Event details"}</DialogTitle>
           <DialogContent dividers>
-            <Grid container component="dl" spacing={3}>
-              {Object.entries({
+            <Details
+              label="Event properties"
+              items={Object.entries({
                 Event: eventName(selected),
                 Result: eventResult(selected),
                 Time: time(selected.context.created_at),
@@ -347,24 +353,8 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                       Error: selected.error_code,
                     }
                   : {}),
-              }).map(([label, value]) => (
-                <Grid key={label} size={{ xs: 12, sm: 6 }}>
-                  <Typography
-                    component="dt"
-                    variant="body2"
-                    color="text.secondary"
-                  >
-                    {label}
-                  </Typography>
-                  <Typography
-                    component="dd"
-                    sx={{ m: 0, overflowWrap: "anywhere" }}
-                  >
-                    {value ?? "-"}
-                  </Typography>
-                </Grid>
-              ))}
-            </Grid>
+              })}
+            />
             {"metadata" in selected && (
               <Box
                 component="pre"
@@ -377,7 +367,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           <DialogActions>
             <Button onClick={() => setSelected(null)}>Close</Button>
           </DialogActions>
-        </Dialog>
+        </Drawer>
       )}
     </Page>
   );

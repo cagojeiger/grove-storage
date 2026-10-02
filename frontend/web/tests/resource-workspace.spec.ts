@@ -21,11 +21,10 @@ test("storage tabs preserve capacity, list context and edit return", async ({
   await page.getByRole("tab", { name: "Configuration", exact: true }).click();
   await expect(
     page.getByRole("progressbar", { name: "Accounted capacity" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Storage properties")).toContainText("Configured capacity");
   await expect(
-    page
-      .getByRole("list", { name: "Storage properties" })
-      .getByRole("listitem"),
+    page.getByLabel("Storage properties").locator("dd"),
   ).toHaveCount(9);
   await expect(page.getByLabel("Saved metadata", { exact: true })).toHaveCount(
     0,
@@ -65,7 +64,7 @@ test("client credentials load only when selected and support keyboard navigation
     calls.filter((call) => call.command === "credential.list"),
   ).toHaveLength(0);
   await overview.focus();
-  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
   const credentials = page.getByRole("tab", {
     name: "S3 credentials",
     exact: true,

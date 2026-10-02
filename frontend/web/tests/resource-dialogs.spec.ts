@@ -18,7 +18,7 @@ for (const theme of ["light", "dark"]) {
       await page.getByLabel("Theme").selectOption(theme);
       await page.getByRole("tab", { name: "Configuration", exact: true }).click();
       await expect(
-        page.getByRole("list", { name: "Storage properties" }),
+        page.getByLabel("Storage properties"),
       ).toBeVisible();
       await page.getByRole("tab", { name: "Overview", exact: true }).click();
       await expect(

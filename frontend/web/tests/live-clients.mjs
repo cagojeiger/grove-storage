@@ -6,7 +6,7 @@ import { expect } from "@playwright/test";
 export async function clientChecks(page, { database }) {
   const id = "console-ui-client";
   await page
-    .getByRole("navigation")
+    .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Clients", exact: true })
     .click();
   await page

@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import {
   AppBar,
   Box,
-  Breadcrumbs,
   Divider,
   Drawer,
   IconButton,
@@ -32,8 +31,8 @@ import type { Session } from "../api/http";
 import { ThemePicker } from "../design/Theme";
 import { AccountMenu } from "./AccountMenu";
 
-const drawerWidth = 256;
-const sections = [
+const drawerWidth = 232;
+const destinations = [
   { label: "Overview", path: "", icon: LayoutDashboard },
   { label: "Storage", path: "storages", icon: HardDrive, group: "Resources" },
   { label: "Clients", path: "clients", icon: AppWindow },
@@ -60,85 +59,98 @@ export function Shell({
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const root = route.split("/")[0];
-  const section =
-    root === "usage"
-      ? sections[0]
-      : root === "access"
-        ? sections[3]
-        : sections.find((item) => item.path === root);
-  const label =
-    root === "usage"
-      ? "Usage history"
-      : route === "settings/security"
-        ? "Security"
-        : (section?.label ?? "My account");
-  const brand = (
-    <Stack
-      component="a"
-      href={import.meta.env.BASE_URL}
-      direction="row"
-      spacing={1.5}
-      sx={{
-        alignItems: "center",
-        color: "text.primary",
-        textDecoration: "none",
-      }}
-    >
-      <Box
-        component="img"
-        src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
-        alt=""
-        sx={{ width: 36, height: 36 }}
-      />
-      <Typography component="span" variant="subtitle1">
-        Grove Storage
-      </Typography>
-    </Stack>
-  );
-
+  const selected =
+    root === "usage" ? "" : root === "access" ? "accounts" : root;
   return (
-    <Box sx={{ display: "flex", minHeight: "100dvh", minWidth: 0 }}>
+    <Box sx={{ display: "flex", minHeight: "100dvh" }}>
+      <AppBar
+        position="fixed"
+        sx={(theme) => ({
+          zIndex: desktop ? theme.zIndex.drawer + 1 : theme.zIndex.appBar,
+        })}
+      >
+        <Toolbar sx={{ gap: 2 }}>
+          {session && !desktop && (
+            <Tooltip title="Open navigation">
+              <IconButton
+                color="inherit"
+                edge="start"
+                aria-label="Open navigation"
+                onClick={() => setOpen(true)}
+              >
+                <Menu />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Link
+            href={import.meta.env.BASE_URL}
+            color="inherit"
+            underline="none"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <Box
+              component="img"
+              src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
+              alt=""
+              sx={{ width: 32, height: 32 }}
+            />
+            <Typography component="span" variant="h6" noWrap>
+              Grove Storage
+            </Typography>
+          </Link>
+          <ThemePicker />
+        </Toolbar>
+      </AppBar>
       {session && (
         <Drawer
           variant={desktop ? "permanent" : "temporary"}
           open={desktop || open}
           onClose={close}
           sx={{ width: desktop ? drawerWidth : 0, flexShrink: 0 }}
-          slotProps={{ paper: { sx: { width: drawerWidth } } }}
+          slotProps={{
+            paper: {
+              sx: {
+                width: drawerWidth,
+                ...(desktop ? { top: 64, height: "calc(100% - 64px)" } : {}),
+              },
+            },
+          }}
         >
           <Stack
             component="aside"
             aria-label="Workspace sidebar"
             sx={{ height: "100%", minHeight: 0 }}
           >
-            <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
-              {brand}
-              {!desktop && (
-                <Tooltip title="Close navigation">
-                  <IconButton aria-label="Close navigation" onClick={close}>
-                    <X size={20} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Toolbar>
-            <Divider />
+            {!desktop && (
+              <Toolbar sx={{ justifyContent: "space-between" }}>
+                <Typography variant="h6">Console</Typography>
+                <IconButton aria-label="Close navigation" onClick={close}>
+                  <X />
+                </IconButton>
+              </Toolbar>
+            )}
             <List
               component="nav"
               aria-label="Main navigation"
-              sx={{ px: 1, flex: 1, overflowY: "auto" }}
+              sx={{ flex: 1, overflowY: "auto" }}
             >
-              {sections
+              {destinations
                 .filter(
                   (item) =>
                     item.path !== "accounts" || session.role === "admin",
                 )
                 .map((item) => {
-                  const selected = section?.path === item.path;
+                  const Icon = item.icon;
                   const group =
                     item.path === "activity" && session.role !== "admin"
                       ? "Management"
                       : item.group;
-                  const Icon = item.icon;
                   return (
                     <Box key={item.path}>
                       {group && (
@@ -147,8 +159,10 @@ export function Shell({
                       <ListItemButton
                         component="a"
                         href={`#${item.path}`}
-                        selected={selected}
-                        aria-current={selected ? "page" : undefined}
+                        selected={selected === item.path}
+                        aria-current={
+                          selected === item.path ? "page" : undefined
+                        }
                         onClick={close}
                       >
                         <ListItemIcon>
@@ -161,56 +175,29 @@ export function Shell({
                 })}
             </List>
             <Divider />
-            <Box sx={{ p: 1 }}>
-              <AccountMenu
-                name={name}
-                role={session.role}
-                passwordSession={session.credential_id === null}
-                loggingOut={loggingOut}
-                onLogout={onLogout}
-                onNavigate={close}
-              />
-            </Box>
+            <AccountMenu
+              name={name}
+              role={session.role}
+              passwordSession={session.credential_id === null}
+              loggingOut={loggingOut}
+              onLogout={onLogout}
+              onNavigate={close}
+            />
           </Stack>
         </Drawer>
       )}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <AppBar
-          position="sticky"
-          color="inherit"
-          elevation={0}
-          sx={{ borderBottom: 1, borderColor: "divider" }}
+      <Stack sx={{ flex: 1, minWidth: 0 }}>
+        <Toolbar />
+        <Box sx={{ flex: 1 }}>{children}</Box>
+        <Box
+          component="footer"
+          sx={{ px: 3, py: 2, borderTop: 1, borderColor: "divider" }}
         >
-          <Toolbar sx={{ gap: 2 }}>
-            {session && !desktop && (
-              <Tooltip title="Open navigation">
-                <IconButton
-                  edge="start"
-                  aria-label="Open navigation"
-                  onClick={() => setOpen(true)}
-                >
-                  <Menu size={20} />
-                </IconButton>
-              </Tooltip>
-            )}
-            {session ? (
-              <Breadcrumbs
-                aria-label="Breadcrumb"
-                sx={{ minWidth: 0, flex: 1 }}
-              >
-                <Link color="inherit" underline="hover" href="#">
-                  Console
-                </Link>
-                <Typography color="text.primary">{label}</Typography>
-              </Breadcrumbs>
-            ) : (
-              <Box sx={{ flex: 1 }}>{brand}</Box>
-            )}
-            <ThemePicker />
-          </Toolbar>
-        </AppBar>
-        {children}
-      </Box>
+          <Typography variant="caption" color="text.secondary">
+            Grove Storage
+          </Typography>
+        </Box>
+      </Stack>
     </Box>
   );
 }

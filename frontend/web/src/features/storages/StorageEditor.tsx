@@ -43,7 +43,9 @@ export function StorageEditor({
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => {
+      mounted.current = false;
+    };
   }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -93,10 +95,7 @@ export function StorageEditor({
     }
   }
   return (
-    <Stack spacing={3} sx={{ maxWidth: 720 }}>
-      <Typography component="h1" variant="h5" id={titleId}>
-        {storage ? "Edit storage" : "Add storage"}
-      </Typography>
+    <Stack spacing={3}>
       <Box>
         <form
           id={`${titleId}-form`}
@@ -109,131 +108,140 @@ export function StorageEditor({
             spacing={3}
             sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
           >
-            <Typography component="h3" variant="subtitle1">
-              Connection
-            </Typography>
-            <TextField
-              name="id"
-              required
-              defaultValue={storage?.id}
-              label={"Storage ID"}
-              slotProps={{
-                htmlInput: {
-                  pattern: idPattern,
-                  maxLength: 64,
-                  title: "1-64 lowercase letters, digits, or hyphens",
-                },
-                input: { readOnly: Boolean(storage) },
-              }}
-            />
-            <TextField
-              key="endpoint"
-              name="endpoint"
-              type="url"
-              required
-              defaultValue={storage?.endpoint ?? ""}
-              placeholder="https://s3.example.com"
-              label={"Endpoint"}
-              slotProps={{ htmlInput: { spellCheck: false } }}
-            />
-            <TextField
-              name="public_endpoint"
-              type="url"
-              defaultValue={storage?.public_endpoint ?? ""}
-              label={"Public endpoint (optional)"}
-              slotProps={{ htmlInput: { spellCheck: false } }}
-            />
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  name="region"
-                  required
-                  defaultValue={storage?.region ?? "us-east-1"}
-                  label={"Region"}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  name="bucket"
-                  required
-                  defaultValue={storage?.bucket ?? ""}
-                  label={"Bucket"}
-                  slotProps={{ htmlInput: { spellCheck: false } }}
-                />
-              </Grid>
-            </Grid>
-            <Divider />
-            <Typography component="h3" variant="subtitle1">
-              Credentials
-            </Typography>
-            <TextField
-              name="access_key"
-              required
-              defaultValue={storage?.access_key ?? ""}
-              label={"Access key"}
-              slotProps={{ htmlInput: { spellCheck: false } }}
-            />
-            <TextField
-              name="secret_key"
-              type="password"
-              required
-              autoComplete="new-password"
-              label={storage ? "Secret key (re-enter)" : "Secret key"}
-            />
-            <Divider />
-            <Typography component="h3" variant="subtitle1">
-              Transfer and allocation
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="force_path_style"
-                    defaultChecked={storage?.force_path_style}
+            <Grid container spacing={4}>
+              <Grid size={{ xs: 12, md: 7 }}>
+                <Stack spacing={3}>
+                  <Typography component="h2" variant="h6">
+                    Connection
+                  </Typography>
+                  <TextField
+                    name="id"
+                    required
+                    defaultValue={storage?.id}
+                    label={"Storage ID"}
+                    slotProps={{
+                      htmlInput: {
+                        pattern: idPattern,
+                        maxLength: 64,
+                        title: "1-64 lowercase letters, digits, or hyphens",
+                      },
+                      input: { readOnly: Boolean(storage) },
+                    }}
                   />
-                }
-                label={"Path-style"}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    name="force_relay"
-                    defaultChecked={storage?.force_relay}
+                  <TextField
+                    key="endpoint"
+                    name="endpoint"
+                    type="url"
+                    required
+                    defaultValue={storage?.endpoint ?? ""}
+                    placeholder="https://s3.example.com"
+                    label={"Endpoint"}
+                    slotProps={{ htmlInput: { spellCheck: false } }}
                   />
-                }
-                label={"Use relay"}
-              />
-            </Stack>
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 8 }}>
-                <TextField
-                  label="Configured capacity"
-                  name="capacity"
-                  required
-                  defaultValue={capacity.value}
-                  slotProps={{
-                    htmlInput: {
-                      "aria-label": "Configured capacity",
-                      inputMode: "decimal",
-                    },
-                  }}
-                />
+                  <TextField
+                    name="public_endpoint"
+                    type="url"
+                    defaultValue={storage?.public_endpoint ?? ""}
+                    label={"Public endpoint (optional)"}
+                    slotProps={{ htmlInput: { spellCheck: false } }}
+                  />
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        name="region"
+                        required
+                        defaultValue={storage?.region ?? "us-east-1"}
+                        label={"Region"}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        name="bucket"
+                        required
+                        defaultValue={storage?.bucket ?? ""}
+                        label={"Bucket"}
+                        slotProps={{ htmlInput: { spellCheck: false } }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Stack>
               </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  label="Unit"
-                  name="unit"
-                  defaultValue={capacity.unit}
-                  select
-                  slotProps={{
-                    htmlInput: { "aria-label": "Capacity unit" },
-                    select: { native: true },
-                  }}
-                >
-                  <option>B</option>
-                  <option>GiB</option>
-                  <option>TiB</option>
-                </TextField>
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Stack spacing={3}>
+                  <Typography component="h2" variant="h6">
+                    Credentials
+                  </Typography>
+                  <TextField
+                    name="access_key"
+                    required
+                    defaultValue={storage?.access_key ?? ""}
+                    label={"Access key"}
+                    slotProps={{ htmlInput: { spellCheck: false } }}
+                  />
+                  <TextField
+                    name="secret_key"
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    label={storage ? "Secret key (re-enter)" : "Secret key"}
+                  />
+                  <Divider />
+                  <Typography component="h2" variant="h6">
+                    Transfer and allocation
+                  </Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          name="force_path_style"
+                          defaultChecked={storage?.force_path_style}
+                        />
+                      }
+                      label={"Path-style"}
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          name="force_relay"
+                          defaultChecked={storage?.force_relay}
+                        />
+                      }
+                      label={"Use relay"}
+                    />
+                  </Stack>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 8 }}>
+                      <TextField
+                        label="Configured capacity"
+                        name="capacity"
+                        required
+                        defaultValue={capacity.value}
+                        slotProps={{
+                          htmlInput: {
+                            "aria-label": "Configured capacity",
+                            inputMode: "decimal",
+                          },
+                        }}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        label="Unit"
+                        name="unit"
+                        defaultValue={capacity.unit}
+                        select
+                        slotProps={{
+                          htmlInput: { "aria-label": "Capacity unit" },
+                          select: { native: true },
+                        }}
+                      >
+                        <option>B</option>
+                        <option>GiB</option>
+                        <option>TiB</option>
+                      </TextField>
+                    </Grid>
+                  </Grid>
+                </Stack>
               </Grid>
             </Grid>
           </Stack>

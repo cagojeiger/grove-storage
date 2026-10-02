@@ -16,17 +16,15 @@ for (const mode of ["light", "dark"]) {
         .click();
       const settings = page.getByRole("region", { name: "Storage settings" });
       const usage = page.getByRole("region", { name: "Storage usage" });
-      const properties = settings.getByRole("list", {
-        name: "Storage properties",
-      });
-      await expect(properties.getByRole("listitem")).toHaveCount(9);
+      const properties = settings.getByLabel("Storage properties");
+      await expect(properties.locator("dd")).toHaveCount(9);
       for (const label of [properties.getByText("Type", { exact: true })]) {
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
       }
       await expect(properties.getByText("S3", { exact: true })).toHaveCSS(
         "font-size",
-        "16px",
+        "14px",
       );
       await expect(settings.getByRole("heading", { level: 2 })).toHaveCSS(
         "font-size",

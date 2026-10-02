@@ -41,17 +41,16 @@ export function ResourceMetadata({ resource, id, canWrite }: Props) {
       command<MetadataResult>(`${resource}.metadata.show`, { id }, signal),
   });
   return (
-    <Stack component="section" aria-label="Metadata" spacing={1}>
+    <Stack component="section" aria-label="Metadata" spacing={2}>
       <Stack
         direction="row"
         sx={{
-          display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 1,
         }}
       >
-        <Typography component="h3" variant="subtitle2">
+        <Typography component="h2" variant="h6">
           Metadata
         </Typography>
         <Stack direction="row" spacing={0.5}>

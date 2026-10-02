@@ -8,18 +8,14 @@ import {
   IconButton,
   Button,
   Link,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
-  Divider,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
 
+import { DataGrid, type GridColDef } from "@mui/x-data-grid";
+import { cspNonce } from "../../app/csp";
+import type { Account } from "../../api/identity";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { identityRequest } from "../../api/identity";
@@ -47,6 +43,61 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
     },
   });
   const data = query.data;
+  const status = (row: Account) =>
+    row.deleted_at
+      ? "Deleted"
+      : !row.is_active
+        ? "Disabled"
+        : row.password_ready
+          ? "Active"
+          : "Pending setup";
+  const columns: GridColDef<Account>[] = [
+    {
+      field: "display_name",
+      headerName: "Account",
+      minWidth: 170,
+      flex: 2,
+      sortable: false,
+      renderCell: ({ row, tabIndex }) => (
+        <Stack sx={{ minWidth: 0, py: 1 }}>
+          <Link
+            tabIndex={tabIndex}
+            href={listing.href(`#accounts/${encodeURIComponent(row.id)}`)}
+            noWrap
+          >
+            {row.display_name}
+          </Link>
+          <Typography variant="body2" color="text.secondary" noWrap>
+            {compact ? status(row) : (row.username ?? "Username not set")}
+          </Typography>
+        </Stack>
+      ),
+    },
+    {
+      field: "role",
+      headerName: "Role",
+      minWidth: 88,
+      flex: 1,
+      sortable: false,
+      renderCell: ({ row }) => (
+        <Chip size="small" label={row.role} variant="outlined" />
+      ),
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      minWidth: 150,
+      flex: 1,
+      sortable: false,
+      renderCell: ({ row }) => (
+        <Chip
+          size="small"
+          label={status(row)}
+          color={status(row) === "Active" ? "success" : "default"}
+        />
+      ),
+    },
+  ];
   return (
     <Stack spacing={2}>
       <Grid container spacing={2} sx={{ alignItems: "center" }}>
@@ -133,7 +184,7 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
           </Button>
         </Grid>
       </Grid>
-      <Divider />
+
       {query.isPending ? (
         <Typography role="status">Loading accounts...</Typography>
       ) : query.isError ? (
@@ -145,86 +196,21 @@ export function AccountsList({ onCreate }: { onCreate: () => void }) {
         </Alert>
       ) : (
         <>
-          <TableContainer>
-            <Table
-              size="small"
+          <Stack sx={{ minHeight: 180, maxHeight: 560 }}>
+            <DataGrid
+              nonce={cspNonce}
               aria-label="Accounts"
-              sx={{ minWidth: 280, tableLayout: "fixed" }}
-            >
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: "50%" }}>Account</TableCell>
-                  <TableCell>Role</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data?.items.map((row) => {
-                  const status = row.deleted_at
-                    ? "Deleted"
-                    : !row.is_active
-                      ? "Disabled"
-                      : row.password_ready
-                        ? "Active"
-                        : "Pending setup";
-                  return (
-                    <TableRow key={row.id} hover>
-                      <TableCell sx={{ overflowWrap: "anywhere" }}>
-                        <Link
-                          href={listing.href(
-                            `#accounts/${encodeURIComponent(row.id)}`,
-                          )}
-                        >
-                          {row.display_name}
-                        </Link>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ display: { xs: "none", sm: "block" } }}
-                        >
-                          {row.username ?? "Username not set"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ textTransform: "capitalize" }}>
-                        {compact ? (
-                          row.role
-                        ) : (
-                          <Chip
-                            size="small"
-                            label={row.role}
-                            variant="outlined"
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {compact ? (
-                          status
-                        ) : (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            color={
-                              !row.deleted_at &&
-                              row.is_active &&
-                              row.password_ready
-                                ? "success"
-                                : "default"
-                            }
-                            label={status}
-                          />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          {!data?.items.length && (
-            <Typography color="text.secondary">
-              No matching accounts.
-            </Typography>
-          )}
+              rows={data?.items ?? []}
+              columns={columns}
+              rowHeight={72}
+              hideFooter
+              disableRowSelectionOnClick
+              disableColumnMenu
+              disableColumnFilter
+              columnVisibilityModel={{ status: !compact }}
+              localeText={{ noRowsLabel: "No matching accounts." }}
+            />
+          </Stack>
         </>
       )}
       <Stack

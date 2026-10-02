@@ -5,13 +5,8 @@ import {
   Checkbox,
   FormControlLabel,
   Button,
-  IconButton,
   Alert,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
-  Tooltip,
   Typography,
   Dialog,
   DialogTitle,
@@ -21,7 +16,7 @@ import {
 
 import { FormEvent, useState, useId } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Trash2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { ApiError, Session, identity, message, request } from "../../api/http";
 import {
   Credential,
@@ -34,7 +29,7 @@ import {
   identityRequest,
 } from "../../api/identity";
 
-import { time } from "../../design/format";
+import { TokenList } from "../access/TokenList";
 import { IssuedToken } from "../access/IssuedToken";
 
 export function PersonalTokens({
@@ -70,7 +65,8 @@ export function PersonalTokens({
           Management API tokens
         </Typography>
         <Button
-          type="submit"
+          variant="contained"
+          type="button"
           startIcon={<KeyRound size={16} />}
           disabled={query.isError}
           onClick={() => setTarget("issue")}
@@ -89,59 +85,7 @@ export function PersonalTokens({
         </Alert>
       ) : (
         <>
-          <List disablePadding aria-label="Management API tokens">
-            {rows.map((token) => (
-              <ListItem
-                key={token.id}
-                disableGutters
-                secondaryAction={
-                  <Tooltip title={`Revoke ${token.label}`}>
-                    <span>
-                      <IconButton
-                        edge="end"
-                        aria-label={`Revoke ${token.label}`}
-                        disabled={Boolean(token.revoked_at)}
-                        onClick={() => setTarget(token)}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                }
-              >
-                <ListItemText
-                  primary={token.label}
-                  sx={{ overflowWrap: "anywhere" }}
-                  slotProps={{ secondary: { component: "div" } }}
-                  secondary={
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1}
-                      useFlexGap
-                      sx={{ flexWrap: "wrap", alignItems: { sm: "center" } }}
-                    >
-                      <Typography variant="body2">
-                        {token.token_prefix}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {token.id}
-                      </Typography>
-                      <Typography variant="body2">
-                        {token.revoked_at
-                          ? "Revoked"
-                          : Date.parse(token.expires_at) <= Date.now()
-                            ? "Expired"
-                            : "Active"}
-                      </Typography>
-                      <Typography variant="body2">
-                        Expires {time(token.expires_at)}
-                      </Typography>
-                    </Stack>
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
+          <TokenList tokens={rows} onRevoke={setTarget} />
           {!rows.length && (
             <Typography color="text.secondary">No API tokens.</Typography>
           )}

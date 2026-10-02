@@ -7,7 +7,7 @@ test("mobile account status remains readable without truncated chips", async ({
   await accessMock(page, [{ ...owner, password_ready: false }]);
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/api/admin/console/#accounts");
-  const status = page.getByRole("cell", { name: "Pending setup", exact: true });
+  const status = page.getByRole("grid").getByText("Pending setup", { exact: true });
   await expect(status).toBeVisible();
   expect(await status.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
     true,
@@ -70,8 +70,9 @@ test("unknown account tabs use overview and keyboard navigation reaches Security
   const overview = page.getByRole("tab", { name: "Overview", exact: true });
   await expect(overview).toHaveAttribute("aria-selected", "true");
   await overview.focus();
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tablist", { name: "Account sections" })).toHaveAttribute("aria-orientation", "vertical");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("tabpanel", { name: "Security" })).toBeVisible();
 });

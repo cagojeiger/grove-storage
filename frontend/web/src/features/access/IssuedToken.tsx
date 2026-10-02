@@ -16,6 +16,7 @@ import {
   Tooltip,
 } from "@mui/material";
 
+import { Details } from "../../app/Details";
 import { useState } from "react";
 import { Copy, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Issued } from "../../api/identity";
@@ -34,13 +35,17 @@ export function IssuedToken({
   const [revealed, setRevealed] = useState(false);
   function copy() {
     if (!navigator.clipboard) {
-      setNotice("Clipboard unavailable. Reveal and select the token to copy it.");
+      setNotice(
+        "Clipboard unavailable. Reveal and select the token to copy it.",
+      );
       return;
     }
     void navigator.clipboard.writeText(value.token).then(
       () => setNotice("Copied"),
       () =>
-        setNotice("Clipboard unavailable. Reveal and select the token to copy it."),
+        setNotice(
+          "Clipboard unavailable. Reveal and select the token to copy it.",
+        ),
     );
   }
   return (
@@ -68,7 +73,9 @@ export function IssuedToken({
                         {revealed ? <EyeOff size={18} /> : <Eye size={18} />}
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title={notice === "Copied" ? "Copied" : "Copy token"}>
+                    <Tooltip
+                      title={notice === "Copied" ? "Copied" : "Copy token"}
+                    >
                       <IconButton aria-label="Copy token" onClick={copy}>
                         <Copy size={18} />
                       </IconButton>
@@ -79,13 +86,16 @@ export function IssuedToken({
             }}
           />
           {notice && (
-            <Typography role="status" variant="body2">{notice}</Typography>
+            <Typography role="status" variant="body2">
+              {notice}
+            </Typography>
           )}
-          <Stack component="dl" spacing={2}>
-            {[
+          <Details
+            label="Token details"
+            items={[
               [
                 accountName ? "Account" : "Account ID",
-                accountName ?? value.account_id ?? value.user_id,
+                accountName ?? value.account_id,
               ],
               [
                 "Expires",
@@ -94,24 +104,8 @@ export function IssuedToken({
                   timeStyle: "long",
                 }),
               ],
-            ].map(([label, content]) => (
-              <div key={label}>
-                <Typography
-                  component="dt"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  {label}
-                </Typography>
-                <Typography
-                  component="dd"
-                  sx={{ m: 0, overflowWrap: "anywhere" }}
-                >
-                  {content}
-                </Typography>
-              </div>
-            ))}
-          </Stack>
+            ]}
+          />
           <Accordion>
             <AccordionSummary expandIcon={<ChevronDown size={18} />}>
               Connection examples
@@ -157,7 +151,12 @@ export function IssuedToken({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button variant="contained" type="button" onClick={onDone} disabled={!saved}>
+        <Button
+          variant="contained"
+          type="button"
+          onClick={onDone}
+          disabled={!saved}
+        >
           Done
         </Button>
       </DialogActions>

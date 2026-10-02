@@ -6,7 +6,6 @@ import {
   Button,
   Alert,
   Divider,
-  Grid,
   Link,
   List,
   ListItem,
@@ -41,6 +40,7 @@ import { clearSession } from "../../auth/session";
 import { useAction } from "../access/useAction";
 import { time } from "../../design/format";
 import { PersonalTokens } from "./PersonalTokens";
+import { Details } from "../../app/Details";
 import { Page } from "../../app/Page";
 import { DetailSections } from "../../app/DetailSections";
 import { useRoute } from "../../app/navigation";
@@ -154,31 +154,21 @@ export function Sessions({ session }: { session: Session }) {
                     </Tooltip>
                   </Stack>
                 )}
-                <Grid container component="dl" spacing={3}>
-                  {[
+                <Details
+                  label="My account details"
+                  items={[
                     ...(profile.data
-                      ? [["Username", profile.data.username]]
+                      ? [
+                          ["Username", profile.data.username] as [
+                            string,
+                            string | null,
+                          ],
+                        ]
                       : []),
                     ["Account", session.user_id],
                     ["Role", session.role],
-                  ].map(([label, value]) => (
-                    <Grid key={label} size={{ xs: 12, sm: 6 }}>
-                      <Typography
-                        component="dt"
-                        variant="body2"
-                        color="text.secondary"
-                      >
-                        {label}
-                      </Typography>
-                      <Typography
-                        component="dd"
-                        sx={{ m: 0, overflowWrap: "anywhere" }}
-                      >
-                        {value}
-                      </Typography>
-                    </Grid>
-                  ))}
-                </Grid>
+                  ]}
+                />
                 {editing && profile.data && (
                   <EditProfile
                     account={profile.data}

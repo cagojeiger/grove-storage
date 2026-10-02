@@ -19,7 +19,7 @@ test("leaving a pending storage save refreshes data without redirecting back", a
   await page.getByLabel("Configured capacity", { exact: true }).fill("2");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
-  await page.getByRole("link", { name: "Storage", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Storage", exact: true }).click();
   await expect(page.getByRole("grid", { name: "Storage", exact: true })).toBeVisible();
   release();
   await expect.poll(() => reads.list).toBeGreaterThan(1);

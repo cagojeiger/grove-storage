@@ -1,6 +1,5 @@
 import {
   Alert,
-  Box,
   Container,
   Link,
   Stack,
@@ -107,18 +106,9 @@ export function SetPassword() {
   }
 
   return (
-    <Container component="main" maxWidth="xs" sx={{ py: 6 }}>
+    <Container component="main" maxWidth="xs" sx={{ py: { xs: 4, sm: 8 } }}>
       <Stack spacing={3}>
-        <Box
-          component="img"
-          sx={{ width: 64, height: 64, objectFit: "contain" }}
-          src={`${import.meta.env.BASE_URL}grove-storage-logo.png`}
-          alt=""
-        />
         <Typography component="h1" variant="h5">
-          Grove Storage
-        </Typography>
-        <Typography component="h2" variant="h6">
           Set password
         </Typography>
         {status === "loading" && (

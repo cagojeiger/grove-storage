@@ -7,7 +7,7 @@ import { storageMock } from "./storage-fixture";
 const lists = [
   { route: "storages", selector: '[role="gridcell"]', setup: storageMock },
   { route: "clients", selector: '[role="gridcell"]', setup: clientMock },
-  { route: "accounts", selector: "tbody td", setup: accessMock },
+  { route: "accounts", selector: '[role="gridcell"]', setup: accessMock },
   { route: "activity", selector: "tbody td", setup: maintenanceMock },
 ] as const;
 
@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"]) {
         await page.getByLabel("Theme").selectOption(theme);
         const row = page.locator(list.selector).first();
         await expect(row).toBeVisible();
-        if (list.route === "accounts" || list.route === "activity") {
+        if (list.route === "activity") {
           await expect(row).toHaveCSS("padding-top", "6px");
           await expect(row).toHaveCSS("padding-bottom", "6px");
           await expect(row).toHaveCSS("border-bottom-width", "1px");

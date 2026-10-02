@@ -49,7 +49,7 @@ export async function storageChecks(
   }
   async function list() {
     await page
-      .getByRole("navigation")
+      .getByRole("navigation", { name: "Main navigation" })
       .getByRole("link", { name: "Storage", exact: true })
       .click();
   }
@@ -173,7 +173,7 @@ export async function storageChecks(
     );
   }
   await page
-    .getByRole("navigation")
+    .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Overview", exact: true })
     .click();
   await expect(

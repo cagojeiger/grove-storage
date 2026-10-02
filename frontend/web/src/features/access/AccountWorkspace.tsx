@@ -1,7 +1,8 @@
-import { Button, Chip, Divider, Grid, Stack, Typography } from "@mui/material";
+import { Button, Chip, Divider, Stack, Typography } from "@mui/material";
 import { Shield, Trash2 } from "lucide-react";
 import type { Account } from "../../api/identity";
 import { DetailSections } from "../../app/DetailSections";
+import { Details } from "../../app/Details";
 import type { AccountAction } from "./AccountDialog";
 import { PasswordSetupIssue } from "./PasswordSetupIssue";
 import { Tokens } from "./Tokens";
@@ -21,144 +22,108 @@ export function AccountWorkspace({
       : account.password_ready
         ? "Active"
         : "Pending setup";
-
   return (
-    <Stack spacing={3}>
-      <Stack
-        direction="row"
-        spacing={1}
-        useFlexGap
-        sx={{ alignItems: "center", flexWrap: "wrap" }}
-      >
-        <Typography color="text.secondary">
-          {account.username ?? "Username not set"}
-        </Typography>
-        <Chip size="small" label={account.role} variant="outlined" />
-        <Chip
-          size="small"
-          label={status}
-          color={status === "Active" ? "success" : "default"}
-          variant="outlined"
-        />
-      </Stack>
-      <DetailSections
-        label="Account sections"
-        sections={[
-          {
-            value: "overview",
-            label: "Overview",
-            content: (
-              <Stack spacing={3}>
+    <DetailSections
+      label="Account sections"
+      sections={[
+        {
+          value: "overview",
+          label: "Overview",
+          content: (
+            <Stack spacing={3}>
+              <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                sx={{ flexWrap: "wrap", alignItems: "center" }}
+              >
                 <Typography component="h2" variant="h6">
                   Account details
                 </Typography>
-                <Grid
-                  container
-                  component="dl"
-                  aria-label="Account details"
-                  spacing={3}
-                  sx={{ m: 0 }}
-                >
-                  {[
-                    ["Account ID", account.id],
+              </Stack>
+              <Details
+                label="Account details"
+                items={[
+                  ["Username", account.username ?? "Not set"],
+                  ["Role", account.role],
+                  [
+                    "Status",
+                    <Chip
+                      size="small"
+                      label={status}
+                      color={status === "Active" ? "success" : "default"}
+                    />,
+                  ],
+                  ["Account ID", account.id],
+                ]}
+              />
+            </Stack>
+          ),
+        },
+        {
+          value: "tokens",
+          label: "API tokens",
+          content: <Tokens key={account.id} account={account} />,
+        },
+        {
+          value: "security",
+          label: "Security",
+          content: (
+            <Stack spacing={4} divider={<Divider />}>
+              <PasswordSetupIssue key={account.id} account={account} />
+              <Stack
+                component="section"
+                aria-label="Account permissions"
+                spacing={2}
+              >
+                <Typography component="h2" variant="h6">
+                  Permissions
+                </Typography>
+                <Details
+                  label="Permissions"
+                  items={[
                     ["Role", account.role],
-                    ["Username", account.username ?? "Not set"],
                     ["Status", status],
-                  ].map(([label, value]) => (
-                    <Grid key={label} size={{ xs: 12, sm: 6 }}>
-                      <Typography
-                        component="dt"
-                        variant="body2"
-                        color="text.secondary"
-                      >
-                        {label}
-                      </Typography>
-                      <Typography
-                        component="dd"
-                        sx={{ m: 0, overflowWrap: "anywhere" }}
-                      >
-                        {value}
-                      </Typography>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Stack>
-            ),
-          },
-          {
-            value: "tokens",
-            label: "API tokens",
-            content: <Tokens key={account.id} account={account} />,
-          },
-          {
-            value: "security",
-            label: "Security",
-            content: (
-              <Stack spacing={3} divider={<Divider />}>
-                <PasswordSetupIssue key={account.id} account={account} />
-                <Stack
-                  spacing={2}
-                  component="section"
-                  aria-label="Account permissions"
+                  ]}
+                />
+                <Button
+                  variant="outlined"
+                  startIcon={<Shield size={18} />}
+                  disabled={disabled}
+                  sx={{ alignSelf: "flex-start" }}
+                  onClick={() => onAction("role")}
                 >
-                  <Typography component="h2" variant="h6">
-                    Permissions
-                  </Typography>
-                  <Stack
-                    direction="row"
-                    sx={{
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                    spacing={2}
+                  Change role
+                </Button>
+              </Stack>
+              <Stack component="section" aria-label="Danger zone" spacing={2}>
+                <Typography component="h2" variant="h6">
+                  Danger zone
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <Button
+                    color={account.is_active ? "error" : "primary"}
+                    variant="outlined"
+                    disabled={disabled}
+                    onClick={() => onAction("active")}
                   >
-                    <Typography sx={{ textTransform: "capitalize" }}>
-                      {account.role}
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      startIcon={<Shield size={16} />}
-                      disabled={disabled}
-                      onClick={() => onAction("role")}
-                    >
-                      Change role
-                    </Button>
-                  </Stack>
-                </Stack>
-                <Stack component="section" aria-label="Danger zone" spacing={2}>
-                  <Typography component="h2" variant="h6">
-                    Danger zone
-                  </Typography>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    useFlexGap
-                    sx={{ flexWrap: "wrap" }}
+                    {account.is_active ? "Disable" : "Enable"}
+                  </Button>
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    startIcon={<Trash2 size={18} />}
+                    disabled={disabled}
+                    onClick={() => onAction("delete")}
                   >
-                    <Button
-                      color={account.is_active ? "error" : "primary"}
-                      variant="outlined"
-                      disabled={disabled}
-                      onClick={() => onAction("active")}
-                    >
-                      {account.is_active ? "Disable" : "Enable"}
-                    </Button>
-                    <Button
-                      color="error"
-                      variant="outlined"
-                      startIcon={<Trash2 size={16} />}
-                      disabled={disabled}
-                      onClick={() => onAction("delete")}
-                    >
-                      Delete account
-                    </Button>
-                  </Stack>
+                    Delete account
+                  </Button>
                 </Stack>
               </Stack>
-            ),
-          },
-        ]}
-      />
-    </Stack>
+            </Stack>
+          ),
+        },
+      ]}
+    />
   );
 }

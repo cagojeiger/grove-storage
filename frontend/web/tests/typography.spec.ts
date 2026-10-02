@@ -10,8 +10,8 @@ for (const theme of ["light", "dark"]) {
     await page.goto(root);
     await page.getByLabel("Theme").selectOption(theme);
     const rows = page
-      .getByRole("table", { name: "Accounts", exact: true })
-      .locator("tbody tr");
+      .getByRole("grid", { name: "Accounts", exact: true })
+      .getByRole("row").filter({ has: page.getByRole("link") });
     await expect(rows).toHaveCount(2);
     for (const row of await rows.all()) {
       await expect(row).toHaveCSS("font-family", /^-apple-system,/);

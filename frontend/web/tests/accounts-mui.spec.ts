@@ -47,7 +47,7 @@ for (const mode of ["light", "dark"]) {
       );
       await expect(details.locator("dd").first()).toHaveCSS(
         "font-size",
-        "16px",
+        "14px",
       );
       await page.getByRole("tab", { name: "API tokens", exact: true }).click();
       await page

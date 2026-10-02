@@ -85,7 +85,8 @@ export async function accessChecks(
   await expect(page.getByLabel("Username")).toHaveAttribute("readonly", "");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("tab", { name: "Overview", exact: true }).click();
-  const userId = await page.locator('dl[aria-label="Account details"] dd').first().innerText();
+  const userId = await page.getByLabel("Account details").locator("dd").filter({ hasText: /^[0-9a-f-]{36}$/ }).innerText();
+  assert.match(userId, /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
   await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Recovery fixture");

@@ -1,6 +1,5 @@
 import {
   Alert,
-  Container,
   IconButton,
   Button,
   TextField,
@@ -68,7 +67,10 @@ export function Storages({
   if (editing) {
     const returnTo = listing.href(id ? storageLink(id) : "#storages");
     return (
-      <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+      <Page
+        title={creating ? "Add storage" : "Edit storage"}
+        back={{ label: "Storage", href: returnTo }}
+      >
         {!canWrite ? (
           <Alert severity="error">Write access required.</Alert>
         ) : !creating && detail.isPending ? (
@@ -88,7 +90,7 @@ export function Storages({
             }}
           />
         )}
-      </Container>
+      </Page>
     );
   }
   return (

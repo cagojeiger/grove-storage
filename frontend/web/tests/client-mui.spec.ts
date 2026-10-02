@@ -55,16 +55,14 @@ for (const theme of ["light", "dark"]) {
         page.getByRole("heading", { name: id, level: 1 }),
       ).toBeVisible();
       const details = page.getByRole("region", { name: "Client details" });
-      const properties = details.getByRole("list", {
-        name: "Client properties",
-      });
-      await expect(properties.getByRole("listitem")).toHaveCount(3);
+      const properties = details.getByLabel("Client properties");
+      await expect(properties.locator("dd")).toHaveCount(3);
       for (const name of ["Client ID", "S3 bucket", "Storage"]) {
         const label = properties.getByText(name, { exact: true });
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
       }
-      await expect(properties.getByRole("link")).toHaveCSS("font-size", "16px");
+      await expect(properties.getByRole("link")).toHaveCSS("font-size", "14px");
       await expect(details.getByText("0 B", { exact: true })).toHaveCSS(
         "font-size",
         "24px",
