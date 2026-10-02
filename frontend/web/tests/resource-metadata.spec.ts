@@ -66,24 +66,11 @@ for (const resource of ["storage", "client"] as const) {
     await expect(
       page.getByRole("heading", { name: "Metadata", exact: true }),
     ).toHaveCount(1);
-    if (resource === "storage") {
-      await expect(
-        page
-          .getByRole("region", { name: "Storage settings" })
-          .getByRole("region", { name: "Metadata", exact: true }),
-      ).toHaveCount(1);
-    } else {
-      const metadataBeforeKeys = await page
-        .getByRole("region", { name: "Metadata", exact: true })
-        .evaluate((element) =>
-          Boolean(
-            element.compareDocumentPosition(
-              document.querySelector('[aria-label="S3 credentials"]')!,
-            ) & Node.DOCUMENT_POSITION_FOLLOWING,
-          ),
-        );
-      expect(metadataBeforeKeys).toBe(true);
-    }
+    await expect(
+      page.getByRole("tabpanel", { name: "Overview" })
+        .getByRole("region", { name: "Metadata", exact: true }),
+    ).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "S3 credentials" })).toHaveCount(0);
     await page
       .getByRole("button", { name: "Edit metadata", exact: true })
       .click();

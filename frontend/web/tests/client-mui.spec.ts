@@ -69,6 +69,7 @@ for (const theme of ["light", "dark"]) {
         "font-size",
         "24px",
       );
+      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       const keys = page.getByRole("region", { name: "S3 credentials" });
       await expect(keys.locator("code")).toHaveCount(2);
       await expect(keys.locator("code").last()).toHaveCSS(
@@ -94,6 +95,7 @@ for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width: 320, height: 480 });
     await page.goto(`${root}/notegate`);
     await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
     await page
       .getByRole("button", { name: "Create credential", exact: true })
       .click();

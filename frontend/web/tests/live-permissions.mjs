@@ -53,6 +53,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     await expect(page.getByLabel("Secret key (re-enter)")).toHaveCount(0);
     await page.getByRole("navigation").getByRole("link", { name: "Storage", exact: true }).click();
     await page.getByRole("link", { name: "console-live", exact: true }).click();
+    await page.getByRole("tab", { name: "Configuration", exact: true }).click();
     await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
     const blocked = await page.evaluate(async () => {
       const response = await fetch("/api/admin/console-commands/v1", {

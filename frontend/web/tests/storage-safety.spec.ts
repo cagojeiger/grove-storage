@@ -80,6 +80,7 @@ test("storage read 401 returns to login without cached detail", async ({
 }) => {
   await storageMock(page);
   await page.goto(`${root}/${example.id}`);
+  await page.getByRole("tab", { name: "Configuration", exact: true }).click();
   await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
   await intercept(page, "storage.show", (route) =>
     route.fulfill({ status: 401, json: failure(401) }),

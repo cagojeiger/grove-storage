@@ -30,6 +30,7 @@ export async function clientChecks(page, { database }) {
   }
   const fileId = randomUUID();
 
+  await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
   await page.getByRole("button", { name: "Create credential", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByLabel(/^Secret key\s*\*?$/)).toBeVisible();

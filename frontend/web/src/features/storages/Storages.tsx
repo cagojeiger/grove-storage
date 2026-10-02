@@ -188,15 +188,17 @@ export function Storages({
                   ? undefined
                   : usage.data?.find((row) => row.storage_id === id)
               }
+              connection={
+                detail.data.kind === "s3" && (
+                  <TestConnection
+                    key={`${id}:${detail.dataUpdatedAt}`}
+                    id={id}
+                    revision={detail.dataUpdatedAt}
+                    refreshing={detail.isFetching}
+                  />
+                )
+              }
             />
-            {detail.data.kind === "s3" && (
-              <TestConnection
-                key={`${id}:${detail.dataUpdatedAt}`}
-                id={id}
-                revision={detail.dataUpdatedAt}
-                refreshing={detail.isFetching}
-              />
-            )}
           </>
         ) : (
           <>

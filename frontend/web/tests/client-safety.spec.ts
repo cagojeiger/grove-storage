@@ -48,6 +48,7 @@ for (const mode of ["lost", "malformed", "unavailable"] as const)
       else await route.fulfill({ status: 503, json: failure(503) });
     });
     await page.goto(root + "/notegate");
+    await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
     await page.getByRole("button", { name: "Create credential", exact: true }).click();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("outcome is unknown");
@@ -61,6 +62,7 @@ for (const code of [401, 403])
   test(`key write ${code} removes sensitive controls`, async ({ page }) => {
     await clientMock(page);
     await page.goto(root + "/notegate");
+    await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
     await page.getByRole("button", { name: "Create credential" }).click();
     if (code === 403)
       await page.route("**/identity/v1/session", (route) =>

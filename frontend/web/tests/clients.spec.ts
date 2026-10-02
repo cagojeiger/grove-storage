@@ -40,6 +40,7 @@ test("console exposes only S3 credentials and never requests Native keys", async
 }) => {
   const { calls } = await clientMock(page);
   await page.goto(root + "/notegate");
+  await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "S3 Credentials" }),
   ).toBeVisible();
@@ -57,6 +58,7 @@ test("S3 issuance and revocation keep the secret out of lists and storage", asyn
 }) => {
   const { calls } = await clientMock(page);
   await page.goto(root + "/notegate");
+  await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
   await page
     .getByRole("button", { name: "Create credential", exact: true })
     .click();

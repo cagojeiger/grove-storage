@@ -32,7 +32,6 @@ export function TestConnection({
       component="section"
       aria-label="Storage connection"
       spacing={2}
-      sx={{ pt: 3, borderTop: 1, borderColor: "divider" }}
     >
       <Stack
         direction={{ xs: "column", sm: "row" }}

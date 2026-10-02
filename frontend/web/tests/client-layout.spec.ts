@@ -9,6 +9,7 @@ for (const width of [320, 390, 768, 1024, 1440])
       await page.goto(root);
       await page.getByLabel("Theme").selectOption(theme);
       await page.getByRole("link", { name: /notegate/ }).click();
+      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       await expect(page.getByRole("region", { name: "S3 credentials" })).toBeVisible();
       expect(
         await page.evaluate(

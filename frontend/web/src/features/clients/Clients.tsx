@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Page } from "../../app/Page";
+import { DetailSections } from "../../app/DetailSections";
 import { command } from "../../api/commands";
 import { message } from "../../api/http";
 import {
@@ -115,17 +116,35 @@ export function Clients({
         ) : current.isError ? (
           <Alert severity="error">{message(current.error)}</Alert>
         ) : id && detail.data ? (
-          <>
-            <ClientDetail
-              client={detail.data}
-              usage={usage.isError ? undefined : used}
-              canWrite={canWrite}
-            />
-            {canWrite && <ClientKeys key={id} clientId={id} />}
-          </>
+          <DetailSections
+            label="Client sections"
+            sections={[
+              {
+                value: "overview",
+                label: "Overview",
+                content: (
+                  <ClientDetail
+                    client={detail.data}
+                    usage={usage.isError ? undefined : used}
+                    canWrite={canWrite}
+                  />
+                ),
+              },
+              ...(canWrite
+                ? [
+                    {
+                      value: "credentials",
+                      label: "S3 credentials",
+                      content: <ClientKeys key={id} clientId={id} />,
+                    },
+                  ]
+                : []),
+            ]}
+          />
         ) : (
           <>
             <TextField
+              size="small"
               label="Search clients"
               type="search"
               value={listing.search}

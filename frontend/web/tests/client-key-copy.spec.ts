@@ -18,6 +18,7 @@ for (const mode of ["missing", "denied", "available"] as const) {
     }
     await clientMock(page);
     await page.goto("/api/admin/console/#clients/notegate");
+    await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
     await page.getByRole("button", { name: "Create credential", exact: true }).click();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await page.getByRole("button", { name: "Copy Secret key", exact: true }).click();

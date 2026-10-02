@@ -54,7 +54,9 @@ export async function captureConsole(page, origin, directory) {
         await expect(
           page.getByLabel("Saved metadata", { exact: true }),
         ).toHaveText("{}");
+        await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
         await expect(page.getByText("No credentials issued.")).toBeVisible();
+        await page.getByRole("tab", { name: "Overview", exact: true }).click();
       } else if (name === "profile") {
         await expect(
           page.getByRole("heading", {

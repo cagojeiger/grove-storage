@@ -11,16 +11,16 @@ for (const mode of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${root}/home-archive`);
       await page.getByLabel("Theme").selectOption(mode);
+      await page
+        .getByRole("tab", { name: "Configuration", exact: true })
+        .click();
       const settings = page.getByRole("region", { name: "Storage settings" });
       const usage = page.getByRole("region", { name: "Storage usage" });
       const properties = settings.getByRole("list", {
         name: "Storage properties",
       });
       await expect(properties.getByRole("listitem")).toHaveCount(9);
-      for (const label of [
-        properties.getByText("Type", { exact: true }),
-        usage.getByText("Stored data", { exact: true }),
-      ]) {
+      for (const label of [properties.getByText("Type", { exact: true })]) {
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
       }
@@ -28,22 +28,35 @@ for (const mode of ["light", "dark"]) {
         "font-size",
         "16px",
       );
-      await expect(usage.getByText("0 B", { exact: true }).first()).toHaveCSS(
-        "font-size",
-        "24px",
-      );
       await expect(settings.getByRole("heading", { level: 2 })).toHaveCSS(
         "font-size",
         "20px",
       );
+      await page.screenshot({
+        path: `test-results/storage-mui-config-${width}-${mode}.png`,
+        fullPage: true,
+      });
+      await page.getByRole("tab", { name: "Overview", exact: true }).click();
+      await expect(usage.getByText("Stored data", { exact: true })).toHaveCSS(
+        "font-size",
+        "14px",
+      );
+      await expect(usage.getByText("Stored data", { exact: true })).toHaveCSS(
+        "font-family",
+        /^-apple-system,/,
+      );
+      await expect(usage.getByText("0 B", { exact: true }).first()).toHaveCSS(
+        "font-size",
+        "24px",
+      );
       await expect(
-        settings.getByLabel("Saved metadata", { exact: true }),
+        page.getByLabel("Saved metadata", { exact: true }),
       ).toHaveCSS("font-family", /monospace/);
       await expect(
-        settings.getByLabel("Saved metadata", { exact: true }),
+        page.getByLabel("Saved metadata", { exact: true }),
       ).toHaveText("{}");
       expect(
-        await settings
+        await page
           .getByRole("region", { name: "Metadata", exact: true })
           .evaluate((el) =>
             Boolean(

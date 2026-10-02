@@ -16,9 +16,11 @@ for (const theme of ["light", "dark"]) {
       await storageMock(page);
       await page.goto("/api/admin/console/#storages/home-archive");
       await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("tab", { name: "Configuration", exact: true }).click();
       await expect(
         page.getByRole("list", { name: "Storage properties" }),
       ).toBeVisible();
+      await page.getByRole("tab", { name: "Overview", exact: true }).click();
       await expect(
         page.getByLabel("Saved metadata", { exact: true }),
       ).toHaveText("{}");
@@ -72,9 +74,11 @@ for (const theme of ["light", "dark"]) {
         .getByRole("grid")
         .getByRole("link", { name: "notegate", exact: true })
         .click();
+      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       await expect(
         page.getByRole("table", { name: "Issued S3 credentials" }),
       ).toBeVisible();
+      await page.getByRole("tab", { name: "Overview", exact: true }).click();
       await page
         .getByRole("button", { name: "Edit metadata", exact: true })
         .click();
@@ -97,6 +101,7 @@ for (const theme of ["light", "dark"]) {
         ),
         fullPage: true,
       });
+      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       await page
         .getByRole("button", { name: "Create credential", exact: true })
         .click();

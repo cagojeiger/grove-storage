@@ -34,6 +34,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await expect(
         page.getByRole("heading", { name: long.id, level: 1 }),
       ).toBeVisible();
+      await page.getByRole("tab", { name: "Configuration", exact: true }).click();
       await expect(
         page.getByRole("region", { name: "Storage settings" }),
       ).toBeVisible();

@@ -27,12 +27,7 @@ export function ClientKeys({ clientId }: { clientId: string }) {
       command<string[]>("credential.list", { client_id: clientId }, signal),
   });
   return (
-    <Stack
-      component="section"
-      aria-label="S3 credentials"
-      spacing={2}
-      sx={{ pt: 3, borderTop: 1, borderColor: "divider" }}
-    >
+    <Stack component="section" aria-label="S3 credentials" spacing={2}>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={1}
@@ -46,7 +41,7 @@ export function ClientKeys({ clientId }: { clientId: string }) {
         </Typography>
         <Button
           type="button"
-          variant="outlined"
+          variant="contained"
           startIcon={<Plus size={16} />}
           onClick={() => setAction({ kind: "s3-create" })}
         >

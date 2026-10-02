@@ -9,6 +9,7 @@ test("Reader can inspect storages but has no write controls", async ({ page }) =
   await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
   await expect(page.getByRole("button", { name: "Add storage", exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: new RegExp(example.id) }).click();
+  await page.getByRole("tab", { name: "Configuration", exact: true }).click();
   await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Delete storage" })).toHaveCount(0);
