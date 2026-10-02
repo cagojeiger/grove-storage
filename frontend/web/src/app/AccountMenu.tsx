@@ -68,7 +68,6 @@ export function AccountMenu({
         transformOrigin={{ vertical: "bottom", horizontal: "left" }}
         slotProps={{
           list: { id, "aria-label": "Account menu" },
-          paper: { sx: { maxWidth: "calc(100vw - 32px)" } },
         }}
       >
         <ListSubheader

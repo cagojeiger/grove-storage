@@ -112,7 +112,7 @@ export function IssuedToken({
               </div>
             ))}
           </Stack>
-          <Accordion disableGutters elevation={0}>
+          <Accordion>
             <AccordionSummary expandIcon={<ChevronDown size={18} />}>
               Connection examples
             </AccordionSummary>

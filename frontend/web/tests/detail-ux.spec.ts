@@ -53,6 +53,35 @@ for (const mode of ["light", "dark"]) {
   }
 }
 
+for (const mode of ["light", "dark"]) {
+  test(`expanded token examples keep actions reachable on a short phone in ${mode}`, async ({ page }) => {
+    await accessMock(page);
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto(`/api/admin/console/#accounts/${owner.id}?tab=tokens`);
+    await page.getByLabel("Theme").selectOption(mode);
+    await page.getByRole("button", { name: "Issue token", exact: true }).click();
+    await page.getByLabel(/^Label/).fill("Phone automation");
+    await page.getByRole("button", { name: "Issue", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "API token created" });
+    await dialog.getByRole("button", { name: "Connection examples" }).click();
+    await expect(dialog.getByText(/gscli --endpoint/)).toBeVisible();
+    const done = dialog.getByRole("button", { name: "Done", exact: true });
+    await expect(done).toBeDisabled();
+    await expect(done).toBeInViewport();
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("checkbox").check();
+    await expect(done).toBeInViewport();
+    await page.screenshot({
+      path: resolve(`../../output/console-mui-simplify-20261002/token-short-${mode}.png`),
+      animations: "disabled",
+    });
+    await done.click();
+    await expect(dialog).toHaveCount(0);
+  });
+}
+
 for (const scenario of ["normal", "zero", "over", "unavailable"] as const) {
   test(`capacity visualization handles ${scenario} without misleading percentages`, async ({ page }) => {
     const capacity = scenario === "zero" ? 0 : 1024;
