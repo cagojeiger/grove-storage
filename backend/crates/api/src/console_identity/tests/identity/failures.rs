@@ -6,7 +6,7 @@ async fn rejected_issue(pool: &PgPool, cookie: &str, user: Uuid, error: &str) {
         cookie,
         "POST",
         &format!("/accounts/{user}/credentials"),
-        serde_json::json!({"label":"private-label"}),
+        serde_json::json!({"label":"private-label","current_password":PASSWORD}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -65,7 +65,7 @@ async fn issuance_limit_returns_conflict_without_a_secret(pool: PgPool) {
         &cookie,
         "POST",
         &format!("/accounts/{user}/credentials"),
-        serde_json::json!({"label":"over-limit"}),
+        serde_json::json!({"label":"over-limit","current_password":PASSWORD}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::CONFLICT);

@@ -32,9 +32,15 @@ fn require_http_url_accepts_http_https_only() {
 async fn filesystem_submission_is_rejected_before_probe() {
     let state = crate::routes::tests::test_state();
     assert!(
-        verified_row(&state.crypto, true, "fs-test", fs_body(false))
-            .await
-            .is_err()
+        verified_row(
+            &state.crypto,
+            state.clock.clone(),
+            true,
+            "fs-test",
+            fs_body(false)
+        )
+        .await
+        .is_err()
     );
 }
 

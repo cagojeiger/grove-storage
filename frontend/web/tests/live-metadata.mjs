@@ -30,9 +30,7 @@ export async function metadataChecks(page, { origin, database }) {
       `SELECT to_jsonb(r) - 'metadata' - 'updated_at' FROM ${table} r WHERE id='${id}'`,
     );
     await page.goto(`${origin}/api/admin/console/#${table}/${id}`);
-    await expect(page.getByLabel("Saved metadata", { exact: true })).toHaveText(
-      "{}",
-    );
+    await expect(page.getByRole("region", { name: "Metadata", exact: true })).toContainText("No metadata.");
     for (const metadata of [
       { description: "Console metadata test", environment: "home" },
       {},
@@ -46,9 +44,9 @@ export async function metadataChecks(page, { origin, database }) {
       await page.getByRole("button", { name: "Save", exact: true }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.reload();
-      await expect(
-        page.getByLabel("Saved metadata", { exact: true }),
-      ).toHaveText(JSON.stringify(metadata, null, 2));
+      if (Object.keys(metadata).length) {
+        for (const [key, value] of Object.entries(metadata)) await expect(page.getByText(`${key}: ${value}`, { exact: true })).toBeVisible();
+      } else await expect(page.getByRole("region", { name: "Metadata", exact: true })).toContainText("No metadata.");
       assert.deepEqual(
         JSON.parse(sql(`SELECT metadata FROM ${table} WHERE id='${id}'`)),
         metadata,

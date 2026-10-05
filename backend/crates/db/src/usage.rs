@@ -131,7 +131,7 @@ pub async fn snapshot_history<'e>(
     sqlx::query_as(
         "SELECT day, storage_id, client_id, active_bytes, active_files \
          FROM usage_snapshot \
-         WHERE day >= current_date - $1 \
+         WHERE day >= grove_time.transaction_now()::date - $1 \
          ORDER BY day, storage_id, client_id",
     )
     .bind(days)

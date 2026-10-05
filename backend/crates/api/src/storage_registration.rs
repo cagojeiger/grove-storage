@@ -1,11 +1,13 @@
 //! Shared storage registration, provider probes and credential encryption.
 
 use axum::http::StatusCode;
+use filegate_core::time::Clock;
 use filegate_core::{Crypto, SecretString};
 use filegate_db::PgPool;
 use filegate_db::registry::{self, StorageRow};
-use filegate_infra::{S3StorageSpec, s3_connect};
+use filegate_infra::{S3StorageSpec, s3_connect, s3_connect_with_clock};
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::error::{ApiError, bad_request};
 use crate::storage_access::backend_from_row;
@@ -39,6 +41,7 @@ fn default_kind() -> String {
 /// provider diagnostics through the common command contract.
 pub(crate) async fn verify_command(
     crypto: &Crypto,
+    clock: Arc<dyn Clock>,
     relay_base_ready: bool,
     operation: grove_management_service::resources::StorageOperation,
 ) -> Result<StorageRow, grove_management_service::Error> {
@@ -52,7 +55,9 @@ pub(crate) async fn verify_command(
             let StorageBackend { spec, .. } =
                 backend_from_row(crypto, &row).map_err(|_| Error::Unavailable)?;
             // Neither provider diagnostics nor credentials cross this boundary.
-            s3_connect(&spec).await.map_err(|_| Error::Unavailable)?;
+            s3_connect_with_clock(&spec, clock)
+                .await
+                .map_err(|_| Error::Unavailable)?;
             return Ok(row);
         }
     };
@@ -74,7 +79,7 @@ pub(crate) async fn verify_command(
         secret_key: spec.secret_key.map(SecretString::from),
         capacity_bytes: spec.capacity_bytes,
     };
-    verified_row(crypto, relay_base_ready, &input.id, body)
+    verified_row(crypto, clock, relay_base_ready, &input.id, body)
         .await
         .map_err(|error| match error {
             ApiError::Status(StatusCode::BAD_REQUEST, _) => {
@@ -88,6 +93,7 @@ pub(crate) async fn verify_command(
 /// 싼 검증이 먼저다 — 네트워크·디스크 검증 전에 거른다.
 pub(crate) async fn verified_row(
     crypto: &Crypto,
+    clock: Arc<dyn Clock>,
     relay_base_ready: bool,
     id: &str,
     body: Submission,
@@ -96,7 +102,7 @@ pub(crate) async fn verified_row(
         return Err(bad_request("capacity_bytes must be >= 0"));
     }
     match body.kind.as_str() {
-        "s3" => verified_s3_row(crypto, relay_base_ready, id, body).await,
+        "s3" => verified_s3_row(crypto, clock, relay_base_ready, id, body).await,
         _ => Err(bad_request("only S3-compatible storage is supported")),
     }
 }
@@ -105,12 +111,13 @@ pub(crate) async fn verified_row(
 /// 암호화·행 조립. 단계마다 함수 하나 — 실패는 전부 앞 단계에서 싸게 끝난다.
 async fn verified_s3_row(
     crypto: &Crypto,
+    clock: Arc<dyn Clock>,
     relay_base_ready: bool,
     id: &str,
     body: Submission,
 ) -> Result<StorageRow, ApiError> {
     let submission = validated_s3_submission(relay_base_ready, body)?;
-    if let Err(error) = s3_connect(&submission.spec).await {
+    if let Err(error) = s3_connect_with_clock(&submission.spec, clock).await {
         // Provider errors may contain submitted addresses or credentials.
         tracing::error!(event = "storage.verify_failed", storage = %id, kind = "s3");
         return Err(bad_request(&format!(

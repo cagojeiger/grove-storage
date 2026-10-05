@@ -1,5 +1,9 @@
 # spec 05: 독립형 관리자 인증
 
+현재 기본값은 `FILEGATE_LEGACY_ADMIN_ENABLED=false`다. 아래의 구형 REST·세션 경로는
+명시적으로 `true`를 설정한 호환 모드에서 제공한다. 비활성 경로는 410을 반환한다.
+이관 순서와 유지 범위는 [현행 전환 계약](11-local-management-auth.md#legacy-operator-cutover)을 따른다.
+
 - 이 문서는 기존 `/api/admin/v1` 운영자 인증의 기록이다. 현행 콘솔·관리 토큰·로컬 계정 계약은 [spec 11](11-local-management-auth.md)을 따른다.
 - 상태: 작업 브랜치 구현, 미릴리스·미배포
 - 범위: 단일 관리자, 복수 토큰, 콘솔 세션, 로컬 복구

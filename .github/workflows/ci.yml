@@ -9,7 +9,51 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
+  image-security:
+    name: Image security / ${{ matrix.architecture }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-latest
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build actual runtime image without publishing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: linux/${{ matrix.architecture }}
+          load: true
+          tags: grove-security:${{ github.sha }}
+          cache-from: type=gha,scope=grove-ci-${{ matrix.architecture }}
+          cache-to: type=gha,mode=max,scope=grove-ci-${{ matrix.architecture }}
+      - name: Smoke test non-root read-only runtime
+        run: |
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            "grove-security:$GITHUB_SHA" --help
+      - uses: ./.github/actions/image-security
+        with:
+          image: grove-security:${{ github.sha }}
+          architecture: ${{ matrix.architecture }}
+          source: docker
+          artifact: trivy-ci-${{ matrix.architecture }}
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -18,13 +62,14 @@ jobs:
       run:
         working-directory: frontend/web
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: frontend/web/.nvmrc
           cache: npm
           cache-dependency-path: frontend/web/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run build
@@ -34,8 +79,10 @@ jobs:
     name: Object contracts (no services)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: python3 -B scripts/check-crate-boundaries.py
+      - run: python3 -B -m unittest discover -s scripts/tests -p test_crate_boundaries.py -v
       - run: cargo test -p grove-management-policy --locked
       - run: cargo test -p grove-management-command --locked
       - run: cargo test -p grove-object-policy --locked
@@ -48,7 +95,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Format
         run: cargo fmt --all --check
@@ -85,10 +132,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Check
         run: cargo check --workspace --all-targets --locked
@@ -106,6 +153,7 @@ jobs:
           /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-cli.py
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-mcp.py
+          /tmp/grove-s3-sdk/bin/python -B scripts/e2e-shutdown.py
 
       - name: S3 SDK contract
         run: |
@@ -116,7 +164,7 @@ jobs:
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: frontend/web/.nvmrc
           cache: npm
@@ -127,6 +175,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          python3 -B -u ../../scripts/e2e-console.py --auth-only
           /tmp/grove-s3-sdk/bin/python -B -u ../../scripts/e2e-console.py --with-minio
 
   notegate:
@@ -137,12 +186,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout Grove
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Checkout pinned NoteGate consumer
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: cagojeiger/notegate
           ref: dab7fe552b3e6ac742465ea40ddd02b2253631fe
@@ -150,7 +199,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache both Rust workspaces
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             . -> target
@@ -178,12 +227,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout Grove
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Checkout released FileGate v0.4.1
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: cagojeiger/filegate
           ref: af685807e5561885616e00918f0207e25188fb3a
@@ -191,7 +240,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache both Rust workspaces
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             . -> target
@@ -217,10 +266,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2
         with:
           tool: cargo-audit
 
@@ -228,4 +277,4 @@ jobs:
       # postgres-only인 이 워크스페이스 빌드엔 컴파일되지 않는다(cargo tree -i로 확인,
       # Cargo.lock에만 잔존). 상위 픽스 릴리스도 아직 없다 — 근거 있는 무시.
       - name: Audit
-        run: cargo audit --ignore RUSTSEC-2023-0071
+        run: cargo audit --deny unsound --ignore RUSTSEC-2023-0071

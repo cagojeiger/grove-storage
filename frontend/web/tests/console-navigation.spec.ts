@@ -17,8 +17,7 @@ for (const width of [390, 768]) {
     await page.getByRole("link", { name: "Activity", exact: true }).click();
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await open.click();
-    await page.getByRole("button", { name: "Account menu", exact: true }).click();
-    await page.getByRole("menuitem", { name: "My account", exact: true }).click();
+    await page.getByRole("link", { name: "My account", exact: true }).click();
     await expect(page.getByRole("heading", { name: "My account", exact: true })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("contentinfo")).toContainText("Grove Storage");

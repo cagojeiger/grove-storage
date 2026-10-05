@@ -1,0 +1,87 @@
+name: Image security gate
+description: Preserve scan evidence before enforcing vulnerability, secret and Rust inventory policy.
+inputs:
+  image:
+    description: Exact image reference; remote scans require a SHA256 digest
+    required: true
+  architecture:
+    description: Linux architecture being scanned
+    required: true
+  source:
+    description: remote for release digests, docker for locally built CI images
+    default: remote
+  artifact:
+    description: Unique artifact name for the scan reports
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Record scan target
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        ARCHITECTURE: ${{ inputs.architecture }}
+        SOURCE: ${{ inputs.source }}
+        REPORT_DIR: reports/${{ inputs.artifact }}
+      run: |
+        set -euo pipefail
+        [[ "$ARCHITECTURE" == amd64 || "$ARCHITECTURE" == arm64 ]]
+        [[ "$SOURCE" == remote || "$SOURCE" == docker ]]
+        if [[ "$SOURCE" == remote ]]; then
+          [[ "$IMAGE" =~ @sha256:[a-f0-9]{64}$ ]]
+        fi
+        mkdir -p "$REPORT_DIR"
+        jq -n --arg image "$IMAGE" --arg architecture "$ARCHITECTURE" \
+          --arg source "$SOURCE" --arg resolved_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          '$ARGS.named' > "$REPORT_DIR/target.json"
+    - name: Scan OS and library vulnerabilities and secrets
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      env:
+        TRIVY_IMAGE_SRC: ${{ inputs.source }}
+        TRIVY_PLATFORM: linux/${{ inputs.architecture }}
+        TRIVY_LIST_ALL_PKGS: 'true'
+        TRIVY_IGNOREFILE: /dev/null
+      with:
+        version: v0.74.0
+        scan-type: image
+        image-ref: ${{ inputs.image }}
+        scanners: vuln,secret
+        vuln-type: os,library
+        severity: HIGH,CRITICAL
+        ignore-unfixed: false
+        trivyignores: ''
+        exit-code: '0'
+        format: json
+        output: reports/${{ inputs.artifact }}/trivy.json
+        timeout: 15m
+        cache: true
+    - name: Generate readable and SARIF reports
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        REPORT_DIR: reports/${{ inputs.artifact }}
+      run: |
+        trivy convert --format sarif --output "$REPORT_DIR/trivy.sarif" "$REPORT_DIR/trivy.json"
+        trivy convert --scanners vuln,secret --format table --output "$REPORT_DIR/trivy.txt" "$REPORT_DIR/trivy.json"
+        trivy --version > "$REPORT_DIR/trivy-version.txt"
+        cat "$REPORT_DIR/target.json" >> "$GITHUB_STEP_SUMMARY"
+    - name: Preserve scan evidence
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: ${{ inputs.artifact }}
+        path: reports/${{ inputs.artifact }}/
+        retention-days: 30
+        if-no-files-found: error
+    - name: Publish GitHub Security report
+      if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+      uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+      with:
+        sarif_file: reports/${{ inputs.artifact }}/trivy.sarif
+        category: ${{ inputs.artifact }}
+    - name: Enforce image security policy
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        REPORT: reports/${{ inputs.artifact }}/trivy.json
+      run: python3 deploy/ci/image-security.py validate "$REPORT"

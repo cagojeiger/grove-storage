@@ -95,9 +95,10 @@ for (const width of [320, 768, 1440])
       );
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/api/admin/console/#usage");
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       const chart = page.getByLabel("Stored data by day", { exact: true });
-      await expect(chart.locator("svg")).toBeVisible();
+      await expect(chart.locator("svg").first()).toBeVisible();
       await expect(chart.locator(".MuiLineChart-line")).toHaveAttribute(
         "d",
         /^M/,
@@ -115,21 +116,25 @@ for (const width of [320, 768, 1440])
           .locator(".MuiLineChart-line"),
       ).toHaveAttribute("d", /^M/);
       const next = page.getByRole("button", { name: "Go to next page" });
+      const pageSize = width < 600 ? 20 : 50;
+      if (width >= 600) {
+        await page.getByRole("combobox", { name: /Rows per page/ }).click();
+        await page.getByRole("option", { name: "50", exact: true }).click();
+      }
       await next.scrollIntoViewIfNeeded();
       const bounds = await next.boundingBox();
       expect(bounds).not.toBeNull();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
-      await next.click();
-      await expect(
-        page.getByText("51–100 of 101", { exact: true }),
-      ).toBeVisible();
-      await next.click();
+      for (let start = pageSize + 1; start <= 101; start += pageSize) {
+        await next.click();
+        await expect(page.getByText(`${start}–${Math.min(start + pageSize - 1, 101)} of 101`, { exact: true })).toBeVisible();
+      }
       await expect(
         page.getByText("101–101 of 101", { exact: true }),
       ).toBeVisible();
       await expect(next).toBeDisabled();
-      await expect(page.getByRole("table").locator("tbody tr")).toHaveCount(1);
+      await expect(page.getByRole("grid", { name: "Daily snapshots" }).getByRole("row")).toHaveCount(2);
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

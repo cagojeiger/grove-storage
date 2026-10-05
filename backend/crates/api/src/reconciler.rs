@@ -1,7 +1,8 @@
 //! reconciler 워커 — 요청 경로 밖의 물리 정리 (공리: 결정·집행 분리).
 //!
 //! 모든 파드가 spawn하고, 실행은 tick마다 advisory lock이 하나를 고른다
-//! (docs/stack 멀티 파드 패턴). tick마다 도는 잡(각 유계 배치, 일부는 전량):
+//! (docs/stack 멀티 파드 패턴). 관리 로그 정리는 별도 작업과 잠금을 사용한다.
+//! 삭제 대상은 분리하며 tick마다 도는 파일 잡(각 유계 배치, 일부는 전량):
 //!   0. 관찰 확정  — 단일 PUT pending의 실물이 선언과 맞으면 확정 (spec 00)
 //!   1. 만료 회수  — 쓰기 lease가 만료된 pending의 예약 해제 + 실물 정리
 //!   2. purge      — deleted 파일의 물리 삭제 + purge 대기 점유 해제
@@ -25,7 +26,6 @@ use filegate_db::files::{self, SweepCandidate};
 use filegate_db::{PgPool, registry, s3_registry as s3reg, usage};
 use filegate_infra::{Address, S3ClientCache, s3_head_object, temp_spool};
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
-use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
 
@@ -48,46 +48,45 @@ const HISTORY_RETENTION: Duration = Duration::from_secs(90 * 24 * 3600);
 /// 유계다 (spec 00). 이력과 같은 3개월 — 관찰 보존의 단일 기준.
 const FILE_RETENTION: Duration = HISTORY_RETENTION;
 
-pub fn spawn(
+pub async fn run(
     pool: PgPool,
     crypto: Arc<Crypto>,
     s3_clients: Arc<S3ClientCache>,
     tick: Duration,
     shutdown: CancellationToken,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        tracing::info!(event = "reconciler.started", tick_secs = tick.as_secs());
+    clock: Arc<dyn filegate_core::time::Clock>,
+) {
+    tracing::info!(event = "reconciler.started", tick_secs = tick.as_secs());
 
-        let mut ticker = interval(tick);
-        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut ticker = interval(tick);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        loop {
-            tokio::select! {
-                () = shutdown.cancelled() => {
-                    tracing::info!(event = "reconciler.stopped");
-                    return;
-                }
-                _ = ticker.tick() => {
-                    // pod 로컬 OS temp의 크래시 스풀은 락 없이 매 pod가 직접
-                    // 치운다 — 자기 디스크는 자기 몫이고, 락 승자만 치우면
-                    // 락을 못 이긴 pod의 잔여물이 밀린다.
-                    sweep_local_temps().await;
-                    let result = filegate_db::with_reconciler_lock(&pool, || async {
-                        run_jobs(&pool, &crypto, &s3_clients).await;
-                    })
-                    .await;
-                    match result {
-                        // 주기적 틱 — 잡 유무와 무관하게 debug (로그 정책).
-                        Ok(Some(())) => tracing::debug!(event = "reconciler.job"),
-                        Ok(None) => {
-                            tracing::debug!(event = "reconciler.skipped", reason = "lock_held")
-                        }
-                        Err(error) => tracing::error!(event = "reconciler.failed", %error),
+    loop {
+        tokio::select! {
+            () = shutdown.cancelled() => {
+                tracing::info!(event = "reconciler.stopped");
+                return;
+            }
+            _ = ticker.tick() => {
+                // pod 로컬 OS temp의 크래시 스풀은 락 없이 매 pod가 직접
+                // 치운다 — 자기 디스크는 자기 몫이고, 락 승자만 치우면
+                // 락을 못 이긴 pod의 잔여물이 밀린다.
+                sweep_local_temps(clock.now().into()).await;
+                let result = filegate_db::with_reconciler_lock(&pool, || async {
+                    run_jobs(&pool, &crypto, &s3_clients).await;
+                })
+                .await;
+                match result {
+                    // 주기적 틱 — 잡 유무와 무관하게 debug (로그 정책).
+                    Ok(Some(())) => tracing::debug!(event = "reconciler.job"),
+                    Ok(None) => {
+                        tracing::debug!(event = "reconciler.skipped", reason = "lock_held")
                     }
+                    Err(error) => tracing::error!(event = "reconciler.failed", %error),
                 }
             }
         }
-    })
+    }
 }
 
 async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
@@ -286,7 +285,14 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
     // stock의 과거는 소급 계산이 불가하므로 매일 남긴다. 이미 찍힌 날은 0.
     // 자정에 서버가 없었으면 첫 tick에 늦게 찍히는 근사치고, 그제 이전의
     // 빈 날은 소급하지 않는다 — 지어낼 수 없는 값이다.
-    let yesterday = chrono::Utc::now().date_naive() - chrono::Days::new(1);
+    let today = filegate_db::time::now(pool).await;
+    match today {
+        Ok(today) => record_daily_snapshot(pool, today.date_naive() - chrono::Days::new(1)).await,
+        Err(error) => tracing::error!(event = "reconciler.snapshot_failed", %error),
+    }
+}
+
+async fn record_daily_snapshot(pool: &PgPool, yesterday: chrono::NaiveDate) {
     match usage::record_snapshot(pool, yesterday).await {
         Ok(0) => {}
         Ok(rows) => {
@@ -300,9 +306,9 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
 
 /// pod 로컬 스풀 정리 — OS temp의 `.fg-tmp-*` 중 늙은 것. DB·락과 무관하게
 /// 매 tick, 모든 pod에서 돈다 (s3 중계 스풀은 pod 로컬 디스크에 살므로).
-async fn sweep_local_temps() {
+async fn sweep_local_temps(now: std::time::SystemTime) {
     let dir = std::env::temp_dir();
-    match temp_spool::sweep_stale_temps(&dir, TEMP_MAX_AGE).await {
+    match temp_spool::sweep_stale_temps_at(&dir, TEMP_MAX_AGE, now).await {
         Ok(0) => {}
         Ok(count) => tracing::info!(event = "reconciler.local_temps_swept", count),
         Err(error) => tracing::warn!(

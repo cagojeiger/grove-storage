@@ -70,9 +70,9 @@ pub(crate) async fn create_in_tx(
         return Ok(CreateOutcome::NoClient);
     };
 
-    let file_id: Uuid = sqlx::query_scalar(
+    let (file_id, now): (Uuid, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
         "INSERT INTO files (client_id, declared_size, content_type, declared_md5, \
-         part_size) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+         part_size) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at",
     )
     .bind(spec.client_id)
     .bind(spec.declared_size)
@@ -84,7 +84,7 @@ pub(crate) async fn create_in_tx(
 
     // 키는 규칙으로 조합해 저장한다 (spec 00 물리 배치). 읽기·삭제는 저장된
     // 키만 따르므로, 규칙이 바뀌어도 기존 객체는 계속 동작한다 (ADR 001).
-    let object_key = object_key(spec.client_id, file_id, spec.content_type);
+    let object_key = object_key(spec.client_id, file_id, spec.content_type, now);
     sqlx::query("INSERT INTO locations (file_id, storage_id, object_key) VALUES ($1, $2, $3)")
         .bind(file_id)
         .bind(&storage.id)
@@ -94,7 +94,7 @@ pub(crate) async fn create_in_tx(
 
     let lease_id: Uuid = sqlx::query_scalar(
         "INSERT INTO leases (file_id, kind, expires_at) \
-         VALUES ($1, 'write', now() + $2 * interval '1 second') RETURNING id",
+         VALUES ($1, 'write', grove_time.transaction_now() + $2 * interval '1 second') RETURNING id",
     )
     .bind(file_id)
     .bind(spec.lease_ttl_secs)
@@ -124,8 +124,13 @@ pub(crate) async fn create_in_tx(
 
 /// New S3 keys preserve `fg/{client}/{yyyy}/{mm}/{file_id}[.ext]`.
 /// Existing objects are always addressed through their stored locations.
-fn object_key(client_id: &str, file_id: Uuid, content_type: Option<&str>) -> String {
-    let date = chrono::Utc::now().format("%Y/%m");
+fn object_key(
+    client_id: &str,
+    file_id: Uuid,
+    content_type: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let date = now.format("%Y/%m");
     let name = match ext_for(content_type) {
         Some(ext) => format!("{file_id}.{ext}"),
         None => file_id.to_string(),
@@ -160,12 +165,15 @@ mod key_tests {
     #[test]
     fn s3_key_preserves_the_existing_prefix_and_extension() {
         let id = Uuid::parse_str("0198a3f2-1111-4222-8333-4444555566ab").unwrap();
-        let s3 = object_key("notegate", id, Some("application/pdf"));
+        let now = chrono::DateTime::parse_from_rfc3339("2026-10-05T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let s3 = object_key("notegate", id, Some("application/pdf"), now);
         assert!(s3.starts_with("fg/notegate/"));
         assert!(s3.ends_with(&format!("/{id}.pdf")));
         assert_eq!(s3.matches('/').count(), 4); // fg/client/yyyy/mm/name
 
-        let plain = object_key("notegate", id, None);
+        let plain = object_key("notegate", id, None, now);
         assert!(plain.ends_with(&format!("/{id}")));
         assert_eq!(plain.matches('/').count(), 4);
     }

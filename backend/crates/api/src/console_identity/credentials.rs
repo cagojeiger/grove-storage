@@ -17,6 +17,7 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub(super) struct Issue {
     label: String,
+    current_password: filegate_core::SecretString,
     #[serde(default = "default_days")]
     expires_in_days: u16,
 }
@@ -59,7 +60,8 @@ pub(super) async fn issue(
         &headers,
         Command::IssueCredential {
             account,
-            key: token.credential(body.label.trim(), body.expires_in_days),
+            key: token.credential(body.label.trim(), body.expires_in_days, state.clock.now()),
+            current_password: body.current_password,
         },
     )
     .await;

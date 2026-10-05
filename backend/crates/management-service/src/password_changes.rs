@@ -1,7 +1,7 @@
 use filegate_core::SecretString;
 use filegate_db::{
     PgPool,
-    management::{self as db, telemetry},
+    management::{self as db, admission},
 };
 use uuid::Uuid;
 
@@ -37,13 +37,20 @@ async fn run(
     current: SecretString,
     replacement: SecretString,
 ) -> Result<(), Error> {
-    if !telemetry::login_allowed(pool).await.map_err(Error::from)? {
-        return Err(Error::RateLimited);
-    }
     let identity = db::session_actor(pool, session_hash)
         .await
         .map_err(Error::from)?
         .ok_or(Error::Unauthenticated)?;
+    if !admission::account_allowed(
+        pool,
+        identity.account_id,
+        admission::Purpose::Reauthentication,
+    )
+    .await
+    .map_err(Error::from)?
+    {
+        return Err(Error::RateLimited);
+    }
     let credential = db::passwords::find_by_account(pool, identity.account_id)
         .await
         .map_err(Error::from)?

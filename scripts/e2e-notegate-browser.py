@@ -37,21 +37,17 @@ def wait_ready(url):
     raise RuntimeError("local server readiness timeout")
 
 
-def check(grove, directory, database, backend, notegate, origin, output):
+def check(grove, directory, database, account, backend, notegate, origin, output):
     wait_ready(grove + "/readyz")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=notegate, text=True).strip()
     diff = subprocess.check_output(["git", "diff", "HEAD", "--binary"], cwd=notegate)
     print("NoteGate revision:", revision, "working diff sha256:", hashlib.sha256(diff).hexdigest())
 
-    def admin(path, data):
-        req = urllib.request.Request(grove + "/api/admin/v1" + path, data=json.dumps(data).encode(),
-            headers={"Authorization": "Bearer " + HARNESS["TOKEN"], "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return json.load(response)
-
-    admin("/storages", {"id": "browser-backend", **backend.spec})
-    admin("/clients", {"id": "notegate-browser", "storage_id": "browser-backend"})
-    credential = admin("/clients/notegate-browser/s3-credentials", {})
+    from cli_management_fixture import Management
+    management = Management(grove, account)
+    management.command("storage.create", {"id": "browser-backend", "spec": backend.spec})
+    management.command("client.create", {"id": "notegate-browser", "storage_id": "browser-backend"})
+    credential = management.command("credential.create", {"client_id": "notegate-browser"})
     docker("exec", database, "createdb", "-U", "filegate", "notegate_browser")
     port = docker("port", database, "5432").rsplit(":", 1)[1]
     with oidc_fixture(origin + "/auth/callback") as (issuer, events):
@@ -102,6 +98,6 @@ if __name__ == "__main__":
     origin = f"http://127.0.0.1:{available_port()}"
     print("Evidence:", output)
     with minio_backend() as backend:
-        HARNESS["main"](lambda grove, directory, database:
-            check(grove, directory, database, backend, notegate, origin, output),
+        HARNESS["main"](lambda grove, directory, database, account:
+            check(grove, directory, database, account, backend, notegate, origin, output),
             with_database=True, s3_cors_origins=(origin,))

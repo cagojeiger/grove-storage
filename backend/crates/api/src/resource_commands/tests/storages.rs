@@ -116,6 +116,7 @@ async fn invalid_storage_fields_and_probe_failure_are_sanitized(pool: PgPool) {
     assert!(matches!(
         crate::storage_registration::verify_command(
             &state.crypto,
+            state.clock.clone(),
             state.public_url.is_some(),
             input
         )

@@ -2,7 +2,6 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use chrono::Utc;
 use filegate_core::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
@@ -49,7 +48,7 @@ async fn login(
     if let Some(previous) = session_cookie(&headers) {
         db::logout(&state.pool, &hash("admin-session", previous)).await?;
     }
-    let age = (expires_at - Utc::now()).num_seconds().max(0);
+    let age = (expires_at - state.clock.now()).num_seconds().max(0);
     let mut response = Json(serde_json::json!({"principal": "admin", "credential_id": credential, "expires_at": expires_at})).into_response();
     response.headers_mut().insert(
         header::SET_COOKIE,

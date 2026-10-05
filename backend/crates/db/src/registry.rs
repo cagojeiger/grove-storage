@@ -137,7 +137,7 @@ pub async fn update_storage_in(
         "UPDATE storages SET kind = $2, force_relay = $3, endpoint = $4, \
          public_endpoint = $5, region = $6, bucket = $7, force_path_style = $8, access_key = $9, \
          secret_key_ciphertext = $10, secret_key_nonce = $11, enc_key_id = $12, \
-         capacity_bytes = $13, updated_at = now() WHERE id = $1",
+         capacity_bytes = $13, updated_at = grove_time.transaction_now() WHERE id = $1",
     )
     .bind(&row.id)
     .bind(&row.kind)

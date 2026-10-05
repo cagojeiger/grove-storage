@@ -16,6 +16,14 @@ use crate::routes::AppState;
 
 pub use session::routes;
 
+pub async fn legacy_initialized(
+    pool: &filegate_db::PgPool,
+    security: &filegate_core::SecurityConfig,
+) -> anyhow::Result<bool> {
+    Ok(security.legacy_admin_enabled
+        && (!security.operator_tokens.is_empty() || db::initialized(pool).await?))
+}
+
 const COOKIE: &str = "__Host-filegate_session";
 
 pub fn hash(domain: &str, raw: &str) -> String {

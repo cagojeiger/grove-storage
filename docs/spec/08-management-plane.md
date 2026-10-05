@@ -1,6 +1,7 @@
 # spec 08: 관리 신원·명령·감사
 
 - 이 문서의 Root/Master 및 토큰-콘솔-로그인 절은 이전 구현의 설계·검증 기록이다. 현행 로컬 인증·API 계약은 [spec 11](11-local-management-auth.md)을 따른다. 공통 자원 명령과 관리 이력의 책임 경계는 유지한다.
+- migration 0024는 과거 Master/Root 인증 테이블·세션을 제거하고 Account와 세션 소유권을 통일한다. 아래 과거 스키마·Master API 설명은 현행 운영 절차가 아니다. 정지·백업·업그레이드 조건은 spec 11의 Schema Cleanup 절을 따른다.
 - 상태: 신원·이력·세션 HTTP와 공통 자원 19개/Bearer HTTP·CLI·MCP 연결 구현·테스트. UI 5a·5b(User 로그인·자원·master 설정/복구·Access) 구현; 세션 목록·이력 화면은 후속.
 - 결정: [ADR 009](../adr/009-management-identity-and-command-boundary.md), [User 통합 ADR 010](../adr/010-unified-users-and-named-tokens.md).
 - 현재 구현: [인증](05-admin-auth.md), [CLI](04-cli.md), [콘솔](06-console.md).
@@ -220,7 +221,8 @@ command_invocations/security_events와 공통 로그인 예산은 `0009`에 구�
 | `audit_events` | id, created_at, actor context, request_id, surface, action, resource_type, resource_id, metadata |
 | `command_invocations` | id, created_at, actor context, request_id, surface, operation, outcome, error_code, duration_ms |
 | `security_events` | id, created_at, nullable actor context, request_id, surface, event_type, reason_code |
-| `login_budget` | 단일 행 id=1, window_start, attempts; 설치 전체 분당 60회 |
+| `login_budget` | 단일 행 id=1; 미등록 사용자·구형 토큰 로그인 공용 분당 60회 |
+| `authentication_budgets` | 계정·목적별 분당 60회; 로그인과 재인증 분리, 계정당 최대 2행 |
 | `master_configuration` | 단일 행 id=1, generation 양의 bigint, token_hash; process 설정의 DB fence |
 
 ```text
@@ -261,7 +263,7 @@ audit / invocation / security ── actor snapshot + request_id
 | 복구 | 지정한 활성 Admin의 기존 키·세션을 폐기하고 새 키 발급; 다른 User·Client 키는 보존 |
 | 변경 감사 | 신원 변경·세션 생성/폐기/상한 회수와 같은 transaction; 감사 실패 시 전체 rollback; 재폐기·같은 값 변경은 중복 이벤트 생략 |
 | 감사 내용 | actor/request/target snapshot; 계정 변경의 role·active 전후 값; 자유 형식 payload 대신 내부 필드만 기록, metadata 8 KiB 상한 |
-| 보존 | 계정은 soft delete; 이력의 actor/owner ID에는 FK를 두지 않아 물리 제거와 독립; 로그 보존/purge는 후속 |
+| 보존 | 계정은 soft delete; 이력의 actor/owner ID에는 FK를 두지 않아 물리 제거와 독립; Audit 365일·Security 90일·Command history 30일 기본, 환경 설정과 bounded worker purge는 [운영 계약](../stack/README.md#관리-로그-보존) 참조 |
 | 기존 DB | 기존 데이터가 있는 0007 → 현재 migration upgrade와 재실행 검증; 기존 계정의 자동 권한 매핑은 수행하지 않음 |
 
 `db::management`는 내부 저장소 연산이다. `AuditContext`는 권한 증명이 아니며
@@ -415,5 +417,5 @@ audit하며, 외부 효과가 남는 작업은 별도 작업 상태 계약으로
 이전 audit는 이전 방식의 기록으로 보존하며, 새 확정 변경 이벤트와 구분한다.
 각 단계는 코드·테스트·대응 spec을 함께 커밋하고 공개·운영 전환은 별도로 수행한다.
 
-후속 구현 전에 고정할 값: 로그 보존 기간·최대 payload·접근 예산,
+후속 구현 전에 고정할 값: 외부 로그 보관 계약·최대 payload·접근 예산,
 이전 인증의 전환/복구 절차.

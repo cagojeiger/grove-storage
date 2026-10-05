@@ -43,19 +43,15 @@ async fn additive_upgrade_preserves_existing_registry_credentials_and_sessions(p
         INSERT INTO clients(id,storage_id) VALUES('existing-app','existing');
         INSERT INTO client_keys(key_hash,client_id) VALUES('sha256:' || repeat('a',64),'existing-app');")
         .execute(&pool).await.unwrap();
-    let credential = admin_auth::issue(
-        &pool,
-        admin_auth::IssueMode::Initialize,
-        "existing",
-        "old-hash",
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    admin_auth::create_session(&pool, "old-hash", "old-session")
+    let credential = uuid::Uuid::new_v4();
+    sqlx::query("INSERT INTO admin_principals(id) VALUES(1)")
+        .execute(&pool)
         .await
-        .unwrap()
         .unwrap();
+    sqlx::query("INSERT INTO admin_credentials(id,principal_id,label,token_hash,expires_at) VALUES($1,1,'existing','old-hash',now()+interval '1 day')")
+        .bind(credential).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO admin_sessions(session_hash,credential_id,expires_at) VALUES('old-session',$1,now()+interval '8 hours')")
+        .bind(credential).execute(&pool).await.unwrap();
     let before = legacy_rows(&pool).await;
     filegate_db::migrate(&pool).await.unwrap();
     filegate_db::migrate(&pool).await.unwrap();
@@ -72,7 +68,7 @@ async fn additive_upgrade_preserves_existing_registry_credentials_and_sessions(p
         admin_auth::session_actor(&pool, "old-session")
             .await
             .unwrap(),
-        Some(credential.id)
+        Some(credential)
     );
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.accounts")
         .fetch_one(&pool)

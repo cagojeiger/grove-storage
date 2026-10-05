@@ -79,7 +79,7 @@ pub(super) async fn issue(
         request_id,
         &session_hash,
         body.current_password,
-        &token.credential(body.label.trim(), body.expires_in_days),
+        &token.credential(body.label.trim(), body.expires_in_days, state.clock.now()),
     )
     .await
     {

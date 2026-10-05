@@ -1,0 +1,34 @@
+src/template contains adaptations of the MUI Dashboard, Sign-in, and
+shared-theme templates, including community Data Grid and chart styles.
+
+Source revision: 27565bf06476f6ce2f8eb0c67393c67477968fa2
+https://github.com/mui/material-ui/tree/27565bf06476f6ce2f8eb0c67393c67477968fa2/docs/data/material/getting-started/templates
+
+Grove adaptations: system font, green brand scale, neutral sign-in background,
+product navigation and permissions, CSP nonce, accessible menu identifiers,
+external field labels, multiline forms, and severity-specific MUI alerts.
+The shared theme applies to the entire console. Existing API and session
+contracts are preserved. Demo data, workspace selection, advertising, search,
+social sign-in, registration, and unsupported recovery controls are excluded.
+
+MIT License
+
+Copyright (c) 2014 Call-Em-All
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

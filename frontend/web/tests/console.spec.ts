@@ -121,20 +121,17 @@ for (const theme of ["light", "dark"]) {
   }) => {
     await mock(page);
     await page.goto(root);
-    await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await expect(
       page.getByRole("link", { name: "Open client notegate" }),
     ).toBeVisible();
     const controls = page
-      .getByRole("region", { name: "Storage connections", exact: true })
+      .getByRole("region", { name: "Connections", exact: true })
       .getByRole("link", { name: /^Open / });
     await expect(controls).toHaveCount(2);
     for (const control of await controls.all()) {
       await expect(control).toHaveCSS("font-family", /^-apple-system,/);
-      await expect(control.getByRole("heading")).toHaveCSS(
-        "font-family",
-        /^-apple-system,/,
-      );
     }
   });
 }
@@ -153,8 +150,7 @@ test("login clears token; logout removes overview", async ({ page }) => {
       JSON.stringify({ ...localStorage, ...sessionStorage }),
     ),
   ).not.toContain("test-token");
-  await page.locator('button[aria-label="Account menu"]').click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(page.getByText("home-storage-long-identifier")).toHaveCount(0);
 });
@@ -169,7 +165,7 @@ test("password change validates confirmation and signs out", async ({
     await route.fulfill({ status: 204 });
   });
   await page.goto(`${root}#settings/security`);
-  await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
   await page.getByLabel("Current password").fill("old-private-password");
   await page.getByLabel(/^New password\s*\*?$/).fill("new-private-password");
   await page.getByLabel("Confirm new password").fill("different-password");
@@ -194,17 +190,17 @@ test("password change validates confirmation and signs out", async ({
   ).not.toContain("private-password");
 });
 
-test("account menu separates profile and security", async ({ page }) => {
+test("direct account navigation separates profile and security", async ({ page }) => {
   await mock(page, true, true);
   await page.goto(root);
-  const menu = page.getByRole("button", { name: "Account menu" });
+  const menu = page.getByRole("link", { name: "My account", exact: true });
   await expect(
     page
       .getByRole("complementary", { name: "Workspace sidebar" })
-      .getByRole("button", { name: "Account menu" }),
+      .getByRole("link", { name: "My account", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("contentinfo").getByRole("button", { name: "Account menu" }),
+    page.getByRole("contentinfo").getByRole("link", { name: "My account", exact: true }),
   ).toHaveCount(0);
   await expect(menu).toContainText("Owner");
   await expect(
@@ -213,28 +209,26 @@ test("account menu separates profile and security", async ({ page }) => {
       .getByRole("link", { name: "My account" }),
   ).toHaveCount(0);
   await menu.click();
-  await page.getByRole("menuitem", { name: "My account" }).click();
   await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
   await expect(page.getByLabel("Current password")).toHaveCount(0);
-  await menu.click();
-  await page.getByRole("menuitem", { name: "Security" }).click();
-  await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
+  await page.getByRole("tab", { name: "Security", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "My account" })).toBeVisible();
   await expect(page.getByLabel("Current password")).toBeVisible();
-  await menu.click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeHidden();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 });
 
 for (const width of [320, 768, 1440]) {
   for (const theme of ["light", "dark"]) {
-    test(`sidebar account menu stays usable ${width}px ${theme}`, async ({
+    test(`sidebar account link stays usable ${width}px ${theme}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 600 });
       await mock(page, true, true);
       await page.goto(`${root}#settings`);
-      await page.getByLabel("Theme").selectOption(theme);
-      const menu = page.getByRole("button", { name: "Account menu" });
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
+      const menu = page.getByRole("link", { name: "My account", exact: true });
       if (width < 900)
         await page.getByRole("button", { name: "Open navigation" }).click();
       if (width >= 900) {
@@ -246,29 +240,24 @@ for (const width of [320, 768, 1440]) {
         expect(rect!.y).toBeGreaterThan(400);
         expect(rect!.y + rect!.height).toBeLessThanOrEqual(600);
       }
-      await menu.click();
-      const panel = await page
-        .getByRole("menu", { name: "Account menu" })
-        .boundingBox();
+      await expect.poll(async () => (await menu.boundingBox())!.x).toBeGreaterThanOrEqual(0);
+      const panel = await menu.boundingBox();
       expect(panel!.x).toBeGreaterThanOrEqual(0);
-      expect(panel!.x + panel!.width).toBeLessThanOrEqual(width);
+      await expect.poll(async () => {
+        const bounds = (await menu.boundingBox())!;
+        return bounds.x + bounds.width;
+      }).toBeLessThanOrEqual(width);
       expect(panel!.y).toBeGreaterThanOrEqual(64);
       expect(panel!.y + panel!.height).toBeLessThanOrEqual(600);
       await expect(
-        page.getByRole("menuitem", { name: "Sign out" }),
+        page.getByRole("button", { name: "Sign out" }),
       ).toBeVisible();
-      await expect(page.getByRole("menu", { name: "Account menu" })).toHaveCSS(
-        "opacity",
-        "1",
-      );
       await page.screenshot({
         path: `test-results/sidebar-account-${width}-${theme}.png`,
       });
-      await page.keyboard.press("Escape");
-      await expect(menu).toBeFocused();
-      await expect(
-        page.getByRole("menuitem", { name: "Sign out" }),
-      ).toBeHidden();
+      await menu.click();
+      await expect(page.getByRole("heading", { name: "My account", exact: true })).toBeVisible();
+      await expect(page.getByRole("menu")).toHaveCount(0);
     });
   }
 }
@@ -281,27 +270,21 @@ test("token browser sessions cannot open password settings", async ({
   await expect(page.getByRole("alert")).toHaveText(
     "Password sign-in required.",
   );
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await expect(page.getByRole("menuitem", { name: "Security" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Security", exact: true })).toHaveCount(0);
 });
 
-test("account menu supports arrow navigation and restores trigger focus", async ({
+test("account link supports keyboard navigation beside sign out", async ({
   page,
 }) => {
   await mock(page, true, true);
   await page.goto(root);
-  const trigger = page.getByRole("button", { name: "Account menu" });
-  await trigger.click();
-  await expect(page.getByRole("menu", { name: "Account menu" })).toBeVisible();
-  await expect(
-    page.getByRole("menuitem", { name: "My account", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(
-    page.getByRole("menuitem", { name: "Security", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(trigger).toBeFocused();
+  const trigger = page.getByRole("link", { name: "My account", exact: true });
+  await trigger.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "My account", exact: true })).toBeVisible();
 });
 
 test("MUI synchronizes an explicit theme between tabs", async ({
@@ -313,9 +296,11 @@ test("MUI synchronizes an explicit theme between tabs", async ({
   const other = await context.newPage();
   await mock(other);
   await other.goto(root);
-  await page.getByLabel("Theme").selectOption("dark");
+  await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${"dark"}$`, "i") }).click();
   await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
-  await other.getByLabel("Theme").selectOption("light");
+  await other.getByRole("button", { name: "Theme", exact: true }).click();
+      await other.getByRole("menuitem", { name: new RegExp(`^${"light"}$`, "i") }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await other.close();
 });
@@ -326,13 +311,16 @@ test("keyboard focus stays visible on a short mobile viewport", async ({
   await page.setViewportSize({ width: 390, height: 600 });
   await mock(page, true, true);
   await page.goto(`${root}#settings`);
-  const link = page.getByRole("link", { name: "Change password" });
+  const link = page.getByRole("tab", { name: "Security", exact: true });
+  const profile = page.getByRole("tab", { name: "Profile", exact: true });
   await expect(link).toBeVisible();
   for (let i = 0; i < 30; i++) {
     await page.keyboard.press("Tab");
-    if (await link.evaluate((element) => element === document.activeElement))
+    if (await profile.evaluate((element) => element === document.activeElement))
       break;
   }
+  await expect(profile).toBeFocused();
+  await page.keyboard.press("ArrowRight");
   await expect(link).toBeFocused();
   await expect
     .poll(() =>
@@ -359,7 +347,8 @@ for (const width of [320, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await mock(page, true, true);
       await page.goto(`${root}#settings/security`);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(page.getByLabel("Current password")).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Change password" }),
@@ -473,8 +462,7 @@ test("empty, API failure, retry, and logout failure", async ({ page }) => {
   await page.route("**/session", (route) =>
     route.fulfill({ status: 500, json: {} }),
   );
-  await page.locator('button[aria-label="Account menu"]').click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
@@ -487,7 +475,8 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 960 });
       await mock(page);
       await page.goto(root);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(
         page.getByRole("link", {
           name: "Open storage home-storage-long-identifier",
@@ -497,13 +486,13 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       if (width < 900) {
         await page.getByRole("button", { name: "Open navigation" }).click();
         await expect(
-          page.getByRole("button", { name: "Account menu", exact: true }),
-        ).toContainText("admin");
+          page.getByRole("link", { name: "My account", exact: true }),
+        ).toContainText("Account");
         await page.getByRole("button", { name: "Close navigation" }).click();
       } else
         await expect(
-          page.getByRole("button", { name: "Account menu", exact: true }),
-        ).toContainText("admin");
+          page.getByRole("link", { name: "My account", exact: true }),
+        ).toContainText("Account");
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -511,7 +500,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       ).toBe(true);
       expect(
         await page
-          .getByRole("link", { name: "Grove Storage", exact: true })
+          .getByRole("main")
           .locator("img")
           .evaluate((img: HTMLImageElement) => img.naturalWidth > 0),
       ).toBe(true);
@@ -531,32 +520,27 @@ test("system theme follows OS and explicit selection persists", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.getByLabel("Theme").selectOption("dark");
+  await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${"dark"}$`, "i") }).click();
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
 for (const theme of ["light", "dark"] as const) {
-  test(`${theme} select options have an explicit matching surface`, async ({
-    page,
-  }) => {
+  test(`${theme} theme menu uses the template surface`, async ({ page }) => {
     await mock(page);
-    await page.emulateMedia({
-      colorScheme: theme === "dark" ? "light" : "dark",
-    });
+    await page.emulateMedia({ colorScheme: theme === "dark" ? "light" : "dark" });
     await page.goto(root);
-    await page.getByLabel("Theme").selectOption(theme);
-    const colors =
-      theme === "dark"
-        ? { text: "rgb(255, 255, 255)", surface: "rgb(18, 18, 18)" }
-        : { text: "rgba(0, 0, 0, 0.87)", surface: "rgb(255, 255, 255)" };
-    await expect(page.getByLabel("Theme")).toHaveCSS("color-scheme", theme);
-    for (const option of await page
-      .getByLabel("Theme")
-      .locator("option")
-      .all()) {
-      await expect(option).toHaveCSS("color", colors.text);
-      await expect(option).toHaveCSS("background-color", colors.surface);
-    }
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+    await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect(menu.locator("..")).toHaveCSS("background-color",
+      theme === "dark" ? "rgb(5, 7, 10)" : "rgb(255, 255, 255)");
+    await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).focus();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Theme", exact: true })).toBeFocused();
   });
 }

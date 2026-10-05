@@ -4,7 +4,10 @@ import { ApiError } from "../../api/http";
 import { identityMessage } from "../../api/identity";
 import { clearSession } from "../../auth/session";
 
-export function useAction(errorMessage = identityMessage) {
+export function useAction(
+  errorMessage = identityMessage,
+  reauthenticate = false,
+) {
   const cache = useQueryClient();
   const lock = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -19,8 +22,14 @@ export function useAction(errorMessage = identityMessage) {
       await work();
     } catch (e) {
       setError(errorMessage(e));
-      setUnknown(!(e instanceof ApiError) || e.outcome !== "not_applied");
-      if (e instanceof ApiError && e.status === 401) clearSession(cache);
+      const rejected =
+        e instanceof ApiError &&
+        (e.outcome === "not_applied" ||
+          (reauthenticate &&
+            [400, 401, 403, 404, 409, 429].includes(e.status)));
+      setUnknown(!rejected);
+      if (e instanceof ApiError && e.status === 401 && !reauthenticate)
+        clearSession(cache);
       if (e instanceof ApiError && e.status === 403) {
         cache.removeQueries({ queryKey: ["access"] });
         void cache.invalidateQueries({ queryKey: ["session"] });

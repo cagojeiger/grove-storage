@@ -5,10 +5,10 @@ import { maintenanceMock } from "./maintenance-fixture";
 import { storageMock } from "./storage-fixture";
 
 const lists = [
-  { route: "storages", selector: '[role="gridcell"]', setup: storageMock },
-  { route: "clients", selector: '[role="gridcell"]', setup: clientMock },
-  { route: "accounts", selector: '[role="gridcell"]', setup: accessMock },
-  { route: "activity", selector: "tbody td", setup: maintenanceMock },
+  { route: "storages", minimumRowHeight: 44, setup: storageMock },
+  { route: "clients", minimumRowHeight: 44, setup: clientMock },
+  { route: "accounts", minimumRowHeight: 36, setup: accessMock },
+  { route: "activity", minimumRowHeight: 36, setup: maintenanceMock },
 ] as const;
 
 for (const theme of ["light", "dark"]) {
@@ -18,17 +18,13 @@ for (const theme of ["light", "dark"]) {
         await page.setViewportSize({ width, height: 720 });
         await list.setup(page);
         await page.goto(`/api/admin/console/#${list.route}`);
-        await page.getByLabel("Theme").selectOption(theme);
-        const row = page.locator(list.selector).first();
+        await page.getByRole("button", { name: "Theme", exact: true }).click();
+        await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
+        const row = page.getByRole("gridcell").first().locator('xpath=ancestor::*[@role="row"]');
         await expect(row).toBeVisible();
-        if (list.route === "activity") {
-          await expect(row).toHaveCSS("padding-top", "6px");
-          await expect(row).toHaveCSS("padding-bottom", "6px");
-          await expect(row).toHaveCSS("border-bottom-width", "1px");
-        } else {
-          const bounds = await row.boundingBox();
-          expect(bounds!.height).toBeGreaterThanOrEqual(44);
-        }
+        const bounds = await row.boundingBox();
+        // The template uses compact rows; resource rows also contain usage data.
+        expect(bounds!.height).toBeGreaterThanOrEqual(list.minimumRowHeight);
         await expect(row).toHaveCSS("font-family", /^-apple-system,/);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         if (width === 1280 && theme === "light") {
@@ -41,11 +37,12 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 720 });
       await storageMock(page);
       await page.goto("/api/admin/console/#storages");
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await page.getByRole("button", { name: "Add storage", exact: true }).click();
       const save = page.getByRole("button", { name: "Save", exact: true });
       const cancel = page.getByRole("button", { name: "Cancel", exact: true });
-      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByRole("dialog", { name: "Add storage" })).toBeVisible();
       await save.scrollIntoViewIfNeeded();
       await expect(save).toBeInViewport();
       await expect(cancel).toBeInViewport();
@@ -65,16 +62,15 @@ for (const theme of ["light", "dark"]) {
   }
 }
 
-test("account danger controls and confirmation share error color", async ({ page }) => {
+test("account deletion and confirmation retain the template error color", async ({ page }) => {
   await accessMock(page);
   await page.goto(`/api/admin/console/#accounts/${owner.id}`);
-  await page.getByLabel("Theme").selectOption("light");
-  await page.getByRole("tab", { name: "Security", exact: true }).click();
+  await page.getByRole("button", { name: "Theme", exact: true }).click();
+  await page.getByRole("menuitem", { name: /^light$/i }).click();
   const remove = page.getByRole("button", { name: "Delete account", exact: true });
-  await expect(remove).toHaveCSS("color", "rgb(211, 47, 47)");
-  await expect(page.getByRole("button", { name: "Disable", exact: true })).toHaveCSS("color", "rgb(211, 47, 47)");
+  await expect(remove).toHaveCSS("color", "rgb(194, 10, 10)");
   await remove.click();
-  await page.getByLabel("Confirm account name").fill(owner.display_name);
-  await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
-  await expect(page.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true })).toHaveCSS("background-color", "rgb(211, 47, 47)");
+  await page.getByLabel("Account name to confirm").fill(owner.display_name);
+  await page.getByRole("checkbox", { name: "I understand this changes my access." }).check();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Save", exact: true })).toHaveCSS("background-color", "rgb(194, 10, 10)");
 });

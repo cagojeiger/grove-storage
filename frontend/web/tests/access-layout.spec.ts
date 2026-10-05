@@ -12,13 +12,13 @@ for (const width of [320, 390, 768, 1024, 1440])
         },
       ]);
       await page.goto(root);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await page
         .getByRole("link", { name: /^Home-administrator/ })
         .click();
-      await page.getByRole("tab", { name: "API tokens", exact: true }).click();
       await expect(
-        page.getByRole("heading", { name: "Management API tokens" }),
+        page.getByRole("region", { name: "Management API tokens" }),
       ).toBeVisible();
       expect(
         await page.evaluate(

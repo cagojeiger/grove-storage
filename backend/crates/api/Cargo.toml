@@ -40,6 +40,7 @@ percent-encoding = { workspace = true }
 rpassword = "7.5.4"
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 # CORS preflight 라우터 테스트용 oneshot (ServiceExt). tower는 axum 경유로
 # 이미 잠겨 있고, util feature만 테스트에서 켠다.
 tower = { version = "0.5", features = ["util"] }

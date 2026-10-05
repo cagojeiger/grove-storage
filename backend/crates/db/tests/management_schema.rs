@@ -11,9 +11,17 @@ use uuid::Uuid;
 async fn accounts_are_complete_without_a_subtype_table(pool: PgPool) {
     let mut tx = pool.begin().await.unwrap();
     let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','orphan','reader')").bind(id).execute(&mut *tx).await.unwrap();
+    sqlx::query(
+        "INSERT INTO management.accounts(id,display_name,role) VALUES($1,'orphan','reader')",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
     tx.commit().await.unwrap();
-    assert!(sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'agent','rejected','reader')").bind(Uuid::new_v4()).execute(&pool).await.is_err());
+    let kind_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='management' AND table_name='accounts' AND column_name='kind')")
+        .fetch_one(&pool).await.unwrap();
+    assert!(!kind_exists);
     let agents: Option<String> =
         sqlx::query_scalar("SELECT to_regclass('management.agents')::text")
             .fetch_one(&pool)
@@ -28,21 +36,47 @@ async fn accounts_are_complete_without_a_subtype_table(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn session_fk_rejects_cross_user_credentials(pool: PgPool) {
+async fn session_fk_rejects_cross_account_credentials(pool: PgPool) {
     let (owner, credential) = bootstrap(&pool).await;
     let other = user(&pool, Role::Reader).await;
     let automation_user = owner;
     let token_key = db::issue_credential(&pool, &context(), automation_user, &key(&hash(2)))
         .await
         .unwrap();
-    for (user_id, credential_id) in [(other, credential.id), (other, token_key.id)] {
-        assert!(sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,credential_id,expires_at) VALUES($1,$2,'token',$3,$4,clock_timestamp()+interval '1 hour')")
-            .bind(Uuid::new_v4()).bind(hash(10)).bind(user_id).bind(credential_id).execute(&pool).await.is_err());
+    for (account_id, credential_id) in [(other, credential.id), (other, token_key.id)] {
+        let error = sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,account_id,credential_id,expires_at) VALUES($1,$2,'token',$3,$4,clock_timestamp()+interval '1 hour')")
+            .bind(Uuid::new_v4()).bind(hash(10)).bind(account_id).bind(credential_id).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23503")
+        );
     }
-    assert!(sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,credential_id,master_generation,expires_at) VALUES($1,$2,'master',$3,$4,'generation',clock_timestamp()+interval '1 hour')")
-        .bind(Uuid::new_v4()).bind(hash(10)).bind(owner).bind(credential.id).execute(&pool).await.is_err());
-    assert!(sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,expires_at) VALUES($1,$2,'master',clock_timestamp()+interval '1 hour')")
-        .bind(Uuid::new_v4()).bind(hash(10)).execute(&pool).await.is_err());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn sessions_require_one_account_and_exactly_one_authentication_method(pool: PgPool) {
+    let (owner, credential) = bootstrap(&pool).await;
+    for (method, token, generation) in [
+        ("master", None, None),
+        ("token", None, None),
+        ("token", Some(credential.id), Some(Uuid::new_v4())),
+        ("password", None, None),
+        ("password", Some(credential.id), Some(Uuid::new_v4())),
+    ] {
+        let error = sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,account_id,credential_id,password_generation,expires_at) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()+interval '1 hour')")
+            .bind(Uuid::new_v4()).bind(hash(10)).bind(method).bind(owner).bind(token).bind(generation)
+            .execute(&pool).await.unwrap_err();
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23514")
+        );
+    }
+    let error = sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,credential_id,expires_at) VALUES($1,$2,'token',$3,clock_timestamp()+interval '1 hour')")
+        .bind(Uuid::new_v4()).bind(hash(10)).bind(credential.id).execute(&pool).await.unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().code().as_deref(),
+        Some("23502")
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]

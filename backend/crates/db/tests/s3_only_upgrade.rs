@@ -40,6 +40,10 @@ async fn snapshot(pool: &PgPool) -> Vec<Vec<Value>> {
             "to_jsonb(t)-'root_path'"
         } else if table == "s3_uploads" {
             "to_jsonb(t)-'if_none_match'"
+        } else if table == "management.accounts" {
+            "to_jsonb(t)-'kind'"
+        } else if table == "management.sessions" {
+            "(to_jsonb(t)-'master_generation'-'user_id'-'account_id'-'password_generation') || jsonb_build_object('account_id',coalesce(to_jsonb(t)->'account_id',to_jsonb(t)->'user_id'))"
         } else {
             "to_jsonb(t)"
         };
@@ -80,25 +84,12 @@ async fn s3_upgrade_preserves_resource_rows_and_management_identity(pool: PgPool
           SELECT id,'s','c','write',declared_size FROM files;
         INSERT INTO usage_snapshot(day,storage_id,client_id,active_bytes,active_files) VALUES(current_date,'s','c',10,1);")
         .execute(&pool).await.unwrap();
-    let context = filegate_db::management::AuditContext {
-        actor: filegate_db::management::AuditActor::Master { session_id: None },
-        request_id: uuid::Uuid::new_v4(),
-        surface: grove_management_policy::Surface::Console,
-    };
     let hash = "a".repeat(64);
-    let (account, _) = filegate_db::management::bootstrap(
-        &pool,
-        &context,
-        "Owner",
-        &filegate_db::management::NewCredential {
-            label: "kept",
-            token_prefix: "gst_test",
-            token_hash: &hash,
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
-        },
-    )
-    .await
-    .unwrap();
+    let account = uuid::Uuid::new_v4();
+    sqlx::query("INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user','Owner','admin')")
+        .bind(account).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO management.credentials(id,account_id,label,token_prefix,token_hash,expires_at) VALUES($1,$2,'kept','gst_test',$3,clock_timestamp()+interval '1 hour')")
+        .bind(uuid::Uuid::new_v4()).bind(account).bind(&hash).execute(&pool).await.unwrap();
     let before = snapshot(&pool).await;
     filegate_db::migrate(&pool).await.unwrap();
     filegate_db::migrate(&pool).await.unwrap();

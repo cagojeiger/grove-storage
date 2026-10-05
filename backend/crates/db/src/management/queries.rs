@@ -91,7 +91,6 @@ impl<K> Default for Page<K> {
 #[derive(Debug, sqlx::FromRow)]
 pub struct AccountSummary {
     pub id: Uuid,
-    pub kind: String,
     pub display_name: String,
     pub role: String,
     pub is_active: bool,
@@ -123,7 +122,7 @@ pub(super) async fn account_in(
     id: Uuid,
 ) -> Result<AccountSummary, Error> {
     sqlx::query_as(
-        "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,
+        "SELECT a.id,a.display_name,a.role,a.is_active,a.deleted_at,
                 p.login_name,(p.password_hash IS NOT NULL) AS password_ready
          FROM management.accounts a
          LEFT JOIN management.password_credentials p ON p.account_id=a.id
@@ -149,7 +148,7 @@ impl IdentityTransaction<'_> {
             AccountStatus::Deleted => "deleted",
         };
         let mut rows: Vec<AccountSummary> = sqlx::query_as(
-            "SELECT a.id,a.kind,a.display_name,a.role,a.is_active,a.deleted_at,
+            "SELECT a.id,a.display_name,a.role,a.is_active,a.deleted_at,
                     p.login_name,(p.password_hash IS NOT NULL) AS password_ready
             FROM management.accounts a
             LEFT JOIN management.password_credentials p ON p.account_id=a.id
@@ -208,14 +207,14 @@ impl IdentityTransaction<'_> {
     }
     pub async fn sessions(
         &mut self,
-        user: Uuid,
+        account: Uuid,
         page: Page<Uuid>,
     ) -> Result<Vec<SessionSummary>, Error> {
         Ok(sqlx::query_as(
             "SELECT id,credential_id,created_at,expires_at,revoked_at FROM management.sessions
-            WHERE user_id=$1 AND ($2::uuid IS NULL OR id<$2) ORDER BY id DESC LIMIT $3",
+            WHERE account_id=$1 AND ($2::uuid IS NULL OR id<$2) ORDER BY id DESC LIMIT $3",
         )
-        .bind(user)
+        .bind(account)
         .bind(page.before)
         .bind(page.limit)
         .fetch_all(&mut *self.inner)

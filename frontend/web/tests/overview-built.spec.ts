@@ -26,25 +26,26 @@ test("built Overview draws unselected branches on first load, reload and return"
   ).toBeVisible();
   await expect(page.getByText(/^Remaining capacity /)).toHaveCount(0);
   await expect(page.getByText("1 TiB remaining", { exact: true }).first()).toBeVisible();
-  await expect(page.locator(".connection-paths path")).toHaveCount(2);
+  await expect(page.locator(".connection-paths g")).toHaveCount(2);
   await expect(page.locator(".connection-paths path.selected")).toHaveCount(0);
   await page.reload();
-  await expect(page.locator(".connection-paths path")).toHaveCount(2);
+  await expect(page.locator(".connection-paths g")).toHaveCount(2);
   await page.getByRole("link", { name: "View all clients" }).click();
   await page
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Overview", exact: true })
     .click();
-  await expect(page.locator(".connection-paths path")).toHaveCount(2);
+  await expect(page.locator(".connection-paths g")).toHaveCount(2);
   for (const theme of ["light", "dark"]) {
-    await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await expect(page.locator(".connection-paths path").first()).toHaveCSS(
       "stroke-width",
-      "2px",
+      "1.5px",
     );
     await expect(page.locator(".connection-paths path").first()).toHaveCSS(
       "stroke",
-      theme === "light" ? "rgba(0, 0, 0, 0.38)" : "rgba(255, 255, 255, 0.5)",
+      theme === "light" ? "rgb(23, 107, 61)" : "rgb(124, 189, 151)",
     );
     await page.screenshot({
       path: `test-results/overview-built-unselected-${theme}.png`,

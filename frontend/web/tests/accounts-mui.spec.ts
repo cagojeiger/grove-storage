@@ -3,20 +3,21 @@ import { accessMock, owner, rawSetupToken } from "./access-fixture";
 
 for (const mode of ["light", "dark"]) {
   for (const width of [320, 390, 768, 1280]) {
-    test(`Accounts use stock MUI at ${width}px in ${mode}`, async ({
+    test(`Accounts use the MUI template at ${width}px in ${mode}`, async ({
       page,
     }) => {
       const name = "Administrator-with-a-long-unbroken-name-for-layout";
       await accessMock(page, [{ ...owner, display_name: name }]);
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/api/admin/console/#accounts");
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       const heading = page.getByRole("heading", {
         name: "Accounts",
         exact: true,
       });
-      await expect(heading).toHaveCSS("font-size", "24px");
-      await expect(heading).toHaveCSS("font-weight", "400");
+      await expect(heading).toHaveCSS("font-size", "20px");
+      await expect(heading).toHaveCSS("font-weight", "600");
       await expect(heading).toHaveCSS("font-family", /^-apple-system,/);
       await expect(
         page
@@ -26,7 +27,7 @@ for (const mode of ["light", "dark"]) {
       await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Create account" })).toHaveCSS(
         "background-color",
-        mode === "dark" ? "rgb(156, 219, 121)" : "rgb(23, 107, 61)",
+        mode === "dark" ? "rgb(245, 246, 250)" : "rgb(5, 7, 10)",
       );
       expect(
         await page.evaluate(
@@ -39,8 +40,9 @@ for (const mode of ["light", "dark"]) {
         fullPage: true,
       });
       await page.getByRole("link", { name, exact: true }).click();
-      const details = page.locator('dl[aria-label="Account details"]');
-      await expect(details.locator("dt")).toHaveCount(4);
+      const details = page.getByRole("main").locator("dl").first();
+      await expect(details.locator("dt")).toHaveCount(5);
+      await expect(details).toContainText(owner.id);
       await expect(details.locator("dt").first()).toHaveCSS(
         "font-size",
         "14px",
@@ -49,13 +51,13 @@ for (const mode of ["light", "dark"]) {
         "font-size",
         "14px",
       );
-      await page.getByRole("tab", { name: "API tokens", exact: true }).click();
       await page
         .getByRole("button", { name: "Issue token", exact: true })
         .click();
       await page
         .getByLabel(/^Label/)
         .fill("CLI-with-a-long-token-label-for-layout");
+      await page.getByLabel("Current password").fill("a private admin password");
       await page.getByRole("button", { name: "Issue", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "API token created" });
       await expect(
@@ -88,13 +90,14 @@ for (const mode of ["light", "dark"]) {
       await accessMock(page, [{ ...owner, password_ready: kind !== "setup link" }]);
       await page.setViewportSize({ width: 320, height: 480 });
       await page.goto(`/api/admin/console/#accounts/${owner.id}`);
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       if (kind === "token") {
-        await page.getByRole("tab", { name: "API tokens", exact: true }).click();
         await page
           .getByRole("button", { name: "Issue token", exact: true })
           .click();
         await page.getByLabel(/^Label/).fill("CLI");
+        await page.getByLabel("Current password").fill("a private admin password");
         await page.getByRole("button", { name: "Issue", exact: true }).click();
       } else {
         await page.route("**/accounts/*/password-setup", (route) =>
@@ -107,7 +110,6 @@ for (const mode of ["light", "dark"]) {
             },
           }),
         );
-        await page.getByRole("tab", { name: "Security", exact: true }).click();
         await page
           .getByRole("button", { name: "Issue setup link", exact: true })
           .click();

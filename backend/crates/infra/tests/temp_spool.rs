@@ -69,3 +69,34 @@ async fn sweep_removes_only_old_request_files() {
         0
     );
 }
+
+#[tokio::test]
+async fn sweep_uses_injected_time_and_a_strict_age_boundary() {
+    let dir = Scratch::new();
+    let path = dir.0.join(".fg-tmp-boundary");
+    let at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+    let file = std::fs::File::create(&path).unwrap();
+    file.set_times(std::fs::FileTimes::new().set_modified(at))
+        .unwrap();
+    drop(file);
+    for now in [at - Duration::from_secs(1), at + Duration::from_secs(60)] {
+        assert_eq!(
+            temp_spool::sweep_stale_temps_at(&dir.0, Duration::from_secs(60), now)
+                .await
+                .unwrap(),
+            0
+        );
+        assert!(path.exists());
+    }
+    assert_eq!(
+        temp_spool::sweep_stale_temps_at(
+            &dir.0,
+            Duration::from_secs(60),
+            at + Duration::from_secs(60) + Duration::from_nanos(1)
+        )
+        .await
+        .unwrap(),
+        1
+    );
+    assert!(!path.exists());
+}

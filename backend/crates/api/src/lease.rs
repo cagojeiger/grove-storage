@@ -43,65 +43,83 @@ async fn run_with_write_heartbeat<T>(
     ownership: WriteOwnership,
     operation: impl Future<Output = T>,
 ) -> Option<T> {
-    let heartbeat_every = Duration::from_secs(WRITE_LEASE_TTL.as_secs() / 3);
-    let mut heartbeat = tokio::time::interval_at(
-        tokio::time::Instant::now() + heartbeat_every,
-        heartbeat_every,
-    );
-    tokio::pin!(operation);
+    run_with_heartbeat(
+        operation,
+        Duration::from_secs(WRITE_LEASE_TTL.as_secs() / 3),
+        || async {
+            let renewed = match ownership {
+                WriteOwnership::NativeCompletion => {
+                    files::renew_completion_lease(pool, file_id, WRITE_LEASE_TTL.as_secs() as i64)
+                        .await
+                }
+                WriteOwnership::NativeUploadPart { lease_id, part_no } => {
+                    files::renew_relay_part_lease(
+                        pool,
+                        file_id,
+                        lease_id,
+                        part_no,
+                        WRITE_LEASE_TTL.as_secs() as i64,
+                    )
+                    .await
+                }
+                WriteOwnership::S3Completion => {
+                    s3_registry::renew_completion_lease(
+                        pool,
+                        file_id,
+                        WRITE_LEASE_TTL.as_secs() as i64,
+                    )
+                    .await
+                }
+                WriteOwnership::UploadPart { lease_id, part_no } => {
+                    s3_registry::renew_upload_part_lease(
+                        pool,
+                        file_id,
+                        lease_id,
+                        part_no,
+                        WRITE_LEASE_TTL.as_secs() as i64,
+                    )
+                    .await
+                }
+            };
+            match renewed {
+                Ok(true) => true,
+                Ok(false) => {
+                    tracing::warn!(
+                        event = "s3.write_ownership_lost",
+                        operation = ownership.operation(),
+                        file = %file_id,
+                    );
+                    false
+                }
+                Err(error) => {
+                    tracing::warn!(
+                    event = "s3.write_heartbeat_failed",
+                    operation = ownership.operation(),
+                    file = %file_id,
+                    %error,
+                    );
+                    true
+                }
+            }
+        },
+    )
+    .await
+}
 
+async fn run_with_heartbeat<T, F: Future<Output = bool>>(
+    operation: impl Future<Output = T>,
+    every: Duration,
+    mut renew: impl FnMut() -> F,
+) -> Option<T> {
+    let mut heartbeat = tokio::time::interval_at(tokio::time::Instant::now() + every, every);
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    tokio::pin!(operation);
     loop {
         tokio::select! {
             biased;
             result = &mut operation => return Some(result),
             _ = heartbeat.tick() => {
-                let renewed = match ownership {
-                    WriteOwnership::NativeCompletion => files::renew_completion_lease(
-                        pool,
-                        file_id,
-                        WRITE_LEASE_TTL.as_secs() as i64,
-                    ).await,
-                    WriteOwnership::NativeUploadPart { lease_id, part_no } => {
-                        files::renew_relay_part_lease(
-                            pool,
-                            file_id,
-                            lease_id,
-                            part_no,
-                            WRITE_LEASE_TTL.as_secs() as i64,
-                        ).await
-                    }
-                    WriteOwnership::S3Completion => s3_registry::renew_completion_lease(
-                        pool,
-                        file_id,
-                        WRITE_LEASE_TTL.as_secs() as i64,
-                    ).await,
-                    WriteOwnership::UploadPart { lease_id, part_no } => {
-                        s3_registry::renew_upload_part_lease(
-                            pool,
-                            file_id,
-                            lease_id,
-                            part_no,
-                            WRITE_LEASE_TTL.as_secs() as i64,
-                        ).await
-                    }
-                };
-                match renewed {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        tracing::warn!(
-                            event = "s3.write_ownership_lost",
-                            operation = ownership.operation(),
-                            file = %file_id,
-                        );
-                        return None;
-                    }
-                    Err(error) => tracing::warn!(
-                        event = "s3.write_heartbeat_failed",
-                        operation = ownership.operation(),
-                        file = %file_id,
-                        %error,
-                    ),
-                }
+                if !renew().await { return None; }
             }
         }
     }
@@ -179,5 +197,70 @@ pub async fn audit_read(
     .await
     {
         tracing::warn!(event = "file.read_audit_failed", file = %file_id, %error);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[tokio::test(start_paused = true)]
+    async fn heartbeat_waits_for_the_injected_interval_then_stops_on_ownership_loss() {
+        let renewed = Arc::new(AtomicUsize::new(0));
+        let count = renewed.clone();
+        let task = tokio::spawn(async move {
+            run_with_heartbeat(
+                std::future::pending::<()>(),
+                Duration::from_secs(300),
+                || async {
+                    count.fetch_add(1, Ordering::SeqCst);
+                    false
+                },
+            )
+            .await
+        });
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(299)).await;
+        assert_eq!(renewed.load(Ordering::SeqCst), 0);
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert_eq!(task.await.expect("heartbeat task"), None);
+        assert_eq!(renewed.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn completed_operation_does_not_start_another_renewal() {
+        let result = run_with_heartbeat(async { 42 }, Duration::from_secs(300), || async {
+            panic!("finished operation must not renew")
+        })
+        .await;
+        assert_eq!(result, Some(42));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn delayed_renewal_does_not_burst_missed_ticks() {
+        let renewals = AtomicUsize::new(0);
+        let start = tokio::time::Instant::now();
+        let result = run_with_heartbeat(
+            async {
+                tokio::time::sleep(Duration::from_secs(1200)).await;
+                42
+            },
+            Duration::from_secs(300),
+            || async {
+                if renewals.fetch_add(1, Ordering::SeqCst) == 0 {
+                    tokio::time::sleep(Duration::from_secs(650)).await;
+                }
+                true
+            },
+        )
+        .await;
+        assert_eq!(result, Some(42));
+        assert_eq!(renewals.load(Ordering::SeqCst), 2);
+        assert_eq!(start.elapsed(), Duration::from_secs(1200));
     }
 }

@@ -245,6 +245,7 @@ export function previewIdentity(json, history) {
         });
       }
       else if (path === "/accounts" && method === "POST") {
+        const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
         if (
           !body.display_name?.trim() ||
           !["user", "user_with_password_setup"].includes(body.kind) ||
@@ -254,11 +255,11 @@ export function previewIdentity(json, history) {
         else if (body.kind === "user_with_password_setup" && body.current_password !== passwords.get(current.account_id)?.password)
           fail(401, "unauthenticated");
         else if (body.kind === "user_with_password_setup" && (
-          [...passwords.values()].some(login => login.username === body.username) ||
-          [...setups.values()].some(setup => setup.username === body.username)))
+          [...passwords.values()].some(login => login.username === username) ||
+          [...setups.values()].some(setup => setup.username === username)))
           fail(409, "conflict");
         else if (body.kind === "user_with_password_setup" &&
-          !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(body.username))
+          !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(username))
           fail(400, "invalid_input");
         else {
           const id = randomUUID();
@@ -269,11 +270,11 @@ export function previewIdentity(json, history) {
             role: body.role,
             is_active: true,
             deleted_at: null,
-            username: body.kind === "user_with_password_setup" ? body.username : null,
+            username: body.kind === "user_with_password_setup" ? username : null,
             password_ready: false,
           });
           if (body.kind === "user_with_password_setup") {
-            const setup = { username: body.username,
+            const setup = { username,
               token: "gsps_" + randomBytes(32).toString("hex"),
               expires_at: new Date(Date.now() + 86400000).toISOString() };
             setups.set(id, setup);
@@ -325,6 +326,10 @@ export function previewIdentity(json, history) {
             );
           else if (!account.is_active || account.deleted_at)
             fail(409, "conflict");
+          else if (typeof body.current_password !== "string")
+            fail(400, "invalid_input");
+          else if (body.current_password !== passwords.get(current.account_id)?.password)
+            fail(401, "unauthenticated");
           else
             json(res, 201, issue(account.id, body.label, body.expires_in_days));
         } else {

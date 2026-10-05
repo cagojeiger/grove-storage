@@ -46,7 +46,7 @@ test("Overview highlights the registered assignment outside its first five stora
   await page.goto("/api/admin/console/#");
   await expect(
     page
-      .getByRole("region", { name: "Registered storage connections" })
+      .locator('[data-side="storage"]')
       .getByRole("link"),
   ).toHaveCount(5);
   await page.getByRole("link", { name: "Open client notegate" }).focus();
@@ -58,7 +58,7 @@ test("Overview highlights the registered assignment outside its first five stora
   await expect(page.getByRole("status")).toContainText("notegate → storage-7");
   await expect(
     page
-      .getByRole("region", { name: "Registered storage connections" })
+      .locator('[data-side="storage"]')
       .getByRole("link"),
   ).toHaveCount(5);
   await intercept(page, "client.show", (r) =>

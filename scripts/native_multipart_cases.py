@@ -4,7 +4,7 @@ import hashlib
 import urllib.error
 
 
-def check_multipart(request, put, opener, endpoint, backend, admin):
+def check_multipart(request, put, opener, endpoint, backend, command):
     parts = [b"a" * (5 * 1024 * 1024), b"b" * (5 * 1024 * 1024), b"tail"]
     content = b"".join(parts)
     expected_etag = hashlib.md5(b"".join(hashlib.md5(part).digest() for part in parts)).hexdigest() + "-3"
@@ -12,11 +12,10 @@ def check_multipart(request, put, opener, endpoint, backend, admin):
     for relay in [False, True]:
         name = "native-multipart-" + ("relay" if relay else "direct")
         token = name + "-test-key"
-        request("POST", "/api/admin/v1/storages",
-                {"id": name, **backend.spec, "force_relay": relay}, admin, 201)
-        request("POST", "/api/admin/v1/clients", {"id": name, "storage_id": name}, admin, 201)
-        request("POST", f"/api/admin/v1/clients/{name}/keys",
-                {"key_hash": "sha256:" + hashlib.sha256(token.encode()).hexdigest()}, admin, 201)
+        command("storage.create", {"id": name, "spec": {**backend.spec, "force_relay": relay}})
+        command("client.create", {"id": name, "storage_id": name})
+        command("client-key.register", {
+            "client_id": name, "key_hash": "sha256:" + hashlib.sha256(token.encode()).hexdigest()})
         created = request("POST", "/api/v1/files", {"declared_size": len(content)}, token, 201)
         file_id = created["file_id"]
         assert created["multipart"]["part_count"] == 3

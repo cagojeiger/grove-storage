@@ -1,28 +1,36 @@
-"""Console-only identity setup for the isolated CLI integration test."""
+"""Local account bootstrap and management commands for isolated E2E tests."""
 import json
 import os
 from pathlib import Path
 import secrets
 import subprocess
+import sys
 import urllib.error
 import urllib.request
+import uuid
 
 ORIGIN = "https://console.test"
 IDENTITY = "/api/admin/identity/v1"
 
 
+def initialize_owner(database):
+    password = "fixture-" + secrets.token_urlsafe(32)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("FILEGATE_")}
+    owner = json.loads(subprocess.check_output(
+        [sys.executable, "scripts/e2e-password-account.py", database],
+        cwd=Path(__file__).resolve().parent.parent,
+        env=dict(env, GROVE_E2E_PASSWORD=password,
+                 GROVE_E2E_DISPLAY_NAME="E2E test owner"), text=True, timeout=45))
+    return {**owner, "username": "owner", "password": password}
+
+
 class Management:
-    def __init__(self, endpoint, database):
+    def __init__(self, endpoint, owner):
         self.endpoint = endpoint
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self.cookie = None
-        owner_password = "fixture-" + secrets.token_urlsafe(32)
-        subprocess.check_output(
-            ["python3", "scripts/e2e-password-account.py", database],
-            cwd=Path(__file__).resolve().parent.parent,
-            env=dict(os.environ, GROVE_E2E_PASSWORD=owner_password,
-                     GROVE_E2E_DISPLAY_NAME="CLI test owner"), text=True, timeout=45)
-        self.request("POST", "/session", {"username": "owner", "password": owner_password})
+        owner_password = owner["password"]
+        self.request("POST", "/session", {"username": owner["username"], "password": owner_password})
         setup = self.request("POST", "/accounts", {
             "kind": "user_with_password_setup", "role": "writer", "display_name": "CLI writer",
             "username": "cli-writer", "current_password": owner_password,
@@ -42,6 +50,20 @@ class Management:
         }, expected=201)
         self.token, self.credential_id = issued["token"], issued["credential_id"]
         self.request("POST", "/session", {"username": "owner", "password": owner_password})
+
+    def command(self, name, inputs=None):
+        request = urllib.request.Request(
+            self.endpoint + "/api/admin/commands/v1", method="POST",
+            headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json"},
+            data=json.dumps({"protocol": 1, "command": name,
+                             "input": {} if inputs is None else inputs}).encode())
+        with self.opener.open(request, timeout=10) as response:
+            assert response.status == 200
+            assert response.headers["Cache-Control"] == "no-store"
+            output = json.load(response)
+        assert output["protocol"] == 1 and output["command"] == name
+        uuid.UUID(output["request_id"])
+        return output["result"]
 
     def request(self, method, path, body=None, expected=200):
         headers = {"Origin": ORIGIN, "X-Grove-CSRF": "1", "Content-Type": "application/json"}

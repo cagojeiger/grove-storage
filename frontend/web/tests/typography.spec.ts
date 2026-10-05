@@ -8,7 +8,8 @@ for (const theme of ["light", "dark"]) {
   }) => {
     await accessMock(page);
     await page.goto(root);
-    await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     const rows = page
       .getByRole("grid", { name: "Accounts", exact: true })
       .getByRole("row").filter({ has: page.getByRole("link") });
@@ -25,20 +26,21 @@ for (const theme of ["light", "dark"]) {
     ).toHaveCSS("font-family", /^-apple-system,/);
   });
 
-  test(`JSON keeps its monospace font in ${theme} mode`, async ({ page }) => {
+  test(`metadata uses the shared system font in ${theme} mode`, async ({ page }) => {
     await clientMock(page);
     await page.goto("/api/admin/console/#clients/notegate");
-    await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await expect(page.getByLabel("Saved metadata", { exact: true })).toHaveCSS(
       "font-family",
-      /monospace/,
+      /^-apple-system,/,
     );
     await page
       .getByRole("button", { name: "Edit metadata", exact: true })
       .click();
     await expect(page.getByLabel("Metadata JSON")).toHaveCSS(
       "font-family",
-      /monospace/,
+      /^-apple-system,/,
     );
     await expect(
       page.getByRole("button", { name: "Save", exact: true }),

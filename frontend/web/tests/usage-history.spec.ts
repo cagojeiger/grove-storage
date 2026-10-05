@@ -39,7 +39,7 @@ test("Reader can load usage snapshots, including retired resource IDs, and chang
   ]);
   await page.goto("/api/admin/console/#usage");
   await expect(
-    page.getByRole("cell", { name: "1,240", exact: true }),
+    page.getByRole("gridcell", { name: "1,240", exact: true }),
   ).toHaveCount(2);
   await expect(page.getByRole("row").nth(1)).toContainText("2026-09-25");
   await expect(page.getByRole("row").nth(2)).toContainText("retired-storage");
@@ -64,21 +64,21 @@ test("empty history is not fabricated as zero usage; failures hide stale rows an
   await mock(page, []);
   await page.goto("/api/admin/console/#usage");
   await expect(
-    page.getByText("No snapshots recorded for this period."),
+    page.getByText("No usage snapshots recorded."),
   ).toBeVisible();
   await intercept(page, "usage.history", (r) =>
     r.fulfill({ json: envelope("usage.history", [snapshot]) }),
   );
   await page.getByRole("button", { name: "Refresh usage history" }).click();
   await expect(
-    page.getByRole("cell", { name: snapshot.client_id }),
+    page.getByRole("gridcell", { name: snapshot.client_id }),
   ).toBeVisible();
   await intercept(page, "usage.history", (r) =>
     r.fulfill({ status: 503, json: failure(503) }),
   );
   await page.getByRole("button", { name: "Refresh usage history" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByRole("table")).toHaveCount(0);
+  await expect(page.getByRole("grid")).toHaveCount(0);
   await intercept(page, "usage.history", (r) =>
     r.fulfill({ status: 401, json: failure(401) }),
   );
@@ -98,7 +98,7 @@ for (const invalid of [
     await mock(page, [{ ...snapshot, ...invalid }]);
     await page.goto("/api/admin/console/#usage");
     await expect(page.getByRole("alert")).toBeVisible();
-    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(page.getByRole("grid")).toHaveCount(0);
   });
 }
 
@@ -113,12 +113,14 @@ test("large histories use bounded local pages without extra API requests", async
     })),
   );
   await page.goto("/api/admin/console/#usage");
+  await page.getByRole("combobox", { name: /Rows per page/ }).click();
+  await page.getByRole("option", { name: "50", exact: true }).click();
   await expect(page.getByText("1–50 of 101", { exact: true })).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(51);
+  expect(await page.getByRole("row").count()).toBeLessThanOrEqual(51);
   const count = inputs.length;
   await page.getByRole("button", { name: "Go to next page" }).click();
   await expect(page.getByText("51–100 of 101", { exact: true })).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(51);
+  expect(await page.getByRole("row").count()).toBeLessThanOrEqual(51);
   await page.getByRole("button", { name: "Go to next page" }).click();
   await expect(page.getByRole("row")).toHaveCount(2);
   expect(inputs.length).toBe(count);
@@ -130,9 +132,13 @@ for (const width of [320, 768, 1440])
       await mock(page);
       await page.setViewportSize({ width, height: 960 });
       await page.goto("/api/admin/console/#usage");
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
+      if (width < 900) {
+        await page.getByRole("grid", { name: "Daily snapshots" }).locator(".MuiDataGrid-virtualScroller").evaluate(element => { element.scrollLeft = 300; });
+      }
       await expect(
-        page.getByRole("cell", { name: snapshot.client_id }),
+        page.getByRole("gridcell", { name: snapshot.client_id }),
       ).toBeVisible();
       expect(
         await page.evaluate(

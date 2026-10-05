@@ -19,23 +19,22 @@ ROOT = Path(__file__).resolve().parent.parent
 TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
 SERVER = TARGET / "debug" / "filegate"
 CLI = TARGET / "debug" / "gscli"
-TOKEN = "cli-local-integration-token"
 
 
 def docker(*args):
     return subprocess.check_output(["docker", *args], text=True, timeout=90).strip()
 
 
-def check_lifecycle(endpoint, directory, database):
+def check_lifecycle(endpoint, directory, database, account):
     from s3_backend_fixture import minio_backend
     with minio_backend() as backend:
-        check_s3_lifecycle(endpoint, directory, backend, database)
+        check_s3_lifecycle(endpoint, directory, backend, account)
 
 
-def check_s3_lifecycle(endpoint, directory, backend, database):
+def check_s3_lifecycle(endpoint, directory, backend, account):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def request(method, path, body=None, token=TOKEN):
+    def request(method, path, body=None, token=""):
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(
             endpoint + path, data=data, method=method,
@@ -56,9 +55,8 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
             raise RuntimeError("Test server did not become ready")
         time.sleep(0.1)
 
-    admin = "/api/admin/v1"
     from cli_management_fixture import Management
-    management = Management(endpoint, database)
+    management = Management(endpoint, account)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FILEGATE_", "GROVE_"))}
     env.pop("DATABASE_URL", None)
     env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
@@ -72,7 +70,6 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
         assert not result.stderr
         output = json.loads(result.stdout)
         assert output["ok"] and output["error"] is None
-        assert TOKEN not in result.stdout
         assert management.token not in result.stdout
         print("PASS", " ".join(args))
         return output, result
@@ -112,22 +109,22 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
     run_cli("storage", "replace", "cli-test-s3", "--from", str(storage_spec), "--yes")
 
     cases = [
-        (["status"], None),
-        (["storage", "list"], "/storages"),
-        (["storage", "show", "cli-test-s3"], "/storages/cli-test-s3"),
-        (["client", "list"], "/clients"),
-        (["client", "show", "cli-test"], "/clients/cli-test"),
-        (["credential", "list", "--client", "cli-test"], "/clients/cli-test/s3-credentials"),
-        (["client-key", "list", "--client", "cli-test"], "/clients/cli-test/keys"),
-        (["usage", "storages"], "/usage"),
-        (["usage", "clients"], "/usage/clients"),
-        (["usage", "history", "--days", "7"], "/usage/history?days=7"),
+        (["status"], None, {}),
+        (["storage", "list"], "storage.list", {}),
+        (["storage", "show", "cli-test-s3"], "storage.show", {"id": "cli-test-s3"}),
+        (["client", "list"], "client.list", {}),
+        (["client", "show", "cli-test"], "client.show", {"id": "cli-test"}),
+        (["credential", "list", "--client", "cli-test"], "credential.list", {"client_id": "cli-test"}),
+        (["client-key", "list", "--client", "cli-test"], "client-key.list", {"client_id": "cli-test"}),
+        (["usage", "storages"], "usage.storages", {}),
+        (["usage", "clients"], "usage.clients", {}),
+        (["usage", "history", "--days", "7"], "usage.history", {"days": 7}),
     ]
-    for args, path in cases:
+    for args, command, inputs in cases:
         output, result = run_cli(*args)
         assert credential["secret_key"] not in result.stdout
-        if path is not None:
-            assert output["data"] == request("GET", admin + path), args
+        if command is not None:
+            assert output["data"] == management.command(command, inputs), args
         else:
             assert output["data"]["registry"]["storage_count"] == 1
             assert output["data"]["registry"]["client_count"] == 1
@@ -138,8 +135,8 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
     run_cli("client-key", "delete", "--client", "cli-test", key, "--yes")
     run_cli("client", "delete", "cli-test", "--yes")
     run_cli("storage", "delete", "cli-test-s3", "--yes")
-    assert request("GET", admin + "/clients") == []
-    assert request("GET", admin + "/storages") == []
+    assert management.command("client.list") == []
+    assert management.command("storage.list") == []
     print("PASS registry lifecycle completed without Terraform")
 
     # A separate fixture remains in the disposable database until container teardown.
@@ -151,7 +148,7 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
     replacement = {**backend.spec, "public_endpoint": backend.spec["endpoint"] + "/changed",
                    "capacity_bytes": 2147483648}
     try:
-        request("PUT", admin + "/storages/cli-test-s3", replacement)
+        management.command("storage.replace", {"id": "cli-test-s3", "spec": replacement})
     except urllib.error.HTTPError as error:
         assert error.code == 409, error.code
     else:
@@ -163,7 +160,7 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
         cwd=directory, env=env, capture_output=True, text=True, timeout=10,
     )
     assert rejected.returncode != 0, rejected.stdout
-    assert request("GET", admin + "/storages/cli-test-s3")["public_endpoint"] == backend.spec["endpoint"]
+    assert management.command("storage.show", {"id": "cli-test-s3"})["public_endpoint"] == backend.spec["endpoint"]
     print("PASS API 409 and CLI rejection preserve a storage with pending files")
 
     def run_as(args, token, expected):
@@ -177,7 +174,7 @@ def check_s3_lifecycle(endpoint, directory, backend, database):
 
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
-         reconciler_interval=1, management=False, verify_log=None, multipart=False,
+         reconciler_interval=1, verify_log=None, multipart=False,
          s3_cors_origins=()):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
@@ -198,7 +195,9 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             env.update(
                 FILEGATE_DATABASE_URL=f"postgres://filegate:filegate@127.0.0.1:{db_port}/filegate",
                 FILEGATE_ENC_ROOT_SECRET="local-cli-integration-root-secret-32bytes",
-                FILEGATE_OPERATOR_TOKENS=TOKEN, FILEGATE_BIND=f"127.0.0.1:{port}",
+                FILEGATE_BIND=f"127.0.0.1:{port}",
+                FILEGATE_LEGACY_ADMIN_ENABLED="false",
+                FILEGATE_CONSOLE_ORIGIN=console_origin or "https://console.test",
                 FILEGATE_PUBLIC_URL=endpoint, FILEGATE_LOG_FORMAT="json",
             )
             if with_database:
@@ -206,18 +205,16 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             if multipart:
                 env.update(FILEGATE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
                            FILEGATE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
-            if console_origin:
-                env["FILEGATE_CONSOLE_ORIGIN"] = console_origin
             if s3_cors_origins:
                 env["FILEGATE_S3_CORS_ALLOWED_ORIGINS"] = ",".join(s3_cors_origins)
-            if management:
-                env["FILEGATE_CONSOLE_ORIGIN"] = console_origin or "https://console.test"
             deadline = time.monotonic() + 20
             while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
                 if time.monotonic() >= deadline:
                     raise RuntimeError("Test database did not become ready")
                 time.sleep(0.2)
+            from cli_management_fixture import initialize_owner
+            account = initialize_owner(container)
             with tempfile.TemporaryFile() as log:
                 server = subprocess.Popen([str(SERVER)], env=env, cwd=directory, stdout=log, stderr=log)
 
@@ -232,12 +229,13 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                     print("PASS SIGKILL confirmed; new process started with the same DB and endpoint")
 
                 try:
+                    verify_modern_startup(endpoint)
                     if with_restart:
-                        check(endpoint, directory, container, crash_and_restart)
+                        check(endpoint, directory, container, account, crash_and_restart)
                     elif with_database:
-                        check(endpoint, directory, container)
+                        check(endpoint, directory, container, account)
                     else:
-                        check(endpoint, directory)
+                        check(endpoint, directory, account)
                 finally:
                     server.terminate()
                     try:
@@ -254,5 +252,27 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
     print("PASS disposable server, database, and files cleaned up")
 
 
+def verify_modern_startup(endpoint):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    deadline = time.monotonic() + 20
+    while True:
+        try:
+            with opener.open(endpoint + "/readyz", timeout=2) as response:
+                if json.load(response) == {"status": "ready"}:
+                    break
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Account-initialized test server did not become ready")
+        time.sleep(0.1)
+    try:
+        with opener.open(endpoint + "/api/admin/v1/clients", timeout=5):
+            raise AssertionError("legacy management must be disabled")
+    except urllib.error.HTTPError as error:
+        assert error.code == 410
+        assert json.load(error) == {"error": "legacy_admin_disabled"}
+    print("PASS local Account bootstrap; legacy management disabled (410)")
+
+
 if __name__ == "__main__":
-    main(with_database=True, management=True)
+    main(with_database=True)

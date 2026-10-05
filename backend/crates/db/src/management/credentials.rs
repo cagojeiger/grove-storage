@@ -27,7 +27,7 @@ pub(super) async fn insert(
     let active: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM management.accounts a
         WHERE a.id=$1 AND a.is_active AND a.deleted_at IS NULL
-        AND a.kind='user')",
+       )",
     )
     .bind(account)
     .fetch_one(&mut **tx)
@@ -35,7 +35,7 @@ pub(super) async fn insert(
     if !active {
         return Err(Error::InactiveAccount);
     }
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.credentials WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()")
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.credentials WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>grove_time.wall_now()")
         .bind(account).fetch_one(&mut **tx).await?;
     if count >= 32 {
         return Err(Error::CredentialLimit);
@@ -95,10 +95,10 @@ pub(super) async fn revoke_in(
     context: &AuditContext,
     id: Uuid,
 ) -> Result<bool, Error> {
-    let changed = sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE id=$1 AND revoked_at IS NULL")
+    let changed = sqlx::query("UPDATE management.credentials SET revoked_at=grove_time.wall_now() WHERE id=$1 AND revoked_at IS NULL")
         .bind(id).execute(&mut *tx).await?.rows_affected() > 0;
     if changed {
-        sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE credential_id=$1 AND revoked_at IS NULL")
+        sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE credential_id=$1 AND revoked_at IS NULL")
             .bind(id).execute(&mut *tx).await?;
         audit::record(&mut tx, context, "credential.revoke", "credential", id).await?;
     }
@@ -122,14 +122,14 @@ pub(super) async fn recover_in(
     account: Uuid,
     key: &NewCredential<'_>,
 ) -> Result<Credential, Error> {
-    let admin: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts WHERE id=$1 AND kind='user' AND role='admin' AND is_active AND deleted_at IS NULL)")
+    let admin: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts WHERE id=$1 AND role='admin' AND is_active AND deleted_at IS NULL)")
         .bind(account).fetch_one(&mut *tx).await?;
     if !admin {
         return Err(Error::NotFound);
     }
-    sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE account_id=$1 AND revoked_at IS NULL")
+    sqlx::query("UPDATE management.credentials SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
-    sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL")
+    sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
     let credential = insert(&mut tx, account, key).await?;
     audit::record(&mut tx, context, "user.recover", "account", account).await?;

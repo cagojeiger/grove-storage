@@ -8,6 +8,7 @@ mod credentials;
 mod failures;
 mod history;
 const BASE: &str = "/api/admin/identity/v1";
+const PASSWORD: &str = "a private phrase for fixture account";
 
 async fn send(
     pool: &PgPool,
@@ -49,7 +50,7 @@ async fn issue(pool: &PgPool, cookie: &str, id: Uuid) -> serde_json::Value {
         cookie,
         "POST",
         &format!("/accounts/{id}/credentials"),
-        serde_json::json!({"label":"automation","expires_in_days":1}),
+        serde_json::json!({"label":"automation","expires_in_days":1,"current_password":PASSWORD}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::CREATED);

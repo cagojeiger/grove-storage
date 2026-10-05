@@ -5,6 +5,14 @@ target
 .omc
 .omx
 .env
+.env.*
+**/node_modules
+**/__pycache__
+**/test-results
+**/playwright-report
+output
+reports
+.compat
 docs
 *.md
 configs

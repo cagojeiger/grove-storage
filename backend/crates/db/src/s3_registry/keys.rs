@@ -55,7 +55,7 @@ pub(super) async fn upsert_key_in_tx(
     .fetch_one(&mut **tx)
     .await?;
     sqlx::query(
-        "UPDATE s3_keys SET file_id = $3, updated_at = now() \
+        "UPDATE s3_keys SET file_id = $3, updated_at = grove_time.transaction_now() \
          WHERE client_id = $1 AND key = $2",
     )
     .bind(client_id)
@@ -120,7 +120,7 @@ async fn detach_active(
     file_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE files SET state = 'deleted', deleted_at = now() \
+        "UPDATE files SET state = 'deleted', deleted_at = grove_time.transaction_now() \
          WHERE id = $1 AND state = 'active'",
     )
     .bind(file_id)

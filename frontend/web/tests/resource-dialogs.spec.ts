@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
 import { storageMock } from "./storage-fixture";
-import { clientMock } from "./client-fixture";
+import { clientMock, s3Id } from "./client-fixture";
 
 for (const theme of ["light", "dark"]) {
   for (const width of [320, 1440]) {
@@ -15,15 +15,14 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: width === 320 ? 480 : 900 });
       await storageMock(page);
       await page.goto("/api/admin/console/#storages/home-archive");
-      await page.getByLabel("Theme").selectOption(theme);
-      await page.getByRole("tab", { name: "Configuration", exact: true }).click();
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(
-        page.getByLabel("Storage properties"),
+        page.getByRole("region", { name: "Storage settings", exact: true }),
       ).toBeVisible();
-      await page.getByRole("tab", { name: "Overview", exact: true }).click();
       await expect(
         page.getByLabel("Saved metadata", { exact: true }),
-      ).toHaveText("{}");
+      ).toHaveText("No metadata.");
       await page.screenshot({
         path: resolve(
           `../../output/console-resource-details-20261001/storage-${width}-${theme}.png`,
@@ -33,7 +32,7 @@ for (const theme of ["light", "dark"]) {
       await page
         .getByRole("button", { name: "Edit storage", exact: true })
         .click();
-      const editor = page.getByRole("main");
+      const editor = page.getByRole("dialog", { name: "Edit storage", exact: true });
       await expect(editor).toBeVisible();
       const save = editor.getByRole("button", { name: "Save", exact: true });
       await save.scrollIntoViewIfNeeded();
@@ -74,11 +73,9 @@ for (const theme of ["light", "dark"]) {
         .getByRole("grid")
         .getByRole("link", { name: "notegate", exact: true })
         .click();
-      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       await expect(
-        page.getByRole("table", { name: "Issued S3 credentials" }),
-      ).toBeVisible();
-      await page.getByRole("tab", { name: "Overview", exact: true }).click();
+        page.getByRole("region", { name: "S3 credentials", exact: true }),
+      ).toContainText(s3Id);
       await page
         .getByRole("button", { name: "Edit metadata", exact: true })
         .click();
@@ -101,13 +98,13 @@ for (const theme of ["light", "dark"]) {
         ),
         fullPage: true,
       });
-      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       await page
         .getByRole("button", { name: "Create credential", exact: true })
         .click();
-      await page.getByRole("button", { name: "Confirm", exact: true }).click();
+      await page.getByRole("dialog", { name: "Create S3 credential", exact: true })
+        .getByRole("button", { name: "Create", exact: true }).click();
       const issued = page.getByRole("dialog", {
-        name: "Create S3 credential",
+        name: "Save S3 credential",
         exact: true,
       });
       const done = issued.getByRole("button", { name: "Done", exact: true });

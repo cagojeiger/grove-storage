@@ -19,7 +19,7 @@ pub(crate) async fn session_operation<T>(
     operation: &'static str,
     work: impl Future<Output = Result<T, Error>>,
 ) -> Result<T, Error> {
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let context = db::session_actor(pool, session_hash)
         .await
         .ok()

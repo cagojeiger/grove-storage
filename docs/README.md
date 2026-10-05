@@ -20,8 +20,10 @@
 | 서비스 연결 | [네이티브](guide/service-integration.md) · [S3](guide/s3-onboarding.md) |
 | 등록부 운영·Terraform 이관 | [CLI 등록 절차](guide/registry-management.md) |
 | 코드 책임·테스트 위치 | [소스 구조](development/source-layout.md) |
+| 시간 의존성·만료 경계·가상 시간 테스트 | [시간 테스트](development/time-testing.md) |
 | 리소스 구조 마감·검증 경계 | [리소스 체크포인트](development/refactor-checkpoint.md) · [S3/NoteGate 검증](development/s3-compatibility-review.md) |
-| Management 정리 우선순위·테스트 지도 | [준비 계획](development/management-review.md) |
+| Management 완성도·운영 준비 우선순위·테스트 지도 | [완성도 점검](development/management-review.md) |
+| main 반영·릴리스·FileGate 운영 이관 게이트 | [운영 전환 준비](development/production-readiness.md) |
 | 로컬 로그인 전환·UX·API·DB·검증 단계 | [로컬 관리 인증 계약](spec/11-local-management-auth.md) |
 | 실행·설정·검증 | [기술·운영](stack/README.md) |
 | 외부 저장소 조사 기록 | [벤더 노트](vendors/README.md) |

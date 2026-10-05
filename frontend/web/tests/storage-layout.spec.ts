@@ -25,7 +25,8 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         },
       ]);
       await page.goto(root);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(
         page.getByRole("link", { name: new RegExp(long.id) }),
       ).toBeVisible();
@@ -34,7 +35,6 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await expect(
         page.getByRole("heading", { name: long.id, level: 1 }),
       ).toBeVisible();
-      await page.getByRole("tab", { name: "Configuration", exact: true }).click();
       await expect(
         page.getByRole("region", { name: "Storage settings" }),
       ).toBeVisible();
@@ -54,7 +54,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await screenshot("editor-bottom");
       expect(
         await page
-          .getByRole("main")
+          .locator("main")
           .evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
       await page.getByRole("button", { name: "Cancel" }).click();

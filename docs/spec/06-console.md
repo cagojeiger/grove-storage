@@ -41,10 +41,9 @@ Grove Storage
 │   │   └── Password setup / Management API tokens / Danger zone
 │   └── Activity
 │       └── Audit log / Command history / Security events
-└── Sidebar account menu
-    ├── My account    profile / Management API tokens / My sessions
-    ├── Security      change password
-    └── Sign out
+└── Sidebar identity
+    ├── My account    direct link: Profile / Security / API tokens / Sessions
+    └── Sign out     separate icon action
 
 App bar: breadcrumb / theme; mobile: navigation drawer trigger
 Entry: Sign in / one-time Set password / operator recovery help
@@ -54,8 +53,8 @@ Entry: Sign in / one-time Set password / operator recovery help
 |---|---|
 | Overview | Client and Storage counts, stored files/data, configured capacity and separate reservations/cleanup |
 | Connections | Clients left, Grove center, Storage right; stacked on narrow screens; curves show configured routes, not observed traffic |
-| Map bounds | Up to six entries per side; seven or more shows five plus a remaining-count group; selection keeps the Client and assigned Storage visible |
-| Overflow browser | Search and 20-entry pages; resolve only visible Client assignments; unavailable assignments stay explicit |
+| Map bounds | Up to six entries per side; seven or more shows five with a View all link and remaining count; selection pins the assigned Storage |
+| Remaining resources | View all opens the resource list; search and local pagination; resolve only the visible Client page |
 | Storage list | S3 settings, configured capacity and Grove-managed usage; row opens detail |
 | Storage editor | Dedicated create/edit route; full-spec replacement re-enters the secret; saved data refreshes without redirecting a user who left the editor |
 | Clients | ID, assigned Storage, stored files/data, metadata and one-time S3 credentials |
@@ -72,10 +71,10 @@ are a future contract, separate from management Activity.
 | Concern | Implementation |
 |---|---|
 | Foundation | React, TypeScript, MUI Material, MUI X Community Data Grid and Charts |
-| Typography | System stack from `ConsoleTheme.tsx`; local monospace for JSON/credentials; no web font download |
-| Theme | System/light/dark; green primary color, zero letter spacing, full-width TextField default; no shared component style overrides |
-| Layout and controls | MUI Container/Stack/Grid, Drawer/AppBar, tables, dialogs and native form constraints |
-| Custom surface | Overview connection geometry; minimal root sizing, scroll clearance and keyboard-focus CSS |
+| Typography | System stack in `src/template/shared-theme/themePrimitives.ts`; template type scale; no web font download |
+| Theme | System/light/dark; green brand scale, zero letter spacing; official shared-theme component overrides |
+| Layout and controls | Official Dashboard and Sign-in templates; MUI Stack/Grid, Drawer/AppBar, Data Grid, dialogs and native form constraints |
+| Custom surface | Overview measured connection geometry; domain composition and responsive sizing through MUI `sx`; no standalone CSS |
 | Language | English labels, `lang=en`, `en-US` numbers; B/KiB/MiB/GiB/TiB display |
 | Dialogs | Responsive MUI Dialog, scrollable content and visible actions; one-time secrets require saved confirmation |
 
@@ -84,12 +83,13 @@ are a future contract, separate from management Activity.
 | Surface | Pagination / meaning |
 |---|---|
 | Storage and Clients | Data Grid; local paging, default 20, choices 20/50/100; full registry list comes from the API |
-| Search and sort | Storage ID/endpoint/bucket; Client ID; natural ID order; filter/order/size changes reset page |
+| Search and sort | Resource ID; natural ID order; filter/order/size changes reset page |
 | Return state | Hash query preserves list state across detail, reload and Back; deletion clamps the page |
-| Client lookups | Visible list page only, at most 100; Overview overflow browser at most 20 |
+| Client lookups | Visible list page only, at most 100; Overview at most six |
 | Accounts | Server search/role/status filters and cursor navigation; filters and page history survive reload |
-| History, tokens, sessions | Server cursor paging through Load more |
-| Usage history | `usage.history`, 1-3650 days, default 90; UTC snapshots; local table paging default 50, choices 20/50/100 |
+| Activity | Data Grid previous/next; 50-row server cursor pages, unknown total until the last page |
+| Tokens, sessions | Server cursor paging through Load more |
+| Usage history | `usage.history`, 1-3650 days, default 90; UTC snapshots; local Data Grid paging default 20, choices 20/50/100 |
 | Usage chart | Recorded stored files/data; absent days remain gaps; deleted resource IDs retain historical rows |
 
 Configured capacity is an operator-set allocation, not provider free space.
@@ -139,7 +139,7 @@ Server-local `filegate status` probes registered backends using server settings.
 | Reissue setup | Active, non-deleted account without a password; reserved username is read-only |
 | Password configured | Initial setup action disabled; use own password change or operator recovery |
 | Recovery | `filegate account recover`; same account ID, sessions and management tokens revoked |
-| Management token | Label and 1-90 day expiry; one-time display; CLI/MCP connection details omit the secret |
+| Management token | Label and 1-90 day expiry; current-password reauthentication; masked one-time display with reveal/copy and saved acknowledgement |
 | Token boundary | Named account token authorizes resource commands; console login uses a password |
 | Role safety | Last usable Admin protected; disable/delete confirms account name; self-actions disclose session loss |
 

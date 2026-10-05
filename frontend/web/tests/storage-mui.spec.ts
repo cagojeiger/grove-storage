@@ -10,13 +10,11 @@ for (const mode of ["light", "dark"]) {
       await storageMock(page);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${root}/home-archive`);
-      await page.getByLabel("Theme").selectOption(mode);
-      await page
-        .getByRole("tab", { name: "Configuration", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       const settings = page.getByRole("region", { name: "Storage settings" });
-      const usage = page.getByRole("region", { name: "Storage usage" });
-      const properties = settings.getByLabel("Storage properties");
+      const usage = page.getByRole("region", { name: "Usage", exact: true });
+      const properties = settings.locator("dl").first();
       await expect(properties.locator("dd")).toHaveCount(9);
       for (const label of [properties.getByText("Type", { exact: true })]) {
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
@@ -26,15 +24,14 @@ for (const mode of ["light", "dark"]) {
         "font-size",
         "14px",
       );
-      await expect(settings.getByRole("heading", { level: 2 })).toHaveCSS(
+      await expect(usage.getByRole("heading", { level: 2 })).toHaveCSS(
         "font-size",
-        "20px",
+        "18px",
       );
       await page.screenshot({
         path: `test-results/storage-mui-config-${width}-${mode}.png`,
         fullPage: true,
       });
-      await page.getByRole("tab", { name: "Overview", exact: true }).click();
       await expect(usage.getByText("Stored data", { exact: true })).toHaveCSS(
         "font-size",
         "14px",
@@ -45,21 +42,21 @@ for (const mode of ["light", "dark"]) {
       );
       await expect(usage.getByText("0 B", { exact: true }).first()).toHaveCSS(
         "font-size",
-        "24px",
+        "14px",
       );
       await expect(
         page.getByLabel("Saved metadata", { exact: true }),
-      ).toHaveCSS("font-family", /monospace/);
+      ).toHaveCSS("font-family", /^-apple-system,/);
       await expect(
         page.getByLabel("Saved metadata", { exact: true }),
-      ).toHaveText("{}");
+      ).toHaveText("No metadata.");
       expect(
         await page
           .getByRole("region", { name: "Metadata", exact: true })
           .evaluate((el) =>
             Boolean(
               el.compareDocumentPosition(
-                document.querySelector('[aria-label="Storage usage"]')!,
+                document.querySelector('[aria-label="Usage"]')!,
               ) & Node.DOCUMENT_POSITION_FOLLOWING,
             ),
           ),
@@ -96,7 +93,8 @@ for (const mode of ["light", "dark"]) {
     await maintenanceMock(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/api/admin/console/#activity");
-    await page.getByLabel("Theme").selectOption(mode);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
     for (const tab of await page.getByRole("tab").all()) {
       await expect(tab).toHaveCSS("font-family", /^-apple-system,/);
       await expect(tab).toHaveCSS("font-size", "14px");

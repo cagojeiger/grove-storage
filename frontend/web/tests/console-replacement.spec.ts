@@ -9,22 +9,20 @@ for (const width of [320, 768, 1440]) {
     await accessMock(page);
     await page.setViewportSize({ width, height: 720 });
     await page.goto(`/api/admin/console/#accounts/${owner.id}`);
-    const tabs = page.getByRole("tablist", { name: "Account sections" });
-    if (width >= 1200)
-      await expect(tabs).toHaveAttribute("aria-orientation", "vertical");
-    else await expect(tabs).not.toHaveAttribute("aria-orientation", "vertical");
-    await page.getByRole("tab", { name: "Overview", exact: true }).focus();
-    await page.keyboard.press(width >= 1200 ? "ArrowDown" : "ArrowRight");
+    const issue = page.getByRole("button", { name: "Issue token", exact: true });
+    await issue.focus();
     await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("tabpanel", { name: "API tokens" }),
+      page.getByRole("dialog", { name: "Issue management token" }),
     ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(issue).toBeFocused();
     if (width < 900)
       await page.getByRole("button", { name: "Open navigation" }).click();
     const sidebar = page.getByRole("complementary", {
       name: "Workspace sidebar",
     });
-    const accountMenu = sidebar.getByRole("button", { name: "Account menu" });
+    const accountMenu = sidebar.getByRole("link", { name: "My account", exact: true });
     await expect(accountMenu).toBeInViewport();
     const bounds = await accountMenu.boundingBox();
     expect(bounds!.height).toBeLessThan(100);
@@ -54,7 +52,7 @@ for (const width of [320, 768, 1440]) {
     const event = page.getByRole("button", { name: /storage.create/ });
     await event.click();
     const details = page.getByRole("dialog", { name: "Event details" });
-    await expect(details.getByLabel("Event properties")).toContainText(
+    await expect(details.locator("dl")).toContainText(
       "storage.create",
     );
     await expect(

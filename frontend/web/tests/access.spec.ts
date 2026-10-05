@@ -16,14 +16,14 @@ test("create a User without Agent or owner fields", async ({ page }) => {
   await page.getByLabel(/^Display name\s*\*?$/).fill("Writer");
   await page.getByLabel(/^Username\s*\*?$/).fill("writer");
   await page.getByLabel(/^Role\s*\*?$/).selectOption("writer");
-  await page.getByLabel("Your current password").fill("a private admin password");
+  await page.getByLabel("Administrator password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("textbox", { name: "Setup link", exact: true })).toBeVisible();
   await page.getByLabel("I have saved this setup link.").check();
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Writer", exact: true })).toBeVisible();
-  await expect(page.getByRole("tabpanel").getByText("Pending setup", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Pending setup", { exact: true })).toBeVisible();
   expect(writes.map((w) => w.body)).toEqual([
     { kind: "user_with_password_setup", display_name: "Writer", role: "writer", username: "writer", current_password: "a private admin password" },
   ]);
@@ -37,10 +37,10 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
   await page
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
-  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("CLI automation");
   await page.getByLabel("Expires in days").fill("7");
+  await page.getByLabel("Current password").fill("a private admin password");
   const sent = page.waitForRequest((r) => r.method() === "POST");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
   expect((await sent).headers()["x-grove-csrf"]).toBe("1");
@@ -66,10 +66,10 @@ test("issue one-time token, discard it and revoke with confirmation", async ({
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Revoke CLI automation" }).click();
   await expect(
-    page.getByRole("button", { name: "Revoke", exact: true }),
+    page.getByRole("button", { name: "Confirm", exact: true }),
   ).toBeDisabled();
-  await page.getByLabel("Revoke CLI automation and its sessions").check();
-  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  await page.getByLabel("Confirmation").fill("CLI automation");
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByText("Revoked", { exact: true })).toBeVisible();
   expect(writes).toHaveLength(2);
 });
@@ -82,16 +82,15 @@ test("last Admin conflict remains visible; destructive change requires name", as
   await page
     .getByRole("link", { name: "Home administrator", exact: true })
     .click();
-  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page
     .getByRole("button", { name: "Delete account", exact: true })
     .click();
   await expect(
-    page.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true }),
+    page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
-  await page.getByLabel("Confirm account name").fill(owner.display_name);
-  await page.getByRole("checkbox", { name: "I understand my current session will end." }).check();
-  await page.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true }).click();
+  await page.getByLabel("Account name to confirm").fill(owner.display_name);
+  await page.getByRole("checkbox", { name: "I understand this changes my access." }).check();
+  await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Keep an active Admin");
 });
 
@@ -117,13 +116,13 @@ for (const failure of ["lost", "unknown", "malformed"])
     await page
       .getByRole("link", { name: "Home administrator", exact: true })
       .click();
-    await page.getByRole("tab", { name: "API tokens", exact: true }).click();
     await page
       .getByRole("button", { name: "Issue token", exact: true })
       .click();
     await page.getByLabel(/^Label\s*\*?$/).fill("Uncertain");
+    await page.getByLabel("Current password").fill("a private admin password");
     await page.getByRole("button", { name: "Issue", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("outcome is unknown");
+    await expect(page.getByRole("alert")).toContainText("result is unknown");
     await expect(
       page.getByRole("button", { name: "Issue", exact: true }),
     ).toBeDisabled();

@@ -42,12 +42,12 @@ pub(super) async fn login(
     .await;
     match result.result {
         Ok(session) => {
-            let mut response = Json(serde_json::json!({"principal": "user", "user_id": session.user_id,
+            let mut response = Json(serde_json::json!({"principal": "user", "user_id": session.account_id,
                 "credential_id": session.credential_id, "session_id": session.id, "expires_at": session.expires_at})).into_response();
             browser::set_cookie(
                 &mut response,
                 raw.expose_secret(),
-                (session.expires_at - chrono::Utc::now())
+                (session.expires_at - state.clock.now())
                     .num_seconds()
                     .max(0),
             );

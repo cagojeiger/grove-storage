@@ -39,7 +39,7 @@ pub(super) async fn run(
                 .await
                 .map(Output::Changed);
         }
-        Command::IssueCredential { account, key } => {
+        Command::IssueCredential { account, key, .. } => {
             return tx
                 .issue_credential(context, account, &key)
                 .await

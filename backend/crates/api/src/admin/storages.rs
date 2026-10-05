@@ -29,7 +29,14 @@ pub(super) async fn create(
     Json(body): Json<StorageCreateBody>,
 ) -> Result<Response, ApiError> {
     let relay_base_ready = state.public_url.is_some();
-    let row = verified_row(&state.crypto, relay_base_ready, &body.id, body.spec).await?;
+    let row = verified_row(
+        &state.crypto,
+        state.clock.clone(),
+        relay_base_ready,
+        &body.id,
+        body.spec,
+    )
+    .await?;
     registry::insert_storage(&state.pool, &row).await?;
     tracing::info!(event = "storage.registered", storage = %row.id, kind = %row.kind);
     Ok((StatusCode::CREATED, Json(output(row)?)).into_response())
@@ -45,7 +52,14 @@ pub(super) async fn update(
         return Err(not_found("storage not found"));
     }
     let relay_base_ready = state.public_url.is_some();
-    let row = verified_row(&state.crypto, relay_base_ready, &id, body).await?;
+    let row = verified_row(
+        &state.crypto,
+        state.clock.clone(),
+        relay_base_ready,
+        &id,
+        body,
+    )
+    .await?;
     match registry::update_storage(&state.pool, &row).await? {
         registry::UpdateStorageOutcome::Updated => {}
         registry::UpdateStorageOutcome::NotFound => return Err(not_found("storage not found")),

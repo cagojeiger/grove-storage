@@ -71,7 +71,6 @@ test("S3-only creation, reload, history and deletion", async ({
   expect(writes[0].input.spec).toMatchObject({ kind: "s3" });
   expect(writes[0].input.spec).not.toHaveProperty("root_path");
   await page.reload();
-  await page.getByRole("tab", { name: "Configuration", exact: true }).click();
   await expect(page.getByText("https://s3.example.com", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Delete storage" }).click();
   const confirm = page.getByRole("button", { name: "Confirm delete" });
@@ -111,7 +110,6 @@ test("legacy filesystem storage remains visible but cannot be edited", async ({ 
   await page.goto(root);
   await page.getByRole("link", { name: /legacy-files/ }).click();
   await expect(page.getByRole("heading", { name: "legacy-files", level: 1 })).toBeVisible();
-  await page.getByRole("tab", { name: "Configuration", exact: true }).click();
   await expect(page.getByText("/legacy/objects", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit storage" })).toBeDisabled();
   expect(writes).toEqual([]);

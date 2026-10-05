@@ -2,14 +2,14 @@ import { expect, test } from "@playwright/test";
 import { accessMock, owner, otherUser } from "./access-fixture";
 
 const detail = `/api/admin/console/#accounts/${owner.id}`;
-const acknowledgement = "I understand my current session will end.";
+const acknowledgement = "I understand this changes my access.";
 
 test("rename trims the label while preserving account identity", async ({ page }) => {
   const mock = await accessMock(page);
   await page.goto(detail);
   await page.getByRole("button", { name: "Edit name", exact: true }).click();
   await expect(page.getByLabel(/^Display name\s*\*?$/)).toHaveValue(owner.display_name);
-  const confirm = page.getByRole("dialog").getByRole("button", { name: "Save name", exact: true });
+  const confirm = page.getByRole("dialog").getByRole("button", { name: "Save", exact: true });
   await expect(confirm).toBeDisabled();
   await page.getByLabel(/^Display name\s*\*?$/).fill("   ");
   await expect(confirm).toBeDisabled();
@@ -27,25 +27,23 @@ test("rename trims the label while preserving account identity", async ({ page }
 test("self demotion requires acknowledgement and refreshes permissions", async ({ page }) => {
   await accessMock(page, [owner, { ...otherUser, role: "admin" }]);
   await page.goto(detail);
-  await page.getByRole("tab", { name: "Security", exact: true }).click();
   await page.getByRole("button", { name: "Change role", exact: true }).click();
   await page.getByLabel(/^Role\s*\*?$/).selectOption("reader");
-  const confirm = page.getByRole("dialog").getByRole("button", { name: "Change role", exact: true });
+  const confirm = page.getByRole("dialog").getByRole("button", { name: "Save", exact: true });
   await expect(confirm).toBeDisabled();
-  await page.getByRole("checkbox", { name: "I understand I will lose access to Accounts." }).check();
+  await page.getByRole("checkbox", { name: acknowledgement }).check();
   await confirm.click();
   await expect(page.getByRole("alert")).toHaveText("Admin access required.");
   await expect(page.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(0);
 });
 
-for (const action of ["Disable", "Delete account"]) {
+for (const action of ["Disable account", "Delete account"]) {
   test(`self ${action} requires confirmation and ends the session`, async ({ page }) => {
     await accessMock(page, [owner, { ...otherUser, role: "admin" }]);
     await page.goto(detail);
-    await page.getByRole("tab", { name: "Security", exact: true }).click();
     await page.getByRole("button", { name: action, exact: true }).click();
-    await page.getByLabel("Confirm account name").fill(owner.display_name);
-    const confirm = page.getByRole("dialog").getByRole("button", { name: action === "Disable" ? "Disable account" : action, exact: true });
+    await page.getByLabel("Account name to confirm").fill(owner.display_name);
+    const confirm = page.getByRole("dialog").getByRole("button", { name: "Save", exact: true });
     await expect(confirm).toBeDisabled();
     await page.getByRole("checkbox", { name: acknowledgement }).check();
     await confirm.click();
@@ -57,12 +55,11 @@ for (const action of ["Disable", "Delete account"]) {
 test("other account changes do not claim to end the current session", async ({ page }) => {
   await accessMock(page);
   await page.goto(`/api/admin/console/#accounts/${otherUser.id}`);
-  await page.getByRole("tab", { name: "Security", exact: true }).click();
-  await page.getByRole("button", { name: "Disable", exact: true }).click();
+  await page.getByRole("button", { name: "Disable account", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: acknowledgement })).toHaveCount(0);
-  await page.getByLabel("Confirm account name").fill(otherUser.display_name);
-  await page.getByRole("dialog").getByRole("button", { name: "Disable account", exact: true }).click();
-  await page.getByRole("button", { name: "Enable", exact: true }).click();
+  await page.getByLabel("Account name to confirm").fill(otherUser.display_name);
+  await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Enable account", exact: true }).click();
   await expect(page.getByText("Unexpired, unrevoked tokens become usable again. Previous sessions remain revoked.")).toBeVisible();
 });
 
@@ -77,9 +74,9 @@ test("unknown rename outcome blocks resubmission", async ({ page }) => {
   await page.goto(detail);
   await page.getByRole("button", { name: "Edit name", exact: true }).click();
   await page.getByLabel(/^Display name\s*\*?$/).fill("Uncertain");
-  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("outcome is unknown");
-  await expect(page.getByRole("button", { name: "Save name", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   expect(writes).toBe(1);
   expect(mock.accounts[0].display_name).toBe(owner.display_name);
 });
@@ -95,8 +92,8 @@ for (const width of [320, 768, 1440]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 960 });
     await accessMock(page);
     await page.goto(detail);
-    await page.getByLabel("Theme").selectOption(theme);
-    await page.getByRole("tab", { name: "Security", exact: true }).click();
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await page.getByRole("button", { name: "Delete account", exact: true }).click();
     await expect(page.getByRole("checkbox", { name: acknowledgement })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

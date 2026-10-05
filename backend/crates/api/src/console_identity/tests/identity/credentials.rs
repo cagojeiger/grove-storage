@@ -1,6 +1,62 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
+async fn admin_issuance_requires_current_password_for_self_and_other_accounts(pool: PgPool) {
+    let (admin, cookie) = actor(&pool, Role::Admin).await;
+    let (other, _) = actor(&pool, Role::Reader).await;
+    let count_before: i64 = sqlx::query_scalar("SELECT count(*) FROM management.credentials")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    for target in [admin, other] {
+        let path = format!("/accounts/{target}/credentials");
+        for (body, status) in [
+            (
+                serde_json::json!({"label":"rejected"}),
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                serde_json::json!({"label":"rejected","current_password":"wrong password"}),
+                StatusCode::UNAUTHORIZED,
+            ),
+            (
+                serde_json::json!({"label":"rejected","current_password":""}),
+                StatusCode::UNAUTHORIZED,
+            ),
+        ] {
+            let response = send(&pool, &cookie, "POST", &path, body).await;
+            assert_eq!(response.status(), status);
+            assert!(json(response).await.get("token").is_none());
+        }
+    }
+    let count_after: i64 = sqlx::query_scalar("SELECT count(*) FROM management.credentials")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count_before, count_after);
+    assert_eq!(current(app(&pool), &cookie).await.status(), StatusCode::OK);
+    // The acting admin's password is required, not the target's password.
+    let other_hash = grove_management_service::passwords::hash(
+        "other",
+        "another private password for the target".into(),
+    )
+    .await
+    .unwrap();
+    sqlx::query("UPDATE management.password_credentials SET password_hash=$2 WHERE account_id=$1")
+        .bind(other)
+        .bind(filegate_core::ExposeSecret::expose_secret(&other_hash))
+        .execute(&pool)
+        .await
+        .unwrap();
+    for target in [admin, other] {
+        assert_eq!(
+            issue(&pool, &cookie, target).await["account_id"],
+            target.to_string()
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
 async fn tokens_are_one_time_responses_and_revocation_invalidates_api_access(pool: PgPool) {
     let (_, admin_cookie) = actor(&pool, Role::Admin).await;
     let user = create(
@@ -66,7 +122,7 @@ async fn tokens_are_one_time_responses_and_revocation_invalidates_api_access(poo
                 &admin_cookie,
                 "POST",
                 &format!("/accounts/{user}/credentials"),
-                serde_json::json!({"label":"invalid","expires_in_days":days})
+                serde_json::json!({"label":"invalid","expires_in_days":days,"current_password":PASSWORD})
             )
             .await
             .status(),

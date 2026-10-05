@@ -35,7 +35,8 @@ for (const width of [320, 768, 1440])
       });
       await page.setViewportSize({ width, height: 960 });
       await page.goto("/api/admin/console/#");
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await page
         .getByRole("link", {
           name: "Open client client-long-name-0",
@@ -52,14 +53,14 @@ for (const width of [320, 768, 1440])
       );
       await page.emulateMedia({ reducedMotion: "reduce" });
       await capture("connections");
-      const hub = await page.locator(".grove-hub").boundingBox();
+      const hub = await page.locator("[data-hub]").boundingBox();
       const left = await page
-        .locator(".connection-column")
-        .first()
+        .locator('[data-side="client"]')
+        .last()
         .boundingBox();
       const right = await page
-        .locator(".connection-column")
-        .last()
+        .locator('[data-side="storage"]')
+        .first()
         .boundingBox();
       expect(hub && left && right).toBeTruthy();
       if (hub && left && right) {
@@ -71,7 +72,7 @@ for (const width of [320, 768, 1440])
           expect(right.y).toBeGreaterThanOrEqual(hub.y + hub.height);
         }
       }
-      await page.getByRole("link", { name: "View all storage" }).click();
+      await page.getByRole("link", { name: /^View all storage/ }).click();
       await expect(
         page
           .getByRole("grid", { name: "Storage", exact: true })
@@ -89,7 +90,7 @@ for (const width of [320, 768, 1440])
       await expect(
         page
           .getByRole("grid", { name: "Clients", exact: true })
-          .getByRole("link"),
+          .getByRole("link", { name: /^client-long-name-/ }),
       ).toHaveCount(4);
       await capture("client-list");
       async function capture(view: string) {

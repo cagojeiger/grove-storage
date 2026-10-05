@@ -24,8 +24,12 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     return response.status;
   }, { token: user.token, password: writerPassword });
   assert.equal(setupStatus, 204);
-  const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "browser-test", expires_in_days: 1 });
-  const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "automation", expires_in_days: 1 });
+  const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, {
+    label: "browser-test", expires_in_days: 1, current_password: ownerPassword,
+  });
+  const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, {
+    label: "automation", expires_in_days: 1, current_password: ownerPassword,
+  });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const page = await context.newPage();
@@ -45,15 +49,16 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     });
     assert.equal(forbidden.status(), 403);
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
+    await expect(page.getByRole("complementary", { name: "Workspace sidebar" })).toContainText("reader");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole("alert")).toHaveText("Write access required.");
+    await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await expect(page.getByLabel("Secret key (re-enter)")).toHaveCount(0);
     await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Storage", exact: true }).click();
     await page.getByRole("link", { name: "console-live", exact: true }).click();
-    await page.getByRole("tab", { name: "Configuration", exact: true }).click();
+
     await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
     const blocked = await page.evaluate(async () => {
       const response = await fetch("/api/admin/console-commands/v1", {
@@ -63,10 +68,9 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
       return response.status;
     });
     assert.equal(blocked, 403);
-    await page.locator('button[aria-label="Account menu"]').click();
-    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await loginWithPassword(page, "console-writer", writerPassword);
-    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
+    await expect(page.getByRole("complementary", { name: "Workspace sidebar" })).toContainText("reader");
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");
     const events = audit.items.filter((e) => e.action === "storage.create");

@@ -3,7 +3,7 @@ use crate::{Error, logging};
 use filegate_core::SecretString;
 use filegate_db::{
     PgPool,
-    management::{self as db, AuditActor, AuditContext, telemetry},
+    management::{self as db, AuditActor, AuditContext, admission, telemetry},
 };
 use grove_management_policy::Surface;
 use uuid::Uuid;
@@ -29,7 +29,7 @@ pub async fn reject_browser(pool: &PgPool, error: Error) -> Uuid {
 
 pub async fn login(pool: &PgPool, token_hash: Option<&str>, session_hash: &str) -> Login {
     let request_id = Uuid::new_v4();
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let result = exchange(pool, request_id, token_hash, session_hash).await;
     record_login(pool, request_id, started, result).await
 }
@@ -41,7 +41,7 @@ pub async fn login_password(
     session_hash: &str,
 ) -> Login {
     let request_id = Uuid::new_v4();
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let result = password_exchange(pool, request_id, username, password, session_hash).await;
     record_login(pool, request_id, started, result).await
 }
@@ -49,12 +49,12 @@ pub async fn login_password(
 async fn record_login(
     pool: &PgPool,
     request_id: Uuid,
-    started: std::time::Instant,
+    started: tokio::time::Instant,
     result: Result<db::Session, Error>,
 ) -> Login {
     let context = result.as_ref().ok().map(|session| AuditContext {
         actor: AuditActor::User {
-            id: session.user_id,
+            id: session.account_id,
             credential_id: session.credential_id,
             session_id: Some(session.id),
         },
@@ -91,9 +91,6 @@ async fn password_exchange(
     password: SecretString,
     session_hash: &str,
 ) -> Result<db::Session, Error> {
-    if !telemetry::login_allowed(pool).await.map_err(Error::from)? {
-        return Err(Error::RateLimited);
-    }
     let login = crate::passwords::username(username).ok();
     let stored = match login.as_deref() {
         Some(login) => db::passwords::find(pool, login)
@@ -101,6 +98,16 @@ async fn password_exchange(
             .map_err(Error::from)?,
         None => None,
     };
+    let allowed = match &stored {
+        Some(credential) => {
+            admission::account_allowed(pool, credential.account_id, admission::Purpose::Login).await
+        }
+        None => admission::anonymous_allowed(pool).await,
+    }
+    .map_err(Error::from)?;
+    if !allowed {
+        return Err(Error::RateLimited);
+    }
     let hash = stored
         .as_ref()
         .map_or(DUMMY_HASH, |row| row.password_hash.as_str());
@@ -129,7 +136,10 @@ async fn exchange(
     token_hash: Option<&str>,
     session_hash: &str,
 ) -> Result<db::Session, Error> {
-    if !telemetry::login_allowed(pool).await.map_err(Error::from)? {
+    if !admission::anonymous_allowed(pool)
+        .await
+        .map_err(Error::from)?
+    {
         return Err(Error::RateLimited);
     }
     let hash = token_hash.ok_or(Error::Unauthenticated)?;

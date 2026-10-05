@@ -18,7 +18,8 @@ test("Storage grid retains paging, sort and search across detail and deletion", 
   await expect(
     grid.getByRole("link", { name: "store-01", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /last page/i }).click();
+  await page.getByRole("button", { name: /next page/i }).click();
+  await page.getByRole("button", { name: /next page/i }).click();
   await grid.getByRole("link", { name: "store-41", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "store-41", exact: true }),
@@ -92,6 +93,7 @@ test("Client grid resolves only the visible page and preserves return state", as
     true,
   );
   await page.getByRole("button", { name: /next page/i }).click();
+  await expect(page).toHaveURL(/page=2/);
   await grid.getByRole("link", { name: "client-21", exact: true }).click();
   await expect(page.getByText("S3 bucket", { exact: true })).toBeVisible();
   await page
@@ -118,7 +120,8 @@ for (const mode of ["light", "dark"]) {
       });
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/api/admin/console/#storages");
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       const grid = page.getByRole("grid", { name: "Storage", exact: true });
       await expect(grid.getByRole("link", { name: example.id })).toBeVisible();
       for (const item of [
@@ -137,21 +140,17 @@ for (const mode of ["light", "dark"]) {
       ).toBe(true);
       await page.screenshot({
         path: resolve(
-          "../../output/console-rebuild-20261001",
+          "../../output/console-sidebar-20261002",
           `storage-${width}-${mode}.png`,
         ),
         fullPage: true,
       });
-      if (width < 900)
-        await page.getByRole("button", { name: "Open navigation" }).click();
-      await expect(
-        page.getByRole("navigation", { name: "Main navigation" }),
-      ).toBeVisible();
+      if (width < 900) await page.getByRole("button", { name: "Open navigation" }).click();
       await page
-        .getByRole("button", { name: "Account menu", exact: true })
+        .getByRole("link", { name: "My account", exact: true })
         .click();
       await expect(
-        page.getByRole("menuitem", { name: "My account", exact: true }),
+        page.getByRole("heading", { name: "My account", exact: true }),
       ).toBeVisible();
     });
   }

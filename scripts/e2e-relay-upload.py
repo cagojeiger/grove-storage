@@ -15,7 +15,7 @@ import urllib.request
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
-def check(endpoint, directory, database, backend):
+def check(endpoint, directory, database, account, backend):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     key = "relay-regression-key"
 
@@ -49,12 +49,12 @@ def check(endpoint, directory, database, backend):
                 raise
             time.sleep(0.1)
 
-    admin = HARNESS["TOKEN"]
-    request("POST", "/api/admin/v1/storages",
-            {"id": "relay", **backend.spec, "force_relay": True}, admin, 201)
-    request("POST", "/api/admin/v1/clients", {"id": "relay", "storage_id": "relay"}, admin, 201)
-    request("POST", "/api/admin/v1/clients/relay/keys",
-        {"key_hash": "sha256:" + hashlib.sha256(key.encode()).hexdigest()}, admin, 201)
+    from cli_management_fixture import Management
+    management = Management(endpoint, account)
+    management.command("storage.create", {"id": "relay", "spec": {**backend.spec, "force_relay": True}})
+    management.command("client.create", {"id": "relay", "storage_id": "relay"})
+    management.command("client-key.register", {
+        "client_id": "relay", "key_hash": "sha256:" + hashlib.sha256(key.encode()).hexdigest()})
 
     body = b"original"
     digest = hashlib.md5(body).hexdigest()
@@ -133,7 +133,7 @@ def check(endpoint, directory, database, backend):
     print("PASS physical success with DB commit failure remains unmeasured and permits consistent retry")
 
     from native_multipart_cases import check_multipart
-    check_multipart(request, put, opener, endpoint, backend, admin)
+    check_multipart(request, put, opener, endpoint, backend, management.command)
 
 
 if __name__ == "__main__":
@@ -142,5 +142,6 @@ if __name__ == "__main__":
     parser.parse_args()
     from s3_backend_fixture import minio_backend
     with minio_backend() as backend:
-        HARNESS["main"](lambda endpoint, directory, database: check(endpoint, directory, database, backend),
+        HARNESS["main"](lambda endpoint, directory, database, account:
+            check(endpoint, directory, database, account, backend),
                         with_database=True, reconciler_interval=3600, multipart=True)

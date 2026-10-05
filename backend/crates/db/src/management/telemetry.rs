@@ -76,12 +76,3 @@ pub async fn security(
         .bind(request_id).bind(audit::surface_name(surface)).bind(event).bind(code).execute(pool).await?;
     Ok(())
 }
-
-/// Shared fixed-size budget. Database errors must fail closed at login admission.
-pub async fn login_allowed(pool: &PgPool) -> Result<bool, Error> {
-    Ok(sqlx::query_scalar("UPDATE management.login_budget SET
-        attempts=CASE WHEN window_start<=clock_timestamp()-interval '1 minute' THEN 1 ELSE attempts+1 END,
-        window_start=CASE WHEN window_start<=clock_timestamp()-interval '1 minute' THEN clock_timestamp() ELSE window_start END
-        WHERE id=1 AND (attempts<60 OR window_start<=clock_timestamp()-interval '1 minute') RETURNING true")
-        .fetch_optional(pool).await?.unwrap_or(false))
-}

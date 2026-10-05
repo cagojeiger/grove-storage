@@ -58,12 +58,13 @@ impl IssuedToken {
         &'a self,
         label: &'a str,
         days: u16,
+        now: chrono::DateTime<chrono::Utc>,
     ) -> filegate_db::management::NewCredential<'a> {
         filegate_db::management::NewCredential {
             label,
             token_prefix: &self.prefix,
             token_hash: &self.hash,
-            expires_at: chrono::Utc::now() + chrono::Duration::days(i64::from(days)),
+            expires_at: now + chrono::Duration::days(i64::from(days)),
         }
     }
 }

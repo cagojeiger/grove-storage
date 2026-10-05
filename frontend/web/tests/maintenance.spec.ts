@@ -33,21 +33,17 @@ test("activity tabs, bigint cursor and details preserve actor and token attribut
   await expect(page.getByRole("dialog")).toContainText("Token ID");
   await expect(page.getByRole("dialog")).toContainText(context.request_id);
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Load more", exact: true }).click();
+  await page.getByRole("button", { name: "Go to next page", exact: true }).click();
   await expect(
     page.getByRole("button", { name: /client.create/ }),
   ).toBeVisible();
   expect(cursors.filter((cursor) => cursor !== null)).toEqual([context.id]);
   expect(cursors[0]).toBeNull();
-  await page
-    .getByRole("tab", { name: "Command history", exact: true })
-    .click();
+  await page.getByRole("tab", { name: "Command history", exact: true }).click();
   await page.getByRole("button", { name: /storage.test/ }).click();
   await expect(page.getByRole("dialog")).toContainText("Duration (ms)");
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page
-    .getByRole("tab", { name: "Security events", exact: true })
-    .click();
+  await page.getByRole("tab", { name: "Security events", exact: true }).click();
   await expect(
     page.getByRole("button", { name: /permission_denied/ }),
   ).toBeVisible();
@@ -69,7 +65,9 @@ for (const role of ["reader", "writer"])
     ).toHaveCount(0);
     expect(requests).toBe(0);
     await page.getByRole("tab", { name: "Audit log" }).click();
-    await expect(page.getByRole("heading", { name: "My activity", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "My activity", exact: true }),
+    ).toBeVisible();
   });
 
 test("demotion and forbidden history responses remove installation event details", async ({
@@ -86,7 +84,9 @@ test("demotion and forbidden history responses remove installation event details
   );
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Refresh activity" }).click();
-  await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
+  await expect(
+    page.getByRole("complementary", { name: "Workspace sidebar" }),
+  ).toContainText("reader");
   await expect(
     page.getByRole("button", { name: /permission_denied/ }),
   ).toHaveCount(0);
@@ -112,10 +112,12 @@ test("sessions page confirms revocation and signs out when revoking the current 
     .getByRole("button", { name: "Revoke session other", exact: true })
     .click();
   expect(requests).toEqual([]);
-  await page.getByRole("button", { name: "Confirm revoke" }).click();
+  await page.getByLabel("Confirmation").fill("REVOKE");
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "Revoke current session" }).click();
-  await page.getByRole("button", { name: "Confirm revoke" }).click();
+  await page.getByLabel("Confirmation").fill("REVOKE");
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByLabel("Password")).toBeVisible();
   expect(requests).toEqual([
     "DELETE /api/admin/identity/v1/me/sessions/other",
@@ -148,10 +150,13 @@ test("unknown revocation is never retried for a password session", async ({
   await page.goto("/api/admin/console/#settings");
   await page.getByRole("tab", { name: "Sessions", exact: true }).click();
   await page.getByRole("button", { name: "Revoke current session" }).click();
-  await page.getByRole("button", { name: "Confirm revoke" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "outcome is unknown" })).toBeVisible();
+  await page.getByLabel("Confirmation").fill("REVOKE");
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Confirm revoke" }),
+    page.getByRole("alert").filter({ hasText: "outcome is unknown" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Confirm", exact: true }),
   ).toBeDisabled();
   expect(calls).toBe(1);
 });
@@ -169,7 +174,8 @@ for (const pageName of ["activity", "settings"])
       r.fulfill({ json: { items: [{}], next_before: null } }),
     );
     await page.goto(`/api/admin/console/#${pageName}`);
-    if (pageName === "settings") await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+    if (pageName === "settings")
+      await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
     await page.route(url, (r) => r.fulfill({ status: 401, json: {} }));
     await page

@@ -15,7 +15,8 @@ for (const theme of ["light", "dark"]) {
       s3.add("a".repeat(64));
       await page.setViewportSize({ width, height: 900 });
       await page.goto(root);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       const table = page.getByRole("grid", { name: "Clients", exact: true });
       await expect(
         table.getByRole("link", { name: id, exact: true }),
@@ -55,7 +56,7 @@ for (const theme of ["light", "dark"]) {
         page.getByRole("heading", { name: id, level: 1 }),
       ).toBeVisible();
       const details = page.getByRole("region", { name: "Client details" });
-      const properties = details.getByLabel("Client properties");
+      const properties = details.locator("dl").first();
       await expect(properties.locator("dd")).toHaveCount(3);
       for (const name of ["Client ID", "S3 bucket", "Storage"]) {
         const label = properties.getByText(name, { exact: true });
@@ -65,14 +66,13 @@ for (const theme of ["light", "dark"]) {
       await expect(properties.getByRole("link")).toHaveCSS("font-size", "14px");
       await expect(details.getByText("0 B", { exact: true })).toHaveCSS(
         "font-size",
-        "24px",
+        "14px",
       );
-      await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
       const keys = page.getByRole("region", { name: "S3 credentials" });
-      await expect(keys.locator("code")).toHaveCount(2);
-      await expect(keys.locator("code").last()).toHaveCSS(
+      await expect(keys.getByRole("button", { name: /^Revoke / })).toHaveCount(2);
+      await expect(keys.getByText("a".repeat(64), { exact: true })).toHaveCSS(
         "font-family",
-        /monospace/,
+        /^-apple-system,/,
       );
       expect(
         await page.evaluate(
@@ -92,17 +92,19 @@ for (const theme of ["light", "dark"]) {
     await clientMock(page);
     await page.setViewportSize({ width: 320, height: 480 });
     await page.goto(`${root}/notegate`);
-    await page.getByLabel("Theme").selectOption(theme);
-    await page.getByRole("tab", { name: "S3 credentials", exact: true }).click();
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await page
       .getByRole("button", { name: "Create credential", exact: true })
       .click();
-    await page.getByRole("button", { name: "Confirm", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Create S3 credential" });
+    await page.getByRole("dialog", { name: "Create S3 credential" }).getByRole("button", { name: "Create", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Save S3 credential" });
     const done = dialog.getByRole("button", { name: "Done", exact: true });
     const saved = dialog.getByRole("checkbox");
     await expect(done).toBeInViewport();
+    await saved.scrollIntoViewIfNeeded();
     await expect(saved).toBeInViewport();
+    await expect(done).toBeInViewport();
     await expect(done).toBeDisabled();
     await expect(
       dialog.getByRole("button", { name: "Done", exact: true }),
@@ -111,7 +113,7 @@ for (const theme of ["light", "dark"]) {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel("Secret key", { exact: true })).toHaveCSS(
       "font-family",
-      /monospace/,
+      /^-apple-system,/,
     );
     await saved.check();
     await done.click();

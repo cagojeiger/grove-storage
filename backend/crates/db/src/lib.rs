@@ -5,6 +5,7 @@ pub mod files;
 pub mod management;
 pub mod registry;
 pub mod s3_registry;
+pub mod time;
 pub mod usage;
 
 pub use sqlx::Error as DbError;
@@ -45,9 +46,21 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = T>,
 {
+    with_advisory_lock(pool, RECONCILER_LOCK_KEY, job).await
+}
+
+pub(crate) async fn with_advisory_lock<F, Fut, T>(
+    pool: &PgPool,
+    key: i64,
+    job: F,
+) -> Result<Option<T>, sqlx::Error>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = T>,
+{
     let mut tx = pool.begin().await?;
     let lock_acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1)")
-        .bind(RECONCILER_LOCK_KEY)
+        .bind(key)
         .fetch_one(&mut *tx)
         .await?;
     if !lock_acquired {

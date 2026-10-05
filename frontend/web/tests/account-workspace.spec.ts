@@ -15,7 +15,7 @@ test("mobile account status remains readable without truncated chips", async ({
   await expect(status.locator(".MuiChip-root")).toHaveCount(0);
 });
 
-test("account tabs preserve list context, reload and browser history", async ({
+test("account details preserve list context, reload and browser history", async ({
   page,
 }) => {
   await accessMock(page);
@@ -27,30 +27,23 @@ test("account tabs preserve list context, reload and browser history", async ({
   await page.goto(
     `/api/admin/console/#accounts/${owner.id}?q=Home&role=admin&limit=20`,
   );
-  await expect(
-    page.getByRole("tab", { name: "Overview", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("tabpanel", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: owner.display_name })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Delete account", exact: true }),
-  ).toHaveCount(0);
-  expect(tokenReads).toBe(0);
-  await page.getByRole("tab", { name: "API tokens", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Management API tokens" }),
   ).toBeVisible();
-  expect(tokenReads).toBeGreaterThan(0);
+  await expect(
+    page.getByRole("region", { name: "Management API tokens" }),
+  ).toBeVisible();
+  await expect.poll(() => tokenReads).toBeGreaterThan(0);
   await page.reload();
   await expect(
-    page.getByRole("tab", { name: "API tokens", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
-  await page.getByRole("tab", { name: "Security", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Delete account", exact: true }),
+    page.getByRole("region", { name: "Management API tokens" }),
   ).toBeVisible();
+  await page.getByRole("link", { name: "View account actions" }).click();
+  await expect(page).toHaveURL(new RegExp(`#activity\\?account_id=${owner.id}`));
   await page.goBack();
   await expect(
-    page.getByRole("tabpanel", { name: "API tokens" }),
+    page.getByRole("region", { name: "Management API tokens" }),
   ).toBeVisible();
   await page
     .getByRole("main")
@@ -58,23 +51,22 @@ test("account tabs preserve list context, reload and browser history", async ({
     .click();
   await expect(page.getByLabel("Search accounts")).toHaveValue("Home");
   await expect(page.getByLabel("Account role")).toHaveValue("admin");
-  await expect(page.getByLabel("Rows per page")).toHaveValue("20");
+  await expect(page.getByLabel("Page size")).toHaveValue("20");
   expect(page.url()).not.toContain("tab=");
 });
 
-test("unknown account tabs use overview and keyboard navigation reaches Security", async ({
+test("legacy account tab links still expose keyboard-accessible actions", async ({
   page,
 }) => {
   await accessMock(page);
   await page.goto(`/api/admin/console/#accounts/${owner.id}?tab=unknown`);
-  const overview = page.getByRole("tab", { name: "Overview", exact: true });
-  await expect(overview).toHaveAttribute("aria-selected", "true");
-  await overview.focus();
-  await expect(page.getByRole("tablist", { name: "Account sections" })).toHaveAttribute("aria-orientation", "vertical");
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("heading", { name: owner.display_name })).toBeVisible();
+  const edit = page.getByRole("button", { name: "Edit name", exact: true });
+  await edit.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("tabpanel", { name: "Security" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(edit).toBeFocused();
 });
 
 for (const theme of ["light", "dark"]) {
@@ -85,14 +77,12 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await accessMock(page);
       await page.goto(`/api/admin/console/#accounts/${owner.id}`);
-      await page.getByLabel("Theme").selectOption(theme);
-      for (const section of ["Overview", "API tokens", "Security"]) {
-        await page.getByRole("tab", { name: section, exact: true }).click();
-        const panel = page.getByRole("tabpanel", {
-          name: section,
-          exact: true,
-        });
-        await expect(panel).toBeVisible();
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
+      for (const section of ["Edit name", "Issue token", "Delete account"]) {
+        const action = page.getByRole("button", { name: section, exact: true });
+        await action.scrollIntoViewIfNeeded();
+        await expect(action).toBeInViewport();
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth,

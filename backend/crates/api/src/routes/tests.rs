@@ -10,6 +10,9 @@ use tower::ServiceExt;
 
 use super::*;
 
+mod independence;
+mod legacy_retirement;
+
 const LAZY_DATABASE_URL: &str = "postgres://unused:unused@localhost/unused";
 
 pub(crate) fn test_state() -> AppState {
@@ -21,12 +24,15 @@ pub(crate) fn test_state() -> AppState {
         enc_root_secret_prev: None,
         enc_key_id_prev: None,
         operator_tokens: vec!["test-operator-token".to_owned().into()],
+        // Keep compatibility contract fixtures explicit; production defaults to false.
+        legacy_admin_enabled: true,
     };
     let crypto = Arc::new(security.crypto().unwrap());
     let pool = PgPoolOptions::new()
         .connect_lazy(LAZY_DATABASE_URL)
         .unwrap();
     AppState {
+        clock: Arc::new(filegate_core::time::SystemClock),
         pool,
         security,
         crypto,

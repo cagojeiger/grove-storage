@@ -26,7 +26,7 @@ test("personal workspace loads private lists only in their respective tabs", asy
     page.getByRole("tab", { name: "Profile", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await expect(
-    page.getByRole("link", { name: "Change password", exact: true }),
+    page.getByRole("tab", { name: "Security", exact: true }),
   ).toBeVisible();
   expect(lists).toEqual([]);
   await expect(
@@ -56,18 +56,19 @@ test("token sessions cannot reveal personal API token management through a tab U
 }) => {
   await maintenanceMock(page);
   await page.goto("/api/admin/console/#settings?tab=tokens");
+  await expect(page.getByRole("alert")).toHaveText("Password sign-in required.");
   await expect(
     page.getByRole("tab", { name: "Profile", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+  ).toHaveAttribute("aria-selected", "false");
   await expect(
     page.getByRole("tab", { name: "API tokens", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: "Change password", exact: true }),
+    page.getByRole("tab", { name: "Security", exact: true }),
   ).toHaveCount(0);
 });
 
-test("activity abbreviates UUIDs in rows but retains full attribution in details", async ({
+test("activity retains full attribution in event details", async ({
   page,
 }) => {
   await maintenanceMock(page);
@@ -81,9 +82,7 @@ test("activity abbreviates UUIDs in rows but retains full attribution in details
     }),
   );
   await page.goto("/api/admin/console/#activity");
-  await expect(page.getByRole("table", { name: "Activity" })).toContainText(
-    "12345678...9abc",
-  );
+  await expect(page.getByRole("grid", { name: "Activity" }).getByRole("gridcell", { name: id, exact: true })).toHaveCount(1);
   await page
     .getByRole("button", { name: "storage.create", exact: true })
     .click();

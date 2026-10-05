@@ -29,6 +29,7 @@ fn commands(target: Uuid, key_hash: &str) -> Vec<(Command<'_>, bool)> {
             Command::IssueCredential {
                 account: target,
                 key: key(key_hash),
+                current_password: "unused legacy session password".into(),
             },
             true,
         ),
@@ -101,7 +102,8 @@ async fn every_console_operation_enforces_its_role(pool: PgPool) {
             )
             .await
             .result;
-            if admin_only && role != Role::Admin {
+            // Legacy token-derived sessions cannot issue new management credentials.
+            if (admin_only && role != Role::Admin) || name == "identity.credential.issue" {
                 assert!(
                     matches!(result, Err(Error::Forbidden)),
                     "{name}: {result:?}"

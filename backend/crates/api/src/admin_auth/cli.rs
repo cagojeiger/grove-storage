@@ -22,6 +22,12 @@ pub async fn run() -> anyhow::Result<std::process::ExitCode> {
         ),
     };
     let config = filegate_core::Config::load()?;
+    if matches!(command, Command::Issue(..)) {
+        anyhow::ensure!(
+            config.security.legacy_admin_enabled,
+            "legacy token issuance is disabled; use filegate account init, or explicitly enable FILEGATE_LEGACY_ADMIN_ENABLED=true for migration"
+        );
+    }
     let pool = filegate_db::connect(config.database.url.expose_secret(), 2).await?;
     filegate_db::migrate(&pool).await?;
     match command {

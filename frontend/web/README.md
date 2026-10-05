@@ -7,31 +7,55 @@ formatting. The UI language is independent of the browser locale.
 
 | Responsibility | Implementation |
 |---|---|
-| Color, type scale, density, light/dark mode | MUI theme in `src/design/ConsoleTheme.tsx` |
+| Color, type scale, density, light/dark mode | Official MUI `shared-theme/`, wired through `src/console/Theme.tsx` |
 | Font | System font stack; no web font downloads |
-| Controls, dialogs, navigation, Activity tabs | MUI; existing Lucide icons |
+| Controls, dialogs, navigation, Activity tabs | Official template component styles; Material and Lucide icons |
 | Resource lists | MUI X Community Data Grid |
 | Recorded usage chart | MUI X Community LineChart; missing days remain gaps |
-| Page structure | MUI Container/Stack/Grid; `src/app/Page.tsx` composes title, back link and actions |
+| Page structure | Official Dashboard shell in `src/template/dashboard/`; domain composition in `src/console/` |
+| Authentication layout | Official Sign-in adaptation in `src/template/sign-in/` |
 | Native form constraints and FormData | MUI TextField `slotProps.htmlInput` and native form submission |
-| Connection visualization | `src/features/overview/connections.css` and measured SVG paths |
-| Global CSS | `src/design/theme.css`: root sizing, scroll clearance and keyboard focus only |
+| Connection visualization | `src/console/ConnectionLines.tsx`: measured SVG paths |
+| Global CSS | MUI CssBaseline; no standalone stylesheet |
+
+The account identity links directly to My account at the bottom of the navigation
+Drawer; sign-out is a separate action. Desktop
+keeps the Drawer visible; mobile opens it from the header. Account navigation
+closes the mobile Drawer. The content footer contains product information only.
+Detail pages combine the parent link and current title in one page heading.
+Resource, account and activity grids fill the remaining viewport with internal
+scrolling and pagination. Short screens retain a minimum grid height and let the
+page scroll. Profile and password forms retain a bounded reading width.
 
 Keep API queries, mutation guards and authorization separate from presentation.
-Use stock MUI component appearance. The shared theme sets the system font stack,
-green primary colors, zero letter spacing and full-width TextField default;
-it has no component style overrides. JSON and credentials use the local monospace
-font. Responsive layout uses MUI breakpoints and spacing. There is one console,
-with no alternate legacy presentation or custom field/dialog wrappers.
+Use the official Dashboard and Sign-in template appearance, including the upstream
+component overrides. One shared theme supplies system fonts, a green brand scale,
+zero letter spacing, template typography, surfaces and input states across every
+page and dialog. Responsive layout uses the template's MUI breakpoints and spacing.
+Domain fields use the template's external-label form pattern. There is one console,
+with no alternate legacy presentation or separate authentication theme.
 React remains on 18.3.1; the `react-is` override matches it, as required by MUI.
 
-The foundation follows the free [MUI dashboard template](https://mui.com/material-ui/getting-started/templates/dashboard/)
-in its default-theme mode and the component documentation, rather than copying
-the template's optional branded theme. Material UI, Data Grid Community and
+The foundation adapts the actual official template source at a pinned revision;
+see [source map and integration boundaries](src/template/README.md).
+Material UI, Data Grid Community and
 Charts Community are MIT-licensed. Pro/Premium packages are not installed.
 See [MUI X licensing](https://mui.com/x/introduction/licensing/).
 Management routes, resource grids and usage charts load on demand; the built
 browser security test verifies these chunks under the production CSP.
+
+The template shell and theme are in `src/template/`; Grove views are in
+`src/console/`. API clients, authorization, parsers and
+query models remain in `src/api/`, `src/auth/` and `src/features/`; the former
+presentation files have been removed. Backend routes and database schemas are unchanged.
+
+The browser tests follow the current template composition: `official-template.spec.ts` covers the
+responsive template and system fonts, `fresh-console.spec.ts` exercises the
+domain composition, and the disposable API fixture covers real authentication,
+resource lifecycle and presigned transfers. The complete 494-test browser suite
+passed on the 2026-10-04 working tree after rebuilding `dist`. This local result
+does not establish release-image, production-hosting or migration readiness; see
+the [readiness review](../../docs/development/management-review.md).
 
 ## Browser Preview
 
@@ -64,6 +88,20 @@ It initializes the first Admin through a server-local command against an empty d
 
 ## Isolated Local Console
 
+Use the real API fixture for account creation and session verification. This mode
+uses a disposable PostgreSQL database and does not require MinIO or Python S3 packages:
+
+```sh
+python3 -B -u scripts/e2e-console.py --auth-only
+python3 -B -u scripts/e2e-console.py --auth-only --serve
+```
+
+Run these commands from the repository root after building the Rust binaries.
+`--serve` prints the HTTPS console URL and a mode-0600 file containing the generated
+`owner` password. The sample preview password does not apply. Stopping the fixture
+removes its database and accounts. Automated browser checks accept only the local
+test certificate; this does not validate production certificate trust.
+
 From the repository root, build `filegate` and `gscli` with `cargo build --bin filegate --bin gscli --locked`.
 On macOS use `DEVELOPER_DIR=/Library/Developer/CommandLineTools` if required by the Rust linker.
 
@@ -78,7 +116,7 @@ npm test
 cd ../..
 ```
 
-The HTTPS fixture always uses a disposable MinIO backend:
+The full HTTPS resource fixture uses a disposable MinIO backend:
 
 ```sh
 python3 -m venv /tmp/grove-s3-sdk
@@ -178,14 +216,14 @@ rules; generated build, browser reports and local TLS files are excluded.
 | `tests/maintenance.spec.ts`, `maintenance-layout.spec.ts` | Scoped history, bigint cursors, demotion, session revocation, unknown outcomes and responsive layouts |
 | `tests/usage-history.spec.ts` | Snapshot dates/counts, range validation, empty/error/401, local pagination and responsive tables |
 | `tests/usage-chart.spec.ts` | Daily aggregation, UTC gaps, a single observation, keyboard metrics, actual chart fonts and mobile pagination |
-| `tests/management-mui.spec.ts`, `tests/accounts-mui.spec.ts` | Default component appearance, responsive management pages, system fonts and short-screen secret dialogs |
+| `tests/management-mui.spec.ts`, `tests/accounts-mui.spec.ts` | Template component appearance, responsive management pages, system fonts and short-screen secret dialogs |
 | `tests/resource-navigation.spec.ts` | Bounded paging, list state across detail/reload/deletion, authoritative Client assignment and overview highlighting |
 | `tests/resource-layout.spec.ts` | Multi-resource topology and paged lists at phone/tablet/desktop widths in both themes |
-| `tests/overview-connections.spec.ts` | Six/seven folding boundary, aggregate totals, curved paths, selection pinning, bounded grouped browser and failure states |
+| `tests/overview-connections.spec.ts` | Six/seven folding boundary, aggregate totals, curved paths, selection pinning, bounded list lookups and refresh/failure states |
 | `tests/overview-built.spec.ts` | Production-built unselected connections on initial mount, reload and navigation return |
 | `tests/live.mjs` via Python fixture | Real HTTPS cookie attributes, CSRF, reload/logout, storage usage, expiry and token revocation |
 | `tests/live-storages.mjs` via Python fixture | UI MinIO lifecycle, concurrent client reference deletion guard, pending-file address change guard |
-| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named User token login and Console audit |
+| `tests/live-permissions.mjs` via Python fixture | Real role demotion, Reader enforcement, named account API tokens and Console audit |
 | `tests/live-access.mjs` via Python fixture | Real local Admin initialization, User lifecycle, token use/revocation, last-Admin protection and server-local recovery |
 | `tests/live-clients.mjs` via Python fixture | Real client/S3 credential lifecycle and pending-file deletion guard |
 | `tests/live-maintenance.mjs` via Python fixture | Real history views and revocation of another/current browser session with independent cookies |
@@ -203,6 +241,7 @@ JSON integers (0 through 2^53-1 bytes); the backend's wider i64 contract is unch
 Issued management tokens stay in component state only. Closing requires an explicit
 saved-token acknowledgement; the token is then discarded. Account search and
 role/status filters run on the server; previous/next cursors survive reload and
-detail navigation. History, token and session lists fetch the next server page
-through **Load more**. User identity actions
+detail navigation. Activity uses the Data Grid's previous/next controls with
+50-row server cursor pages and an unknown total until the last page. Token and
+session lists fetch the next server page through **Load more**. User identity actions
 use console-only APIs, separate from resource commands available to CLI/MCP.

@@ -2,6 +2,8 @@
 
 #[path = "support/lifecycle.rs"]
 mod lifecycle;
+#[path = "support/time.rs"]
+mod time;
 
 use filegate_db::files;
 use sqlx::PgPool;
@@ -94,9 +96,10 @@ async fn expired_before_admission_cannot_claim(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn receive_past_ttl_blocks_reclaim_and_renews_on_finish(pool: PgPool) {
+    time::install_clock(&pool).await;
     let file = relay(&pool).await;
     sqlx::query(
-        "UPDATE leases SET expires_at = clock_timestamp() + interval '1 second' WHERE id = $1",
+        "UPDATE leases SET expires_at=grove_time.wall_now()+interval '1 second' WHERE id=$1",
     )
     .bind(file.lease_id)
     .execute(&pool)
@@ -106,7 +109,11 @@ async fn receive_past_ttl_blocks_reclaim_and_renews_on_finish(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(1100)).await;
+    time::set_time(
+        &pool,
+        time::base() + chrono::Duration::seconds(1) + chrono::Duration::microseconds(1),
+    )
+    .await;
     let candidate = files::expired_pending(&pool, 10)
         .await
         .unwrap()
