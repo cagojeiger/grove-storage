@@ -41,6 +41,8 @@ Grove Storage
 │   │   └── Password setup / Management API tokens / Danger zone
 │   └── Activity
 │       └── Audit log / Command history / Security events
+├── Developer
+│   └── API docs      Swagger UI: S3 / Management / Native compatibility
 └── Sidebar identity
     ├── My account    direct link: Profile / Security / API tokens / Sessions
     └── Sign out     separate icon action
@@ -61,6 +63,7 @@ Entry: Sign in / one-time Set password / operator recovery help
 | Accounts | Server-side search, role/status filters and cursor paging; create, rename, change role, enable/disable/delete |
 | Activity | Committed changes, command outcomes and security events; actor/token filters and event details |
 | My account | Display-name edit, own tokens and sessions; revoking the current session signs out |
+| API docs | Read-only Swagger UI and OpenAPI 3.1 JSON; public integration contracts, not browser-internal identity routes |
 
 Reader/Writer see their own management history; Admin sees installation history.
 Security events and account administration require Admin. Client file-request logs

@@ -12,6 +12,7 @@ mod local_accounts;
 mod logging;
 mod management_maintenance;
 mod mcp;
+mod openapi;
 mod reconciler;
 mod resource_commands;
 mod routes;
@@ -40,6 +41,10 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
         Some("status") => status::run().await,
         Some("admin") => admin_auth::cli::run().await,
         Some("account") => local_accounts::run().await,
+        Some("openapi") => {
+            println!("{}", serde_json::to_string_pretty(&openapi::documents())?);
+            Ok(std::process::ExitCode::SUCCESS)
+        }
         Some("--help") | Some("-h") | Some("help") => {
             print_usage();
             Ok(std::process::ExitCode::SUCCESS)
@@ -59,7 +64,8 @@ fn print_usage() {
          filegate [serve]   서버를 기동한다 (기본)\n    \
          filegate status    배포 상태를 점검하고 요약을 출력한다\n    \
          filegate admin     Legacy operator tokens (explicit compatibility mode)\n    \
-         filegate account   Initialize or recover a local password account"
+         filegate account   Initialize or recover a local password account\n    \
+         filegate openapi   Export public API contracts (no database required)"
     );
 }
 

@@ -170,7 +170,8 @@ the browser Origin. API routes and `/readyz` are proxied; browser requests use
 same-origin cookies. Token/provider secrets never belong in `VITE_*` variables.
 For release hosting, use a dedicated HTTPS console host. Mount `dist` at
 `/api/admin/console/` and proxy only `/api/admin/identity/v1` (including its subpaths),
-`/api/admin/console-commands/v1`, and
+`/api/admin/console-commands/v1`, the three GET-only OpenAPI endpoints
+`/api/docs/{s3,management,native}.json`, and
 `/readyz`. Return 404 for all other paths. Serve S3, relay and uploaded files on a
 different host: uploaded HTML running on the console origin could act with the
 administrator's cookies. This does not require a separate backend process.
@@ -178,7 +179,7 @@ administrator's cookies. This does not require a separate backend process.
 For each HTML response, generate a cryptographically random nonce, replace
 `__GROVE_CSP_NONCE__` in `dist/index.html`, and apply
 `consoleHeaders(false, nonce)` from `security-headers.mjs`. The same nonce authorizes
-only the MUI/Emotion style elements for that response; `style-src-attr 'none'`,
+only the MUI/Emotion and isolated Swagger style elements for that response; `style-src-attr 'none'`,
 script restrictions and `Cache-Control: no-store` remain in force. A plain static
 file server without this HTML/header integration is not a production console host.
 Typography uses locally installed system fonts; no font assets are bundled.
@@ -189,6 +190,44 @@ The backend image and production ingress are not configured by this frontend.
 See [browser security](../../docs/spec/07-browser-security.md) for deployment checks.
 
 ## Verification
+
+### API Documentation
+
+Open `#api` (Developer > API docs) after signing in. The standard Swagger UI
+is read-only: request execution and authorization inputs are disabled, no
+credentials are saved, and schema reads omit cookies. Swagger's styles are
+isolated in a shadow root and use the console's system font stack. Its large
+bundle is loaded only when the API docs route is opened. No CDN or online
+validator is used. `img-src` allows packaged data-image icons; script, connection,
+frame and nonce-only style restrictions remain unchanged. Swagger UI's Apache-2.0
+license and NOTICE are shipped in `dist` alongside the console assets.
+
+The Rust backend exposes public, secret-free OpenAPI 3.1 documents:
+
+- `/api/docs/s3.json`: path-style SigV4 operations and explicit support limits.
+  Use an S3 SDK to sign requests; Swagger does not implement SigV4 signing.
+- `/api/docs/management.json`: `/api/admin/commands/v1`, with request/result
+  schemas generated from the canonical command catalog. Account API token auth.
+- `/api/docs/native.json`: FileGate-compatible file lifecycle DTOs generated
+  from the API's Rust types. Native Client key auth.
+
+Browser identity and console commands are internal surfaces; disabled legacy
+admin routes and the MCP protocol are not presented as public REST endpoints.
+Documentation adds no resource permissions or changes to S3/Native behavior.
+
+`filegate openapi` exports all three contracts without starting the server or
+connecting to PostgreSQL. To show them in the in-memory sample preview and run
+the full Swagger browser tests:
+
+```sh
+cargo run -q -p filegate-api -- openapi > /tmp/grove-openapi.json
+GROVE_PREVIEW_OPENAPI=/tmp/grove-openapi.json node frontend/web/scripts/preview.mjs
+cd frontend/web
+GROVE_TEST_OPENAPI=/tmp/grove-openapi.json npx playwright test tests/api-docs.spec.ts
+```
+
+CI's Rust job runs these tests with freshly exported contracts; the frontend-only
+job checks the documentation error state without requiring a Rust toolchain.
 
 TypeScript is pinned to 6.0.3. ESLint 10 and typescript-eslint 8 use the
 [recommended type-aware rules](https://typescript-eslint.io/getting-started/typed-linting/)

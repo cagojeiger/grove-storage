@@ -250,15 +250,22 @@ fn verify_part_sizes(
     Ok(())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub(super) struct PartsBody {
     parts: Vec<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct PartOut {
     part: i32,
     url: String,
+}
+
+pub(super) fn schemas() -> [(&'static str, schemars::Schema); 2] {
+    [
+        ("PartsBody", schemars::schema_for!(PartsBody)),
+        ("PartsOut", schemars::schema_for!(Vec<PartOut>)),
+    ]
 }
 
 /// part 접근 발급 = 갱신 = 재개 (spec 02). 같은 part의 재요청이 재시도이고,

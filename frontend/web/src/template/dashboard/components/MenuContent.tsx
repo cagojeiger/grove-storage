@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import {
   Activity,
+  BookOpen,
   Database,
   HardDrive,
   LayoutDashboard,
@@ -70,6 +71,10 @@ export default function MenuContent({
           selected: route.startsWith("activity"),
         },
       ],
+    },
+    {
+      label: "Developer",
+      items: [{ text: "API docs", href: "#api", icon: BookOpen, selected: route === "api" }],
     },
   ];
   return (

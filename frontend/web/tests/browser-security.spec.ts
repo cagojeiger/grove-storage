@@ -39,6 +39,8 @@ test("built console loads with restrictive browser headers", async ({
   const response = await page.goto(root);
   const headers = response?.headers();
   expect(headers?.["content-security-policy"]).not.toContain("unsafe-inline");
+  expect(headers?.["content-security-policy"]).toContain("img-src 'self' data:");
+  expect(headers?.["content-security-policy"]).toContain("script-src 'self';");
   expect(headers?.["x-frame-options"]).toBe("DENY");
   expect(headers?.["x-content-type-options"]).toBe("nosniff");
   expect(headers?.["referrer-policy"]).toBe("no-referrer");

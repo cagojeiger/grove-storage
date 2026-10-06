@@ -16,6 +16,7 @@ export default defineConfig(() => {
       rollupOptions: {
         output: {
           manualChunks: (id) => {
+            if (id.includes("/swagger-ui-react/")) return "swagger-ui";
             if (
               /\/node_modules\/@mui\/x-(charts|charts-vendor|internal-gestures)\//.test(
                 id,
@@ -29,7 +30,6 @@ export default defineConfig(() => {
             if (/\/node_modules\/@(mui|emotion)\//.test(id)) return "mui-core";
             if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id))
               return "react-runtime";
-            if (id.includes("node_modules")) return "vendor";
           },
         },
       },
@@ -49,6 +49,7 @@ export default defineConfig(() => {
         [
           "/api/admin/identity/v1",
           "/api/admin/console-commands/v1",
+          "/api/docs/",
           "/readyz",
         ].map((path) => [path, { target, changeOrigin: false }]),
       ),

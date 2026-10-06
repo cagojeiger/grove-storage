@@ -178,6 +178,13 @@ jobs:
           python3 -B -u ../../scripts/e2e-console.py --auth-only
           /tmp/grove-s3-sdk/bin/python -B -u ../../scripts/e2e-console.py --with-minio
 
+      - name: Swagger UI with Rust-generated public contracts
+        working-directory: frontend/web
+        run: |
+          ../../target/debug/filegate openapi > /tmp/grove-openapi.json
+          npm run build
+          GROVE_TEST_OPENAPI=/tmp/grove-openapi.json npx playwright test tests/api-docs.spec.ts
+
   notegate:
     name: NoteGate file transfer contract
     runs-on: ubuntu-latest

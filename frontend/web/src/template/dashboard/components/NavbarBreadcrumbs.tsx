@@ -23,6 +23,7 @@ export default function NavbarBreadcrumbs({ route }: { route: string }) {
         activity: "Activity",
         settings: "My account",
         usage: "Usage history",
+        api: "API docs",
       } as Record<string, string>
     )[key] ?? "Overview";
   return (

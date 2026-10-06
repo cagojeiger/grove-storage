@@ -24,7 +24,7 @@ use crate::storage_access::backend_from_row;
 use filegate_infra::backend::StorageBackend;
 use grove_object_policy::validation::{classify_upload, content_type_ok, declared_md5_format_ok};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub(super) struct CreateBody {
     declared_size: i64,
     content_type: Option<String>,
@@ -33,7 +33,7 @@ pub(super) struct CreateBody {
     declared_md5: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct CreateOut {
     file_id: Uuid,
     /// 만료가 있는 PUT URL. URL 구조는 계약이 아니다 (spec 00).
@@ -46,13 +46,13 @@ struct CreateOut {
 
 /// multipart 서술자 (spec 02) — 서비스는 이대로 자르고, 구조에 의존하지
 /// 않는다. part 접근은 POST /v1/files/{id}/parts로 받는다.
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct MultipartOut {
     part_size: i64,
     part_count: i32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct CommitOut {
     file_id: Uuid,
     state: &'static str,
@@ -233,13 +233,13 @@ pub(super) async fn committed_or_conflict(
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, schemars::JsonSchema)]
 pub(super) struct ReadBody {
     /// 다운로드 표현 — 파일명 (RFC 5987로 인코딩되어 서명에 실린다, ADR 003).
     filename: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct ReadOut {
     file_id: Uuid,
     /// 만료가 있는 GET URL. 서비스가 302 redirect한다 (spec 00).
@@ -312,7 +312,7 @@ pub(super) async fn read(
     Ok(Json(ReadOut { file_id, get_url }).into_response())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct StatOut {
     file_id: Uuid,
     state: String,
@@ -359,10 +359,22 @@ pub(super) async fn delete(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct DeleteOut {
     file_id: Uuid,
     state: &'static str,
+}
+
+pub(super) fn schemas() -> [(&'static str, schemars::Schema); 7] {
+    [
+        ("CreateBody", schemars::schema_for!(CreateBody)),
+        ("CreateOut", schemars::schema_for!(CreateOut)),
+        ("CommitOut", schemars::schema_for!(CommitOut)),
+        ("ReadBody", schemars::schema_for!(ReadBody)),
+        ("ReadOut", schemars::schema_for!(ReadOut)),
+        ("StatOut", schemars::schema_for!(StatOut)),
+        ("DeleteOut", schemars::schema_for!(DeleteOut)),
+    ]
 }
 
 /// 클라이언트 delete는 200 + 상태 본문이다 — 운영자·S3 표면의 204와

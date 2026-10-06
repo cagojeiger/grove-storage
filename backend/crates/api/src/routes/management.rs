@@ -30,6 +30,7 @@ pub(super) fn routes(state: AppState) -> Router<AppState> {
 
     Router::new()
         .merge(legacy)
+        .merge(crate::openapi::routes())
         .route("/api/admin/mcp", any(crate::mcp::handle))
         .route(
             "/api/admin/commands/v1",

@@ -10,6 +10,10 @@ import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
 const base = "/api/admin/console/";
+// Use exported Rust contracts, never a separately maintained sample API schema.
+const openapi = process.env.GROVE_PREVIEW_OPENAPI
+  ? JSON.parse(await readFile(process.env.GROVE_PREVIEW_OPENAPI, "utf8"))
+  : null;
 const storages = new Map([
   [
     "home-archive",
@@ -87,6 +91,11 @@ async function response(req, res) {
   const path = url.pathname;
   if (await identities.handle(req, res, url)) return;
   const method = req.method;
+  const documentation = /^\/api\/docs\/(s3|management|native)\.json$/.exec(path);
+  if (documentation && method === "GET")
+    return openapi
+      ? json(res, 200, openapi[documentation[1]])
+      : json(res, 503, { error: "OpenAPI export not configured for this sample preview" });
   if (path === "/readyz") return json(res, 200, { status: "ready" });
   if (path === "/api/admin/console-commands/v1" && method === "POST") {
     if (!identities.session()) return json(res, 401, {});

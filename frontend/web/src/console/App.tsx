@@ -29,6 +29,9 @@ const Activity = lazy(() =>
 const Profile = lazy(() =>
   import("./Profile").then((module) => ({ default: module.Profile })),
 );
+const ApiDocs = lazy(() =>
+  import("./ApiDocs").then((module) => ({ default: module.ApiDocs })),
+);
 
 export function App() {
   const cache = useQueryClient();
@@ -134,6 +137,8 @@ export function App() {
         session={value}
         security={route === "settings/security"}
       />
+    ) : route === "api" ? (
+      <ApiDocs />
     ) : route === "usage" ? (
       <UsageHistory />
     ) : !route ? (
