@@ -35,6 +35,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     const page = await context.newPage();
     await page.goto(`${origin}/api/admin/console/#storages/console-live`);
     await loginWithPassword(page, "console-writer", writerPassword);
+    await page.getByRole("link", { name: "Open storage console-live", exact: true }).click();
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "reader" });

@@ -131,11 +131,8 @@ try {
   await page.getByLabel("Confirm new password").fill(replacement);
   await page.getByRole("button", { name: "Change password" }).click();
   await page.getByRole("button", { name: "Sign in", exact: true }).waitFor();
-  await page.getByLabel("Username").fill("owner");
-  await page.getByLabel(/^Password\s*\*?$/).fill(replacement);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("tab", { name: "Security", exact: true }).waitFor();
-  await page.getByRole("tab", { name: "Profile", exact: true }).click();
+  await loginWithPassword(page, "owner", replacement);
+  await page.getByRole("link", { name: "My account", exact: true }).click();
   await page.getByRole("heading", { name: "My account", exact: true }).waitFor();
   await page.getByLabel("Display name").fill("Console owner updated");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();

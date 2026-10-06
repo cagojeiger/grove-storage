@@ -36,6 +36,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     const other = await context.newPage();
     await other.goto(`${origin}/api/admin/console/#settings`);
     await loginWithPassword(other, "owner", ownerPassword);
+    await other.getByRole("link", { name: "My account", exact: true }).click();
     await other.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(
       other.getByRole("heading", { name: "My sessions", exact: true }),
@@ -72,6 +73,8 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByLabel(/^Password\s*\*?$/)).toBeVisible();
     await loginWithPassword(page, "owner", ownerPassword);
+    await page.getByRole("link", { name: "My account", exact: true }).click();
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "My sessions", exact: true }),
     ).toBeVisible();
