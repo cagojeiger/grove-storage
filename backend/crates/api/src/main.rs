@@ -10,11 +10,14 @@ mod error;
 mod lease;
 mod local_accounts;
 mod logging;
+mod management_maintenance;
 mod mcp;
+mod openapi;
 mod reconciler;
 mod resource_commands;
 mod routes;
 mod s3;
+mod shutdown;
 mod spool;
 mod status;
 mod storage_access;
@@ -38,6 +41,10 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
         Some("status") => status::run().await,
         Some("admin") => admin_auth::cli::run().await,
         Some("account") => local_accounts::run().await,
+        Some("openapi") => {
+            println!("{}", serde_json::to_string_pretty(&openapi::documents())?);
+            Ok(std::process::ExitCode::SUCCESS)
+        }
         Some("--help") | Some("-h") | Some("help") => {
             print_usage();
             Ok(std::process::ExitCode::SUCCESS)
@@ -56,13 +63,14 @@ fn print_usage() {
          USAGE:\n    \
          filegate [serve]   서버를 기동한다 (기본)\n    \
          filegate status    배포 상태를 점검하고 요약을 출력한다\n    \
-         filegate admin     관리자 초기화 및 토큰 관리\n    \
-         filegate account   Initialize or recover a local password account"
+         filegate admin     Legacy operator tokens (explicit compatibility mode)\n    \
+         filegate account   Initialize or recover a local password account\n    \
+         filegate openapi   Export public API contracts (no database required)"
     );
 }
 
 /// 서버 기동: env 설정 → PostgreSQL(+마이그레이션) → storage 재검증
-/// → HTTP + reconciler → graceful shutdown.
+/// → HTTP + object reconciler + management maintenance → graceful shutdown.
 async fn serve() -> anyhow::Result<()> {
     let config = filegate_core::Config::load()?;
     let console_origin = admin_auth::console_origin(std::env::var("FILEGATE_CONSOLE_ORIGIN").ok())?;
@@ -82,13 +90,18 @@ async fn serve() -> anyhow::Result<()> {
     .await?;
     filegate_db::migrate(&pool).await?;
     anyhow::ensure!(
-        !config.security.operator_tokens.is_empty()
-            || filegate_db::admin_auth::initialized(&pool).await?
-            || filegate_db::management::passwords::initialized(&pool)
-                .await
-                .map_err(|_| anyhow::anyhow!("management initialization check failed"))?,
-        "administrator not initialized; run filegate account init or filegate admin init for legacy authentication"
+        filegate_db::management::passwords::initialized(&pool)
+            .await
+            .map_err(|_| anyhow::anyhow!("management initialization check failed"))?
+            || admin_auth::legacy_initialized(&pool, &config.security).await?,
+        "administrator not initialized; run filegate account init; legacy-only installations require explicit FILEGATE_LEGACY_ADMIN_ENABLED=true during migration"
     );
+    if config.security.legacy_admin_enabled {
+        tracing::warn!(
+            event = "admin.legacy_enabled",
+            "Legacy operator API bypasses Account roles; disable it after migrating management callers"
+        );
+    }
     info!(
         event = "db.connected",
         max_connections = config.database.max_connections
@@ -97,21 +110,38 @@ async fn serve() -> anyhow::Result<()> {
     // 등록된 storage 접근 재검증 — 실패하면 부팅 중단 (ADR 001).
     storage_registration::verify_registered(&pool, &crypto).await?;
 
+    let maintenance_pool = filegate_db::connect(
+        config.database.url.expose_secret(),
+        management_maintenance::DB_CONNECTIONS,
+    )
+    .await?;
+
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
     info!(event = "server.listening", addr = %config.server.bind_addr);
 
     let shutdown = CancellationToken::new();
     // 요청 경로와 reconciler가 같은 캐시를 공유한다 — 같은 storage의 웜 풀.
-    let s3_clients = std::sync::Arc::new(filegate_infra::S3ClientCache::default());
-    let worker = reconciler::spawn(
+    let clock: Arc<dyn filegate_core::time::Clock> = Arc::new(filegate_core::time::SystemClock);
+    let s3_clients = Arc::new(filegate_infra::S3ClientCache::new(clock.clone()));
+    let mut workers = tokio::task::JoinSet::new();
+    let tick = std::time::Duration::from_secs(config.server.reconciler_interval_secs);
+    workers.spawn(reconciler::run(
         pool.clone(),
         crypto.clone(),
         s3_clients.clone(),
-        std::time::Duration::from_secs(config.server.reconciler_interval_secs),
+        tick,
         shutdown.clone(),
-    );
+        clock.clone(),
+    ));
+    workers.spawn(management_maintenance::run(
+        maintenance_pool.clone(),
+        config.server.management_log_retention,
+        tick,
+        shutdown.clone(),
+    ));
 
     let state = routes::AppState {
+        clock,
         pool: pool.clone(),
         security: config.security.clone(),
         crypto,
@@ -146,19 +176,21 @@ async fn serve() -> anyhow::Result<()> {
     info!(event = "server.shutting_down");
     shutdown.cancel();
 
-    // 시그널로 나온 경우 진행 중 요청의 드레인을 끝까지 기다린다.
-    let server_result = match server_result {
-        Some(result) => result,
-        None => server.await,
-    };
-
-    if let Err(error) = worker.await {
-        tracing::warn!(event = "reconciler.join_failed", %error);
-    }
-    pool.close().await;
+    shutdown::drain(
+        async {
+            match server_result {
+                Some(result) => result,
+                None => server.await,
+            }
+        },
+        workers,
+        || async {
+            tokio::join!(pool.close(), maintenance_pool.close());
+        },
+        shutdown::GRACE_PERIOD,
+    )
+    .await?;
     info!(event = "shutdown.complete");
-
-    server_result?;
     Ok(())
 }
 

@@ -4,7 +4,7 @@ use super::*;
 /// proof again under its own transaction; admission never caches authority.
 pub async fn admit_mcp(pool: &PgPool, token_hash: &str) -> Result<(), (Uuid, CommandError)> {
     let request_id = Uuid::new_v4();
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let mut context = None;
     let result = async {
         let mut tx = IdentityTransaction::begin(pool).await?;

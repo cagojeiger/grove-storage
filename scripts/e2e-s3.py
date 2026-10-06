@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Run SDK contracts against a disposable MinIO backend."""
 
-import json
 import os
 from pathlib import Path
 import runpy
 import subprocess
 import sys
-import time
 import urllib.error
 import urllib.request
 
@@ -16,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 HARNESS = runpy.run_path(str(ROOT / "e2e-cli.py"))
 
 
-def check(endpoint, directory, database, backend):
+def check(endpoint, directory, database, account, backend):
     from botocore.auth import S3SigV4Auth
     from botocore.awsrequest import AWSRequest
     from botocore.credentials import Credentials
@@ -26,30 +24,11 @@ def check(endpoint, directory, database, backend):
 
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def admin(method, path, body=None):
-        request = urllib.request.Request(
-            endpoint + path, method=method,
-            data=None if body is None else json.dumps(body).encode(),
-            headers={"Authorization": "Bearer " + HARNESS["TOKEN"],
-                     "Content-Type": "application/json"},
-        )
-        with opener.open(request, timeout=5) as response:
-            return json.loads(response.read())
-
-    deadline = time.monotonic() + 20
-    while True:
-        try:
-            if admin("GET", "/readyz") == {"status": "ready"}:
-                break
-        except (urllib.error.URLError, TimeoutError):
-            pass
-        if time.monotonic() >= deadline:
-            raise RuntimeError("server readiness timeout")
-        time.sleep(0.1)
-
-    admin("POST", "/api/admin/v1/storages", {"id": "s3-test-backend", **backend.spec})
-    admin("POST", "/api/admin/v1/clients", {"id": "s3-test", "storage_id": "s3-test-backend"})
-    credential = admin("POST", "/api/admin/v1/clients/s3-test/s3-credentials", {})
+    from cli_management_fixture import Management
+    management = Management(endpoint, account)
+    management.command("storage.create", {"id": "s3-test-backend", "spec": backend.spec})
+    management.command("client.create", {"id": "s3-test", "storage_id": "s3-test-backend"})
+    credential = management.command("credential.create", {"client_id": "s3-test"})
     env = dict(os.environ, S3_ENDPOINT=endpoint, S3_BUCKET="s3-test",
                S3_ACCESS_KEY=credential["access_key_id"], S3_SECRET_KEY=credential["secret_key"],
                S3_EXPECT_WRONG_KEY_404="1", NO_PROXY="127.0.0.1")
@@ -132,4 +111,5 @@ if __name__ == "__main__":
     parser.parse_args()
     from s3_backend_fixture import minio_backend
     with minio_backend() as backend:
-        HARNESS["main"](lambda endpoint, directory, database: check(endpoint, directory, database, backend), with_database=True)
+        HARNESS["main"](lambda endpoint, directory, database, account:
+            check(endpoint, directory, database, account, backend), with_database=True)

@@ -46,7 +46,7 @@ async fn reader_and_writer_cannot_manage_identities_or_view_security(pool: PgPoo
             (
                 "POST",
                 format!("/accounts/{target}/credentials"),
-                serde_json::json!({"label":"forged"}),
+                serde_json::json!({"label":"forged","current_password":PASSWORD}),
             ),
             (
                 "DELETE",

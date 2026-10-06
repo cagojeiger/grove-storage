@@ -80,7 +80,7 @@ impl Completion {
         lease_ttl_secs: i64,
     ) -> Result<bool, sqlx::Error> {
         let lease = sqlx::query(
-            "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+            "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
              WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
         )
         .bind(self.file_id)
@@ -129,7 +129,7 @@ pub async fn renew_completion_lease(
         return Ok(false);
     }
     let renewed = sqlx::query(
-        "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+        "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
          WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
     )
     .bind(file_id)
@@ -159,7 +159,7 @@ pub async fn finalize_completion(
     }
     // Check the completion row after any recovery holding this file lock has committed.
     let transitioned = sqlx::query(
-        "UPDATE files f SET state = 'active', etag = $2, committed_at = now() \
+        "UPDATE files f SET state = 'active', etag = $2, committed_at = grove_time.transaction_now() \
          FROM native_multipart_completions c \
          WHERE f.id = $1 AND f.state = 'pending' AND c.file_id = f.id \
          AND c.state = 'completing' AND lower(c.expected_etag) = lower($2)",
@@ -205,7 +205,7 @@ pub async fn completion_candidates(
          JOIN files f ON f.id = c.file_id JOIN locations l ON l.file_id = c.file_id \
          JOIN leases le ON le.file_id = c.file_id AND le.kind = 'write' \
          WHERE c.state = 'completing' AND f.state = 'pending' \
-         AND le.state = 'issued' AND le.expires_at < now() LIMIT $1",
+         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -238,7 +238,7 @@ async fn lock_expired_completion(
     }
     let lease: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM leases WHERE file_id = $1 AND kind = 'write' \
-         AND state = 'issued' AND expires_at < now() FOR UPDATE",
+         AND state = 'issued' AND expires_at < grove_time.transaction_now() FOR UPDATE",
     )
     .bind(file_id)
     .fetch_optional(&mut **tx)
@@ -266,7 +266,7 @@ pub async fn reopen_completion(
         return Ok(false);
     }
     sqlx::query(
-        "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+        "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
          WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
     )
     .bind(file_id)
@@ -283,7 +283,7 @@ pub async fn claim_cleanup(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx::E
         return Ok(false);
     }
     let changed = sqlx::query(
-        "UPDATE native_multipart_completions SET state = 'cleaning', updated_at = now() \
+        "UPDATE native_multipart_completions SET state = 'cleaning', updated_at = grove_time.transaction_now() \
          WHERE file_id = $1 AND state = 'completing'",
     )
     .bind(file_id)

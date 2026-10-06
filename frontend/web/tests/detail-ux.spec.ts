@@ -11,9 +11,11 @@ for (const mode of ["light", "dark"]) {
       await context.grantPermissions(["clipboard-read", "clipboard-write"]);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/api/admin/console/#accounts/${owner.id}`);
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       await page.getByRole("button", { name: "Issue token", exact: true }).click();
       await page.getByLabel(/^Label/).fill("Deployment automation");
+      await page.getByLabel("Current password").fill("a private admin password");
       await page.getByRole("button", { name: "Issue", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "API token created" });
       const token = dialog.getByLabel("Issued token", { exact: true });
@@ -22,21 +24,18 @@ for (const mode of ["light", "dark"]) {
       await expect(done).toBeDisabled();
       await expect(dialog.getByRole("heading", { level: 2 })).toHaveCount(1);
       await expect(dialog.getByRole("heading", { name: "Token issued" })).toHaveCount(0);
-      await expect(dialog.getByRole("button", { name: "Connection examples" })).toHaveAttribute("aria-expanded", "false");
-      await expect(dialog.getByText(owner.display_name, { exact: true })).toBeVisible();
-      await dialog.getByRole("button", { name: "Show token" }).click();
+      await expect(dialog.getByText(owner.id, { exact: true })).toBeVisible();
+      await dialog.getByRole("button", { name: "Show issued token" }).click();
       await expect(token).toHaveAttribute("type", "text");
       await expect(token).toHaveValue(rawToken);
-      await dialog.getByRole("button", { name: "Hide token" }).click();
-      await dialog.getByRole("button", { name: "Copy token" }).click();
-      await expect(dialog.getByRole("status")).toHaveText("Copied");
+      await dialog.getByRole("button", { name: "Hide issued token" }).click();
+      await dialog.getByRole("button", { name: "Copy issued token" }).click();
+      await expect(dialog.getByRole("status")).toHaveText("Copied.");
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(rawToken);
       await page.screenshot({
         path: resolve(`../../output/console-detail-ux-20261001/token-${width}-${mode}.png`),
         animations: "disabled",
       });
-      await dialog.getByRole("button", { name: "Connection examples" }).click();
-      await expect(dialog.getByText(/gscli --endpoint/)).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(dialog).toBeVisible();
       expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -50,6 +49,36 @@ for (const mode of ["light", "dark"]) {
       });
     });
   }
+}
+
+for (const mode of ["light", "dark"]) {
+  test(`token details keep actions reachable on a short phone in ${mode}`, async ({ page }) => {
+    await accessMock(page);
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto(`/api/admin/console/#accounts/${owner.id}?tab=tokens`);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
+    await page.getByRole("button", { name: "Issue token", exact: true }).click();
+    await page.getByLabel(/^Label/).fill("Phone automation");
+    await page.getByLabel("Current password").fill("a private admin password");
+    await page.getByRole("button", { name: "Issue", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "API token created" });
+    await expect(dialog.getByText(owner.id, { exact: true })).toBeVisible();
+    const done = dialog.getByRole("button", { name: "Done", exact: true });
+    await expect(done).toBeDisabled();
+    await expect(done).toBeInViewport();
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("checkbox").check();
+    await expect(done).toBeInViewport();
+    await page.screenshot({
+      path: resolve(`../../output/console-mui-simplify-20261002/token-short-${mode}.png`),
+      animations: "disabled",
+    });
+    await done.click();
+    await expect(dialog).toHaveCount(0);
+  });
 }
 
 for (const scenario of ["normal", "zero", "over", "unavailable"] as const) {
@@ -73,7 +102,8 @@ for (const scenario of ["normal", "zero", "over", "unavailable"] as const) {
     const grid = page.getByRole("grid", { name: "Storage", exact: true });
     const progress = grid.getByRole("progressbar");
     if (scenario === "zero" || scenario === "unavailable") {
-      await expect(grid.getByText(scenario === "zero" ? "0 B remaining" : "Usage unavailable")).toBeVisible();
+      if (scenario === "zero") await expect(grid.getByText("0 B remaining")).toBeVisible();
+      else await expect(page.getByRole("alert")).toContainText("Usage unavailable");
       await expect(progress).toHaveCount(0);
     } else {
       await expect(progress).toHaveAttribute("aria-valuetext", `${scenario === "over" ? 150 : 75}% of configured capacity`);

@@ -14,6 +14,7 @@ pub mod passwords;
 pub mod personal_tokens;
 pub mod profile;
 pub mod resources;
+pub mod retention;
 pub mod sessions;
 pub use command::Command;
 pub use filegate_db::management::{Proof, queries::Page};
@@ -102,7 +103,7 @@ pub async fn execute(
     command: Command<'_>,
 ) -> Execution {
     let request_id = Uuid::new_v4();
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let operation = command.name();
     let mutation = command.is_mutation();
     let (context, result) = run(pool, proof, surface, command, request_id).await;
@@ -135,7 +136,7 @@ async fn run(
         Ok(tx) => tx,
         Err(error) => return (None, Err(error.into())),
     };
-    let identity = match tx.resolve(proof).await {
+    let mut identity = match tx.resolve(proof).await {
         Ok(Some(identity)) => identity,
         Ok(None) => return (None, Err(Error::Unauthenticated)),
         Err(error) => return (None, Err(error.into())),
@@ -148,6 +149,35 @@ async fn run(
         Ok(scope) => scope,
         Err(_) => return (Some(context), Err(Error::Forbidden)),
     };
+    if let Command::IssueCredential {
+        current_password, ..
+    } = &command
+    {
+        let Proof::PasswordSession(session_hash) = proof else {
+            return (Some(context), Err(Error::Forbidden));
+        };
+        // Password hashing must not hold the identity lock or a DB connection.
+        if let Err(error) = tx.finish().await {
+            return (Some(context), Err(error.into()));
+        }
+        if let Err(error) =
+            password_setups::reauthenticate(pool, session_hash, current_password.clone()).await
+        {
+            return (Some(context), Err(error));
+        }
+        tx = match IdentityTransaction::begin(pool).await {
+            Ok(tx) => tx,
+            Err(error) => return (Some(context), Err(error.into())),
+        };
+        identity = match tx.resolve(proof).await {
+            Ok(Some(identity)) => identity,
+            Ok(None) => return (Some(context), Err(Error::Unauthenticated)),
+            Err(error) => return (Some(context), Err(error.into())),
+        };
+        if authorize(identity.caller(), surface, command.action()) != Ok(scope) {
+            return (Some(context), Err(Error::Forbidden));
+        }
+    }
     let result = dispatch::run(tx, &context, identity, scope, command)
         .await
         .map_err(Error::from);

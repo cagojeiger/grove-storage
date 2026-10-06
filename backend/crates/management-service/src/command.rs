@@ -16,6 +16,7 @@ pub enum Command<'a> {
     IssueCredential {
         account: Uuid,
         key: NewCredential<'a>,
+        current_password: filegate_core::SecretString,
     },
     RevokeCredential(Uuid),
     RevokeOwnSession(Uuid),

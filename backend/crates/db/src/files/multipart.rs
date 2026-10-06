@@ -107,9 +107,9 @@ pub async fn claim_relay_part(
     }
     let renewed = sqlx::query(
         "UPDATE leases SET expires_at = GREATEST( \
-             expires_at, now() + $3 * interval '1 second') \
+             expires_at, grove_time.transaction_now() + $3 * interval '1 second') \
          WHERE id = $1 AND file_id = $2 AND kind = 'write' \
-         AND state = 'issued' AND expires_at > now() \
+         AND state = 'issued' AND expires_at > grove_time.transaction_now() \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $2) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $2)",
     )
@@ -155,7 +155,7 @@ pub async fn renew_relay_part_lease(
         return Ok(false);
     }
     let renewed = sqlx::query(
-        "UPDATE leases le SET expires_at = now() + $4 * interval '1 second' \
+        "UPDATE leases le SET expires_at = grove_time.transaction_now() + $4 * interval '1 second' \
          FROM lease_parts lp \
          WHERE le.id = $2 AND le.file_id = $1 AND le.kind = 'write' \
          AND le.state = 'issued' AND lp.lease_id = le.id \
@@ -295,8 +295,8 @@ pub async fn extend_write_lease(
         return Ok(false);
     }
     let updated = sqlx::query(
-        "UPDATE leases SET expires_at = GREATEST(expires_at, now() + $2 * interval '1 second') \
-         WHERE id = $1 AND state = 'issued' AND expires_at > now() \
+        "UPDATE leases SET expires_at = GREATEST(expires_at, grove_time.transaction_now() + $2 * interval '1 second') \
+         WHERE id = $1 AND state = 'issued' AND expires_at > grove_time.transaction_now() \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
                          WHERE c.file_id = leases.file_id)",
     )

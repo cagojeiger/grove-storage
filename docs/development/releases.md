@@ -124,9 +124,10 @@ flowchart LR
     Version["버전 파일·lock 갱신"] --> Main["main push"]
     Main --> CI["CI 성공"]
     CI --> Resolve["동일 SHA·현재 main·미발행 태그 확인"]
-    Resolve --> Image["서버 이미지 2종"]
+    Resolve --> Image["서버 이미지 1종 / amd64·arm64"]
     Resolve --> CLI["CLI 4종 build·version·설치 검증"]
-    Image --> Publish["main 재확인 → 이미지 태그·GitHub Release"]
+    Image --> Gate["smoke·Trivy·SBOM·서명된 출처 검증"]
+    Gate --> Publish["main 재확인 → 이미지 태그·GitHub Release"]
     CLI --> Publish
     Publish --> Ops["운영 배포는 별도 GitOps 변경"]
 ```
@@ -135,6 +136,11 @@ flowchart LR
 2. `python3 deploy/ci/check-version.py`와 CI를 통과한다.
 3. Release는 Grove 저장소에서 CI가 성공한 main push의 SHA를 checkout한다. 기존 태그는 보존한다.
 4. 네 플랫폼 바이너리·SHA-256, `gscli-manifest.json`, `gscli-installer.sh`를 발행한다.
+
+이미지는 [보안 정책](image-security.md)의 후보 검사·증명·검증을 모두 통과해야
+버전 태그와 `latest`로 승격한다. 서버 이미지는 한 종류이며 CPU 아키텍처만
+amd64/arm64로 나눈다. 전용 Helm 차트 없이 기존 `quick-deploy`를 사용한다.
+이미 발행된 `0.4.1`에 새 보안 증명이나 Rust inventory가 소급 추가되지는 않는다.
 
 버전 형식은 정수 3자리 SemVer다. 기능 추가는 minor, 호환되는 수정은 patch,
 계약을 깨는 변경은 별도 호환성 검토와 릴리스 노트를 동반한다.

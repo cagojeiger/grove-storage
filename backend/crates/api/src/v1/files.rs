@@ -1,9 +1,5 @@
-//! 업로드 루프: create(발급) → 전송 주체의 직접 PUT → commit(사후 검증).
-//!
-//! spec 00의 계약 그대로다: 바이트는 filegate를 지나지 않고(공리 2),
-//! capacity는 집행하지 않는 관찰의 비교선이라 create가 용량으로 거부하지
-//! 않으며, 직결 PUT은 크기를 앞단에서 막지 못하므로 commit이 사후 검증
-//! 게이트다. 용량은 운영자의 세계다 — 클라이언트에 노출하지 않는다 (공리 1).
+//! Native 파일 발급·확정·조회. capacity는 집행하지 않는 관찰값이다.
+//! 직결 업로드는 commit에서, 중계 업로드는 전송 중 크기·해시를 검증한다.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -24,7 +20,7 @@ use crate::storage_access::backend_from_row;
 use filegate_infra::backend::StorageBackend;
 use grove_object_policy::validation::{classify_upload, content_type_ok, declared_md5_format_ok};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, schemars::JsonSchema)]
 pub(super) struct CreateBody {
     declared_size: i64,
     content_type: Option<String>,
@@ -33,7 +29,7 @@ pub(super) struct CreateBody {
     declared_md5: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct CreateOut {
     file_id: Uuid,
     /// 만료가 있는 PUT URL. URL 구조는 계약이 아니다 (spec 00).
@@ -46,13 +42,13 @@ struct CreateOut {
 
 /// multipart 서술자 (spec 02) — 서비스는 이대로 자르고, 구조에 의존하지
 /// 않는다. part 접근은 POST /v1/files/{id}/parts로 받는다.
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct MultipartOut {
     part_size: i64,
     part_count: i32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct CommitOut {
     file_id: Uuid,
     state: &'static str,
@@ -64,7 +60,6 @@ pub(super) async fn create(
     Extension(client): Extension<ClientId>,
     Json(body): Json<CreateBody>,
 ) -> Result<Response, ApiError> {
-    // 크기·모드·md5-무효 규칙은 순수 계약이다 (validation) — is_multipart 반환.
     let multipart = classify_upload(
         body.declared_size,
         state.multipart_threshold,
@@ -233,13 +228,13 @@ pub(super) async fn committed_or_conflict(
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, schemars::JsonSchema)]
 pub(super) struct ReadBody {
     /// 다운로드 표현 — 파일명 (RFC 5987로 인코딩되어 서명에 실린다, ADR 003).
     filename: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct ReadOut {
     file_id: Uuid,
     /// 만료가 있는 GET URL. 서비스가 302 redirect한다 (spec 00).
@@ -312,7 +307,7 @@ pub(super) async fn read(
     Ok(Json(ReadOut { file_id, get_url }).into_response())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct StatOut {
     file_id: Uuid,
     state: String,
@@ -359,10 +354,22 @@ pub(super) async fn delete(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct DeleteOut {
     file_id: Uuid,
     state: &'static str,
+}
+
+pub(super) fn schemas() -> [(&'static str, schemars::Schema); 7] {
+    [
+        ("CreateBody", schemars::schema_for!(CreateBody)),
+        ("CreateOut", schemars::schema_for!(CreateOut)),
+        ("CommitOut", schemars::schema_for!(CommitOut)),
+        ("ReadBody", schemars::schema_for!(ReadBody)),
+        ("ReadOut", schemars::schema_for!(ReadOut)),
+        ("StatOut", schemars::schema_for!(StatOut)),
+        ("DeleteOut", schemars::schema_for!(DeleteOut)),
+    ]
 }
 
 /// 클라이언트 delete는 200 + 상태 본문이다 — 운영자·S3 표면의 204와

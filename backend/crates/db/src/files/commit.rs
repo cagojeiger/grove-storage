@@ -16,7 +16,7 @@ pub async fn finalize_commit(
     let mut tx = pool.begin().await?;
 
     let transitioned = sqlx::query(
-        "UPDATE files SET state = 'active', etag = $2, committed_at = now() \
+        "UPDATE files SET state = 'active', etag = $2, committed_at = grove_time.transaction_now() \
          WHERE id = $1 AND state = 'pending' \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $1) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $1)",
@@ -54,7 +54,7 @@ pub async fn finalize_multipart_commit(
     let mut tx = pool.begin().await?;
 
     let transitioned = sqlx::query(
-        "UPDATE files SET state = 'active', declared_size = $2, etag = $3, committed_at = now() \
+        "UPDATE files SET state = 'active', declared_size = $2, etag = $3, committed_at = grove_time.transaction_now() \
          WHERE id = $1 AND state = 'pending' \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $1) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $1)",
@@ -103,7 +103,7 @@ pub async fn observed_commit_candidates(
          JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
          WHERE f.state = 'pending' AND f.part_size IS NULL \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads su WHERE su.file_id = f.id) \
-         AND le.state = 'issued' AND le.expires_at > now() \
+         AND le.state = 'issued' AND le.expires_at > grove_time.transaction_now() \
          LIMIT $1",
     )
     .bind(limit)

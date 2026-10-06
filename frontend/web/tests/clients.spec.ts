@@ -41,7 +41,7 @@ test("console exposes only S3 credentials and never requests Native keys", async
   const { calls } = await clientMock(page);
   await page.goto(root + "/notegate");
   await expect(
-    page.getByRole("heading", { name: "S3 Credentials" }),
+    page.getByRole("heading", { name: "S3 credentials" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Generate key|Register key/ }),
@@ -60,21 +60,19 @@ test("S3 issuance and revocation keep the secret out of lists and storage", asyn
   await page
     .getByRole("button", { name: "Create credential", exact: true })
     .click();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByLabel(/^Secret key\s*\*?$/)).toHaveValue(
     "one-time-provider-independent-secret",
   );
   await expect(
     page.getByRole("button", { name: "Done", exact: true }),
   ).toBeDisabled();
-  await page
-    .getByLabel("I have saved these keys. Secrets are shown only once.")
-    .check();
+  await page.getByLabel("I have saved this credential.").check();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page
     .getByRole("button", { name: `Revoke ${s3Id}`, exact: true })
     .click();
-  await page.getByLabel("Client ID to confirm").fill("notegate");
+  await page.getByLabel("Confirmation").fill(s3Id);
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(calls).toContainEqual({

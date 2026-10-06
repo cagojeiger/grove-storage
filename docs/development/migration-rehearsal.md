@@ -5,7 +5,7 @@
 | Item | Contract |
 |---|---|
 | Source | FileGate `v0.4.1`, commit `af685807e5561885616e00918f0207e25188fb3a`, migrations `0001..0006` |
-| Target | Current Grove binary and its embedded migrations |
+| Target | Current Grove binary; all embedded migration versions/checksums must match current SQL sources |
 | Services | Owned PostgreSQL 17 and MinIO containers, loopback only |
 | Data | Fixtures created through the released FileGate HTTP APIs |
 | Backup | Private temporary custom-format `pg_dump`; `pg_restore` into a new DB |
@@ -29,15 +29,31 @@ FileGate v0.4.1
        v
 Grove local account init -> migrate + first password Admin
   -> compare legacy resource rows, encrypted keys, locations, leases, upload IDs
+  -> check all target migration checksums and Account/Session schema
   -> start Grove -> old keys/URLs read old bytes + password Admin login
   -> stop Grove -> assert external S3 objects and multipart parts unchanged
        |
        v
 Old binary against upgraded DB -> migration rejection
-Backup -> fresh rollback DB -> exact legacy rows and migration checksums
-  -> start FileGate -> read old files -> resume pending uploads -> verify bytes
-  -> remove fixture services, temporary dump and logs
+  |
+  +-- Run 1: backup -> fresh rollback DB -> exact legacy rows/checksums
+  |     -> FileGate -> read old files -> resume pending uploads -> verify bytes
+  |
+  +-- Run 2: independently repeat seed/backup/upgrade on new PG + MinIO
+        -> Grove -> finish old pending Native/S3 uploads -> verify bytes
+
+Each run removes its fixture services, temporary dump and server logs.
 ```
+
+The forward-recovery run uses separate provider objects and databases. Completing
+uploads changes S3, so it must not reuse the frozen rollback fixture. Old Native
+upload URLs, service keys, S3 credentials, multipart upload IDs and part ETags are
+used without reissuance. Previously issued S3 download URLs remain readable.
+
+The fixture explicitly enables `FILEGATE_LEGACY_ADMIN_ENABLED` with a test-only
+operator token to compare old registration API reads. This is not the production
+default; password Account login is verified independently. Public S3 requests do
+not acquire a management Account dependency.
 
 ## Run
 
@@ -57,8 +73,23 @@ python3 -B -u scripts/e2e-migration.py --filegate-dir /path/to/pinned-filegate
 
 CI job: `Offline FileGate migration rehearsal`. The Python entry point owns all
 servers and containers it stops; the legacy checkout is read-only during the run.
+The entry point executes both runs and reports the legacy revision and both binary
+SHA-256 hashes. These identify local build artifacts, not a published image.
 Password login is an API assertion here. Actual browser HTTPS/cookie behavior is
 covered by the separate `Console real HTTPS API contract` job step.
+
+## Local Evidence
+
+On 2026-10-05 both runs passed using freshly built locked FileGate and Grove
+binaries, isolated PostgreSQL 17 and pinned MinIO. All 24 target migrations
+matched their source checksums, obsolete Master/Root authentication tables and
+columns were absent, and Session ownership was a non-null `account_id`.
+The 27 Python script tests also passed, including rejection of a stale target,
+failed/checksum-mismatched migrations and obsolete authentication schema.
+
+This evidence is from a dirty Grove development checkout. It must be repeated
+from the eventual clean release candidate; it is not immutable release or live
+cluster evidence.
 
 ## Production Gate
 

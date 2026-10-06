@@ -53,7 +53,7 @@ pub async fn issue(
         }
         IssueMode::Create if exists => "credential.create",
         IssueMode::Recover if exists => {
-            sqlx::query("UPDATE admin_credentials SET revoked_at = now() WHERE revoked_at IS NULL")
+            sqlx::query("UPDATE admin_credentials SET revoked_at = grove_time.transaction_now() WHERE revoked_at IS NULL")
                 .execute(&mut *tx)
                 .await?;
             sqlx::query("DELETE FROM admin_sessions")
@@ -65,7 +65,7 @@ pub async fn issue(
     };
     let credential = sqlx::query_as::<_, Credential>(
         "INSERT INTO admin_credentials(id, principal_id, label, token_hash, expires_at)
-         VALUES($1, 1, $2, $3, now() + interval '90 days')
+         VALUES($1, 1, $2, $3, grove_time.transaction_now() + interval '90 days')
          RETURNING id, label, expires_at, revoked_at",
     )
     .bind(Uuid::new_v4())
@@ -96,7 +96,7 @@ pub async fn list(pool: &PgPool) -> Result<Vec<Credential>, sqlx::Error> {
 pub async fn revoke(pool: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {
     let mut tx = lock(pool).await?;
     let changed = sqlx::query(
-        "UPDATE admin_credentials SET revoked_at = COALESCE(revoked_at, now()) WHERE id = $1",
+        "UPDATE admin_credentials SET revoked_at = COALESCE(revoked_at, grove_time.transaction_now()) WHERE id = $1",
     )
     .bind(id)
     .execute(&mut *tx)
@@ -123,7 +123,7 @@ pub async fn revoke(pool: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {
 pub async fn authenticate(pool: &PgPool, hash: &str) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar(
         "SELECT id FROM admin_credentials WHERE token_hash = $1
-                        AND revoked_at IS NULL AND expires_at > now()",
+                        AND revoked_at IS NULL AND expires_at > grove_time.transaction_now()",
     )
     .bind(hash)
     .fetch_optional(pool)
@@ -132,9 +132,9 @@ pub async fn authenticate(pool: &PgPool, hash: &str) -> Result<Option<Uuid>, sql
 
 pub async fn login_allowed(pool: &PgPool) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar("UPDATE admin_login_budget SET
-        attempts = CASE WHEN window_start <= now() - interval '1 minute' THEN 1 ELSE attempts + 1 END,
-        window_start = CASE WHEN window_start <= now() - interval '1 minute' THEN now() ELSE window_start END
-        WHERE id = 1 AND (attempts < 60 OR window_start <= now() - interval '1 minute')
+        attempts = CASE WHEN window_start <= grove_time.transaction_now() - interval '1 minute' THEN 1 ELSE attempts + 1 END,
+        window_start = CASE WHEN window_start <= grove_time.transaction_now() - interval '1 minute' THEN grove_time.transaction_now() ELSE window_start END
+        WHERE id = 1 AND (attempts < 60 OR window_start <= grove_time.transaction_now() - interval '1 minute')
         RETURNING true")
         .fetch_optional(pool).await.map(|v| v.unwrap_or(false))
 }
@@ -146,11 +146,11 @@ pub async fn create_session(
     session_hash: &str,
 ) -> Result<Option<(Uuid, DateTime<Utc>)>, sqlx::Error> {
     let mut tx = lock(pool).await?;
-    sqlx::query("DELETE FROM admin_sessions WHERE expires_at <= now()")
+    sqlx::query("DELETE FROM admin_sessions WHERE expires_at <= grove_time.transaction_now()")
         .execute(&mut *tx)
         .await?;
     let credential: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM admin_credentials WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()")
+        "SELECT id FROM admin_credentials WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > grove_time.transaction_now()")
         .bind(token_hash).fetch_optional(&mut *tx).await?;
     let Some(id) = credential else {
         return Ok(None);
@@ -165,7 +165,7 @@ pub async fn create_session(
     .execute(&mut *tx)
     .await?;
     let result = sqlx::query_as("INSERT INTO admin_sessions(session_hash, credential_id, expires_at)
-        SELECT $1, id, LEAST(expires_at, now() + interval '8 hours') FROM admin_credentials WHERE id = $2
+        SELECT $1, id, LEAST(expires_at, grove_time.transaction_now() + interval '8 hours') FROM admin_credentials WHERE id = $2
         RETURNING credential_id, expires_at")
         .bind(session_hash).bind(id).fetch_one(&mut *tx).await?;
     sqlx::query(
@@ -181,7 +181,7 @@ pub async fn create_session(
 
 pub async fn session_actor(pool: &PgPool, hash: &str) -> Result<Option<Uuid>, sqlx::Error> {
     sqlx::query_scalar("SELECT c.id FROM admin_sessions s JOIN admin_credentials c ON c.id = s.credential_id
-        WHERE s.session_hash = $1 AND s.expires_at > now() AND c.expires_at > now() AND c.revoked_at IS NULL")
+        WHERE s.session_hash = $1 AND s.expires_at > grove_time.transaction_now() AND c.expires_at > grove_time.transaction_now() AND c.revoked_at IS NULL")
         .bind(hash).fetch_optional(pool).await
 }
 

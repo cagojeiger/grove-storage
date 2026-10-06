@@ -1,16 +1,4 @@
 //! HTTP 표면 — 경로 배선과 공통 레이어만 안다.
-//!
-//! 경로 구조 — 제어는 /api 밑에 표면별 버전, 바이트는 /blobs(버전 밖),
-//! 프로브는 k8s 관례 이름:
-//!   /                  서비스 정보
-//!   /healthz           liveness (무의존)
-//!   /readyz            readiness (DB 체크)
-//!   /api/v1/*          클라이언트 API (클라이언트 키 — v1 모듈)
-//!   /api/admin/v1/*    운영자 API (관리자 토큰 또는 콘솔 세션)
-//!   /api/admin/commands/v1  공통 자원 명령 (User Bearer)
-//!   /api/admin/console-commands/v1  공통 자원 명령 (User 세션 + CSRF)
-//!   /api/admin/mcp      같은 자원 명령의 stateless MCP (User Bearer)
-//!   /blobs/*           중계 바이트 엔드포인트 (lease secret — blobs 모듈)
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,13 +7,16 @@ use axum::extract::{MatchedPath, Request, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::{Json, Router, middleware};
+use axum::{Json, Router};
 use filegate_db::PgPool;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{Span, info, info_span};
+
+mod management;
+mod objects;
 
 /// 컨트롤 API 요청 본문 상한. 바이트는 이 표면을 지나지 않는다 (공리 2).
 const CONTROL_BODY_LIMIT: usize = 1024 * 1024;
@@ -38,6 +29,7 @@ pub(crate) const RESERVED_TOP_LEVEL: &[&str] = filegate_db::registry::RESERVED_C
 
 #[derive(Clone)]
 pub struct AppState {
+    pub clock: Arc<dyn filegate_core::time::Clock>,
     pub pool: PgPool,
     pub security: filegate_core::SecurityConfig,
     pub crypto: Arc<filegate_core::Crypto>,
@@ -58,8 +50,6 @@ pub struct AppState {
     pub spool_slots: Arc<tokio::sync::Semaphore>,
 }
 
-/// `Authorization: Bearer <token>`에서 토큰을 꺼낸다 — 두 인증 미들웨어
-/// (운영자·클라이언트)가 같은 형식을 읽는다.
 pub(crate) fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
     headers
         .get(axum::http::header::AUTHORIZATION)
@@ -78,18 +68,8 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     let control = Router::new()
         .route("/", get(root))
         .merge(system_routes())
-        .nest("/api/admin/v1", admin_guarded(state.clone()))
-        .route("/api/admin/mcp", axum::routing::any(crate::mcp::handle))
-        .route(
-            "/api/admin/commands/v1",
-            axum::routing::post(crate::resource_commands::execute),
-        )
-        .merge(crate::console_identity::resources::routes(state.clone()))
-        .nest(
-            "/api/admin/identity/v1",
-            crate::console_identity::routes(state.clone()),
-        )
-        .nest("/api/v1", v1_guarded(state.clone()))
+        .merge(management::routes(state.clone()))
+        .merge(objects::control(state.clone()))
         .layer(RequestBodyLimitLayer::new(CONTROL_BODY_LIMIT))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
@@ -101,8 +81,7 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     // (admin::clients가 client id로 거부한다).
     let app = Router::new()
         .merge(control)
-        .nest("/blobs", crate::blobs::routes(s3_cors_allowed_origins))
-        .merge(crate::s3::routes(s3_cors_allowed_origins))
+        .merge(objects::streaming(s3_cors_allowed_origins))
         .with_state(state);
     with_telemetry(app)
 }
@@ -121,7 +100,6 @@ fn with_telemetry(router: Router) -> Router {
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }
 
-/// 시스템 표면: 프로브. 인증 밖에 둔다.
 fn system_routes() -> Router<AppState> {
     Router::new()
         .route("/healthz", get(health))
@@ -132,25 +110,6 @@ fn system_routes() -> Router<AppState> {
 /// 위 system_routes 등록 목록과 같아야 한다.
 pub(crate) fn is_system_path(path: &str) -> bool {
     matches!(path, "/healthz" | "/readyz")
-}
-
-/// 클라이언트 API — 전 경로가 클라이언트 키 미들웨어 뒤에 있다 (spec 00).
-fn v1_guarded(state: AppState) -> Router<AppState> {
-    crate::v1::v1_routes().route_layer(middleware::from_fn_with_state(
-        state,
-        crate::v1::require_client,
-    ))
-}
-
-/// 리소스 경로는 관리자 인증을 적용하고, 세션 경로는 자체 인증을 사용한다.
-/// route_layer로 매치되지 않은 경로는 인증 없이 404를 반환한다.
-fn admin_guarded(state: AppState) -> Router<AppState> {
-    crate::admin::admin_routes()
-        .route_layer(middleware::from_fn_with_state(
-            state,
-            crate::admin_auth::require_operator,
-        ))
-        .merge(crate::admin_auth::routes())
 }
 
 async fn root() -> impl IntoResponse {

@@ -10,45 +10,53 @@ for (const mode of ["light", "dark"]) {
       await storageMock(page);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${root}/home-archive`);
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       const settings = page.getByRole("region", { name: "Storage settings" });
-      const usage = page.getByRole("region", { name: "Storage usage" });
-      const properties = settings.getByRole("list", {
-        name: "Storage properties",
-      });
-      await expect(properties.getByRole("listitem")).toHaveCount(9);
-      for (const label of [
-        properties.getByText("Type", { exact: true }),
-        usage.getByText("Stored data", { exact: true }),
-      ]) {
+      const usage = page.getByRole("region", { name: "Usage", exact: true });
+      const properties = settings.locator("dl").first();
+      await expect(properties.locator("dd")).toHaveCount(9);
+      for (const label of [properties.getByText("Type", { exact: true })]) {
         await expect(label).toHaveCSS("font-family", /^-apple-system,/);
         await expect(label).toHaveCSS("font-size", "14px");
       }
       await expect(properties.getByText("S3", { exact: true })).toHaveCSS(
         "font-size",
-        "16px",
+        "14px",
+      );
+      await expect(usage.getByRole("heading", { level: 2 })).toHaveCSS(
+        "font-size",
+        "18px",
+      );
+      await page.screenshot({
+        path: `test-results/storage-mui-config-${width}-${mode}.png`,
+        fullPage: true,
+      });
+      await expect(usage.getByText("Stored data", { exact: true })).toHaveCSS(
+        "font-size",
+        "14px",
+      );
+      await expect(usage.getByText("Stored data", { exact: true })).toHaveCSS(
+        "font-family",
+        /^-apple-system,/,
       );
       await expect(usage.getByText("0 B", { exact: true }).first()).toHaveCSS(
         "font-size",
-        "24px",
-      );
-      await expect(settings.getByRole("heading", { level: 2 })).toHaveCSS(
-        "font-size",
-        "20px",
+        "14px",
       );
       await expect(
-        settings.getByLabel("Saved metadata", { exact: true }),
-      ).toHaveCSS("font-family", /monospace/);
+        page.getByLabel("Saved metadata", { exact: true }),
+      ).toHaveCSS("font-family", /^-apple-system,/);
       await expect(
-        settings.getByLabel("Saved metadata", { exact: true }),
-      ).toHaveText("{}");
+        page.getByLabel("Saved metadata", { exact: true }),
+      ).toHaveText("No metadata.");
       expect(
-        await settings
+        await page
           .getByRole("region", { name: "Metadata", exact: true })
           .evaluate((el) =>
             Boolean(
               el.compareDocumentPosition(
-                document.querySelector('[aria-label="Storage usage"]')!,
+                document.querySelector('[aria-label="Usage"]')!,
               ) & Node.DOCUMENT_POSITION_FOLLOWING,
             ),
           ),
@@ -85,7 +93,8 @@ for (const mode of ["light", "dark"]) {
     await maintenanceMock(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/api/admin/console/#activity");
-    await page.getByLabel("Theme").selectOption(mode);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
     for (const tab of await page.getByRole("tab").all()) {
       await expect(tab).toHaveCSS("font-family", /^-apple-system,/);
       await expect(tab).toHaveCSS("font-size", "14px");

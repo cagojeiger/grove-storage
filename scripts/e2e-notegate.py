@@ -3,14 +3,11 @@
 
 import argparse
 import hashlib
-import json
 import os
 from pathlib import Path
 import re
 import runpy
 import subprocess
-import time
-import urllib.error
 import urllib.request
 
 from s3_backend_fixture import docker, minio_backend
@@ -19,31 +16,14 @@ from s3_backend_fixture import docker, minio_backend
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
-def check(endpoint, directory, database, backend, notegate):
+def check(endpoint, directory, database, account, backend, notegate):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def admin(method, path, body=None):
-        request = urllib.request.Request(endpoint + path, method=method,
-            data=None if body is None else json.dumps(body).encode(),
-            headers={"Authorization": "Bearer " + HARNESS["TOKEN"],
-                     "Content-Type": "application/json"})
-        with opener.open(request, timeout=5) as response:
-            return json.load(response)
-
-    deadline = time.monotonic() + 20
-    while True:
-        try:
-            if admin("GET", "/readyz") == {"status": "ready"}:
-                break
-        except (OSError, urllib.error.URLError):
-            pass
-        if time.monotonic() >= deadline:
-            raise RuntimeError("Grove readiness timeout")
-        time.sleep(0.1)
-
-    admin("POST", "/api/admin/v1/storages", {"id": "notegate-backend", **backend.spec})
-    admin("POST", "/api/admin/v1/clients", {"id": "notegate-contract", "storage_id": "notegate-backend"})
-    credential = admin("POST", "/api/admin/v1/clients/notegate-contract/s3-credentials", {})
+    from cli_management_fixture import Management
+    management = Management(endpoint, account)
+    management.command("storage.create", {"id": "notegate-backend", "spec": backend.spec})
+    management.command("client.create", {"id": "notegate-contract", "storage_id": "notegate-backend"})
+    credential = management.command("credential.create", {"client_id": "notegate-contract"})
     preflight = urllib.request.Request(endpoint + "/notegate-contract/cors-probe", method="OPTIONS",
         headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "PUT",
                  "Access-Control-Request-Headers": "content-type,if-none-match"})
@@ -93,6 +73,6 @@ if __name__ == "__main__":
     if not (notegate / "backend/crates/api/src/rest/file_upload_tests.rs").is_file():
         parser.error("--notegate-dir must contain NoteGate's file upload contract suite")
     with minio_backend() as backend:
-        HARNESS["main"](lambda endpoint, directory, database:
-            check(endpoint, directory, database, backend, notegate), with_database=True,
+        HARNESS["main"](lambda endpoint, directory, database, account:
+            check(endpoint, directory, database, account, backend, notegate), with_database=True,
             s3_cors_origins=("http://localhost:5173",))

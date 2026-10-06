@@ -83,7 +83,7 @@ test("creation opens the returned account even outside the loaded page", async (
   await page.getByLabel(/^Display name\s*\*?$/).fill("New account");
   await page.getByLabel(/^Username\s*\*?$/).fill("new.account");
   await page
-    .getByLabel("Your current password")
+    .getByLabel("Administrator password")
     .fill("a private admin password");
   await page
     .getByRole("dialog")
@@ -106,8 +106,9 @@ test("missing accounts show a route back and mismatched responses show no tokens
 }) => {
   await accessMock(page);
   await page.goto(`${base}/00000000-0000-0000-0000-000000000000`);
-  await expect(page.getByRole("alert")).toContainText("Account unavailable");
-  await page.getByRole("link", { name: "Back to accounts" }).click();
+  await expect(page.getByRole("alert")).toContainText("The request could not be completed.");
+  await expect(page.getByRole("button", { name: "Issue token", exact: true })).toHaveCount(0);
+  await page.getByRole("main").getByRole("link", { name: "Accounts", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Create account", exact: true }),
   ).toBeVisible();

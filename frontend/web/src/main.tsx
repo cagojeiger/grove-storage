@@ -5,17 +5,24 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { App } from "./app/App";
-import { ConsoleTheme } from "./design/ConsoleTheme";
+import { App } from "./console/App";
+import { Theme } from "./console/Theme";
+import { ErrorBoundary } from "./console/ErrorBoundary";
 import { ApiError } from "./api/http";
 import { clearSession } from "./auth/session";
-import "./design/theme.css";
 
 const client = new QueryClient({
   queryCache: new QueryCache({
-    onError: (error) => {
+    onError: (error, query) => {
       if (error instanceof ApiError && error.status === 401) {
         clearSession(client);
+      }
+      if (
+        error instanceof ApiError &&
+        error.status === 403 &&
+        query.queryKey[0] !== "session"
+      ) {
+        void client.invalidateQueries({ queryKey: ["session"] });
       }
     },
   }),
@@ -24,7 +31,11 @@ const client = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
-      <ConsoleTheme><App /></ConsoleTheme>
+      <Theme>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </Theme>
     </QueryClientProvider>
   </React.StrictMode>,
 );

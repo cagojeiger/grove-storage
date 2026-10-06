@@ -92,16 +92,20 @@ pub(crate) async fn reauthenticate(
     session_hash: &str,
     current_password: SecretString,
 ) -> Result<db::Identity, Error> {
-    if !db::telemetry::login_allowed(pool)
-        .await
-        .map_err(Error::from)?
-    {
-        return Err(Error::RateLimited);
-    }
     let actor = db::session_actor(pool, session_hash)
         .await
         .map_err(Error::from)?
         .ok_or(Error::Unauthenticated)?;
+    if !db::admission::account_allowed(
+        pool,
+        actor.account_id,
+        db::admission::Purpose::Reauthentication,
+    )
+    .await
+    .map_err(Error::from)?
+    {
+        return Err(Error::RateLimited);
+    }
     let credential = db::passwords::find_by_account(pool, actor.account_id)
         .await
         .map_err(Error::from)?

@@ -6,7 +6,7 @@ import { expect } from "@playwright/test";
 export async function clientChecks(page, { database }) {
   const id = "console-ui-client";
   await page
-    .getByRole("navigation")
+    .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Clients", exact: true })
     .click();
   await page
@@ -24,14 +24,14 @@ export async function clientChecks(page, { database }) {
   await expect(page.getByRole("button", { name: /Generate key|Register key/ })).toHaveCount(0);
   async function saved() {
     await page
-      .getByLabel("I have saved these keys. Secrets are shown only once.")
+      .getByLabel("I have saved this credential.")
       .check();
     await page.getByRole("button", { name: "Done", exact: true }).click();
   }
   const fileId = randomUUID();
 
   await page.getByRole("button", { name: "Create credential", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByLabel(/^Secret key\s*\*?$/)).toBeVisible();
   const s3 = await page
     .getByLabel(/^Access key ID\s*\*?$/)
@@ -53,7 +53,7 @@ export async function clientChecks(page, { database }) {
     await page
       .getByRole("button", { name: `Revoke ${key}`, exact: true })
       .click();
-    await page.getByLabel("Client ID to confirm").fill(id);
+    await page.getByLabel("Confirmation").fill(key);
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(

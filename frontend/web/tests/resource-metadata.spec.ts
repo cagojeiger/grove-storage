@@ -66,24 +66,6 @@ for (const resource of ["storage", "client"] as const) {
     await expect(
       page.getByRole("heading", { name: "Metadata", exact: true }),
     ).toHaveCount(1);
-    if (resource === "storage") {
-      await expect(
-        page
-          .getByRole("region", { name: "Storage settings" })
-          .getByRole("region", { name: "Metadata", exact: true }),
-      ).toHaveCount(1);
-    } else {
-      const metadataBeforeKeys = await page
-        .getByRole("region", { name: "Metadata", exact: true })
-        .evaluate((element) =>
-          Boolean(
-            element.compareDocumentPosition(
-              document.querySelector('[aria-label="S3 credentials"]')!,
-            ) & Node.DOCUMENT_POSITION_FOLLOWING,
-          ),
-        );
-      expect(metadataBeforeKeys).toBe(true);
-    }
     await page
       .getByRole("button", { name: "Edit metadata", exact: true })
       .click();
@@ -123,7 +105,7 @@ for (const resource of ["storage", "client"] as const) {
     await page.getByLabel("Metadata JSON").fill("{}");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByLabel("Saved metadata", { exact: true })).toHaveText(
-      "{}",
+      "No metadata.",
     );
   });
 }
@@ -132,7 +114,7 @@ test("reader can view metadata without edit controls", async ({ page }) => {
   await clientMock(page, "reader");
   await page.goto("/api/admin/console/#clients/notegate");
   await expect(page.getByLabel("Saved metadata", { exact: true })).toHaveText(
-    "{}",
+    "No metadata.",
   );
   await expect(page.getByRole("button", { name: "Edit metadata" })).toHaveCount(
     0,
@@ -171,12 +153,18 @@ test("unknown write stops resubmission and close re-reads metadata", async ({
     page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Close and review" }).click();
-  const edit = page.getByRole("button", { name: "Edit metadata", exact: true });
-  await expect(edit).toBeFocused();
-  await expect(edit).toHaveAttribute("aria-disabled", "true");
+  const edit = page.getByRole("button", {
+    name: "Edit metadata",
+    exact: true,
+    includeHidden: true,
+  });
+  await expect(edit).toBeDisabled();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  expect(writes).toBe(1);
   finishReview();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(edit).toBeFocused();
   await expect(
     page.getByLabel("Saved metadata", { exact: true }),
   ).toContainText("applied");
@@ -192,7 +180,8 @@ for (const width of [390, 768, 1440]) {
     await clientMock(page);
     await page.goto("/api/admin/console/#clients/notegate");
     for (const theme of ["Light", "Dark"]) {
-      await page.getByLabel(/^Theme\s*\*?$/).selectOption({ label: theme });
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await page.getByRole("button", { name: "Edit metadata" }).click();
       await page
         .getByLabel("Metadata JSON")

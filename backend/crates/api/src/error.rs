@@ -1,6 +1,4 @@
 //! 핸들러 에러 → HTTP 응답 번역 (운영자 API와 클라이언트 API 공용).
-//! 핸들러는 `Result<_, ApiError>`를 돌려주고 `?`로 전파한다 —
-//! 상태 코드 규칙이 이 파일 한 곳에 산다.
 
 use axum::Json;
 use axum::http::StatusCode;
@@ -35,12 +33,10 @@ pub(crate) fn conflict(message: &str) -> ApiError {
     ApiError::Status(StatusCode::CONFLICT, message.to_owned())
 }
 
-/// 위 네 가지에 없는 상태 코드용 — 바이트 평면의 411/408/413 등.
 pub(crate) fn status(code: StatusCode, message: &str) -> ApiError {
     ApiError::Status(code, message.to_owned())
 }
 
-/// 내부 실패 — 상세는 로그로, 응답은 일반 문구 (IntoResponse에서).
 pub(crate) fn internal(detail: impl std::fmt::Display) -> ApiError {
     ApiError::Internal(filegate_core::Error::internal(detail))
 }

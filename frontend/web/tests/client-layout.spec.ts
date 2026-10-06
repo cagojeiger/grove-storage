@@ -7,7 +7,8 @@ for (const width of [320, 390, 768, 1024, 1440])
       await clientMock(page);
       await page.setViewportSize({ width, height: 960 });
       await page.goto(root);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await page.getByRole("link", { name: /notegate/ }).click();
       await expect(page.getByRole("region", { name: "S3 credentials" })).toBeVisible();
       expect(
@@ -20,7 +21,7 @@ for (const width of [320, 390, 768, 1024, 1440])
         fullPage: true,
       });
       await page.getByRole("button", { name: "Create credential" }).click();
-      await page.getByRole("button", { name: "Confirm", exact: true }).click();
+      await page.getByRole("dialog", { name: "Create S3 credential" }).getByRole("button", { name: "Create", exact: true }).click();
       await expect(
         page.getByLabel(/^Secret key\s*\*?$/),
       ).toBeVisible();

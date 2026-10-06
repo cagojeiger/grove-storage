@@ -7,7 +7,8 @@ for (const width of [320, 390, 768, 1440])
       await maintenanceMock(page);
       await page.setViewportSize({ width, height: 960 });
       await page.goto("/api/admin/console/#activity");
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(
         page.getByRole("button", { name: /storage.create/ }),
       ).toBeVisible();
@@ -21,8 +22,8 @@ for (const width of [320, 390, 768, 1440])
       ).toBe(true);
       await page.getByRole("button", { name: "Close", exact: true }).click();
       if (width < 900) await page.getByRole("button", { name: "Open navigation" }).click();
-      await page.locator('button[aria-label="Account menu"]').click();
-      await page.getByRole("menuitem", { name: "My account", exact: true }).click();
+      await page.getByRole("link", { name: "My account", exact: true }).click();
+      await page.getByRole("tab", { name: "Sessions", exact: true }).click();
       await expect(
         page.getByText("Current session", { exact: true }),
       ).toBeVisible();

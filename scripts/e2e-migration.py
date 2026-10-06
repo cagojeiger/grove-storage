@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline FileGate v0.4.1 -> Grove -> backup restore, using disposable services only."""
+"""Offline FileGate upgrade, backup restore, and forward upload recovery."""
 
 import argparse
 import hashlib
@@ -84,7 +84,7 @@ def vendor_snapshot(backend):
     return objects, uploads
 
 
-def verify_reads(fixture, data):
+def verify_reads(fixture, data, *, pending_state="pending"):
     assert fixture.request("GET", "/api/admin/v1/clients/consumer")["storage_id"] == "archive"
     path = f"/api/v1/files/{data['native']}"
     assert fixture.request("GET", path, token=NATIVE_KEY)["state"] == "active"
@@ -98,7 +98,7 @@ def verify_reads(fixture, data):
         assert body.read() == S3_BYTES
     with fixture.opener.open(data["old_url"], timeout=10) as response:
         assert response.read() == S3_BYTES
-    assert fixture.request("GET", f"/api/v1/files/{data['pending']['file_id']}", token=NATIVE_KEY)["state"] == "pending"
+    assert fixture.request("GET", f"/api/v1/files/{data['pending']['file_id']}", token=NATIVE_KEY)["state"] == pending_state
 
 
 def initialize(fixture):
@@ -135,8 +135,43 @@ def preflight(fixture, directory):
     assert fixture.sql("SELECT count(*) FROM native_multipart_completions;") == "0", "native completion recovery must finish first"
 
 
-def run(directory):
+def verify_target_schema(fixture):
+    expected = [{
+        "version": int(source.name.split("_", 1)[0]),
+        "success": True,
+        "checksum": hashlib.sha384(source.read_bytes()).hexdigest(),
+    } for source in sorted((ROOT / "backend/crates/db/migrations").glob("*.sql"))]
+    actual = json.loads(fixture.sql("SELECT json_agg(t ORDER BY version) FROM "
+                                   "(SELECT version,success,encode(checksum,'hex') AS checksum FROM _sqlx_migrations) t;"))
+    assert actual == expected, "target binary/schema does not match current migration sources"
+    assert fixture.sql("SELECT count(*) FROM pg_tables WHERE schemaname='management' "
+                       "AND tablename IN ('master_configuration','root_sessions');") == "0"
+    assert fixture.sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='management' "
+                       "AND ((table_name='accounts' AND column_name='kind') OR "
+                       "(table_name='sessions' AND column_name IN ('user_id','master_generation')));") == "0"
+    assert fixture.sql("SELECT is_nullable FROM information_schema.columns WHERE table_schema='management' "
+                       "AND table_name='sessions' AND column_name='account_id';") == "NO"
+    print(f"PASS target schema and all {len(expected)} migration checksums match current sources")
+
+
+def resume_pending(fixture, data, backend):
+    put(fixture, data["pending"]["put_url"], PART)
+    fixture.request("POST", f"/api/v1/files/{data['pending']['file_id']}/commit", token=NATIVE_KEY)
+    read = fixture.request("POST", f"/api/v1/files/{data['pending']['file_id']}/read", {}, NATIVE_KEY)
+    with fixture.opener.open(read["get_url"], timeout=10) as response:
+        assert response.read() == PART
+    client = s3(fixture.endpoint, data["credential"])
+    client.complete_multipart_upload(Bucket="consumer", Key="pending/object", UploadId=data["upload"],
+        MultipartUpload={"Parts": [{"PartNumber": 1, "ETag": data["etag"]}]})
+    response = client.get_object(Bucket="consumer", Key="pending/object")
+    with response["Body"] as body:
+        assert body.read() == PART
+    assert not backend.vendor.list_multipart_uploads(Bucket=backend.spec["bucket"]).get("Uploads")
+
+
+def run(directory, *, finish_on_grove=False):
     legacy = legacy_binary(directory)
+    print(f"Grove binary SHA-256: {hashlib.sha256(SERVER.read_bytes()).hexdigest()}")
     with minio_backend() as backend, rehearsal() as fixture:
         with fixture.server(legacy):
             data = seed(fixture, backend)
@@ -152,6 +187,7 @@ def run(directory):
         print("PASS released FileGate schema/checksums, active objects, pending uploads and stopped-writer backup")
 
         account, password = initialize(fixture)
+        verify_target_schema(fixture)
         assert fixture.snapshot(resources, normalized=True) == expected, "upgrade changed legacy resource rows"
         assert fixture.sql("SELECT count(*) FROM storages WHERE metadata <> '{}'::jsonb;") == "0"
         assert fixture.sql("SELECT count(*) FROM clients WHERE metadata <> '{}'::jsonb;") == "0"
@@ -167,24 +203,21 @@ def run(directory):
         message = (incompatible.stdout + incompatible.stderr).lower()
         assert incompatible.returncode != 0 and "migration" in message and "missing" in message, \
             "old binary must reject the upgraded schema; image-only rollback is not supported"
+        if finish_on_grove:
+            # Separate seed/backup/provider from rollback: resumed writes change S3.
+            with fixture.server(SERVER):
+                verify_login(fixture, account, password)
+                resume_pending(fixture, data, backend)
+                verify_reads(fixture, data, pending_state="active")
+            print("PASS new Grove resumes FileGate Native/S3 pending uploads with old URLs, keys and upload IDs")
+            return
         fixture.restore(backup)
         assert fixture.snapshot(tables, database="rollback") == baseline, "restored rows or migration checksums differ"
         assert fixture.sql("SELECT count(*) FROM pg_namespace WHERE nspname='management';", "rollback") == "0"
         with fixture.server(legacy, database="rollback"):
             verify_reads(fixture, data)
             # Resume mutations only AFTER restoring and checking the quiescent snapshot.
-            put(fixture, data["pending"]["put_url"], PART)
-            fixture.request("POST", f"/api/v1/files/{data['pending']['file_id']}/commit", token=NATIVE_KEY)
-            read = fixture.request("POST", f"/api/v1/files/{data['pending']['file_id']}/read", {}, NATIVE_KEY)
-            with fixture.opener.open(read["get_url"], timeout=10) as response:
-                assert response.read() == PART
-            client = s3(fixture.endpoint, data["credential"])
-            client.complete_multipart_upload(Bucket="consumer", Key="pending/object", UploadId=data["upload"],
-                MultipartUpload={"Parts": [{"PartNumber": 1, "ETag": data["etag"]}]})
-            response = client.get_object(Bucket="consumer", Key="pending/object")
-            with response["Body"] as body:
-                assert body.read() == PART
-            assert not backend.vendor.list_multipart_uploads(Bucket=backend.spec["bucket"]).get("Uploads")
+            resume_pending(fixture, data, backend)
         print("PASS image-only rollback rejected; backup restored exact legacy rows/checksums; old server reads and resumes uploads")
 
 
@@ -193,3 +226,4 @@ if __name__ == "__main__":
     parser.add_argument("--filegate-dir", required=True, type=Path)
     args = parser.parse_args()
     run(args.filegate_dir.resolve())
+    run(args.filegate_dir.resolve(), finish_on_grove=True)

@@ -25,7 +25,7 @@ pub async fn mark_deleted(
     file_id: Uuid,
 ) -> Result<DeleteOutcome, sqlx::Error> {
     let transitioned = sqlx::query(
-        "UPDATE files SET state = 'deleted', deleted_at = now() \
+        "UPDATE files SET state = 'deleted', deleted_at = grove_time.transaction_now() \
          WHERE id = $1 AND client_id = $2 AND state = 'active'",
     )
     .bind(file_id)
@@ -79,7 +79,7 @@ pub async fn expired_pending(
          FROM files f \
          JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
          JOIN locations l ON l.file_id = f.id \
-         WHERE f.state = 'pending' AND le.state = 'issued' AND le.expires_at < now() \
+         WHERE f.state = 'pending' AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = f.id) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c WHERE c.file_id = f.id) \
          LIMIT $1",
@@ -130,7 +130,7 @@ pub async fn finalize_reclaim(
     let expired = sqlx::query(
         "UPDATE leases SET state = 'expired' \
          WHERE file_id = $1 AND kind = 'write' AND state = 'issued' \
-         AND expires_at < now()",
+         AND expires_at < grove_time.transaction_now()",
     )
     .bind(candidate.file_id)
     .execute(&mut *tx)
@@ -235,7 +235,7 @@ pub async fn expire_read_leases(pool: &PgPool, limit: i64) -> Result<u64, sqlx::
     let result = sqlx::query(
         "UPDATE leases SET state = 'expired' WHERE id IN ( \
          SELECT id FROM leases WHERE kind = 'read' AND state = 'issued' \
-         AND expires_at < now() LIMIT $1)",
+         AND expires_at < grove_time.transaction_now() LIMIT $1)",
     )
     .bind(limit)
     .execute(pool)
@@ -256,7 +256,7 @@ pub async fn prune_terminal_leases(
         "DELETE FROM leases WHERE id IN ( \
          SELECT le.id FROM leases le \
          WHERE le.state <> 'issued' \
-         AND le.created_at < now() - $1 * interval '1 second' \
+         AND le.created_at < grove_time.transaction_now() - $1 * interval '1 second' \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = le.file_id) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
                          WHERE c.file_id = le.file_id) \
@@ -285,7 +285,7 @@ pub async fn prune_terminal_files(
         "DELETE FROM files WHERE id IN ( \
          SELECT f.id FROM files f \
          WHERE f.state IN ('deleted', 'reclaimed') \
-         AND COALESCE(f.deleted_at, f.created_at) < now() - $1 * interval '1 second' \
+         AND COALESCE(f.deleted_at, f.created_at) < grove_time.transaction_now() - $1 * interval '1 second' \
          AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.file_id = f.id) \
          AND NOT EXISTS (SELECT 1 FROM leases le WHERE le.file_id = f.id) \
          LIMIT $2)",
@@ -307,7 +307,7 @@ pub async fn prune_history(
     let deleted = sqlx::query(
         "DELETE FROM lease_history WHERE ctid IN ( \
          SELECT ctid FROM lease_history \
-         WHERE at < now() - $1 * interval '1 second' \
+         WHERE at < grove_time.transaction_now() - $1 * interval '1 second' \
          LIMIT $2)",
     )
     .bind(retention_secs)

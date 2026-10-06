@@ -5,6 +5,42 @@ const root = "/api/admin/console/";
 const token = `gsps_${"b".repeat(64)}`;
 const issued = { account_id: otherUser.id, username: "writer", expires_at: "2099-01-01T00:00:00Z", token };
 
+test("Reader creation validates usernames and preserves non-secret fields on retry", async ({ page }) => {
+  await accessMock(page, [owner]);
+  const requests: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/identity/v1/accounts", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    requests.push(body);
+    await route.fulfill(requests.length === 1
+      ? { status: 401, json: { error: "unauthenticated" } }
+      : { status: 201, json: { ...issued, username: "reader.check" } });
+  });
+  await page.goto(`${root}#accounts`);
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create account" });
+  await dialog.getByLabel("Display name").fill("Reader test");
+  await dialog.getByLabel("Username").fill("reader@invalid");
+  await dialog.getByLabel("Administrator password").fill("wrong-password");
+  await dialog.getByRole("button", { name: "Create account", exact: true }).click();
+  expect(requests).toHaveLength(0);
+  await dialog.getByLabel("Username").fill("Reader.Check");
+  await dialog.getByRole("button", { name: "Create account", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Current password is incorrect");
+  await expect(dialog.getByLabel("Display name")).toHaveValue("Reader test");
+  await expect(dialog.getByLabel("Username")).toHaveValue("Reader.Check");
+  await expect(dialog.getByLabel("Role")).toHaveValue("reader");
+  await expect(dialog.getByLabel("Administrator password")).toHaveValue("");
+  await dialog.getByLabel("Administrator password").fill("private-admin-password");
+  await dialog.getByRole("button", { name: "Create account", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Save setup link" })).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual({
+    kind: "user_with_password_setup", display_name: "Reader test",
+    username: "reader.check", role: "reader", current_password: "private-admin-password",
+  });
+});
+
 test("Admin issues a one-time setup link without persisting its secret", async ({ page }) => {
   await accessMock(page, [owner, { ...otherUser, password_ready: false }]);
   let body: unknown;
@@ -36,7 +72,7 @@ for (const account of [
   test(`setup is unavailable for ${account.password_ready ? "initialized" : account.deleted_at ? "deleted" : "disabled"} accounts`, async ({ page }) => {
     const { writes } = await accessMock(page, account.id === owner.id ? [account] : [owner, account]);
     await page.goto(`${root}#accounts/${account.id}`);
-    await expect(page.getByRole("button", { name: "Issue setup link" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Issue setup link" })).toHaveCount(0);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(writes).toEqual([]);
   });
@@ -77,7 +113,8 @@ for (const width of [320, 1440]) {
       await page.route("**/api/admin/identity/v1/session", (route) => route.fulfill({ status: 401, json: {} }));
       await page.route("**/api/admin/identity/v1/password-setup/inspect", (route) => route.fulfill({ json: { username: "writer", expires_at: issued.expires_at } }));
       await page.goto(`${root}#set-password/${token}`);
-      await page.getByLabel("Theme").selectOption(theme);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(page.getByLabel("New password")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: `test-results/password-setup-${width}-${theme}.png`, fullPage: true });

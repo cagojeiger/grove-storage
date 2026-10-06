@@ -29,13 +29,15 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await page
     .getByRole("tab", { name: "Security events", exact: true })
     .click();
-  await expect(page.getByRole("table", { name: "Activity", exact: true }).locator("tbody tr").first()).toBeVisible();
+  await expect(page.getByRole("grid", { name: "Activity", exact: true }).getByRole("row").nth(1)).toBeVisible();
 
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const other = await context.newPage();
     await other.goto(`${origin}/api/admin/console/#settings`);
     await loginWithPassword(other, "owner", ownerPassword);
+    await other.getByRole("link", { name: "My account", exact: true }).click();
+    await other.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(
       other.getByRole("heading", { name: "My sessions", exact: true }),
     ).toBeVisible();
@@ -45,12 +47,12 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
           .session_id,
     );
     await page.goto(`${origin}/api/admin/console/#settings`);
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await page
       .getByRole("button", { name: `Revoke session ${otherId}`, exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Confirm revoke", exact: true })
-      .click();
+    await page.getByLabel("Confirmation").fill("REVOKE");
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     assert.equal(
       await other.evaluate(
@@ -67,11 +69,12 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     await page
       .getByRole("button", { name: "Revoke current session", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Confirm revoke", exact: true })
-      .click();
+    await page.getByLabel("Confirmation").fill("REVOKE");
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.getByLabel(/^Password\s*\*?$/)).toBeVisible();
     await loginWithPassword(page, "owner", ownerPassword);
+    await page.getByRole("link", { name: "My account", exact: true }).click();
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "My sessions", exact: true }),
     ).toBeVisible();

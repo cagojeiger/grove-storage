@@ -78,7 +78,7 @@ pub async fn issue_read_lease(
     let mut tx = pool.begin().await?;
     let lease_id: Uuid = sqlx::query_scalar(
         "INSERT INTO leases (file_id, kind, expires_at, secret_hash) \
-         VALUES ($1, 'read', now() + $2 * interval '1 second', $3) RETURNING id",
+         VALUES ($1, 'read', grove_time.transaction_now() + $2 * interval '1 second', $3) RETURNING id",
     )
     .bind(file_id)
     .bind(ttl_secs)
@@ -152,7 +152,7 @@ pub async fn byte_lease(
          LEFT JOIN locations l ON l.file_id = f.id \
          LEFT JOIN storages s ON s.id = l.storage_id \
          WHERE le.id = $1 AND le.secret_hash = $2 \
-         AND le.state = 'issued' AND le.expires_at > now() \
+         AND le.state = 'issued' AND le.expires_at > grove_time.transaction_now() \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
                          WHERE c.file_id = f.id)"
     ))

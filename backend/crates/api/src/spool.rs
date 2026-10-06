@@ -53,13 +53,9 @@ pub struct Measured {
 /// 호출자가 이중 abort해도 무해하다). 미달(written < declared) 검사는
 /// 호출자 몫이다 — 표면마다 에러 코드가 다르므로.
 pub enum SpoolError {
-    /// 청크 사이 유휴가 상한을 넘었다 (slow-loris).
     Idle,
-    /// 스트림이 도중에 끊겼다.
     Aborted,
-    /// 선언 크기를 넘겼다 — 도중에 끊는다.
     TooLarge,
-    /// 스풀 쓰기 실패.
     Io(std::io::Error),
 }
 
@@ -72,13 +68,32 @@ pub async fn spool_to_temp(
     declared_size: i64,
     want_s3_checksums: bool,
 ) -> Result<Measured, SpoolError> {
+    spool_to_temp_with_idle_timeout(
+        body,
+        writer,
+        temp_path,
+        declared_size,
+        want_s3_checksums,
+        STREAM_IDLE_TIMEOUT,
+    )
+    .await
+}
+
+async fn spool_to_temp_with_idle_timeout(
+    body: Body,
+    writer: &mut (impl tokio::io::AsyncWrite + Unpin),
+    temp_path: &Path,
+    declared_size: i64,
+    want_s3_checksums: bool,
+    idle_timeout: Duration,
+) -> Result<Measured, SpoolError> {
     let mut md5 = Md5::new();
     let mut sha256 = want_s3_checksums.then(Sha256::new);
     let mut crc32 = want_s3_checksums.then(crc32fast::Hasher::new);
     let mut written: i64 = 0;
     let mut stream = body.into_data_stream();
     loop {
-        let chunk = match tokio::time::timeout(STREAM_IDLE_TIMEOUT, stream.next()).await {
+        let chunk = match tokio::time::timeout(idle_timeout, stream.next()).await {
             Err(_) => {
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Idle);

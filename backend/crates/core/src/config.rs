@@ -5,6 +5,7 @@
 //! storage 시크릿도 env가 아니라 DB의 암호문 컬럼에 산다 (core::crypto).
 
 use std::net::SocketAddr;
+use std::num::NonZeroU16;
 
 use secrecy::{ExposeSecret, SecretString};
 
@@ -29,11 +30,11 @@ pub struct SecurityConfig {
     pub enc_key_id_prev: Option<String>,
     /// 관리자 초기화 전까지 사용하는 호환용 운영자 토큰 목록.
     pub operator_tokens: Vec<SecretString>,
+    /// Explicit compatibility mode for the old operator REST API and sessions.
+    pub legacy_admin_enabled: bool,
 }
 
 impl SecurityConfig {
-    /// storage 시크릿 암호기를 조립한다 (활성 + 선택적 PREV). 부팅에서 호출되어
-    /// 루트 길이·중복 key_id 같은 오설정을 여기서 잡는다.
     pub fn crypto(&self) -> Result<crate::Crypto> {
         let mut crypto = crate::Crypto::new(&self.enc_key_id, &self.enc_root_secret)?;
         if let (Some(id), Some(root)) = (&self.enc_key_id_prev, &self.enc_root_secret_prev) {
@@ -61,10 +62,11 @@ pub struct ServerConfig {
     pub bind_addr: SocketAddr,
     pub log_format: LogFormat,
     /// 중계 바이트 엔드포인트의 공개 베이스 URL (예: https://filegate.example.com).
-    /// 중계 storage(fs 또는 force_relay)를 등록하려면 필수 — 등록이 검사한다.
+    /// force_relay storage 등록에 필요하다.
     pub public_url: Option<String>,
-    /// reconciler tick 간격 (기본 60초). 테스트에서만 줄인다.
+    /// reconciler tick 간격 (기본 60초).
     pub reconciler_interval_secs: u64,
+    pub management_log_retention: ManagementLogRetention,
     /// 이 선언 크기를 넘으면 create가 multipart를 발급한다 (spec 02).
     pub multipart_threshold_bytes: i64,
     /// multipart part 크기 (균일, 마지막만 나머지). 업로드별로 동결된다 —
@@ -73,6 +75,13 @@ pub struct ServerConfig {
     /// S3 표면 CORS 허용 origin (FILEGATE_S3_CORS_ALLOWED_ORIGINS, 콤마구분).
     /// 비면 CORS 미적용 — 브라우저 직접 업로드는 이 목록의 origin에만 열린다.
     pub s3_cors_allowed_origins: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ManagementLogRetention {
+    pub audit_days: NonZeroU16,
+    pub security_days: NonZeroU16,
+    pub invocation_days: NonZeroU16,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -96,6 +105,12 @@ impl Config {
 
     /// env 조회 함수로 로드한다 (테스트에서 env를 주입한다).
     pub(crate) fn load_from(env: &dyn Fn(&str) -> Option<String>) -> Result<Self> {
+        let retention_days = |key: &str, default: &str| {
+            env(key)
+                .unwrap_or_else(|| default.to_owned())
+                .parse::<NonZeroU16>()
+                .map_err(|_| Error::config(format!("{key} must be an integer between 1 and 65535")))
+        };
         let server = ServerConfig {
             bind_addr: env("FILEGATE_BIND")
                 .unwrap_or_else(|| "127.0.0.1:8080".to_owned())
@@ -127,6 +142,14 @@ impl Config {
                 .transpose()
                 .map_err(|e| Error::config(format!("FILEGATE_RECONCILER_INTERVAL_SECS: {e}")))?
                 .unwrap_or(60),
+            management_log_retention: ManagementLogRetention {
+                audit_days: retention_days("FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS", "365")?,
+                security_days: retention_days("FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS", "90")?,
+                invocation_days: retention_days(
+                    "FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
+                    "30",
+                )?,
+            },
             multipart_threshold_bytes: env("FILEGATE_MULTIPART_THRESHOLD_BYTES")
                 .map(|v| v.parse())
                 .transpose()
@@ -207,6 +230,15 @@ impl Config {
             enc_root_secret_prev,
             enc_key_id_prev,
             operator_tokens,
+            legacy_admin_enabled: match env("FILEGATE_LEGACY_ADMIN_ENABLED").as_deref() {
+                None | Some("false") => false,
+                Some("true") => true,
+                Some(_) => {
+                    return Err(Error::config(
+                        "FILEGATE_LEGACY_ADMIN_ENABLED must be true|false",
+                    ));
+                }
+            },
         };
         Ok(Self {
             server,
@@ -241,8 +273,13 @@ mod tests {
         assert_eq!(config.database.max_connections, 20);
         assert_eq!(config.security.enc_key_id, "v1");
         assert_eq!(config.security.operator_tokens.len(), 2);
+        assert!(!config.security.legacy_admin_enabled);
         assert_eq!(config.server.multipart_threshold_bytes, 256 * 1024 * 1024);
         assert_eq!(config.server.part_size_bytes, 64 * 1024 * 1024);
+        let retention = config.server.management_log_retention;
+        assert_eq!(retention.audit_days.get(), 365);
+        assert_eq!(retention.security_days.get(), 90);
+        assert_eq!(retention.invocation_days.get(), 30);
     }
 
     #[test]
@@ -316,6 +353,27 @@ mod tests {
     }
 
     #[test]
+    fn legacy_admin_requires_explicit_opt_in() {
+        for (input, expected) in [("true", true), ("false", false)] {
+            let config = Config::load_from(&|key| match key {
+                "FILEGATE_LEGACY_ADMIN_ENABLED" => Some(input.into()),
+                other => base_env(other),
+            })
+            .unwrap();
+            assert_eq!(config.security.legacy_admin_enabled, expected);
+        }
+        for input in ["", "TRUE", "1", "yes"] {
+            assert!(
+                Config::load_from(&|key| match key {
+                    "FILEGATE_LEGACY_ADMIN_ENABLED" => Some(input.into()),
+                    other => base_env(other),
+                })
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
     fn zero_reconciler_interval_is_rejected() {
         // 0은 tokio::time::interval을 패닉시키므로 부팅에서 거부한다.
         let zero = |key: &str| match key {
@@ -323,6 +381,40 @@ mod tests {
             other => base_env(other),
         };
         assert!(Config::load_from(&zero).is_err());
+    }
+
+    #[test]
+    fn management_retention_accepts_positive_days_only() {
+        for key in [
+            "FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS",
+            "FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS",
+            "FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
+        ] {
+            for value in ["0", "-1", "", "1.5", "65536", "invalid"] {
+                assert!(
+                    Config::load_from(&|name| {
+                        if name == key {
+                            Some(value.into())
+                        } else {
+                            base_env(name)
+                        }
+                    })
+                    .is_err(),
+                    "{key} accepted {value}"
+                );
+            }
+        }
+        let config = Config::load_from(&|key| match key {
+            "FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS" => Some("730".into()),
+            "FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS" => Some("180".into()),
+            "FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS" => Some("1".into()),
+            other => base_env(other),
+        })
+        .unwrap();
+        let retention = config.server.management_log_retention;
+        assert_eq!(retention.audit_days.get(), 730);
+        assert_eq!(retention.security_days.get(), 180);
+        assert_eq!(retention.invocation_days.get(), 1);
     }
 
     #[test]

@@ -1,12 +1,15 @@
 # Grove Storage
 
-FileGate 구현을 보존한 개발 기준선이다. 서버·패키지·API 이름은 현재 FileGate 계약을
-유지한다. [이관 기록과 책임 분리 분석](docs/development/import-review.md)에 원본 커밋,
-후속 작업, 검증 범위를 기록한다. 관리자 인증 추가분과 콘솔 미리보기는 미배포 작업이다.
+여러 외부 S3 호환 저장소의 업로드·다운로드를 하나의 서비스 계약으로 연결한다.
+클라이언트는 Grove의 Native 또는 지원되는 S3 API를 사용하고, 실제 저장소의
+endpoint와 공급자 자격증명은 Grove가 관리한다. 서버·패키지·API 이름은 기존
+FileGate 계약을 유지한다. [이관 기록](docs/development/import-review.md)과
+[완성도 점검](docs/development/management-review.md)에 검증 범위와 남은 작업을 기록한다.
 
 PostgreSQL에 파일 메타데이터를 기록하고, 외부 S3 호환 저장소의 바이트를
-네이티브 API와 S3 호환 API로 제공한다. 신규 등록·교체는 S3만 지원하며,
-기존 로컬 FS 행의 데이터 접근은 이관 전까지 유지한다.
+네이티브 API와 지원되는 S3 호환 API로 제공한다. 등록부와 backend는 S3-only이며,
+migration `0017`은 기존 FS 행이 있으면 중단한다. 로컬 임시 스풀은 relay 전송
+버퍼이며 등록 가능한 저장소가 아니다. 전체 S3 서비스의 대체를 목표로 하지 않는다.
 
 ## 개선 계획
 
@@ -32,11 +35,17 @@ PostgreSQL에 파일 메타데이터를 기록하고, 외부 S3 호환 저장소
 ```sh
 docker compose up -d
 cp .env.example .env
+export FILEGATE_DATABASE_URL=postgres://filegate:filegate@127.0.0.1:55432/filegate
+cargo run --bin filegate -- account init owner Owner
 cargo run --bin filegate
 ```
 
 Compose는 PostgreSQL(`55432`), MinIO(`9000/9001`), 개발 버킷을 준비한다.
-[운영자 API](docs/spec/01-registry.md)로 storage·client·자격증명을 등록한다.
+`account init`은 비밀번호를 대화형으로 입력받으며 기본 계정 비밀번호는 없다.
+실제 콘솔 연결은 [frontend 실행 절차](frontend/web/README.md#existing-development-api)를
+따른다. Rust 서버와 backend 이미지는 콘솔 정적 파일을 제공하지 않는다.
+콘솔에서 관리 토큰을 발급한 뒤 `gscli`로 storage·client·자격증명을 등록할 수 있다.
+구형 운영자 REST API는 [명시적 호환 모드](docs/spec/11-local-management-auth.md#legacy-operator-cutover)에서 제공한다.
 기존 [Terraform 예제](deploy/local/main.tf)는 이관 전 비교용 구성을 제공한다.
 [CLI 등록 절차](docs/guide/registry-management.md)는 Terraform 없는 등록 흐름을 제공한다.
 
@@ -46,12 +55,18 @@ Compose는 PostgreSQL(`55432`), MinIO(`9000/9001`), 개발 버킷을 준비한�
 | `GET /healthz` | 프로세스 생존 |
 | `GET /readyz` | DB 준비 상태 |
 
-자동 릴리스는 기존 FileGate 저장소에 한정한다. Grove의 패키지·업데이트 채널은
-후속 릴리스에서 전환한다. 실행 환경의 배포는 별도 운영 절차로 수행한다.
+[릴리스 workflow](.github/workflows/release.yml)는 Grove 저장소의 성공한 main CI를
+기준으로 backend 이미지와 Linux/macOS CLI 자산을 발행하도록 구성되어 있다.
+서버 이미지는 한 종류이며 Linux amd64/arm64를 지원한다. 취약점·Secret 검사와
+출처 검증을 발행 전에 수행하고, 공개 이미지도 매일 재검사한다.
+[이미지 보안 정책](docs/development/image-security.md)을 따른다. 전용 Helm 차트는
+추가하지 않으며 기존 `quick-deploy` 배포를 유지한다.
+이 구성은 실행 환경의 배포 완료를 뜻하지 않는다. 운영 콘솔 호스팅과 FileGate
+전환 검증은 [완성도 점검](docs/development/management-review.md)의 남은 항목이다.
 
 ## 관리 CLI
 
-MCP도 같은 20개 자원 명령을 `/api/admin/mcp`에서 제공한다.
+MCP도 같은 자원 명령을 `/api/admin/mcp`에서 제공한다.
 [연결·인증·비밀 전달 계약](docs/spec/10-management-mcp.md). 운영 배포는 별도다.
 
 ```sh
@@ -63,8 +78,9 @@ gscli --endpoint https://filegate.example.com --token-file /path/to/management-t
 ```
 
 `GROVE_ENDPOINT`·`GROVE_TOKEN`으로 연결 설정을 공급할 수 있다.
-CLI는 User 토큰으로 공통 관리 명령 API를 호출한다. 이전 서버에는 이전 CLI를 사용한다.
-DB·마스터 키는 CLI에 전달하지 않는다. 기존 `filegate status`는
+CLI는 Account의 관리 API 토큰으로 공통 자원 명령 API를 호출한다.
+계정 생성·비밀번호·관리 토큰·세션 관리는 콘솔 전용이다. 이전 서버에는 이전 CLI를 사용한다.
+DB 접속 정보·서버 암호화 키는 CLI에 전달하지 않는다. 기존 `filegate status`는
 서버 로컬 진단으로 유지한다. [명령·출력·후속 계약](docs/spec/04-cli.md).
 
 배포 채널은 GitHub Release의 Linux/macOS 실행 파일이다.

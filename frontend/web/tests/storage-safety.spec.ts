@@ -8,7 +8,7 @@ test("zero file count does not bypass delete 409; refreshed registry is shown", 
   const { reads } = await storageMock(page);
   await page.goto(root);
   await page.getByRole("link", { name: new RegExp(example.id) }).click();
-  await expect(page.getByText("Files: 0").first()).toBeVisible();
+  await expect(page.getByRole("term").filter({ hasText: /^Stored files$/ }).locator("..")).toContainText("0");
   await intercept(page, "storage.delete", (route) =>
       route.fulfill({ status: 409, json: { ...failure(409), message: "secret-server-error" } }),
   );

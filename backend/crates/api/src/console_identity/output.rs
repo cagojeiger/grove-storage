@@ -80,8 +80,9 @@ pub(super) fn credential_page(
 }
 
 pub(super) fn account(r: filegate_db::management::queries::AccountSummary) -> Value {
+    // The v1 console discriminator is compatibility output, not a DB subtype.
     json!({
-        "id": r.id, "kind": r.kind, "display_name": r.display_name,
+        "id": r.id, "kind": "user", "display_name": r.display_name,
         "role": r.role, "is_active": r.is_active, "deleted_at": r.deleted_at,
         "username": r.login_name, "password_ready": r.password_ready,
     })

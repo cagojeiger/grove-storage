@@ -10,7 +10,7 @@ test("activity uses a compact filter toolbar and a tab underline", async ({ page
   await page.goto("/api/admin/console/#activity");
   await expect(page.getByLabel("Actor account ID")).toBeHidden();
   const tab = page.getByRole("tab", { name: "Audit log" });
-  await expect(tab).toHaveCSS("border-left-width", "0px");
+  await expect(tab).toHaveCSS("border-left-color", "rgba(0, 0, 0, 0)");
   await expect(tab).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".MuiTabs-indicator")).toBeVisible();
   await page.getByRole("button", { name: "Filters" }).click();
@@ -24,7 +24,7 @@ test("activity distinguishes no history from no filtered results", async ({ page
   await page.route("**/identity/v1/history/*", route => route.fulfill({ json: { items: [], next_before: null } }));
   await page.goto("/api/admin/console/#activity");
   await expect(page.getByText("No activity recorded yet.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Filters" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Filters" })).toBeVisible();
   await page.goto(filtered);
   await expect(page.getByText("No activity matches these filters.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Clear filters" })).toBeVisible();
@@ -63,7 +63,7 @@ test("filters survive pagination, tabs, reload and reset without stale rows", as
     } });
   });
   await page.goto(filtered);
-  await page.getByRole("button", { name: "Load more", exact: true }).click();
+  await page.getByRole("button", { name: "Go to next page", exact: true }).click();
   await expect(page.getByRole("button", { name: /client.create/ })).toBeVisible();
   expect(requests.at(-1)?.searchParams.get("before")).toBe(context.id);
   await page.getByRole("tab", { name: "Command history", exact: true }).click();
@@ -119,7 +119,8 @@ for (const width of [320, 768, 1440]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 960 });
     await maintenanceMock(page);
     await page.goto(filtered);
-    await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await expect(page.getByLabel("Actor account ID")).toHaveValue(owner.id);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/activity-filters-${width}-${theme}.png`, fullPage: true });

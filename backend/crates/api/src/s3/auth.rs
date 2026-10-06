@@ -89,7 +89,11 @@ fn parse_auth(auth: &str) -> Option<ParsedAuth> {
 /// header-signed 재료 — Authorization 헤더 + x-amz-* 헤더에서.
 // Err=Response는 s3 표면의 관용구(authenticate와 같음) — sync fn이라만 lint 대상.
 #[allow(clippy::result_large_err)]
-fn from_header(uri: &Uri, headers: &HeaderMap) -> Result<SigV4, Response> {
+fn from_header(
+    uri: &Uri,
+    headers: &HeaderMap,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<SigV4, Response> {
     let auth = header_str(headers, "authorization")
         .ok_or_else(|| access_denied("missing authorization"))?;
     let parsed = parse_auth(auth).ok_or_else(|| access_denied("malformed authorization"))?;
@@ -104,7 +108,7 @@ fn from_header(uri: &Uri, headers: &HeaderMap) -> Result<SigV4, Response> {
     let request_time = chrono::NaiveDateTime::parse_from_str(amz_date, "%Y%m%dT%H%M%SZ")
         .map_err(|_| access_denied("malformed x-amz-date"))?
         .and_utc();
-    if (chrono::Utc::now() - request_time).num_seconds().abs() > MAX_CLOCK_SKEW_SECS {
+    if (now - request_time).abs() > chrono::Duration::seconds(MAX_CLOCK_SKEW_SECS) {
         return Err(xml_error(
             StatusCode::FORBIDDEN,
             "RequestTimeTooSkewed",
@@ -146,7 +150,7 @@ fn from_header(uri: &Uri, headers: &HeaderMap) -> Result<SigV4, Response> {
 /// UNSIGNED-PAYLOAD로 고정, 만료는 X-Amz-Expires 창으로 검사한다. 이게 서비스가
 /// 자기 S3 SDK의 `generate_presigned_url`을 filegate에 그대로 겨누는 경로다.
 #[allow(clippy::result_large_err)]
-fn from_query(uri: &Uri) -> Result<SigV4, Response> {
+fn from_query(uri: &Uri, now: chrono::DateTime<chrono::Utc>) -> Result<SigV4, Response> {
     let query = uri.query().unwrap_or_default();
     for key in [
         "X-Amz-Algorithm",
@@ -197,11 +201,11 @@ fn from_query(uri: &Uri) -> Result<SigV4, Response> {
         .and_utc();
     let expires = presigned_expiry(query_value(query, "X-Amz-Expires").unwrap_or_default())
         .map_err(access_denied)?;
-    let elapsed = (chrono::Utc::now() - request_time).num_seconds();
-    if elapsed < -MAX_CLOCK_SKEW_SECS {
+    let elapsed = now - request_time;
+    if elapsed < -chrono::Duration::seconds(MAX_CLOCK_SKEW_SECS) {
         return Err(access_denied("the presigned url is not yet valid"));
     }
-    if elapsed > expires {
+    if elapsed > chrono::Duration::seconds(expires) {
         return Err(xml_error(
             StatusCode::FORBIDDEN,
             "AccessDenied",
@@ -255,10 +259,11 @@ pub(super) async fn authenticate(
     }
     // 서명 위치로 모드를 가른다: Authorization 헤더면 header-signed,
     // 쿼리에 X-Amz-Signature가 있으면 presigned.
+    let now = state.clock.now();
     let sig = if header_str(headers, "authorization").is_some() {
-        from_header(uri, headers)?
+        from_header(uri, headers, now)?
     } else if uri.query().is_some_and(|q| q.contains("X-Amz-Signature=")) {
-        from_query(uri)?
+        from_query(uri, now)?
     } else {
         return Err(access_denied("missing authorization"));
     };

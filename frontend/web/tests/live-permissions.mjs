@@ -24,13 +24,18 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     return response.status;
   }, { token: user.token, password: writerPassword });
   assert.equal(setupStatus, 204);
-  const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "browser-test", expires_in_days: 1 });
-  const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, { label: "automation", expires_in_days: 1 });
+  const credential = await identity("POST", `/accounts/${user.account_id}/credentials`, {
+    label: "browser-test", expires_in_days: 1, current_password: ownerPassword,
+  });
+  const automationKey = await identity("POST", `/accounts/${user.account_id}/credentials`, {
+    label: "automation", expires_in_days: 1, current_password: ownerPassword,
+  });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
     const page = await context.newPage();
     await page.goto(`${origin}/api/admin/console/#storages/console-live`);
     await loginWithPassword(page, "console-writer", writerPassword);
+    await page.getByRole("link", { name: "Open storage console-live", exact: true }).click();
     await page.getByRole("button", { name: "Edit storage" }).click();
     await page.getByLabel("Secret key (re-enter)").fill("not-probed-after-demotion");
     await identity("PATCH", `/accounts/${user.account_id}`, { operation: "role", role: "reader" });
@@ -45,14 +50,16 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     });
     assert.equal(forbidden.status(), 403);
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
+    await expect(page.getByRole("complementary", { name: "Workspace sidebar" })).toContainText("reader");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole("alert")).toHaveText("Write access required.");
+    await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit storage" })).toHaveCount(0);
     await expect(page.getByLabel("Secret key (re-enter)")).toHaveCount(0);
-    await page.getByRole("navigation").getByRole("link", { name: "Storage", exact: true }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Storage", exact: true }).click();
     await page.getByRole("link", { name: "console-live", exact: true }).click();
+
     await expect(page.getByRole("region", { name: "Storage settings" })).toBeVisible();
     const blocked = await page.evaluate(async () => {
       const response = await fetch("/api/admin/console-commands/v1", {
@@ -62,10 +69,9 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
       return response.status;
     });
     assert.equal(blocked, 403);
-    await page.locator('button[aria-label="Account menu"]').click();
-    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await loginWithPassword(page, "console-writer", writerPassword);
-    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
+    await expect(page.getByRole("complementary", { name: "Workspace sidebar" })).toContainText("reader");
     assert.equal((await context.cookies()).filter((c) => c.name === "__Host-grove_session").length, 1);
     const audit = await identity("GET", "/history/audit?limit=100");
     const events = audit.items.filter((e) => e.action === "storage.create");
@@ -81,6 +87,7 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     assert(calls.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
     assert.equal(await page.evaluate(async () => (await fetch("/api/admin/identity/v1/history/security")).status), 403);
     await page.goto(`${origin}/api/admin/console/#settings`);
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(page.getByRole("button", { name: "Revoke current session", exact: true })).toBeVisible();
     console.log("PASS real role demotion, Reader read-only UI/server, password login and console audit");
   } finally { await context.close(); }

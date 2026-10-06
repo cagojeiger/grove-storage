@@ -1,6 +1,6 @@
 # ADR 009: 신원 관리는 콘솔로, 자원 관리는 공통 명령으로 제공한다
 
-- 상태: 관리 경계 유지. User/Agent 분리는 [ADR 010](010-unified-users-and-named-tokens.md)으로 대체; 아래는 당시 결정 기록.
+- 상태: 관리·파일 책임 분리와 공통 자원 명령 경계는 유지한다. User/Agent 분리는 [ADR 010](010-unified-users-and-named-tokens.md), Master·로그인·복구는 [로컬 관리 인증](../spec/11-local-management-auth.md)으로 대체되었다. 본문은 당시 결정 기록이다.
 - 날짜: 2026-09-24
 - 선행: [ADR 007](007-grove-storage-foundation.md)
 - 대체: [ADR 008](008-local-owner-and-agent-credentials.md)

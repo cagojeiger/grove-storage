@@ -32,10 +32,8 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
     sqlx::query("INSERT INTO management.credentials(id,account_id,label,token_prefix,token_hash,expires_at) VALUES($1,$2,'Owner token','gst_old',$3,clock_timestamp()+interval '1 day')")
         .bind(original).bind(owner).bind(hash(1)).execute(&mut *tx).await.unwrap();
     tx.commit().await.unwrap();
-    db::create_session(&pool, Uuid::new_v4(), &hash(1), &hash(10))
-        .await
-        .unwrap()
-        .unwrap();
+    sqlx::query("INSERT INTO management.sessions(id,session_hash,auth_method,user_id,credential_id,expires_at) VALUES($1,$2,'token',$3,$4,clock_timestamp()+interval '8 hours')")
+        .bind(Uuid::new_v4()).bind(hash(10)).bind(owner).bind(original).execute(&pool).await.unwrap();
     let agent = Uuid::new_v4();
     let credential = Uuid::new_v4();
     let mut tx = pool.begin().await.unwrap();
@@ -61,13 +59,13 @@ async fn unification_preserves_ids_history_and_user_sessions_without_promoting_a
     .unwrap();
     filegate_db::migrate(&pool).await.unwrap();
     filegate_db::migrate(&pool).await.unwrap();
-    let row: (String, bool, String) =
-        sqlx::query_as("SELECT kind,is_active,role FROM management.accounts WHERE id=$1")
+    let row: (bool, String) =
+        sqlx::query_as("SELECT is_active,role FROM management.accounts WHERE id=$1")
             .bind(agent)
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(row, ("user".into(), false, "writer".into()));
+    assert_eq!(row, (false, "writer".into()));
     let after: String = sqlx::query_scalar(
         "SELECT row_to_json(t)::text FROM management.audit_events t WHERE actor_id=$1",
     )

@@ -19,7 +19,7 @@ test("role demotion during an Access mutation removes private controls", async (
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await page.getByLabel(/^Display name\s*\*?$/).fill("Rejected");
   await page.getByLabel(/^Username\s*\*?$/).fill("rejected");
-  await page.getByLabel("Your current password").fill("a private admin password");
+  await page.getByLabel("Administrator password").fill("a private admin password");
   await page.getByRole("dialog").getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveText("Admin access required.");
@@ -73,6 +73,7 @@ test("pending issuance cannot double-submit and clears the secret after close", 
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("One request");
+  await page.getByLabel("Current password").fill("a private admin password");
   await page.getByRole("dialog").locator("form").evaluate((form) => {
     form.dispatchEvent(
       new Event("submit", { bubbles: true, cancelable: true }),
@@ -117,8 +118,9 @@ test("wrong-account issued tokens are rejected as unknown", async ({
     .click();
   await page.getByRole("button", { name: "Issue token", exact: true }).click();
   await page.getByLabel(/^Label\s*\*?$/).fill("Wrong account");
+  await page.getByLabel("Current password").fill("a private admin password");
   await page.getByRole("button", { name: "Issue", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("outcome is unknown");
+  await expect(page.getByRole("alert")).toContainText("result is unknown");
   await expect(
     page.getByLabel("Issued token", { exact: true }),
   ).toHaveCount(0);

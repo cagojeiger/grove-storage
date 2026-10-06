@@ -1,5 +1,7 @@
 use super::*;
 
+mod admission;
+
 const PASSWORD: &str = "a private phrase for browser sign-in";
 
 async fn sign_in(router: Router, username: &str, password: &str) -> Response {

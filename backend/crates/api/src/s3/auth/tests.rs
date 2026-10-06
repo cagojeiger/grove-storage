@@ -2,6 +2,51 @@
 
 use super::*;
 
+fn fixed_now() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339("2026-10-05T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc)
+}
+
+#[test]
+fn presigned_expiry_and_future_skew_are_checked_without_rounding() {
+    let uri: Uri = "/b/k?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=key%2F20261005%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261005T000000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=abc".parse().unwrap();
+    let base = fixed_now();
+    for (offset, accepted) in [
+        (-900_000_001, false),
+        (-900_000_000, true),
+        (899_999_999, true),
+        (900_000_000, true),
+        (900_000_001, false),
+    ] {
+        assert_eq!(
+            from_query(&uri, base + chrono::Duration::microseconds(offset)).is_ok(),
+            accepted,
+            "{offset}"
+        );
+    }
+}
+
+#[test]
+fn header_skew_checks_both_edges_without_rounding() {
+    let mut headers = HeaderMap::new();
+    headers.insert("authorization", "AWS4-HMAC-SHA256 Credential=key/20261005/auto/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc".parse().unwrap());
+    headers.insert("x-amz-date", "20261005T000000Z".parse().unwrap());
+    headers.insert("x-amz-content-sha256", "UNSIGNED-PAYLOAD".parse().unwrap());
+    let uri: Uri = "/b/k".parse().unwrap();
+    for offset in [-900_000_001, -900_000_000, 900_000_000, 900_000_001] {
+        assert_eq!(
+            from_header(
+                &uri,
+                &headers,
+                fixed_now() + chrono::Duration::microseconds(offset)
+            )
+            .is_ok(),
+            offset.abs() <= 900_000_000
+        );
+    }
+}
+
 #[test]
 fn authorization_rejects_ambiguous_fields_and_scope() {
     let valid = "AWS4-HMAC-SHA256 Credential=key/20260922/auto/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc";
@@ -19,7 +64,7 @@ fn authorization_rejects_ambiguous_fields_and_scope() {
 
 #[test]
 fn query_auth_rejects_expiry_bounds_and_duplicate_fields() {
-    let now = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+    let now = fixed_now().format("%Y%m%dT%H%M%SZ").to_string();
     let date = &now[..8];
     let valid = format!(
         "/b/k?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=key%2F{date}%2Fauto%2Fs3%2Faws4_request&X-Amz-Date={now}&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=abc"
@@ -31,21 +76,24 @@ fn query_auth_rejects_expiry_bounds_and_duplicate_fields() {
         format!("{valid}&X-Amz-%53ignature=abc"),
         valid.replace("aws4_request&", "aws4_request%2Fextra&"),
     ] {
-        assert!(from_query(&invalid.parse().unwrap()).is_err(), "{invalid}");
+        assert!(
+            from_query(&invalid.parse().unwrap(), fixed_now()).is_err(),
+            "{invalid}"
+        );
     }
 }
 
 #[test]
 fn header_auth_rejects_invalid_payload_hash_before_lookup() {
-    let now = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+    let now = fixed_now().format("%Y%m%dT%H%M%SZ").to_string();
     let date = &now[..8];
     let mut headers = HeaderMap::new();
     headers.insert("authorization", format!("AWS4-HMAC-SHA256 Credential=key/{date}/auto/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=abc").parse().unwrap());
     headers.insert("x-amz-date", now.parse().unwrap());
     headers.insert("x-amz-content-sha256", "not-a-hash".parse().unwrap());
-    assert!(from_header(&"/b/k".parse().unwrap(), &headers).is_err());
+    assert!(from_header(&"/b/k".parse().unwrap(), &headers, fixed_now()).is_err());
     headers.insert("x-amz-content-sha256", "UNSIGNED-PAYLOAD".parse().unwrap());
-    assert!(from_header(&"/b/k".parse().unwrap(), &headers).is_ok());
+    assert!(from_header(&"/b/k".parse().unwrap(), &headers, fixed_now()).is_ok());
 }
 
 #[test]
@@ -59,7 +107,7 @@ fn query_param_reads_the_value_or_none() {
 #[test]
 fn from_query_parses_credential_scope_and_defaults_unsigned_payload() {
     // 유효 창 안의 최근 시각으로 만든 presigned 쿼리 (서명값은 형태만).
-    let now = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+    let now = fixed_now().format("%Y%m%dT%H%M%SZ").to_string();
     let date = &now[..8];
     let uri: Uri = format!(
         "/b/k?X-Amz-Algorithm=AWS4-HMAC-SHA256\
@@ -68,7 +116,7 @@ fn from_query_parses_credential_scope_and_defaults_unsigned_payload() {
     )
     .parse()
     .unwrap();
-    let sig = from_query(&uri).expect("valid presigned query parses");
+    let sig = from_query(&uri, fixed_now()).expect("valid presigned query parses");
     assert_eq!(sig.access_key, "fgak0123456789abcdef");
     assert_eq!(sig.region, "auto");
     assert_eq!(sig.service, "s3");
@@ -86,5 +134,5 @@ fn from_query_rejects_expired_url() {
          &X-Amz-Date=20200101T000000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=x"
         .parse()
         .unwrap();
-    assert!(from_query(&uri).is_err());
+    assert!(from_query(&uri, fixed_now()).is_err());
 }

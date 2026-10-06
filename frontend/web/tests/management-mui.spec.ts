@@ -5,17 +5,10 @@ import { owner } from "./access-fixture";
 import { session } from "./command-fixture";
 
 test("shared theme has no component style overrides or legacy page CSS", async () => {
-  const theme = await readFile("src/design/ConsoleTheme.tsx", "utf8");
-  const css = await readFile("src/design/theme.css", "utf8");
+  const theme = await readFile("src/console/Theme.tsx", "utf8");
   expect(theme).not.toContain("styleOverrides");
-  expect(css).not.toMatch(
-    /\.Mui|font-size|font-family|\.storage|\.account|\.usage|\.activity/,
-  );
   const files = await readdir("src", { recursive: true });
-  expect(files.filter((path) => path.endsWith(".css")).sort()).toEqual([
-    "design/theme.css",
-    "features/overview/connections.css",
-  ]);
+  expect(files.filter((path) => path.endsWith(".css"))).toEqual([]);
   expect(files).not.toContain("design/Fields.tsx");
   expect(files).not.toContain("design/Dialog.tsx");
   const dependencies = JSON.parse(await readFile("package.json", "utf8")) as {
@@ -45,11 +38,12 @@ for (const mode of ["light", "dark"]) {
       );
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/api/admin/console/#activity");
-      await page.getByLabel("Theme").selectOption(mode);
+      await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${mode}$`, "i") }).click();
       for (const [route, title] of [
         ["activity", "Activity"],
         ["settings", "My account"],
-        ["settings/security", "Security"],
+        ["settings/security", "My account"],
       ]) {
         await page.goto(`/api/admin/console/#${route}`);
         const heading = page.getByRole("heading", {
@@ -57,12 +51,12 @@ for (const mode of ["light", "dark"]) {
           level: 1,
           exact: true,
         });
-        await expect(heading).toHaveCSS("font-size", "24px");
-        await expect(heading).toHaveCSS("font-weight", "400");
+        await expect(heading).toHaveCSS("font-size", "20px");
+        await expect(heading).toHaveCSS("font-weight", "600");
         await expect(heading).toHaveCSS("font-family", /^-apple-system,/);
-        await expect(
-          page.getByRole("navigation", { name: "Breadcrumb" }),
-        ).toContainText(title);
+        const breadcrumb = page.getByRole("navigation", { name: "Console path" });
+        if (width >= 900) await expect(breadcrumb).toContainText(title);
+        else await expect(breadcrumb).toHaveCount(0);
         await expect(page.getByRole("main")).not.toHaveClass(
           /overview|settings|activity/,
         );
@@ -79,10 +73,10 @@ for (const mode of ["light", "dark"]) {
       }
       const current = page.getByLabel("Current password");
       await expect(current).toHaveCSS("font-family", /^-apple-system,/);
-      await expect(current).toHaveCSS("font-size", "16px");
+      await expect(current).toHaveCSS("font-size", "14px");
       await expect(
         page.getByRole("button", { name: "Change password" }),
-      ).toHaveCSS("border-radius", "4px");
+      ).toHaveCSS("border-radius", "8px");
     });
   }
 }

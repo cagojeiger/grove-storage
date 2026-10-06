@@ -83,7 +83,14 @@ fn workers() -> &'static Arc<Semaphore> {
 }
 
 async fn permit() -> Result<tokio::sync::OwnedSemaphorePermit, Error> {
-    tokio::time::timeout(HASH_WAIT, workers().clone().acquire_owned())
+    permit_with(workers().clone(), HASH_WAIT).await
+}
+
+async fn permit_with(
+    workers: Arc<Semaphore>,
+    wait: std::time::Duration,
+) -> Result<tokio::sync::OwnedSemaphorePermit, Error> {
+    tokio::time::timeout(wait, workers.acquire_owned())
         .await
         .map_err(|_| Error::Busy)?
         .map_err(|_| Error::Unavailable)
@@ -141,6 +148,30 @@ pub async fn verify(password: SecretString, hash: SecretString) -> Result<bool, 
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn hash_queue_times_out_at_the_injected_deadline() {
+        let start = tokio::time::Instant::now();
+        assert!(matches!(
+            permit_with(Arc::new(Semaphore::new(0)), HASH_WAIT).await,
+            Err(Error::Busy)
+        ));
+        assert_eq!(start.elapsed(), HASH_WAIT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn hash_queue_accepts_capacity_before_the_deadline() {
+        let queue = Arc::new(Semaphore::new(0));
+        let release = queue.clone();
+        let task = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            release.add_permits(1);
+        });
+        let start = tokio::time::Instant::now();
+        assert!(permit_with(queue, HASH_WAIT).await.is_ok());
+        assert_eq!(start.elapsed(), std::time::Duration::from_secs(4));
+        task.await.unwrap();
+    }
 
     #[test]
     fn usernames_have_one_canonical_form() {

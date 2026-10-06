@@ -7,7 +7,8 @@ export function consoleHeaders(development = false, nonce) {
       `style-src 'self'${development ? " 'unsafe-inline'" : ""}`,
       ...(nonce ? [`style-src-elem 'self' 'nonce-${nonce}'`] : []),
       "style-src-attr 'none'",
-      "img-src 'self'",
+      // Swagger's packaged CSS embeds its small icons as data images.
+      "img-src 'self' data:",
       "font-src 'self'",
       `connect-src 'self'${development ? " ws: wss:" : ""}`,
       "base-uri 'none'",

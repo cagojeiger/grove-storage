@@ -31,7 +31,7 @@ pub async fn claim_relay_upload(
     let lease: Option<(Option<i64>, Option<String>)> = sqlx::query_as(
         "SELECT uploaded_size, uploaded_md5 FROM leases \
          WHERE id = $1 AND file_id = $2 AND kind = 'write' AND state = 'issued' \
-         AND expires_at > clock_timestamp() AND secret_hash IS NOT NULL \
+         AND expires_at > grove_time.wall_now() AND secret_hash IS NOT NULL \
          AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $2) \
          AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $2) \
          FOR UPDATE",
@@ -55,7 +55,7 @@ impl RelayUploadClaim {
     pub async fn done(mut self, size: i64, md5: &str, ttl_secs: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             "UPDATE leases SET uploaded_size = $2, uploaded_md5 = $3, \
-             expires_at = GREATEST(expires_at, clock_timestamp() + $4 * interval '1 second') \
+             expires_at = GREATEST(expires_at, grove_time.wall_now() + $4 * interval '1 second') \
              WHERE id = $1",
         )
         .bind(self.lease_id)

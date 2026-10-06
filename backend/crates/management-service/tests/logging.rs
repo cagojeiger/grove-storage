@@ -2,7 +2,7 @@
 mod support;
 use filegate_db::{
     PgPool,
-    management::{self as db, NewAccount, telemetry},
+    management::{self as db, NewAccount, admission},
 };
 use grove_management_policy::{Role, Surface};
 use grove_management_service::{self as service, Command, Error, Output, Page, Proof};
@@ -228,7 +228,7 @@ async fn login_budget_is_shared_bounded_and_resets(pool: PgPool) {
     let mut tasks = tokio::task::JoinSet::new();
     for _ in 0..80 {
         let pool = pool.clone();
-        tasks.spawn(async move { telemetry::login_allowed(&pool).await.unwrap() });
+        tasks.spawn(async move { admission::anonymous_allowed(&pool).await.unwrap() });
     }
     let mut admitted = 0;
     while let Some(result) = tasks.join_next().await {
@@ -243,7 +243,7 @@ async fn login_budget_is_shared_bounded_and_resets(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    assert!(telemetry::login_allowed(&pool).await.unwrap());
+    assert!(admission::anonymous_allowed(&pool).await.unwrap());
     let attempts: i32 =
         sqlx::query_scalar("SELECT attempts FROM management.login_budget WHERE id=1")
             .fetch_one(&pool)
@@ -254,5 +254,5 @@ async fn login_budget_is_shared_bounded_and_resets(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(!telemetry::login_allowed(&pool).await.unwrap());
+    assert!(!admission::anonymous_allowed(&pool).await.unwrap());
 }

@@ -5,6 +5,7 @@ pub mod files;
 pub mod management;
 pub mod registry;
 pub mod s3_registry;
+pub mod time;
 pub mod usage;
 
 pub use sqlx::Error as DbError;
@@ -18,12 +19,10 @@ pub async fn connect(database_url: &str, max_connections: u32) -> Result<PgPool,
         .await
 }
 
-/// 마이그레이션 실행. 부팅 배선의 두 번째 단계다 (연결 직후).
 pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
     sqlx::migrate!("./migrations").run(pool).await
 }
 
-/// DB 생존 확인 (readiness probe용).
 pub async fn ping(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").execute(pool).await.map(|_| ())
 }
@@ -45,9 +44,21 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = T>,
 {
+    with_advisory_lock(pool, RECONCILER_LOCK_KEY, job).await
+}
+
+pub(crate) async fn with_advisory_lock<F, Fut, T>(
+    pool: &PgPool,
+    key: i64,
+    job: F,
+) -> Result<Option<T>, sqlx::Error>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = T>,
+{
     let mut tx = pool.begin().await?;
     let lock_acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock($1)")
-        .bind(RECONCILER_LOCK_KEY)
+        .bind(key)
         .fetch_one(&mut *tx)
         .await?;
     if !lock_acquired {

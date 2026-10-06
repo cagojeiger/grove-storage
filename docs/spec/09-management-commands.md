@@ -61,7 +61,8 @@ Content-Type: application/json
 
 CLI HTTP는 User 토큰을 사용하며 서버가 `resource_api`로 기록한다.
 CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 CLI 전송은 E2E로
-검증하며 실제 MCP HTTP도 CLI 결과와 대조한다. 기존 `/api/admin/v1`은 이전 소비자용으로 유지한다.
+검증하며 실제 MCP HTTP도 CLI 결과와 대조한다. 기존 `/api/admin/v1`은
+[명시적 호환 모드](05-admin-auth.md)에서 이전 소비자에게 제공한다.
 
 ### 브라우저 전송
 

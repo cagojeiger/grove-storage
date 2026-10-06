@@ -10,6 +10,9 @@ async fn account_lifecycle_and_last_admin_guard_are_applied_over_http(pool: PgPo
     )
     .await;
     let path = format!("/accounts/{user}");
+    let account = get(&pool, &cookie, &path).await;
+    assert_eq!(account["kind"], "user");
+    assert_eq!(account["id"], user.to_string());
     assert_eq!(
         send(
             &pool,

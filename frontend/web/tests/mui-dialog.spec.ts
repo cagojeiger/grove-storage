@@ -6,7 +6,8 @@ for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width: 390, height: 400 });
     await accessMock(page);
     await page.goto(root);
-    await page.getByLabel("Theme").selectOption(theme);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+      await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
     await page.getByRole("button", { name: "Create account", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Create account", exact: true });
     await expect(dialog).toBeVisible();
@@ -16,7 +17,7 @@ for (const theme of ["light", "dark"]) {
     const submit = dialog.getByRole("button", { name: "Create account" });
     await expect(cancel).toBeInViewport();
     await expect(submit).toBeInViewport();
-    await dialog.getByLabel("Your current password").scrollIntoViewIfNeeded();
+    await dialog.getByLabel("Administrator password").scrollIntoViewIfNeeded();
     await expect(cancel).toBeInViewport();
     await expect(submit).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

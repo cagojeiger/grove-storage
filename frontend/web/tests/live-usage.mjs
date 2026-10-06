@@ -23,18 +23,18 @@ export async function usageChecks(page, { database, origin }) {
   await page.goto(`${origin}/api/admin/console/#`);
   await page.getByRole("link", { name: "Usage history", exact: true }).click();
   await expect(
-    page.getByRole("cell", { name: "1,240", exact: true }),
+    page.getByRole("gridcell", { name: "1,240", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("cell", { name: "1 GiB", exact: true }),
+    page.getByRole("gridcell", { name: "1 GiB", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("cell", { name: "retired-client", exact: true }),
+    page.getByRole("gridcell", { name: "retired-client", exact: true }),
   ).toHaveCount(0);
   await page.getByLabel(/^Days\s*\*?$/).fill("365");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(
-    page.getByRole("cell", { name: "retired-client", exact: true }),
+    page.getByRole("gridcell", { name: "retired-client", exact: true }),
   ).toBeVisible();
   await page.goto(`${origin}/api/admin/console/#storages/console-live`);
   console.log(

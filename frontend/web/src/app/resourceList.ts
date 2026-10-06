@@ -21,7 +21,9 @@ export function useResourceList() {
   const state = readState(route);
   const href = useCallback(
     (target: string) => {
-      return target + (query ? `?${query}` : "");
+      const params = new URLSearchParams(query);
+      if (!target.slice(1).includes("/")) params.delete("tab");
+      return target + (params.size ? `?${params}` : "");
     },
     [query],
   );

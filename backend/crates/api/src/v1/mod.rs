@@ -23,6 +23,10 @@ use crate::routes::AppState;
 #[derive(Clone)]
 pub struct ClientId(pub String);
 
+pub(crate) fn schemas() -> impl Iterator<Item = (&'static str, schemars::Schema)> {
+    files::schemas().into_iter().chain(multipart::schemas())
+}
+
 pub fn v1_routes() -> Router<AppState> {
     Router::new()
         .route("/files", post(files::create))

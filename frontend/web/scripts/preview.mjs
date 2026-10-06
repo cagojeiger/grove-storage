@@ -10,6 +10,10 @@ import { consoleHeaders } from "../security-headers.mjs";
 
 const dist = resolve(import.meta.dirname, "../dist");
 const base = "/api/admin/console/";
+// Use exported Rust contracts, never a separately maintained sample API schema.
+const openapi = process.env.GROVE_PREVIEW_OPENAPI
+  ? JSON.parse(await readFile(process.env.GROVE_PREVIEW_OPENAPI, "utf8"))
+  : null;
 const storages = new Map([
   [
     "home-archive",
@@ -87,6 +91,11 @@ async function response(req, res) {
   const path = url.pathname;
   if (await identities.handle(req, res, url)) return;
   const method = req.method;
+  const documentation = /^\/api\/docs\/(s3|management|native)\.json$/.exec(path);
+  if (documentation && method === "GET")
+    return openapi
+      ? json(res, 200, openapi[documentation[1]])
+      : json(res, 503, { error: "OpenAPI export not configured for this sample preview" });
   if (path === "/readyz") return json(res, 200, { status: "ready" });
   if (path === "/api/admin/console-commands/v1" && method === "POST") {
     if (!identities.session()) return json(res, 401, {});
@@ -125,7 +134,8 @@ async function response(req, res) {
       return storages.has(storageId) ? success(storages.get(storageId)) : failure(404, "not_found");
     if (command === "storage.delete") {
       if (!storages.has(storageId)) return failure(404, "not_found");
-      if (storageId === "home-archive" || clients.references(storageId)) return failure(409, "conflict");
+      const counters = usage(storages.get(storageId));
+      if (clients.references(storageId) || ["active_files", "reserved_files", "purge_pending_files", "active_bytes", "reserved_bytes", "purge_pending_bytes"].some((key) => counters[key] > 0)) return failure(409, "conflict");
       storages.delete(storageId);
       return success({ resource: "storage", id: storageId }, { resource_type: "storage", resource_id: storageId, metadata: {} });
     }

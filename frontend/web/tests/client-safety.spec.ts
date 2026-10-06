@@ -49,10 +49,10 @@ for (const mode of ["lost", "malformed", "unavailable"] as const)
     });
     await page.goto(root + "/notegate");
     await page.getByRole("button", { name: "Create credential", exact: true }).click();
-    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("outcome is unknown");
     await expect(
-      page.getByRole("button", { name: "Confirm", exact: true }),
+      page.getByRole("button", { name: "Create", exact: true }),
     ).toBeDisabled();
     expect(attempts).toBe(1);
   });
@@ -69,10 +69,10 @@ for (const code of [401, 403])
     await intercept(page, "credential.create", (route) =>
       route.fulfill({ status: code, json: failure(code) }),
     );
-    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     if (code === 401)
       await expect(page.getByLabel("Password")).toBeVisible();
-    else await expect(page.getByRole("button", { name: "Account menu", exact: true })).toContainText("reader");
+    else await expect(page.getByRole("link", { name: "My account", exact: true })).toContainText("reader");
     await expect(page.getByRole("button", { name: "Create credential" })).toHaveCount(0);
   });

@@ -5,7 +5,8 @@
 #   storage ◀── client ── client_key
 #
 # 기존 fixture 재현:
-#   docker compose up -d && cargo run --bin filegate   # 서버 기동
+#   docker compose up -d
+#   FILEGATE_LEGACY_ADMIN_ENABLED=true FILEGATE_OPERATOR_TOKENS=fgop_local-dev cargo run --bin filegate
 #   mkdir -p /tmp/filegate-fs-demo
 #   export FILEGATE_OPERATOR_TOKEN=fgop_local-dev
 #   terraform -chdir=deploy/local init -upgrade

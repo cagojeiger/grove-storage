@@ -33,7 +33,7 @@ impl IdentityTransaction<'_> {
     ) -> Result<Value, Error> {
         let (sql, kind, action) = match resource {
             MetadataResource::Storage => (
-                "UPDATE storages SET metadata=$2, updated_at=now() WHERE id=$1 RETURNING metadata",
+                "UPDATE storages SET metadata=$2, updated_at=grove_time.transaction_now() WHERE id=$1 RETURNING metadata",
                 "storage",
                 "storage.metadata.replace",
             ),

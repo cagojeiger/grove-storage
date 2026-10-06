@@ -40,6 +40,7 @@ class Rehearsal:
             FILEGATE_DATABASE_URL=f"postgres://filegate:filegate@127.0.0.1:{self.db_port}/{database}",
             FILEGATE_ENC_ROOT_SECRET="migration-fixture-encryption-secret-32bytes",
             FILEGATE_OPERATOR_TOKENS=OPERATOR,
+            FILEGATE_LEGACY_ADMIN_ENABLED="true",
             FILEGATE_BIND=self.endpoint.removeprefix("http://"),
             FILEGATE_PUBLIC_URL=self.endpoint, FILEGATE_CONSOLE_ORIGIN=CONSOLE_ORIGIN,
             FILEGATE_RECONCILER_INTERVAL_SECS="3600", FILEGATE_LOG_FORMAT="json",

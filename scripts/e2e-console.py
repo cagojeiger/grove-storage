@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import runpy
-import secrets
 import socket
 import signal
 import ssl
@@ -18,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HARNESS = runpy.run_path(str(ROOT / "scripts/e2e-cli.py"))
 
 
-def check(endpoint, directory, database, origin, serve, minio):
+def check(endpoint, directory, database, owner, origin, serve, minio, auth_only=False):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 30
     while True:
@@ -31,11 +30,7 @@ def check(endpoint, directory, database, origin, serve, minio):
         if time.monotonic() > deadline:
             raise RuntimeError('API readiness timeout')
         time.sleep(.2)
-    owner_password = 'fixture-' + secrets.token_urlsafe(32)
-    owner = json.loads(subprocess.check_output(
-        ['python3', 'scripts/e2e-password-account.py', database], cwd=ROOT,
-        env=dict(os.environ, GROVE_E2E_PASSWORD=owner_password,
-                 GROVE_E2E_DISPLAY_NAME='Console test owner'), text=True, timeout=45))
+    owner_password = owner['password']
     key, cert = Path(directory) / 'key.pem', Path(directory) / 'cert.pem'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                     '-keyout', str(key), '-out', str(cert), '-days', '1',
@@ -66,11 +61,12 @@ def check(endpoint, directory, database, origin, serve, minio):
                 while vite.poll() is None:
                     time.sleep(1)
             else:
-                subprocess.run(['node', 'tests/live.mjs'], cwd=ROOT / 'frontend/web',
+                suite = 'tests/live-identity.mjs' if auth_only else 'tests/live.mjs'
+                subprocess.run(['node', suite], cwd=ROOT / 'frontend/web',
                                input=json.dumps({'origin': origin, 'ownerPassword': owner_password,
                                                  'ownerId': owner['account_id'],
                                                  'database': database, 'endpoint': endpoint,
-                                                 'minio': minio.spec}), text=True,
+                                                 'minio': minio.spec if minio else None}), text=True,
                                check=True, timeout=150)
         finally:
             vite.terminate()
@@ -87,11 +83,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--serve', action='store_true')
     parser.add_argument('--with-minio', action='store_true')
+    parser.add_argument('--auth-only', action='store_true',
+                        help='Run or serve real account/session flows without an S3 backend')
     args = parser.parse_args()
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
     origin = f'https://127.0.0.1:{port}'
-    from s3_backend_fixture import minio_backend
-    with minio_backend() as minio:
-        HARNESS['main'](lambda endpoint, directory, database: check(endpoint, directory, database, origin, args.serve, minio),
-                        with_database=True, console_origin=origin, management=True)
+    if args.auth_only:
+        HARNESS['main'](lambda endpoint, directory, database, account:
+            check(endpoint, directory, database, account, origin, args.serve, None, True),
+            with_database=True, console_origin=origin)
+    else:
+        from s3_backend_fixture import minio_backend
+        with minio_backend() as minio:
+            HARNESS['main'](lambda endpoint, directory, database, account:
+                check(endpoint, directory, database, account, origin, args.serve, minio),
+                with_database=True, console_origin=origin)

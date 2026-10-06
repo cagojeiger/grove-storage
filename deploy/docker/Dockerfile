@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
 # opsgate의 하우스 Dockerfile 패턴: cargo-chef + sccache로 의존성 레이어를
-# 캐시하고, 런타임은 debian slim + 비루트 사용자 + 바이너리만 담는다.
+# 캐시하고, 런타임은 Distroless + 비루트 사용자 + 바이너리만 담는다.
 
-FROM rust:1.96.1-bookworm AS chef
+FROM rust:1.96.1-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS chef
 
 WORKDIR /app
 RUN apt-get update \
@@ -17,8 +17,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN --mount=type=cache,id=filegate-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=filegate-cargo-git,target=/usr/local/cargo/git,sharing=locked \
-    cargo install cargo-chef --locked \
-    && cargo install sccache --locked --no-default-features
+    cargo install cargo-chef --version 0.1.78 --locked \
+    && cargo install sccache --version 0.18.0 --locked --no-default-features \
+    && cargo install cargo-auditable --version 0.7.6 --locked
 
 ENV RUSTC_WRAPPER=sccache \
     SCCACHE_DIR=/sccache \
@@ -45,14 +46,11 @@ RUN --mount=type=cache,id=filegate-cargo-registry,target=/usr/local/cargo/regist
     --mount=type=cache,id=filegate-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=filegate-sccache,target=/sccache,sharing=locked \
     --mount=type=cache,id=filegate-target-release,target=/app/target,sharing=locked \
-    cargo build --release --locked --bin filegate \
+    cargo auditable build --release --locked --bin filegate \
     && cp /app/target/release/filegate /usr/local/bin/filegate
 
-FROM debian:bookworm-slim AS runtime
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2 AS runtime
 
-COPY --from=chef /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin appuser
 WORKDIR /app
 COPY --from=builder /usr/local/bin/filegate /usr/local/bin/filegate
 
@@ -61,5 +59,5 @@ COPY --from=builder /usr/local/bin/filegate /usr/local/bin/filegate
 ENV FILEGATE_BIND=0.0.0.0:8080
 EXPOSE 8080
 
-USER appuser
+USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/filegate"]

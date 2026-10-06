@@ -162,7 +162,7 @@ pub async fn claim_completion(
         }
         Some((state, _, _)) if state == "open" => {
             let lease = sqlx::query(
-                "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+                "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
                  WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
             )
             .bind(spec.file_id)
@@ -174,7 +174,7 @@ pub async fn claim_completion(
             }
             sqlx::query(
                 "UPDATE s3_uploads SET state = 'completing', expected_size = $2, \
-                 expected_etag = $3, updated_at = now() WHERE file_id = $1",
+                 expected_etag = $3, updated_at = grove_time.transaction_now() WHERE file_id = $1",
             )
             .bind(spec.file_id)
             .bind(spec.expected_size)
@@ -290,7 +290,7 @@ impl MultipartCompletion {
             return Ok(CompletionClaim::Unavailable);
         }
         let lease = sqlx::query(
-            "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+            "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
              WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
         )
         .bind(self.file_id)
@@ -302,7 +302,7 @@ impl MultipartCompletion {
         }
         let changed = sqlx::query(
             "UPDATE s3_uploads SET state = 'completing', expected_size = $2, \
-             expected_etag = $3, updated_at = now() \
+             expected_etag = $3, updated_at = grove_time.transaction_now() \
              WHERE file_id = $1 AND state = 'open'",
         )
         .bind(self.file_id)
@@ -361,9 +361,9 @@ pub async fn claim_upload_part(
     }
     let renewed = sqlx::query(
         "UPDATE leases SET expires_at = GREATEST( \
-             expires_at, now() + $3 * interval '1 second') \
+             expires_at, grove_time.transaction_now() + $3 * interval '1 second') \
          WHERE id = $1 AND file_id = $2 AND kind = 'write' \
-         AND state = 'issued' AND expires_at > now()",
+         AND state = 'issued' AND expires_at > grove_time.transaction_now()",
     )
     .bind(lease_id)
     .bind(file_id)
@@ -422,7 +422,7 @@ pub async fn renew_upload_part_lease(
         return Ok(false);
     }
     let renewed = sqlx::query(
-        "UPDATE leases SET expires_at = now() + $3 * interval '1 second' \
+        "UPDATE leases SET expires_at = grove_time.transaction_now() + $3 * interval '1 second' \
          WHERE id = $2 AND file_id = $1 AND kind = 'write' AND state = 'issued'",
     )
     .bind(file_id)
@@ -574,7 +574,7 @@ pub async fn claim_abort(
         return Ok(AbortClaim::Busy);
     }
     let claimed = sqlx::query(
-        "UPDATE s3_uploads SET state = 'aborting', updated_at = now() \
+        "UPDATE s3_uploads SET state = 'aborting', updated_at = grove_time.transaction_now() \
          WHERE file_id = $1 AND key = $2 AND multipart AND state = 'open'",
     )
     .bind(file_id)
@@ -658,7 +658,7 @@ async fn finalize_upload(
     if if_none_match && !insert_key_in_tx(&mut tx, client_id, key, file_id).await? {
         sqlx::query(
             "UPDATE s3_uploads SET state = 'aborting', expected_size = NULL, \
-             expected_etag = NULL, updated_at = now() WHERE file_id = $1",
+             expected_etag = NULL, updated_at = grove_time.transaction_now() WHERE file_id = $1",
         )
         .bind(file_id)
         .execute(&mut *tx)
@@ -669,7 +669,7 @@ async fn finalize_upload(
 
     sqlx::query(
         "UPDATE files SET state = 'active', declared_size = $2, etag = $3, \
-         committed_at = now() WHERE id = $1",
+         committed_at = grove_time.transaction_now() WHERE id = $1",
     )
     .bind(file_id)
     .bind(expected_size)
@@ -706,7 +706,7 @@ pub async fn expired_open_uploads(pool: &PgPool, limit: i64) -> Result<Vec<Uuid>
          JOIN files f ON f.id = u.file_id \
          JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
          WHERE u.state = 'open' AND f.state = 'pending' \
-         AND le.state = 'issued' AND le.expires_at < now() LIMIT $1",
+         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -737,7 +737,7 @@ pub async fn claim_expired_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, s
     let expired = sqlx::query(
         "UPDATE leases SET state = 'expired' \
          WHERE file_id = $1 AND kind = 'write' AND state = 'issued' \
-         AND expires_at < now()",
+         AND expires_at < grove_time.transaction_now()",
     )
     .bind(file_id)
     .execute(&mut *tx)
@@ -745,7 +745,7 @@ pub async fn claim_expired_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, s
     if expired.rows_affected() == 0 {
         return Ok(false);
     }
-    sqlx::query("UPDATE s3_uploads SET state = 'aborting', updated_at = now() WHERE file_id = $1")
+    sqlx::query("UPDATE s3_uploads SET state = 'aborting', updated_at = grove_time.transaction_now() WHERE file_id = $1")
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
@@ -853,7 +853,7 @@ pub async fn completion_candidates(
          JOIN files f ON f.id = u.file_id JOIN locations l ON l.file_id = u.file_id \
          JOIN leases le ON le.file_id = u.file_id AND le.kind = 'write' \
          WHERE u.state = 'completing' AND f.state = 'pending' \
-         AND le.state = 'issued' AND le.expires_at < now() LIMIT $1",
+         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -888,7 +888,7 @@ pub async fn renew_completion_lease(
         return Ok(false);
     }
     let renewed = sqlx::query(
-        "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+        "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
          WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
     )
     .bind(file_id)
@@ -926,7 +926,7 @@ async fn lock_expired_completion(
     }
     let lease: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM leases WHERE file_id = $1 AND kind = 'write' \
-         AND state = 'issued' AND expires_at < now() FOR UPDATE",
+         AND state = 'issued' AND expires_at < grove_time.transaction_now() FOR UPDATE",
     )
     .bind(file_id)
     .fetch_optional(&mut **tx)
@@ -946,7 +946,7 @@ pub async fn reopen_completion(
     }
     let reopened = sqlx::query(
         "UPDATE s3_uploads SET state = 'open', expected_size = NULL, \
-         expected_etag = NULL, updated_at = now() \
+         expected_etag = NULL, updated_at = grove_time.transaction_now() \
          WHERE file_id = $1 AND state = 'completing'",
     )
     .bind(file_id)
@@ -956,7 +956,7 @@ pub async fn reopen_completion(
         return Ok(false);
     }
     let lease = sqlx::query(
-        "UPDATE leases SET expires_at = now() + $2 * interval '1 second' \
+        "UPDATE leases SET expires_at = grove_time.transaction_now() + $2 * interval '1 second' \
          WHERE file_id = $1 AND kind = 'write' AND state = 'issued'",
     )
     .bind(file_id)
@@ -979,7 +979,7 @@ pub async fn mark_completion_aborting(pool: &PgPool, file_id: Uuid) -> Result<bo
     }
     let changed = sqlx::query(
         "UPDATE s3_uploads SET state = 'aborting', expected_size = NULL, \
-         expected_etag = NULL, updated_at = now() \
+         expected_etag = NULL, updated_at = grove_time.transaction_now() \
          WHERE file_id = $1 AND state = 'completing'",
     )
     .bind(file_id)

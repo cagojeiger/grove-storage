@@ -2,6 +2,51 @@
 
 use super::*;
 
+#[tokio::test(start_paused = true)]
+async fn idle_stream_stops_at_the_injected_deadline() {
+    let body = Body::from_stream(futures_util::stream::pending::<
+        Result<axum::body::Bytes, std::io::Error>,
+    >());
+    let start = tokio::time::Instant::now();
+    let result = spool_to_temp_with_idle_timeout(
+        body,
+        &mut tokio::io::sink(),
+        Path::new("unused-idle-path"),
+        1,
+        false,
+        Duration::from_secs(30),
+    )
+    .await;
+    assert!(matches!(result, Err(SpoolError::Idle)));
+    assert_eq!(start.elapsed(), Duration::from_secs(30));
+}
+
+#[tokio::test(start_paused = true)]
+async fn stream_progress_resets_the_idle_budget() {
+    let stream = futures_util::stream::unfold(0, |index| async move {
+        if index == 2 {
+            return None;
+        }
+        tokio::time::sleep(Duration::from_secs(29)).await;
+        Some((
+            Ok::<_, std::io::Error>(axum::body::Bytes::from_static(b"x")),
+            index + 1,
+        ))
+    });
+    let start = tokio::time::Instant::now();
+    let result = spool_to_temp_with_idle_timeout(
+        Body::from_stream(stream),
+        &mut tokio::io::sink(),
+        Path::new("unused-progress-path"),
+        2,
+        false,
+        Duration::from_secs(30),
+    )
+    .await;
+    assert!(result.is_ok());
+    assert_eq!(start.elapsed(), Duration::from_secs(58));
+}
+
 #[test]
 fn spool_root_is_local_and_independent_of_provider() {
     assert_eq!(spool_root(), std::env::temp_dir());

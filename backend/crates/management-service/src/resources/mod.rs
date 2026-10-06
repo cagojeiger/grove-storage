@@ -49,7 +49,7 @@ where
     F: Future<Output = Result<StorageRow, Error>>,
 {
     let request_id = Uuid::new_v4();
-    let started = std::time::Instant::now();
+    let started = tokio::time::Instant::now();
     let name = command.name();
     let (context, result) = run(
         pool,

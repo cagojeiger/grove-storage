@@ -1,7 +1,24 @@
 import { test, expect } from "@playwright/test";
 import { envelope, intercept } from "./command-fixture";
+import { maintenanceMock } from "./maintenance-fixture";
 
 const root = "http://127.0.0.1:5180/api/admin/console/";
+
+test("a missing page chunk offers explicit reload instead of a blank console", async ({
+  page,
+}) => {
+  await maintenanceMock(page);
+  await page.route("**/assets/Activity-*.js", (route) => route.abort());
+  await page.goto(`${root}#activity`);
+  await expect(page.getByRole("alert")).toContainText(
+    "The console could not load",
+  );
+  await page.unroute("**/assets/Activity-*.js");
+  await page.getByRole("button", { name: "Reload console" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Activity", exact: true }),
+  ).toBeVisible();
+});
 
 test("built console loads with restrictive browser headers", async ({
   page,
@@ -22,6 +39,8 @@ test("built console loads with restrictive browser headers", async ({
   const response = await page.goto(root);
   const headers = response?.headers();
   expect(headers?.["content-security-policy"]).not.toContain("unsafe-inline");
+  expect(headers?.["content-security-policy"]).toContain("img-src 'self' data:");
+  expect(headers?.["content-security-policy"]).toContain("script-src 'self';");
   expect(headers?.["x-frame-options"]).toBe("DENY");
   expect(headers?.["x-content-type-options"]).toBe("nosniff");
   expect(headers?.["referrer-policy"]).toBe("no-referrer");
@@ -59,7 +78,7 @@ test("built console loads with restrictive browser headers", async ({
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator(".MuiDialog-paper")).toHaveCSS(
     "background-color",
-    "rgb(255, 255, 255)",
+    "rgb(245, 246, 250)",
   );
   await page.keyboard.press("Escape");
   await page.getByRole("link", { name: "Clients", exact: true }).click();
@@ -106,10 +125,10 @@ test("built console loads with restrictive browser headers", async ({
   ).toHaveAttribute("d", /^M/);
   expect(assets.some((url) => url.includes("mui-x-charts"))).toBe(true);
   for (const [route, title, chunk] of [
-    ["accounts", "Accounts", "Access"],
+    ["accounts", "Accounts", "Accounts"],
     ["activity", "Activity", "Activity"],
-    ["settings", "My account", "Sessions"],
-    ["settings/security", "Security", "Security"],
+    ["settings", "My account", "Profile"],
+    ["settings/security", "My account", "Profile"],
   ]) {
     await page.goto(`${root}#${route}`);
     await expect(

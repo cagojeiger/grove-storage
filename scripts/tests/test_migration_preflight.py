@@ -42,6 +42,39 @@ class MigrationPreflightTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     rehearsal["preflight"](fixture, ROOT)
 
+    def target_rows(self):
+        return [{
+            "version": int(source.name.split("_", 1)[0]), "success": True,
+            "checksum": hashlib.sha384(source.read_bytes()).hexdigest(),
+        } for source in sorted((ROOT / "backend/crates/db/migrations").glob("*.sql"))]
+
+    def test_target_matches_all_current_migrations_and_account_schema(self):
+        fixture = Mock()
+        fixture.sql.side_effect = [json.dumps(self.target_rows()), "0", "0", "NO"]
+        rehearsal["verify_target_schema"](fixture)
+        self.assertEqual(fixture.sql.call_count, 4)
+
+    def test_rejects_stale_target_binary_failed_migration_or_checksum_drift(self):
+        current = self.target_rows()
+        for rows in [
+            current[:-1],
+            [*current[:-1], {**current[-1], "success": False}],
+            [*current[:-1], {**current[-1], "checksum": "wrong"}],
+        ]:
+            with self.subTest(rows=rows):
+                fixture = Mock()
+                fixture.sql.return_value = json.dumps(rows)
+                with self.assertRaisesRegex(AssertionError, "does not match"):
+                    rehearsal["verify_target_schema"](fixture)
+
+    def test_rejects_obsolete_tables_columns_or_nullable_session_owner(self):
+        for state in [["1"], ["0", "1"], ["0", "0", "YES"], ["0", "0", ""]]:
+            with self.subTest(state=state):
+                fixture = Mock()
+                fixture.sql.side_effect = [json.dumps(self.target_rows()), *state]
+                with self.assertRaises(AssertionError):
+                    rehearsal["verify_target_schema"](fixture)
+
     @patch("subprocess.check_output")
     def test_rejects_wrong_or_dirty_legacy_checkout_before_starting_services(self, output):
         for revision, dirty in (("wrong", ""), (rehearsal["LEGACY_REVISION"], " M Cargo.toml")):

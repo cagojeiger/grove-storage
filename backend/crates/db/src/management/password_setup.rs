@@ -22,14 +22,12 @@ pub async fn create(
     let mut tx = lock(pool).await?;
     let context = admin_password_session(&mut tx, request_id, session_hash).await?;
     let account_id = Uuid::new_v4();
-    sqlx::query(
-        "INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user',$2,$3)",
-    )
-    .bind(account_id)
-    .bind(account.display_name)
-    .bind(role_name(account.role))
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO management.accounts(id,display_name,role) VALUES($1,$2,$3)")
+        .bind(account_id)
+        .bind(account.display_name)
+        .bind(role_name(account.role))
+        .execute(&mut *tx)
+        .await?;
     sqlx::query(
         "INSERT INTO management.password_credentials(account_id,login_name,password_hash,generation,password_changed_at)
          VALUES($1,$2,NULL,NULL,NULL)",
@@ -40,7 +38,7 @@ pub async fn create(
     .await?;
     let expires_at: DateTime<Utc> = sqlx::query_scalar(
         "INSERT INTO management.password_setup_tokens(account_id,token_hash,expires_at)
-         VALUES($1,$2,clock_timestamp()+interval '24 hours') RETURNING expires_at",
+         VALUES($1,$2,grove_time.wall_now()+interval '24 hours') RETURNING expires_at",
     )
     .bind(account_id)
     .bind(token_hash)
@@ -92,7 +90,6 @@ async fn admin_password_session(
 
 #[derive(sqlx::FromRow)]
 struct AccountRow {
-    kind: String,
     is_active: bool,
     deleted_at: Option<DateTime<Utc>>,
     login_name: Option<String>,
@@ -111,7 +108,7 @@ pub async fn issue(
     let mut tx = lock(pool).await?;
     let context = admin_password_session(&mut tx, request_id, session_hash).await?;
     let account: Option<AccountRow> = sqlx::query_as(
-            "SELECT a.kind,a.is_active,a.deleted_at,p.login_name,p.password_hash
+            "SELECT a.is_active,a.deleted_at,p.login_name,p.password_hash
              FROM management.accounts a LEFT JOIN management.password_credentials p ON p.account_id=a.id
              WHERE a.id=$1",
         )
@@ -121,7 +118,7 @@ pub async fn issue(
     let Some(account) = account else {
         return Err(Error::NotFound);
     };
-    if account.kind != "user" || !account.is_active || account.deleted_at.is_some() {
+    if !account.is_active || account.deleted_at.is_some() {
         return Err(Error::InactiveAccount);
     }
     if account.password_hash.is_some() {
@@ -143,9 +140,9 @@ pub async fn issue(
     }
     let expires_at: DateTime<Utc> = sqlx::query_scalar(
         "INSERT INTO management.password_setup_tokens(account_id,token_hash,expires_at)
-         VALUES($1,$2,clock_timestamp()+interval '24 hours')
+         VALUES($1,$2,grove_time.wall_now()+interval '24 hours')
          ON CONFLICT(account_id) DO UPDATE SET token_hash=EXCLUDED.token_hash,
-         created_at=clock_timestamp(),expires_at=clock_timestamp()+interval '24 hours'
+         created_at=grove_time.wall_now(),expires_at=grove_time.wall_now()+interval '24 hours'
          RETURNING expires_at",
     )
     .bind(account_id)
@@ -174,8 +171,8 @@ pub async fn inspect(pool: &PgPool, token_hash: &str) -> Result<Option<Setup>, E
          FROM management.password_setup_tokens t
          JOIN management.password_credentials p ON p.account_id=t.account_id
          JOIN management.accounts a ON a.id=t.account_id
-         WHERE t.token_hash=$1 AND t.expires_at>clock_timestamp()
-           AND p.password_hash IS NULL AND a.kind='user'
+         WHERE t.token_hash=$1 AND t.expires_at>grove_time.wall_now()
+           AND p.password_hash IS NULL
            AND a.is_active AND a.deleted_at IS NULL",
     )
     .bind(token_hash)
@@ -199,8 +196,8 @@ pub async fn complete(
         "SELECT t.account_id FROM management.password_setup_tokens t
          JOIN management.password_credentials p ON p.account_id=t.account_id
          JOIN management.accounts a ON a.id=t.account_id
-         WHERE t.token_hash=$1 AND t.expires_at>clock_timestamp()
-           AND p.password_hash IS NULL AND a.kind='user'
+         WHERE t.token_hash=$1 AND t.expires_at>grove_time.wall_now()
+           AND p.password_hash IS NULL
            AND a.is_active AND a.deleted_at IS NULL",
     )
     .bind(token_hash)
@@ -211,7 +208,7 @@ pub async fn complete(
     };
     sqlx::query(
         "UPDATE management.password_credentials
-         SET password_hash=$2,generation=$3,password_changed_at=clock_timestamp()
+         SET password_hash=$2,generation=$3,password_changed_at=grove_time.wall_now()
          WHERE account_id=$1 AND password_hash IS NULL",
     )
     .bind(account)

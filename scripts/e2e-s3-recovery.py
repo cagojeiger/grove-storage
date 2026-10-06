@@ -20,16 +20,8 @@ import s3_db_fault
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
-def check(endpoint, directory, database, backend, proxy, attempts, restart=None, db_failure=False):
+def check(endpoint, directory, database, account, backend, proxy, attempts, restart=None, db_failure=False):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-    def admin(method, path, body=None):
-        request = urllib.request.Request(endpoint + path, method=method,
-            data=None if body is None else json.dumps(body).encode(),
-            headers={"Authorization": "Bearer " + HARNESS["TOKEN"],
-                     "Content-Type": "application/json"})
-        with opener.open(request, timeout=5) as response:
-            return json.load(response)
 
     def sql(statement):
         return docker("exec", database, "psql", "-U", "filegate", "-d", "filegate",
@@ -44,14 +36,17 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None,
 
     def ready():
         try:
-            return admin("GET", "/readyz")["status"] == "ready"
+            with opener.open(endpoint + "/readyz", timeout=5) as response:
+                return json.load(response)["status"] == "ready"
         except OSError:
             return False
 
     wait_for(ready)
-    admin("POST", "/api/admin/v1/storages", {**backend.spec, "id": "recovery", "endpoint": proxy})
-    admin("POST", "/api/admin/v1/clients", {"id": "recovery", "storage_id": "recovery"})
-    credential = admin("POST", "/api/admin/v1/clients/recovery/s3-credentials", {})
+    from cli_management_fixture import Management
+    management = Management(endpoint, account)
+    management.command("storage.create", {"id": "recovery", "spec": {**backend.spec, "endpoint": proxy}})
+    management.command("client.create", {"id": "recovery", "storage_id": "recovery"})
+    credential = management.command("credential.create", {"client_id": "recovery"})
     client = boto3.client("s3", endpoint_url=endpoint, region_name="us-east-1",
         aws_access_key_id=credential["access_key_id"], aws_secret_access_key=credential["secret_key"],
         config=Config(signature_version="s3v4", s3={"addressing_style": "path"},
@@ -114,7 +109,7 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None,
         assert client.get_object(**args)["Body"].read() == old
         assert backend.vendor.get_object(Bucket=backend.spec["bucket"], Key=physical)["Body"].read() == new
         assert len(attempts) == count == 1
-        usage = admin("GET", "/api/admin/v1/usage")[0]
+        usage = management.command("usage.storages")[0]
         assert usage["active_bytes"] == len(old) and usage["active_files"] == 1, usage
         assert usage["reserved_files"] == 1 and usage["purge_pending_files"] == 0, usage
         print("PASS request and reconciler commit failures roll back file, lease, and key changes")
@@ -134,8 +129,8 @@ def check(endpoint, directory, database, backend, proxy, attempts, restart=None,
         assert error.response["Error"]["Code"] == "NoSuchUpload", error
     else:
         raise AssertionError("finalized upload must no longer be open")
-    wait_for(lambda: admin("GET", "/api/admin/v1/usage")[0]["purge_pending_files"] == 0)
-    usage = admin("GET", "/api/admin/v1/usage")[0]
+    wait_for(lambda: management.command("usage.storages")[0]["purge_pending_files"] == 0)
+    usage = management.command("usage.storages")[0]
     assert usage["active_files"] == 1 and usage["active_bytes"] == len(new), usage
     assert usage["reserved_files"] == usage["reserved_bytes"] == usage["purge_pending_bytes"] == 0, usage
     assert usage["remaining_bytes"] == backend.spec["capacity_bytes"] - len(new), usage
@@ -159,6 +154,6 @@ if __name__ == "__main__":
     options = parser.parse_args()
     with minio_backend() as backend:
         with complete_proxy(backend.endpoint, drop_response=not options.db_failure) as (proxy, attempts):
-            HARNESS["main"](lambda endpoint, directory, database, restart=None:
-                check(endpoint, directory, database, backend, proxy, attempts, restart, options.db_failure),
+            HARNESS["main"](lambda endpoint, directory, database, account, restart=None:
+                check(endpoint, directory, database, account, backend, proxy, attempts, restart, options.db_failure),
                 with_database=True, with_restart=options.restart)

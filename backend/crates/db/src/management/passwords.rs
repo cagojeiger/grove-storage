@@ -16,7 +16,7 @@ pub async fn initialized(pool: &PgPool) -> Result<bool, Error> {
     Ok(sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM management.password_credentials p
          JOIN management.accounts a ON a.id=p.account_id
-         WHERE p.password_hash IS NOT NULL AND a.kind='user' AND a.role='admin'
+         WHERE p.password_hash IS NOT NULL AND a.role='admin'
            AND a.is_active AND a.deleted_at IS NULL)",
     )
     .fetch_one(pool)
@@ -76,11 +76,11 @@ pub async fn change(
 ) -> Result<bool, Error> {
     let mut tx = lock(pool).await?;
     let current: Option<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT s.id,s.user_id FROM management.sessions s
-         JOIN management.accounts a ON a.id=s.user_id
+        "SELECT s.id,s.account_id FROM management.sessions s
+         JOIN management.accounts a ON a.id=s.account_id
          JOIN management.password_credentials p ON p.account_id=a.id
          WHERE s.session_hash=$1 AND s.auth_method='password'
-           AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+           AND s.revoked_at IS NULL AND s.expires_at>grove_time.wall_now()
            AND s.password_generation=$2 AND p.generation=$2
            AND a.is_active AND a.deleted_at IS NULL",
     )
@@ -93,7 +93,7 @@ pub async fn change(
     };
     let changed = sqlx::query(
         "UPDATE management.password_credentials
-         SET password_hash=$2,generation=$3,password_changed_at=clock_timestamp()
+         SET password_hash=$2,generation=$3,password_changed_at=grove_time.wall_now()
          WHERE account_id=$1 AND generation=$4",
     )
     .bind(account)
@@ -106,7 +106,7 @@ pub async fn change(
     if changed != 1 {
         return Ok(false);
     }
-    sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL")
+    sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
     let context = super::AuditContext {
         actor: super::AuditActor::User {
@@ -144,13 +144,11 @@ pub async fn initialize(
         return Err(Error::AlreadyInitialized);
     }
     let account = Uuid::new_v4();
-    sqlx::query(
-        "INSERT INTO management.accounts(id,kind,display_name,role) VALUES($1,'user',$2,'admin')",
-    )
-    .bind(account)
-    .bind(display_name)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO management.accounts(id,display_name,role) VALUES($1,$2,'admin')")
+        .bind(account)
+        .bind(display_name)
+        .execute(&mut *tx)
+        .await?;
     replace(&mut tx, account, login, password_hash).await?;
     local_audit(&mut tx, request_id, account, "account.initialize").await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
@@ -186,9 +184,9 @@ pub async fn recover(
         .bind(account)
         .execute(&mut *tx)
         .await?;
-    sqlx::query("UPDATE management.sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL")
+    sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
-    sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE account_id=$1 AND revoked_at IS NULL")
+    sqlx::query("UPDATE management.credentials SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
     local_audit(&mut tx, request_id, account, "account.password_recover").await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
@@ -205,7 +203,7 @@ async fn replace(
         "INSERT INTO management.password_credentials(account_id,login_name,password_hash,generation)
          VALUES($1,$2,$3,$4) ON CONFLICT(account_id) DO UPDATE
          SET login_name=EXCLUDED.login_name,password_hash=EXCLUDED.password_hash,
-             generation=EXCLUDED.generation,password_changed_at=clock_timestamp()",
+             generation=EXCLUDED.generation,password_changed_at=grove_time.wall_now()",
     ).bind(account).bind(login).bind(hash).bind(Uuid::new_v4()).execute(&mut **tx).await?;
     Ok(())
 }

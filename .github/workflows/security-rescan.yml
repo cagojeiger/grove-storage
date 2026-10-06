@@ -1,0 +1,69 @@
+name: Released image security
+
+on:
+  schedule:
+    - cron: '17 18 * * *' # Daily at 03:17 KST.
+  workflow_dispatch:
+
+concurrency:
+  group: released-image-security
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve released image digests
+    if: github.repository == 'cagojeiger/grove-storage'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Resolve latest once and pin both Linux platform manifests
+        id: targets
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          index_digest=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{.Manifest.Digest}}')
+          [[ "$index_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          docker buildx imagetools inspect "$IMAGE@$index_digest" --raw > "$RUNNER_TEMP/index.json"
+          targets="$RUNNER_TEMP/targets.jsonl"
+          for architecture in amd64 arm64; do
+            digest=$(python3 deploy/ci/image-security.py platform "$RUNNER_TEMP/index.json" "$architecture")
+            jq -cn --arg architecture "$architecture" --arg image "$IMAGE@$digest" \
+              --arg index_digest "$index_digest" '$ARGS.named' >> "$targets"
+          done
+          echo "matrix=$(jq -sc '{include: .}' "$targets")" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: Rescan ${{ matrix.architecture }}
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Record released index identity
+        env:
+          INDEX_DIGEST: ${{ matrix.index_digest }}
+        run: |
+          mkdir -p "reports/trivy-released-${{ matrix.architecture }}"
+          printf '%s\n' "$INDEX_DIGEST" > "reports/trivy-released-${{ matrix.architecture }}/index-digest.txt"
+      - uses: ./.github/actions/image-security
+        with:
+          image: ${{ matrix.image }}
+          architecture: ${{ matrix.architecture }}
+          artifact: trivy-released-${{ matrix.architecture }}

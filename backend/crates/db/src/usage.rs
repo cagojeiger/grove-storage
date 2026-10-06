@@ -7,9 +7,6 @@
 
 use sqlx::PgPool;
 
-/// storage 하나의 용량·3버킷·상태별 파일 수. 파일 수는 버킷과 짝을 이룬다:
-/// reserved↔pending, active↔active, purge_pending↔deleted/reclaimed(정리 전).
-/// purge 완료 파일은 locations가 사라지므로 세지 않는다 — 점유가 없다.
 #[derive(sqlx::FromRow)]
 pub struct StorageUsage {
     pub storage_id: String,
@@ -23,7 +20,6 @@ pub struct StorageUsage {
     pub purge_pending_files: i64,
 }
 
-/// storage별 사용량 — 등록된 모든 storage를 id 순으로, 조회 시점 집계.
 /// sum(bigint)은 NUMERIC이라 i64로 못 받는다 — bigint로 되돌린다.
 pub async fn by_storage<'e>(
     pool: impl sqlx::PgExecutor<'e>,
@@ -112,7 +108,6 @@ pub async fn record_snapshot(pool: &PgPool, day: chrono::NaiveDate) -> Result<u6
     Ok(result.rows_affected())
 }
 
-/// 일별 스냅샷 한 행 — (day, storage, client)의 활성 점유.
 #[derive(sqlx::FromRow)]
 pub struct SnapshotRow {
     pub day: chrono::NaiveDate,
@@ -131,7 +126,7 @@ pub async fn snapshot_history<'e>(
     sqlx::query_as(
         "SELECT day, storage_id, client_id, active_bytes, active_files \
          FROM usage_snapshot \
-         WHERE day >= current_date - $1 \
+         WHERE day >= grove_time.transaction_now()::date - $1 \
          ORDER BY day, storage_id, client_id",
     )
     .bind(days)
