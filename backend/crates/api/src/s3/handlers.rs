@@ -23,8 +23,6 @@ use crate::storage_access::backend_from_row;
 use filegate_infra::backend::commit_temp_to_backend;
 use grove_object_policy::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
 
-// ── PutObject ────────────────────────────────────────────────
-
 /// 바이트를 스풀로 받아 실측(크기·MD5·SHA256)하고 뒷단에 올린 뒤 즉시
 /// 확정한다 — 스트림 완료가 곧 관찰이다 (spec 03). 같은 키 재PUT은
 /// 매핑 교체 + 옛 file detach다.
@@ -259,8 +257,6 @@ pub(super) fn spool_error_to_xml(error: spool::SpoolError) -> Response {
         spool::SpoolError::Io(error) => xml_internal("spool write", error),
     }
 }
-
-// ── GetObject / HeadObject / DeleteObject ────────────────────
 
 /// (bucket, key) → active file. 매핑·파일·상태 어느 층이 없어도 같은 404다.
 async fn resolve(

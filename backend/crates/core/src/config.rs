@@ -35,8 +35,6 @@ pub struct SecurityConfig {
 }
 
 impl SecurityConfig {
-    /// storage 시크릿 암호기를 조립한다 (활성 + 선택적 PREV). 부팅에서 호출되어
-    /// 루트 길이·중복 key_id 같은 오설정을 여기서 잡는다.
     pub fn crypto(&self) -> Result<crate::Crypto> {
         let mut crypto = crate::Crypto::new(&self.enc_key_id, &self.enc_root_secret)?;
         if let (Some(id), Some(root)) = (&self.enc_key_id_prev, &self.enc_root_secret_prev) {
@@ -64,9 +62,9 @@ pub struct ServerConfig {
     pub bind_addr: SocketAddr,
     pub log_format: LogFormat,
     /// 중계 바이트 엔드포인트의 공개 베이스 URL (예: https://filegate.example.com).
-    /// 중계 storage(fs 또는 force_relay)를 등록하려면 필수 — 등록이 검사한다.
+    /// force_relay storage 등록에 필요하다.
     pub public_url: Option<String>,
-    /// reconciler tick 간격 (기본 60초). 테스트에서만 줄인다.
+    /// reconciler tick 간격 (기본 60초).
     pub reconciler_interval_secs: u64,
     pub management_log_retention: ManagementLogRetention,
     /// 이 선언 크기를 넘으면 create가 multipart를 발급한다 (spec 02).

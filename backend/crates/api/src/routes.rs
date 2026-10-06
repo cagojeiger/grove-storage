@@ -1,16 +1,4 @@
 //! HTTP 표면 — 경로 배선과 공통 레이어만 안다.
-//!
-//! 경로 구조 — 제어는 /api 밑에 표면별 버전, 바이트는 /blobs(버전 밖),
-//! 프로브는 k8s 관례 이름:
-//!   /                  서비스 정보
-//!   /healthz           liveness (무의존)
-//!   /readyz            readiness (DB 체크)
-//!   /api/v1/*          클라이언트 API (클라이언트 키 — v1 모듈)
-//!   /api/admin/v1/*    구형 운영자 API (명시적 호환 모드에서만 활성)
-//!   /api/admin/commands/v1  공통 자원 명령 (User Bearer)
-//!   /api/admin/console-commands/v1  공통 자원 명령 (User 세션 + CSRF)
-//!   /api/admin/mcp      같은 자원 명령의 stateless MCP (User Bearer)
-//!   /blobs/*           중계 바이트 엔드포인트 (lease secret — blobs 모듈)
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,8 +50,6 @@ pub struct AppState {
     pub spool_slots: Arc<tokio::sync::Semaphore>,
 }
 
-/// `Authorization: Bearer <token>`에서 토큰을 꺼낸다 — 두 인증 미들웨어
-/// (운영자·클라이언트)가 같은 형식을 읽는다.
 pub(crate) fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
     headers
         .get(axum::http::header::AUTHORIZATION)
@@ -114,7 +100,6 @@ fn with_telemetry(router: Router) -> Router {
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }
 
-/// 시스템 표면: 프로브. 인증 밖에 둔다.
 fn system_routes() -> Router<AppState> {
     Router::new()
         .route("/healthz", get(health))

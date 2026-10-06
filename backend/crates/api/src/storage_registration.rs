@@ -89,8 +89,6 @@ pub(crate) async fn verify_command(
         })
 }
 
-/// 접근 검증 후 행으로 만든다. 등록과 갱신의 공통 경로.
-/// 싼 검증이 먼저다 — 네트워크·디스크 검증 전에 거른다.
 pub(crate) async fn verified_row(
     crypto: &Crypto,
     clock: Arc<dyn Clock>,
@@ -107,8 +105,6 @@ pub(crate) async fn verified_row(
     }
 }
 
-/// s3 등록은 세 단계다: 필드 검증(순수) → 접근 확인(네트워크) →
-/// 암호화·행 조립. 단계마다 함수 하나 — 실패는 전부 앞 단계에서 싸게 끝난다.
 async fn verified_s3_row(
     crypto: &Crypto,
     clock: Arc<dyn Clock>,
@@ -134,7 +130,6 @@ struct S3Submission {
     capacity_bytes: i64,
 }
 
-/// 종류별 필드 규칙만 본다 — 네트워크·디스크에 닿지 않는다.
 fn validated_s3_submission(
     relay_base_ready: bool,
     body: Submission,
@@ -171,7 +166,6 @@ fn validated_s3_submission(
     })
 }
 
-/// Encrypt the verified provider secret before constructing a registry row.
 fn encrypted_s3_row(
     crypto: &Crypto,
     id: &str,

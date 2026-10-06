@@ -1,9 +1,5 @@
-//! 업로드 루프: create(발급) → 전송 주체의 직접 PUT → commit(사후 검증).
-//!
-//! spec 00의 계약 그대로다: 바이트는 filegate를 지나지 않고(공리 2),
-//! capacity는 집행하지 않는 관찰의 비교선이라 create가 용량으로 거부하지
-//! 않으며, 직결 PUT은 크기를 앞단에서 막지 못하므로 commit이 사후 검증
-//! 게이트다. 용량은 운영자의 세계다 — 클라이언트에 노출하지 않는다 (공리 1).
+//! Native 파일 발급·확정·조회. capacity는 집행하지 않는 관찰값이다.
+//! 직결 업로드는 commit에서, 중계 업로드는 전송 중 크기·해시를 검증한다.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -64,7 +60,6 @@ pub(super) async fn create(
     Extension(client): Extension<ClientId>,
     Json(body): Json<CreateBody>,
 ) -> Result<Response, ApiError> {
-    // 크기·모드·md5-무효 규칙은 순수 계약이다 (validation) — is_multipart 반환.
     let multipart = classify_upload(
         body.declared_size,
         state.multipart_threshold,

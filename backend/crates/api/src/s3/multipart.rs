@@ -41,8 +41,6 @@ use grove_object_policy::validation::content_type_ok;
 /// 바이트는 이 표면을 지나지 않으므로 넉넉히 4MiB로 둔다.
 const COMPLETE_BODY_LIMIT: usize = 4 * 1024 * 1024;
 
-// ── CreateMultipartUpload ────────────────────────────────────
-
 /// 크기 미상의 pending 파일 + write lease를 열고 UploadId를 돌려준다.
 /// declared_size는 sentinel 0으로 시작하고 Complete가 실측 합으로 확정한다.
 /// part_size는 크기를 파생하는 값이 아니라 multipart 표식 + 크기 상한(×10000)
@@ -157,8 +155,6 @@ async fn schedule_create_cleanup(state: &AppState, client_id: &str, key: &str, f
         );
     }
 }
-
-// ── UploadPart ───────────────────────────────────────────────
 
 /// part 바이트를 스풀로 받아 실측(크기·MD5)하고 벤더 UploadPart로 중계한다.
 /// 발급(part 업로드)마다 write lease를 갱신해 진행 중 세션을 살린다. 같은
@@ -368,8 +364,6 @@ pub(super) async fn upload_part(
     Ok(response)
 }
 
-// ── CompleteMultipartUpload ──────────────────────────────────
-
 /// 요청 XML의 part 목록을 원장의 실측과 대조해(존재·ETag 일치) 완성한다 —
 /// 목록은 검증 입력이고 크기의 진실은 원장이다 (spec 03). 검증 후 벤더
 /// Complete에 정확한 part 번호와 ETag 목록을 전달한다.
@@ -554,8 +548,6 @@ pub(super) async fn complete_multipart(
     Ok(complete_result(bucket, key, &etag))
 }
 
-// ── AbortMultipartUpload ─────────────────────────────────────
-
 /// aborting 선점 뒤 벤더 세션·임시·최종 객체를 멱등 정리하고 pending을
 /// 회수한다. 실패하면 session/location이 남아 reconciler가 재시도한다.
 /// 없는·다른 key·네이티브 세션은 NoSuchUpload다.
@@ -601,8 +593,6 @@ pub(super) async fn abort_multipart(
     tracing::info!(event = "s3.abort_multipart", client = %client_id, key, file = %file_id);
     Ok(StatusCode::NO_CONTENT.into_response())
 }
-
-// ── 공용 ─────────────────────────────────────────────────────
 
 /// UploadId 핸들(= file_id) → 진행 중 multipart 세션. 소유·상태·모드를
 /// 검증한다: 남의 것·없는 것·이미 끝난 것·multipart가 아닌 것은 NoSuchUpload.

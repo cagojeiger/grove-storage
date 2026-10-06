@@ -53,13 +53,9 @@ pub struct Measured {
 /// 호출자가 이중 abort해도 무해하다). 미달(written < declared) 검사는
 /// 호출자 몫이다 — 표면마다 에러 코드가 다르므로.
 pub enum SpoolError {
-    /// 청크 사이 유휴가 상한을 넘었다 (slow-loris).
     Idle,
-    /// 스트림이 도중에 끊겼다.
     Aborted,
-    /// 선언 크기를 넘겼다 — 도중에 끊는다.
     TooLarge,
-    /// 스풀 쓰기 실패.
     Io(std::io::Error),
 }
 

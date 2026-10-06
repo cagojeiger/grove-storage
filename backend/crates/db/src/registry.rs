@@ -1,4 +1,4 @@
-//! 등록부 행 접근 (마이그레이션 0002): storages / clients / client_keys.
+//! 등록부 행 접근: storages / clients / client_keys.
 //!
 //! 참조 무결성은 DB FK가 집행한다 — 여기서는 위반을 분류만 하고
 //! HTTP 응답은 호출자(api)가 정한다.
@@ -169,7 +169,6 @@ pub async fn get_storage<'e>(
     .await
 }
 
-/// 부팅 재검증과 목록 조회가 함께 쓴다. 등록부는 소수 행이라 무계 조회다.
 pub async fn list_storages<'e>(
     pool: impl sqlx::PgExecutor<'e>,
 ) -> Result<Vec<StorageRow>, sqlx::Error> {
@@ -220,7 +219,6 @@ pub async fn client_exists(pool: &PgPool, id: &str) -> Result<bool, sqlx::Error>
         .await
 }
 
-/// 클라이언트가 소유한 storage id (없는 클라이언트면 None).
 pub async fn client_storage<'e>(
     pool: impl sqlx::PgExecutor<'e>,
     id: &str,

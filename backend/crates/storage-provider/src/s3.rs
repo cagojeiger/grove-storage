@@ -1,8 +1,4 @@
 //! S3 provider clients, probes, presigning, and physical operations.
-//!
-//! 입력은 등록부의 storage 행 + 복호된 시크릿이다 (spec 01).
-//! 등록 시점과 부팅 재검증이 connect를, 도메인 오퍼레이션이
-//! presign_put(발급)과 head_object(commit의 사후 검증)를 호출한다.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -74,13 +70,8 @@ impl PartialEq for S3StorageSpec {
     }
 }
 
-/// storage당 클라이언트 캐시 — 클라이언트가 자기 HTTP 커넥션 풀을 소유하므로,
-/// 요청마다 새로 만들면 모든 S3 네트워크 op가 콜드 TCP+TLS 핸드셰이크로
-/// 시작한다. 재사용이 풀을 웜 상태로 유지한다.
-///
-/// 무효화는 내용 대조다: storage 행은 요청마다 DB에서 새로 읽히므로, 캐시된
-/// spec과 이번 spec이 다르면(등록 갱신) 그 자리에서 재구성한다 — 멀티 pod에도
-/// 별도 무효화 훅이 필요 없다. 락 poison이면 캐시만 건너뛴다 (기능 동일).
+/// Storage별 HTTP 연결 풀을 재사용한다. 요청의 spec이 바뀌면 재구성하므로
+/// 별도 pod 간 무효화가 필요 없다. 락 poison이면 캐시를 건너뛴다.
 #[derive(Debug)]
 pub struct S3ClientCache {
     inner: RwLock<HashMap<(String, Address), (S3StorageSpec, S3Storage)>>,
@@ -116,9 +107,7 @@ impl S3ClientCache {
     }
 }
 
-/// 접근 확인 없이 클라이언트만 구성한다. 요청 경로(presign·head_object)용 —
-/// 접근성은 등록·부팅 재검증이 이미 보증했다. crate 내부 헬퍼다: 외부는
-/// 캐시 래퍼(S3ClientCache::get)와 connect를 지난다.
+/// 접근 확인 없이 클라이언트만 구성한다.
 fn client(spec: &S3StorageSpec, address: Address, clock: Arc<dyn Clock>) -> S3Storage {
     let credentials = Credentials::new(
         spec.access_key.clone(),
