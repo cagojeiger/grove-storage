@@ -33,13 +33,13 @@ History:   lease_history / usage_snapshot (independent ID snapshots)
 | Management | Account, token, session and management-history tables remain unchanged |
 | Response compatibility | Management DTOs keep root_path=null; this is not a DB column |
 
-Apply the migration with old writers stopped and a verified backup of the DB and
-encryption keys. FS rows require an explicit data migration before this step.
-For the later FileGate cutover, drain or reconcile uploads and account for already
-issued presigned URLs, which can continue to write to external S3 after shutdown.
-Validate object IDs, locations, logical keys, encrypted credentials and recovery
-rows before reopening traffic. Application rollback requires the matching old
-schema/backup; the previous binary is not supported on the S3-only schema.
+The offline upgrade starts with all old DB writers stopped and a verified backup
+of the database and encryption keys. Remaining FS rows prevent this migration.
+Issued presigned URLs can continue to write to external S3 after server shutdown.
+The cutover checks object IDs, locations, logical keys, encrypted credentials and
+recovery rows before traffic resumes. Rollback restores the previous binary and
+its matching database backup. The old binary is incompatible with the S3-only schema.
+The procedure is in [migration rehearsal](../development/migration-rehearsal.md).
 
 ## 등록 관계
 
@@ -55,13 +55,19 @@ flowchart LR
 PostgreSQL이 정본이고 운영자 API가 변경 경계다. `gscli`과 API 클라이언트가
 같은 변경 계약을 사용한다. 기존 Terraform 예제는 운영 이관 전 비교 기준이다.
 
-| 리소스 | `/api/admin/v1` 아래 경로 | 동작 |
+| 리소스 | 공통 명령 | 동작 |
 |---|---|---|
-| storage | `/storages`, `/storages/{id}` | 생성·목록·조회·갱신·삭제 |
-| client | `/clients`, `/clients/{id}` | 생성·목록·조회·삭제 |
-| client key | `/clients/{id}/keys[/{key_hash}]` | 해시 등록·목록·조회·삭제 |
-| S3 credential | `/clients/{id}/s3-credentials[/{access_key_id}]` | 발급·목록·삭제 |
-| usage | `/usage`, `/usage/clients`, `/usage/history` | 조회 |
+| storage | `storage.*` | 생성·목록·조회·교체·삭제·metadata·연결 검사 |
+| client | `client.*` | 생성·목록·조회·삭제·metadata |
+| client key | `client-key.*` | 해시 등록·목록·삭제 |
+| S3 credential | `credential.*` | 발급·목록·삭제 |
+| usage | `usage.*` | Storage·Client·일별 사용량 조회 |
+
+Console은 세션으로 `/api/admin/console-commands/v1`을 호출한다. 관리 API·CLI는
+Account 토큰으로 `/api/admin/commands/v1`을 호출하고 MCP는 같은 명령을 실행한다.
+입력·출력은 [명령 계약](09-management-commands.md), 인증은
+[로컬 관리 인증](11-local-management-auth.md)에 있다.
+구형 `/api/admin/v1` REST는 [명시적 호환 모드](05-admin-auth.md)에서 제공한다.
 
 ## 저장소와 배치
 
@@ -95,8 +101,8 @@ vendor 세션을 재발견하는 내부 복구에 사용한다.
 
 | 비밀 | 공급·저장 | 회전 |
 |---|---|---|
-| 관리자 토큰 | DB 해시, [초기화·세션·호환 계약](05-admin-auth.md) | 새 토큰 발급 → 소비자 전환 → 옛 토큰 폐기 |
-| 초기화 전 운영자 토큰 | env FILEGATE_OPERATOR_TOKENS, 쉼표 목록·상수시간 비교 | 관리자 초기화 시 DB 인증으로 전환 |
+| Account 관리 토큰 | DB 해시, [계정·토큰 계약](11-local-management-auth.md) | 새 토큰 발급 → 소비자 전환 → 옛 토큰 폐기 |
+| 구형 운영자 토큰 | 명시적 호환 모드의 DB 해시 또는 env FILEGATE_OPERATOR_TOKENS | [이전 인증 전환](11-local-management-auth.md#legacy-operator-cutover) |
 | client 키 | 생성자가 raw 전달, API에는 sha256:64hex 등록 | 해시 추가 → 소비자 전환 → 옛 해시 삭제 |
 | S3 secret | 서버 생성·발급 시 1회 반환, AES-GCM 저장 | 재발급 → 소비자 전환 → 옛 자격증명 삭제 |
 | storage secret | 운영자가 제출, 접근 검증 후 AES-GCM 저장 | 새 vendor 키로 storage 갱신 |

@@ -134,14 +134,35 @@ Server-local `filegate status` probes registered backends using server settings.
 
 ## Account Workflows
 
+```text
+Sign in                         Set password (one-time setup)
++--------------------------+    +--------------------------+
+| Username                 |    | Username (read-only)     |
+| Password             [o] |    | New password         [o] |
+|                [Sign in] |    | Confirm password     [o] |
+| Recovery help            |    |           [Set password] |
++--------------------------+    +--------------------------+
+
+Sidebar identity -- click --> My account
+                              Profile | Security | API tokens | Sessions
+Sidebar sign-out icon ------> End current session
+```
+
+The sidebar identity opens My account directly. Security is a tab within that
+page, not a separate sidebar menu action. A fresh password sign-in opens
+Overview; an authenticated reload retains the current route.
+
 | Flow | Contract |
 |---|---|
 | First Admin | `filegate account init` in a server terminal, then normal password sign-in |
 | Create account | Admin re-enters current password; username, display name, role and setup link created atomically |
 | Initial password | Recipient consumes one-time fragment link, sets password, then signs in |
+| Unavailable setup | Expired, used or invalid link shows an unavailable state; an Admin can replace the link while the account has no password |
 | Reissue setup | Active, non-deleted account without a password; reserved username is read-only |
 | Password configured | Initial setup action disabled; use own password change or operator recovery |
 | Recovery | `filegate account recover`; same account ID, sessions and management tokens revoked |
+| Forgotten password | Recovery help points to the server operator |
+| Session expired | Sign-in state; sensitive form values and private cached data are cleared |
 | Management token | Label and 1-90 day expiry; current-password reauthentication; masked one-time display with reveal/copy and saved acknowledgement |
 | Token boundary | Named account token authorizes resource commands; console login uses a password |
 | Role safety | Last usable Admin protected; disable/delete confirms account name; self-actions disclose session loss |
@@ -149,6 +170,10 @@ Server-local `filegate status` probes registered backends using server settings.
 Account tokens, Client service credentials and provider secrets remain separate.
 Changing a password revokes browser sessions and preserves management API tokens.
 Full authentication and transaction contracts live in [spec 11](11-local-management-auth.md).
+
+Forms support keyboard focus, password-manager autocomplete and paste. Loading,
+empty, validation, conflict, forbidden, rate-limited and unavailable states are
+explicit. Secrets remain outside persistent web storage, analytics and logs.
 
 ## Verification and Delivery
 

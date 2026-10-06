@@ -6,7 +6,7 @@
 
 | 항목 | 제공 주체 |
 |---|---|
-| storage·client 등록 | [운영자 API](../spec/01-registry.md) |
+| storage·client 등록 | [Console·CLI 등록부 관리](registry-management.md) |
 | client bearer 키 | 운영자 |
 | endpoint | FileGate 실행 환경 |
 | 사용자 권한·안정 URL | 서비스 |
@@ -61,4 +61,7 @@ FileGate DB → 위치·크기·상태·lease·사용량
 |---|---|
 | /api/v1/* | client bearer 키 |
 | 발급된 바이트 URL | URL의 secret·서명·만료 |
-| /api/admin/v1/* | operator bearer 토큰 |
+| /api/admin/commands/v1 | Account 관리 API 토큰; 등록부 관리 |
+
+Console·CLI·MCP의 관리 인증은 [로컬 관리 인증](../spec/11-local-management-auth.md),
+S3 SDK 연동은 [S3 연동](s3-onboarding.md)에 있다.

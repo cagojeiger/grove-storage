@@ -45,54 +45,12 @@ Initialize an Account with `filegate account init`, migrate management callers t
 API replica. Old operator authority is independent of Account roles and revocation
 while compatibility mode is enabled. Turning it off is a process configuration
 change, not token revocation; turning it back on restores still-valid credentials.
-Native/S3 Client keys and presigned/relay contracts are unchanged. Do not deploy
-the new default to a legacy-only installation before choosing its migration mode.
+Native/S3 Client keys and presigned/relay contracts are unchanged. With legacy
+mode disabled, startup accepts an active local password Admin. Legacy-only
+installations start with explicitly enabled and initialized legacy authentication.
 
-## Screens
-
-```text
-Sign in                         Set password (one-time setup)
-+--------------------------+    +--------------------------+
-| Username                 |    | Username (read-only)     |
-| Password             [o] |    | New password         [o] |
-|                [Sign in] |    | Confirm password     [o] |
-| Recovery help            |    |           [Set password] |
-+--------------------------+    +--------------------------+
-
-Console
-+------------------+-----------------------------------------------+
-| Overview         | Accounts                    [+ Create account] |
-| Resources        | Search [      ] Role [All v] Status [Current v] |
-|   Storage        | Account                 Role     Status        |
-|   Clients        | Heeyong                 Admin    Active        |
-| Management       | Backup                  Writer   Pending setup |
-|   Accounts       | Rows [50 v]       2 on this page    [<] [>]     |
-|   Activity       |                                               |
-+------------------+-----------------------------------------------+
-| Sidebar account menu --> My account: Profile | Tokens | Sessions  |
-|                     --> Security: Change password                |
-+------------------------------------------------------------------+
-```
-
-| Flow | UX / server result |
-|---|---|
-| First installation | Operator initializes an admin with hidden password input; browser uses normal Sign in |
-| Create account | Admin enters username, display name and role; one-time setup link is shown once |
-| First password | Recipient opens setup link, confirms the read-only reserved username, chooses password, then signs in normally |
-| Expired/used setup | Generic unavailable link state; replacement is available only while the account has no password |
-| Password already configured | Setup-link action is disabled; use password change or operator recovery |
-| Change password | Current/new/confirmation; all sessions revoked; normal sign-in follows |
-| Forgotten password | Recovery help points to server operator; local recovery revokes sessions and API tokens |
-| Issue token | Name and expiry; secret displayed once; UI provides CLI/MCP connection snippets |
-| Revoke token | Confirmation names token and affected automation; no Client key changes |
-| Role/activation | Server guard protects last usable admin; UI explains rejected operation |
-| Session expired | Return to sign-in with a local return path; discard sensitive form values |
-
-All UI labels are English. Layouts support light/dark and phone/tablet/desktop.
-Tables retain cursor pagination. Loading, empty, validation, conflict, forbidden,
-rate-limited and unavailable states are explicit. Forms support keyboard focus,
-password-manager autocomplete and paste. Secrets remain outside persistent web
-storage, URLs sent to the server, analytics and logs.
+Console navigation, forms and account workflows are in
+[the console contract](06-console.md#account-workflows).
 
 ## Persistence
 
@@ -130,11 +88,12 @@ Migration `0024_account_authentication_cleanup.sql` is transactional:
 | `admin_*` compatibility tables | Unchanged; explicit legacy mode remains a separate cutover decision |
 | Storage/Client/file/upload tables | Unchanged; S3 protocol, SigV4 keys and object locations unchanged |
 
-Stop **all old servers and other DB writers** before applying this migration.
-Back up the DB and verify restoration first, then migrate and start the matching
-new binaries. Do not run old binaries against the new schema; image-only rollback
-is insufficient, so rollback requires the matching pre-upgrade database backup.
-The migration lock is not a substitute for stopping old writers.
+The offline upgrade starts with **all old servers and other DB writers stopped**
+and a database backup whose restoration has been verified. Migration precedes
+startup of the matching new binaries. Old binaries are incompatible with the new
+schema. Rollback restores the previous binary and its matching pre-upgrade database
+backup; changing the image alone leaves an incompatible schema.
+The migration lock serializes migrations, not application writers.
 
 Console JSON retains the compatibility fields `kind: "user"` and `user_id`;
 they no longer reflect separate DB identity types. External S3 clients require
@@ -204,6 +163,10 @@ Authenticated local account, profile and personal-token operations record
 command outcomes under the response request ID. Successful mutations also
 write their audit event in the same transaction as the change.
 
+Compatibility account creation without a password leaves initial setup pending.
+Separate setup-link issuance enables password login. Legacy token sessions cannot
+use the personal token routes.
+
 Setup links put their secret in a fragment, immediately remove it from browser
 history and submit it in a body. The setup page uses no third-party content.
 An initialized account uses password change/local recovery instead of initial
@@ -220,34 +183,7 @@ with the same token contract. Passwords stay out of remote CLI/MCP configuration
 Token identity and request ID are recorded; the client-reported tool name is not
 used as authorization evidence.
 
-## Delivery Gates
-
-| Stage | Required evidence | State |
-|---|---|---|
-| 1. Password foundation | Policy/hash tests, initialize/recover atomicity and concurrency tests | Verified locally |
-| 2. Session cutover | Login, expiry, CSRF, generation race, password-change and revocation tests | Verified locally |
-| 3. Account UX | Setup-once flow, role/last-admin guards, personal tokens/sessions | Verified locally |
-| 4. Machine interfaces | CLI/MCP parity, role change, expiry/revoke, identity API denial | Verified locally |
-| 5. Cleanup and release readiness | Remove old Root/Master flow, align docs, full regression and responsive browser tests | Local verification; migration 0024 implements historical authentication cleanup |
-
-Existing migration checksums and Resource tables remain intact. Incremental
-Management migrations support staged development. Migration 0024 removes the
-obsolete authentication tables without rewriting earlier migration checksums.
-Deployment and OIDC integration are separate work.
-
-### Foundation Evidence
-
-| Check | Result |
-|---|---|
-| Password unit tests | 3 passed: canonical username, policy, salted Argon2id/Unicode verification |
-| Password DB tests | 7 passed: initialize race, rollback, targeted revocation, login-name guards |
-| Local account service tests | 2 passed with real hashes and PostgreSQL |
-| Local command parser | Passed; recovery requires confirmation and password arguments are rejected |
-| Existing DB/management service suites | Passed against isolated PostgreSQL 17 |
-| Server binary | Interactive init/recover passed; same account ID; secret-free local audit; non-TTY rejected |
-| Static checks | Rustfmt, Clippy with warnings denied, diff whitespace check passed |
-
-Local provisioning commands:
+## Server-local Operations
 
 ```sh
 filegate account init owner "Owner"
@@ -258,58 +194,13 @@ filegate account recover <account-id> owner --yes
 confirmed in a terminal. The commands return account/request IDs, never the
 password or PHC hash. These are server operator commands, separate from `gscli`.
 
-### Session Evidence
+## Verification
 
-| Check | Result |
-|---|---|
-| Password login and change API | Five PostgreSQL-backed tests passed: role freshness, recovery fencing, CSRF, revocation and rollback |
-| Existing DB/API/management suites | Passed against fresh isolated PostgreSQL 17; migration upgrade preserves existing session data |
-| Browser regression | 214 Playwright tests passed; password form checked at phone and desktop widths in light/dark |
-| Real HTTPS fixture | Disposable PostgreSQL and MinIO: local recovery, password login, password change, re-login and Resource workflows passed |
-| Static checks | Rustfmt, Clippy with warnings denied, frontend lint and production build passed |
-
-### Setup Link Evidence
-
-| Check | Result |
-|---|---|
-| DB setup tests | Four PostgreSQL-backed tests passed: name reservation, replacement, expiry/deletion/recovery, single winner and audit rollback |
-| Console API tests | Two PostgreSQL-backed tests passed: Admin password session and reauthentication, CSRF/Origin, single-use completion and login |
-| Browser regression | 220 Playwright tests passed, including one-time link display, fragment removal and responsive setup form |
-| Real HTTPS fixture | Disposable PostgreSQL and MinIO: Admin issued a link, another browser set a password and signed in as Reader |
-
-Console creation atomically reserves the username and issues a setup link; the
-link is displayed once. Account lists/details show username and password
-readiness. Legacy account creation without a password remains for existing
-callers during migration; it requires separate link issuance to enable password
-login. A password session can issue, list and revoke its own management tokens;
-issuance requires current-password verification and the account's reauthentication budget.
-Legacy token sessions cannot use the personal token routes.
-
-### Personal Token Evidence
-
-| Check | Result |
-|---|---|
-| DB/API ownership tests | Self-only list/revoke, password-session gate, reauthentication and CSRF passed against PostgreSQL 17 |
-| Browser regression | 225 Playwright tests passed, including personal-token lifecycle and phone/desktop light/dark layouts |
-| Real HTTPS fixture | Reader setup/login, own token issue, Resource `status` 200 and revoked token 401 passed with PostgreSQL and MinIO |
-
-### Profile Evidence
-
-| Check | Result |
-|---|---|
-| API | Own profile, same-account name change, CSRF/Origin, token-session denial and audit metadata passed |
-| Browser | 226 Playwright tests passed, including profile edit and return to original name |
-| Real HTTPS fixture | Password user changed and restored display name while retaining account identity and role |
-
-### Machine Interface Evidence
-
-| Check | Result |
-|---|---|
-| Real HTTPS fixture | Reader's own `gsm_` token passed `gscli status`, MCP `status` and Resource `status`; identity account API rejected it |
-| Revocation | The same token was rejected by CLI, MCP and Resource immediately after self-revocation |
-| Role freshness | MCP and Resource tests cover Reader write denial after demotion and disabled-account rejection |
-| Expiry | Credential lookup excludes expired tokens; existing API lifecycle tests exercise expiry |
-| Console | Issuance displays CLI and MCP connection details without putting the token into a command snippet |
+Test locations are in [source layout](../development/source-layout.md#검증-위치).
+Historical implementation results are in
+[the verification record](../development/local-auth-verification.md).
+Release and migration evidence is tracked in
+[production readiness](../development/production-readiness.md).
 
 ## References
 

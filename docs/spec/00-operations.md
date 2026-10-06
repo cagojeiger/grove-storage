@@ -92,7 +92,8 @@ stateDiagram-v2
 
 ## 사용량
 
-운영자 API의 `/usage`, `/usage/clients`, `/usage/history?days=N`에서 관찰한다.
+공통 관리 명령의 `usage.storages`, `usage.clients`, `usage.history`에서 관찰한다.
+입력·출력은 [명령 계약](09-management-commands.md)에 있다.
 
 | 관찰 | 계산 |
 |---|---|
