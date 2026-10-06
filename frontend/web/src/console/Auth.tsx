@@ -134,7 +134,14 @@ export function Auth({ setup = false }: { setup?: boolean }) {
                       password,
                     }),
                   });
-                  cache.setQueryData(["session"], await currentSession());
+                  const session = await currentSession();
+                  history.replaceState(
+                    null,
+                    "",
+                    `${location.pathname}${location.search}#`,
+                  );
+                  window.dispatchEvent(new HashChangeEvent("hashchange"));
+                  cache.setQueryData(["session"], session);
                 }
               } catch (failure) {
                 if (

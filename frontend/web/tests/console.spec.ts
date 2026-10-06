@@ -9,6 +9,39 @@ import {
 
 const root = "/api/admin/console/";
 
+for (const route of ["", "api", "settings/security", "accounts?status=current&limit=50"]) {
+  test(`new password sign-in lands on Overview from ${route || "root"}`, async ({ page }) => {
+    await mock(page, false, true);
+    await page.goto(`${root}#${route}`);
+    await page.getByLabel("Username").fill("owner");
+    await page.getByLabel("Password").fill("fixture-password");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => location.hash)).toBe("");
+    await expect(page.getByRole("table", { name: "Storage usage" })).toBeVisible();
+  });
+}
+
+test("authenticated refresh retains the current page", async ({ page }) => {
+  await mock(page, true, true);
+  await page.goto(`${root}#settings/security`);
+  await expect(page.getByLabel("Current password")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Current password")).toBeVisible();
+  await expect(page).toHaveURL(/#settings\/security$/);
+});
+
+test("failed sign-in does not navigate away from the requested page", async ({ page }) => {
+  await mock(page, false, true);
+  await page.route("**/api/admin/identity/v1/session", route => route.fulfill({ status: 401, json: {} }));
+  await page.goto(`${root}#api`);
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password").fill("incorrect-password");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Username or password is incorrect.");
+  await expect(page).toHaveURL(/#api$/);
+});
+
 test.describe("English default", () => {
   test.use({ locale: "de-DE" });
   test("document, sign-in, labels and numbers stay English", async ({
