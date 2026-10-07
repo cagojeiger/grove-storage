@@ -28,7 +28,7 @@ import {
   clientMessage,
 } from "../features/clients/model";
 import { bytes } from "../design/format";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 import {
   Capacity,
   Confirmation,

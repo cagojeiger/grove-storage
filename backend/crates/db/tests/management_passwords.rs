@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, Error, passwords},
 };
@@ -44,7 +44,7 @@ async fn concurrent_initialization_has_one_account_and_audit(pool: PgPool) {
     let counts: (i64, i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM management.accounts),
                 (SELECT count(*) FROM management.password_credentials),
-                (SELECT count(*) FROM management.credentials)",
+                (SELECT count(*) FROM management.api_tokens)",
     )
     .fetch_one(&pool)
     .await
@@ -83,7 +83,7 @@ async fn audit_failure_rolls_back_initialization(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn recovery_replaces_generation_and_revokes_only_target_identity(pool: PgPool) {
+async fn recovery_replaces_generation_and_preserves_other_identities(pool: PgPool) {
     let (owner, _) = bootstrap(&pool).await;
     let other = user(&pool, Role::Writer).await;
     db::issue_credential(&pool, &context(), other, &key(&hash(2)))
@@ -131,6 +131,7 @@ async fn recovery_audit_failure_preserves_hash_token_and_session(pool: PgPool) {
         .await
         .unwrap();
     let before = passwords::find(&pool, "owner").await.unwrap().unwrap();
+    let before_audit = audit_count(&pool).await;
     reject_audit(&pool).await;
     assert!(
         passwords::recover(&pool, Uuid::new_v4(), owner, "owner", NEXT_HASH)
@@ -143,6 +144,7 @@ async fn recovery_audit_failure_preserves_hash_token_and_session(pool: PgPool) {
     assert!(passwords::find(&pool, "renamed").await.unwrap().is_none());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_some());
     assert!(db::session_actor(&pool, &hash(20)).await.unwrap().is_some());
+    assert_eq!(audit_count(&pool).await, before_audit);
 }
 
 #[sqlx::test(migrations = "./migrations")]

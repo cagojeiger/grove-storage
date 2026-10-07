@@ -92,8 +92,8 @@ jobs:
           context: .
           file: deploy/docker/Dockerfile
           platforms: ${{ matrix.platform }}
-          cache-from: type=gha,scope=filegate-release-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=filegate-release-${{ matrix.arch }}
+          cache-from: type=gha,scope=grove-release-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=grove-release-${{ matrix.arch }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           sbom: true
           provenance: mode=max
@@ -127,6 +127,32 @@ jobs:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE }}@${{ steps.platform.outputs.digest }}
           architecture: ${{ matrix.arch }}
           artifact: trivy-release-${{ matrix.arch }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: frontend/web/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+      - name: Test packaged release console and API
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          DIGEST: ${{ steps.platform.outputs.digest }}
+        run: |
+          npm --prefix frontend/web ci
+          cd frontend/web && npx playwright install --with-deps chromium && cd ../..
+          python3 -m venv /tmp/grove-image-sdk
+          /tmp/grove-image-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-image-sdk/bin/python -B scripts/e2e-image.py "$IMAGE@$DIGEST" \
+            --report-dir "reports/image-release-${{ matrix.arch }}"
+
+      - name: Preserve release runtime evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-runtime-${{ matrix.arch }}
+          path: reports/image-release-${{ matrix.arch }}/
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Record source, workflow and successful CI
         run: python3 deploy/ci/release-evidence.py generate "$RUNNER_TEMP/release-evidence.json"

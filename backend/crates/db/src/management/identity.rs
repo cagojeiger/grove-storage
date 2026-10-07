@@ -53,7 +53,7 @@ pub(super) async fn token(
     hash: &str,
 ) -> Result<Option<Identity>, Error> {
     let row: Option<Row> = sqlx::query_as("SELECT a.id AS account_id,a.role,c.id AS credential_id,NULL::uuid AS session_id
-        FROM management.credentials c JOIN management.accounts a ON a.id=c.account_id
+        FROM management.api_tokens c JOIN management.accounts a ON a.id=c.account_id
         WHERE c.token_hash=$1 AND c.hash_version=1 AND c.revoked_at IS NULL AND c.expires_at>grove_time.wall_now()
         AND a.is_active AND a.deleted_at IS NULL")
         .bind(hash).fetch_optional(connection).await?;
@@ -75,7 +75,7 @@ pub(super) async fn session(
     hash: &str,
 ) -> Result<Option<Identity>, Error> {
     let row: Option<Row> = sqlx::query_as("SELECT a.id AS account_id,a.role,c.id AS credential_id,s.id AS session_id
-        FROM management.sessions s LEFT JOIN management.credentials c ON c.id=s.credential_id AND c.account_id=s.account_id
+        FROM management.sessions s LEFT JOIN management.api_tokens c ON c.id=s.credential_id AND c.account_id=s.account_id
         JOIN management.accounts a ON a.id=s.account_id
         LEFT JOIN management.password_credentials p ON p.account_id=s.account_id
         WHERE s.session_hash=$1 AND s.auth_method IN ('token','password') AND s.revoked_at IS NULL AND s.expires_at>grove_time.wall_now()

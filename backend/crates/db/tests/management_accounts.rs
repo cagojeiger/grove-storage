@@ -2,35 +2,12 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AccountChange, Error},
 };
 use grove_management_policy::{Action, Role, Surface, authorize};
 use support::*;
-
-#[sqlx::test(migrations = "./migrations")]
-async fn bootstrap_is_atomic_and_singleton(pool: PgPool) {
-    let hash_a = hash(1);
-    let hash_b = hash(2);
-    let a = key(&hash_a);
-    let b = key(&hash_b);
-    let ctx = context();
-    let (a, b) = tokio::join!(
-        db::bootstrap(&pool, &ctx, "A", &a),
-        db::bootstrap(&pool, &ctx, "B", &b)
-    );
-    assert_ne!(a.is_ok(), b.is_ok());
-    assert!(
-        matches!(a, Err(Error::AlreadyInitialized)) || matches!(b, Err(Error::AlreadyInitialized))
-    );
-    assert_eq!(audit_count(&pool).await, 2);
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.accounts")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(count, 1);
-}
 
 #[sqlx::test(migrations = "./migrations")]
 async fn last_admin_changes_are_serialized(pool: PgPool) {
@@ -152,18 +129,6 @@ async fn no_op_has_no_duplicate_audit_and_failures_roll_back(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(count, 2);
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn failed_bootstrap_leaves_no_account_or_credential(pool: PgPool) {
-    reject_audit(&pool).await;
-    assert!(
-        db::bootstrap(&pool, &context(), "Owner", &key(&hash(1)))
-            .await
-            .is_err()
-    );
-    let count: i64 = sqlx::query_scalar("SELECT (SELECT count(*) FROM management.accounts)+(SELECT count(*) FROM management.credentials)").fetch_one(&pool).await.unwrap();
-    assert_eq!(count, 0);
 }
 
 #[sqlx::test(migrations = "./migrations")]

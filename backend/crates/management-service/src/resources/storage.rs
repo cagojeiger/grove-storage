@@ -1,5 +1,5 @@
 use crate::Error;
-use filegate_db::{
+use grove_db::{
     management::{AuditContext, IdentityTransaction},
     registry::{StorageRow, UpdateStorageOutcome},
 };

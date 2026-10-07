@@ -10,7 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { command } from "../api/commands";
 import { field } from "../api/identity";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 import {
   Storage,
   idPattern,

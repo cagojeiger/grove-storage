@@ -6,9 +6,9 @@
 #
 # 기존 fixture 재현:
 #   docker compose up -d
-#   FILEGATE_LEGACY_ADMIN_ENABLED=true FILEGATE_OPERATOR_TOKENS=fgop_local-dev cargo run --bin filegate
+#   GROVE_LEGACY_ADMIN_ENABLED=true GROVE_OPERATOR_TOKENS=fgop_local-dev cargo run --bin grove-storage
 #   mkdir -p /tmp/filegate-fs-demo
-#   export FILEGATE_OPERATOR_TOKEN=fgop_local-dev
+#   export GROVE_OPERATOR_TOKEN=fgop_local-dev
 #   terraform -chdir=deploy/local init -upgrade
 #   terraform -chdir=deploy/local apply
 #
@@ -32,7 +32,7 @@ terraform {
 
 provider "filegate" {
   endpoint = "http://127.0.0.1:8080"
-  # token은 env FILEGATE_OPERATOR_TOKEN으로 공급한다.
+  # token은 env GROVE_OPERATOR_TOKEN으로 공급한다.
 }
 
 # ── storage: 물리 저장 공간 (독립 노드) ──────────────────────────
@@ -52,7 +52,7 @@ resource "filegate_storage_s3" "minio_local" {
 }
 
 # 중계(relay) s3: 같은 MinIO를 filegate 바이트 엔드포인트로 강제.
-# 서버에 FILEGATE_PUBLIC_URL이 서 있어야 등록된다.
+# 서버에 GROVE_PUBLIC_URL이 서 있어야 등록된다.
 resource "filegate_storage_s3" "minio_relay" {
   id               = "minio-relay"
   endpoint         = "http://127.0.0.1:9000"

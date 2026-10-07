@@ -4,9 +4,9 @@
 use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use filegate_db::files::{self, CreateOutcome, CreateSpec};
-use filegate_db::s3_registry as s3reg;
-use filegate_infra::{Address, s3_open_read, s3_open_read_range, temp_spool};
+use grove_db::files::{self, CreateOutcome, CreateSpec};
+use grove_db::s3_registry as s3reg;
+use grove_infra::{Address, s3_open_read, s3_open_read_range, temp_spool};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ use crate::lease::{WRITE_LEASE_TTL, run_with_completion_heartbeat};
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
 use crate::storage_access::backend_from_row;
-use filegate_infra::backend::commit_temp_to_backend;
+use grove_infra::s3_io::commit_temp_to_backend;
 use grove_object_policy::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
 
 /// 바이트를 스풀로 받아 실측(크기·MD5·SHA256)하고 뒷단에 올린 뒤 즉시

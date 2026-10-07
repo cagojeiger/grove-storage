@@ -2,6 +2,7 @@
 
 기준: `520e172`까지의 코드·로컬 검증. S3-only 중개/릴레이와 NoteGate 호환 범위를 마감한다.
 릴리스·운영 이관·배포는 별도 단계다.
+아래 migration 번호는 당시 기록이다. 현재 새 설치 기준은 [새 DB baseline](fresh-installation.md)이다.
 
 ## 책임 경계
 
@@ -69,7 +70,7 @@ NoteGate 업로드 직후 사용량 표시 캐시 지연은 별도 UI 이슈로 
 |---|---|
 | 리소스 코드 구조 | 현 범위 마감; S3 multipart 조율 일부는 API에 유지 |
 | Management | [준비 계획](management-review.md) 순서로 계약 점검·측정 후 최소 변경 |
-| 운영 이관 | [격리 업그레이드·복원 리허설](migration-rehearsal.md) 추가; 운영 DB·외부 객체의 실제 복원 검증은 별도 |
+| 새 설치·복원 | [격리 초기화·복원 리허설](fresh-installation.md); 기존 DB 이관은 별도 |
 | 운영 연결 | AWS/R2·실제 OIDC·Ingress/TLS·운영 endpoint 별도 검증 |
 | 추가 장애 | 쓰기 진행 중 종료·DB COMMIT 응답 유실 별도 검증 |
 | 미래 기능 | 자동 배치·S3 간 이동·독립 filesystem Node/Agent 조인 별도 설계 |

@@ -284,7 +284,6 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                   Result: eventResult(selected),
                   Time: time(selected.context.created_at),
                   Actor: actor(selected.context),
-                  "Owner account ID": selected.context.owner_user_id,
                   Source: selected.context.surface,
                   "Request ID": selected.context.request_id,
                   "Token ID": selected.context.credential_id,

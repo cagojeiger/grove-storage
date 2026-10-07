@@ -1,10 +1,9 @@
 [package]
-name = "filegate-infra"
+name = "grove-infra"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-filegate-core.workspace = true
 grove-storage-provider.workspace = true
 anyhow = { workspace = true }
 tokio = { workspace = true }

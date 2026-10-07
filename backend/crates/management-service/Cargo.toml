@@ -4,14 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-filegate-db.workspace = true
-filegate-core.workspace = true
+grove-db.workspace = true
+grove-core.workspace = true
 grove-management-policy.workspace = true
 grove-management-command.workspace = true
 uuid.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-subtle.workspace = true
 argon2.workspace = true
 unicode-normalization.workspace = true
 

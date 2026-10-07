@@ -7,7 +7,7 @@ mod support;
 mod time;
 
 use chrono::{DateTime, Duration, Utc};
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, admission},
 };
@@ -122,7 +122,7 @@ async fn retention_uses_injected_database_time_across_connections(pool: PgPool) 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn expired_write_cannot_renew_and_reclaim_rechecks_the_current_time(pool: PgPool) {
-    use filegate_db::files;
+    use grove_db::files;
     install_clock(&pool).await;
     lifecycle::wire(&pool, 1000).await;
     let file = lifecycle::create_ok(&pool, 100).await;
@@ -236,10 +236,10 @@ async fn password_setup_expires_at_the_exact_boundary(pool: PgPool) {
 async fn usage_history_cutoff_tracks_the_injected_calendar_date(pool: PgPool) {
     install_clock(&pool).await;
     lifecycle::wire(&pool, 1000).await;
-    sqlx::query("INSERT INTO usage_snapshot(day,storage_id,client_id,active_bytes,active_files) VALUES('2025-12-31','s','c',10,1)")
+    sqlx::query("INSERT INTO usage_snapshots(day,storage_id,client_id,active_bytes,active_files) VALUES('2025-12-31','s','c',10,1)")
         .execute(&pool).await.unwrap();
     assert_eq!(
-        filegate_db::usage::snapshot_history(&pool, 1)
+        grove_db::usage::snapshot_history(&pool, 1)
             .await
             .unwrap()
             .len(),
@@ -247,7 +247,7 @@ async fn usage_history_cutoff_tracks_the_injected_calendar_date(pool: PgPool) {
     );
     set_time(&pool, base() + Duration::days(1)).await;
     assert!(
-        filegate_db::usage::snapshot_history(&pool, 1)
+        grove_db::usage::snapshot_history(&pool, 1)
             .await
             .unwrap()
             .is_empty()

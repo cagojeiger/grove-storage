@@ -1,6 +1,6 @@
 //! The registry is the contract between management and file operations.
 use super::*;
-use filegate_db::{PgPool, registry, s3_registry};
+use grove_db::{PgPool, registry, s3_registry};
 use grove_s3_protocol::signing::{sha256_hex, sign};
 use uuid::Uuid;
 
@@ -9,7 +9,6 @@ const SECRET: &str = "client-s3-secret";
 
 async fn fixture(pool: PgPool) -> (AppState, Uuid) {
     let mut state = test_state();
-    state.security.legacy_admin_enabled = false;
     state.pool = pool;
     state.console_origin = Some("https://console.test".into());
     let encrypted = state
@@ -40,7 +39,7 @@ async fn fixture(pool: PgPool) -> (AppState, Uuid) {
         registry::insert_client(&state.pool, client, "home")
             .await
             .unwrap();
-        registry::insert_client_key(&state.pool, client, &filegate_core::client_key_hash(client))
+        registry::insert_client_key(&state.pool, client, &grove_core::client_key_hash(client))
             .await
             .unwrap();
     }
@@ -63,7 +62,7 @@ async fn fixture(pool: PgPool) -> (AppState, Uuid) {
         .execute(&state.pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO s3_keys(client_id,key,file_id) VALUES('app','object',$1)")
+    sqlx::query("INSERT INTO s3_object_keys(client_id,key,file_id) VALUES('app','object',$1)")
         .bind(file)
         .execute(&state.pool)
         .await
@@ -160,7 +159,7 @@ async fn native_file_operations_need_registry_not_management(pool: PgPool) {
     let deleted = native(&state, "GET", &path, "app", "").await;
     assert!(body_text(deleted).await.contains("deleted"));
 
-    registry::delete_client_key(&state.pool, "app", &filegate_core::client_key_hash("app"))
+    registry::delete_client_key(&state.pool, "app", &grove_core::client_key_hash("app"))
         .await
         .unwrap();
     assert_eq!(

@@ -15,11 +15,6 @@ pub async fn abort_write(temp: &Path) {
 
 /// Reap old request spools left by interrupted processes using the caller's
 /// retention window. Live request spools must remain younger than that window.
-pub async fn sweep_stale_temps(dir: &Path, max_age: std::time::Duration) -> anyhow::Result<u32> {
-    use filegate_core::time::Clock;
-    sweep_stale_temps_at(dir, max_age, filegate_core::time::SystemClock.now().into()).await
-}
-
 pub async fn sweep_stale_temps_at(
     dir: &Path,
     max_age: std::time::Duration,

@@ -1,6 +1,6 @@
 use super::*;
 use axum::response::Response;
-use filegate_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db};
 use uuid::Uuid;
 
 async fn request(
@@ -25,13 +25,7 @@ async fn request(
 
 #[tokio::test]
 async fn disabled_legacy_routes_never_authenticate_or_access_database() {
-    let mut state = test_state();
-    state.security.legacy_admin_enabled = false;
-    assert!(
-        !crate::admin_auth::legacy_initialized(&state.pool, &state.security)
-            .await
-            .unwrap()
-    );
+    let state = test_state();
     for path in [
         "/api/admin/v1",
         "/api/admin/v1/",
@@ -57,21 +51,14 @@ async fn disabled_legacy_routes_never_authenticate_or_access_database() {
                 response.headers().get(header::CACHE_CONTROL).unwrap(),
                 "no-store"
             );
-            assert!(body_text(response).await.contains("legacy_admin_disabled"));
+            assert!(body_text(response).await.contains("legacy_admin_removed"));
         }
     }
-    state.security.legacy_admin_enabled = true;
-    assert!(
-        crate::admin_auth::legacy_initialized(&state.pool, &state.security)
-            .await
-            .unwrap()
-    );
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn account_console_commands_and_mcp_work_without_legacy_auth(pool: PgPool) {
     let mut state = test_state();
-    state.security.legacy_admin_enabled = false;
     state.pool = pool;
     state.console_origin = Some("https://console.test".into());
     let password = "a private phrase for the retirement test";
@@ -84,11 +71,11 @@ async fn account_console_commands_and_mcp_work_without_legacy_auth(pool: PgPool)
     )
     .await
     .unwrap();
-    let token = format!("gsm_{}", filegate_core::generate_url_secret());
+    let token = format!("gsm_{}", grove_core::generate_url_secret());
     db::issue_credential(
         &state.pool,
         &db::AuditContext {
-            actor: db::AuditActor::User {
+            actor: db::AuditActor::Account {
                 id: account,
                 credential_id: None,
                 session_id: None,
@@ -100,7 +87,7 @@ async fn account_console_commands_and_mcp_work_without_legacy_auth(pool: PgPool)
         &db::NewCredential {
             label: "test",
             token_prefix: "gsm_test",
-            token_hash: &crate::console_identity::secrets::token_hash(&token),
+            token_hash: &crate::accounts::secrets::token_hash(&token),
             expires_at: chrono::Utc::now() + chrono::Duration::days(1),
         },
     )
@@ -172,90 +159,4 @@ async fn account_console_commands_and_mcp_work_without_legacy_auth(pool: PgPool)
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[sqlx::test(migrations = "../db/migrations")]
-async fn compatibility_switch_blocks_valid_old_tokens_and_cookies_without_deleting_them(
-    pool: PgPool,
-) {
-    let mut state = test_state();
-    state.pool = pool;
-    state.security.operator_tokens.clear();
-    state.console_origin = Some("https://console.test".into());
-    let token = format!("fgop_{}", filegate_core::generate_url_secret());
-    let hash = crate::admin_auth::hash("admin-token", &token);
-    filegate_db::admin_auth::issue(
-        &state.pool,
-        filegate_db::admin_auth::IssueMode::Initialize,
-        "old",
-        &hash,
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert!(
-        crate::admin_auth::legacy_initialized(&state.pool, &state.security)
-            .await
-            .unwrap()
-    );
-    let response = request(
-        &state,
-        "POST",
-        "/api/admin/v1/session",
-        &[("origin", "https://console.test"), ("x-filegate-csrf", "1")],
-        &serde_json::json!({"token":token}).to_string(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let cookie = response
-        .headers()
-        .get(header::SET_COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .split(';')
-        .next()
-        .unwrap()
-        .to_owned();
-    let bearer = format!("Bearer {token}");
-    state.security.legacy_admin_enabled = false;
-    assert!(
-        !crate::admin_auth::legacy_initialized(&state.pool, &state.security)
-            .await
-            .unwrap()
-    );
-    for headers in [
-        vec![("authorization", bearer.as_str())],
-        vec![("cookie", cookie.as_str())],
-    ] {
-        for (method, path) in [
-            ("GET", "/api/admin/v1/clients"),
-            ("POST", "/api/admin/v1/clients"),
-            ("GET", "/api/admin/v1/session"),
-        ] {
-            assert_eq!(
-                request(&state, method, path, &headers, "{}").await.status(),
-                StatusCode::GONE
-            );
-        }
-    }
-    assert!(
-        filegate_db::admin_auth::authenticate(&state.pool, &hash)
-            .await
-            .unwrap()
-            .is_some()
-    );
-    state.security.legacy_admin_enabled = true;
-    assert_eq!(
-        request(
-            &state,
-            "GET",
-            "/api/admin/v1/clients",
-            &[("cookie", &cookie)],
-            ""
-        )
-        .await
-        .status(),
-        StatusCode::OK
-    );
 }

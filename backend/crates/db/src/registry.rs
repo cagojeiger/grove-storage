@@ -1,4 +1,4 @@
-//! 등록부 행 접근: storages / clients / client_keys.
+//! 등록부 행 접근: storages / clients / client_native_keys.
 //!
 //! 참조 무결성은 DB FK가 집행한다 — 여기서는 위반을 분류만 하고
 //! HTTP 응답은 호출자(api)가 정한다.
@@ -252,14 +252,14 @@ pub async fn delete_client_rows<'e>(
         .map(|result| result.rows_affected())
 }
 
-// ---- client_keys ----
+// ---- client_native_keys ----
 
 pub async fn insert_client_key<'e>(
     pool: impl sqlx::PgExecutor<'e>,
     client_id: &str,
     key_hash: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO client_keys (key_hash, client_id) VALUES ($1, $2)")
+    sqlx::query("INSERT INTO client_native_keys (key_hash, client_id) VALUES ($1, $2)")
         .bind(key_hash)
         .bind(client_id)
         .execute(pool)
@@ -275,7 +275,7 @@ pub async fn client_key_exists(
     key_hash: &str,
 ) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM client_keys WHERE key_hash = $1 AND client_id = $2)",
+        "SELECT EXISTS (SELECT 1 FROM client_native_keys WHERE key_hash = $1 AND client_id = $2)",
     )
     .bind(key_hash)
     .bind(client_id)
@@ -288,7 +288,7 @@ pub async fn client_id_for_key_hash(
     pool: &PgPool,
     key_hash: &str,
 ) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar("SELECT client_id FROM client_keys WHERE key_hash = $1")
+    sqlx::query_scalar("SELECT client_id FROM client_native_keys WHERE key_hash = $1")
         .bind(key_hash)
         .fetch_optional(pool)
         .await
@@ -298,10 +298,12 @@ pub async fn list_client_keys<'e>(
     pool: impl sqlx::PgExecutor<'e>,
     client_id: &str,
 ) -> Result<Vec<String>, sqlx::Error> {
-    sqlx::query_scalar("SELECT key_hash FROM client_keys WHERE client_id = $1 ORDER BY key_hash")
-        .bind(client_id)
-        .fetch_all(pool)
-        .await
+    sqlx::query_scalar(
+        "SELECT key_hash FROM client_native_keys WHERE client_id = $1 ORDER BY key_hash",
+    )
+    .bind(client_id)
+    .fetch_all(pool)
+    .await
 }
 
 pub async fn delete_client_key(
@@ -319,7 +321,7 @@ pub async fn delete_client_key_rows<'e>(
     client_id: &str,
     key_hash: &str,
 ) -> Result<u64, sqlx::Error> {
-    sqlx::query("DELETE FROM client_keys WHERE key_hash = $1 AND client_id = $2")
+    sqlx::query("DELETE FROM client_native_keys WHERE key_hash = $1 AND client_id = $2")
         .bind(key_hash)
         .bind(client_id)
         .execute(pool)

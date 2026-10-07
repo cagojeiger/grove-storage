@@ -24,7 +24,7 @@ def check(endpoint, directory, database, account, backend, proxy, attempts, rest
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def sql(statement):
-        return docker("exec", database, "psql", "-U", "filegate", "-d", "filegate",
+        return docker("exec", database, "psql", "-U", "grove", "-d", "grove",
                       "-v", "ON_ERROR_STOP=1", "-At", "-c", statement)
 
     def wait_for(predicate):

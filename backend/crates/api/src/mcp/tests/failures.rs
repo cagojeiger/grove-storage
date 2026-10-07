@@ -26,7 +26,7 @@ async fn failed_audit_rolls_back_issuance_and_unknown_commit_is_not_retried(pool
         CREATE SEQUENCE public.mcp_commit_attempts;
         CREATE FUNCTION public.reject_mcp_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         PERFORM nextval('public.mcp_commit_attempts'); RAISE EXCEPTION 'private-mcp-detail'; END $$;
-        CREATE CONSTRAINT TRIGGER reject_mcp_commit AFTER INSERT ON s3_credentials
+        CREATE CONSTRAINT TRIGGER reject_mcp_commit AFTER INSERT ON client_s3_credentials
         DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.reject_mcp_commit();",
     )
     .execute(&pool)
@@ -52,7 +52,7 @@ async fn failed_audit_rolls_back_issuance_and_unknown_commit_is_not_retried(pool
         .unwrap();
     assert_eq!(attempts, 1);
     assert_eq!(
-        filegate_db::s3_registry::list_credentials(&pool, "app")
+        grove_db::s3_registry::list_credentials(&pool, "app")
             .await
             .unwrap(),
         ["testaccesskey"]

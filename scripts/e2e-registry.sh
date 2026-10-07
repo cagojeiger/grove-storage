@@ -1,16 +1,16 @@
 #!/bin/sh
 # 등록부 검증 스위트: A. DB 제약 프로브(직접 SQL) / B. 운영자 API E2E(curl).
 #
-# 전제: docker compose up (PG + MinIO), 서버 실행 중(cargo run -p filegate-api),
+# 전제: docker compose up (PG + MinIO), 서버 실행 중(cargo run -p grove-api),
 #       .env의 로컬 개발 토큰(fgop_local-dev). 등록부 테이블을 비우고 시작한다 —
 #       로컬 개발 DB 전용이다.
 # 사용: sh scripts/e2e-registry.sh   (종료 코드 = FAIL 수)
 BASE=http://127.0.0.1:8080
 AUTH="Authorization: Bearer fgop_local-dev"
 JSON="Content-Type: application/json"
-# compose 프로젝트/서비스 이름이 다르면 FILEGATE_PG_CONTAINER로 지정한다.
-PG_CONTAINER="${FILEGATE_PG_CONTAINER:-filegate-postgres-1}"
-PSQL="docker exec $PG_CONTAINER psql -U filegate -d filegate -qc"
+# compose 프로젝트/서비스 이름이 다르면 GROVE_PG_CONTAINER로 지정한다.
+PG_CONTAINER="${GROVE_PG_CONTAINER:-grove-postgres-1}"
+PSQL="docker exec $PG_CONTAINER psql -U grove -d grove -qc"
 PASS=0; FAIL=0
 
 ok()   { PASS=$((PASS+1)); }
@@ -32,8 +32,8 @@ $PSQL "DELETE FROM lease_parts;" >/dev/null 2>&1
 $PSQL "DELETE FROM leases;" >/dev/null 2>&1
 $PSQL "DELETE FROM locations;" >/dev/null 2>&1
 $PSQL "DELETE FROM files;" >/dev/null 2>&1
-$PSQL "DELETE FROM s3_credentials;" >/dev/null 2>&1
-$PSQL "DELETE FROM client_keys;" >/dev/null 2>&1
+$PSQL "DELETE FROM client_s3_credentials;" >/dev/null 2>&1
+$PSQL "DELETE FROM client_native_keys;" >/dev/null 2>&1
 $PSQL "DELETE FROM clients;" >/dev/null 2>&1
 $PSQL "DELETE FROM storages;" >/dev/null 2>&1
 
@@ -46,24 +46,24 @@ sqlfail "storage id 중복" "INSERT INTO storages (id,endpoint,public_endpoint,r
 sqlok   "client 정상" "INSERT INTO clients (id,storage_id) VALUES ('c1','s1');"
 sqlfail "client 슬러그 위반" "INSERT INTO clients (id,storage_id) VALUES ('-bad','s1');"
 sqlfail "client의 없는 storage" "INSERT INTO clients (id,storage_id) VALUES ('ghost','missing');"
-sqlfail "key 해시 형식 위반" "INSERT INTO client_keys (key_hash,client_id) VALUES ('sha256:zzz','c1');"
-sqlok   "key 정상" "INSERT INTO client_keys (key_hash,client_id) VALUES ('$HASH_A','c1');"
+sqlfail "key 해시 형식 위반" "INSERT INTO client_native_keys (key_hash,client_id) VALUES ('sha256:zzz','c1');"
+sqlok   "key 정상" "INSERT INTO client_native_keys (key_hash,client_id) VALUES ('$HASH_A','c1');"
 sqlok   "둘째 client" "INSERT INTO clients (id,storage_id) VALUES ('c2','s1');"
-sqlfail "key 해시 전역 중복(다른 client라도)" "INSERT INTO client_keys (key_hash,client_id) VALUES ('$HASH_A','c2');"
+sqlfail "key 해시 전역 중복(다른 client라도)" "INSERT INTO client_native_keys (key_hash,client_id) VALUES ('$HASH_A','c2');"
 sqlfail "client가 참조하는 storage 삭제" "DELETE FROM storages WHERE id='s1';"
 sqlfail "미등록 client의 file" "INSERT INTO files (client_id,declared_size) VALUES ('ghost',1);"
 sqlok   "등록 client의 file" "INSERT INTO files (client_id,declared_size) VALUES ('c1',1);"
 sqlfail "file 남은 client 삭제" "DELETE FROM clients WHERE id='c1';"
 sqlok   "file 정리" "DELETE FROM files WHERE client_id='c1';"
 sqlok   "client 삭제 → key cascade" "DELETE FROM clients WHERE id='c1';"
-LEFT=$($PSQL "SELECT count(*) FROM client_keys WHERE client_id='c1';" -t | tr -d ' \n')
+LEFT=$($PSQL "SELECT count(*) FROM client_native_keys WHERE client_id='c1';" -t | tr -d ' \n')
 if [ "$LEFT" = "0" ]; then ok; else bad "key cascade 잔여 $LEFT"; fi
 sqlok   "정리: c2" "DELETE FROM clients WHERE id='c2';"
 sqlok   "정리: s1" "DELETE FROM storages WHERE id='s1';"
 
 echo "=== B. 운영자 API E2E ==="
-S='{"endpoint":"http://127.0.0.1:9000","region":"us-east-1","bucket":"filegate-std","force_path_style":true,"access_key":"filegate","secret_key":"filegate-secret","capacity_bytes":1073741824}'
-SBAD='{"endpoint":"http://127.0.0.1:9000","region":"us-east-1","bucket":"filegate-std","force_path_style":true,"access_key":"filegate","secret_key":"wrong","capacity_bytes":1}'
+S='{"endpoint":"http://127.0.0.1:9000","region":"us-east-1","bucket":"grove-std","force_path_style":true,"access_key":"grove","secret_key":"grove-secret","capacity_bytes":1073741824}'
+SBAD='{"endpoint":"http://127.0.0.1:9000","region":"us-east-1","bucket":"grove-std","force_path_style":true,"access_key":"grove","secret_key":"wrong","capacity_bytes":1}'
 http "인증 없음 401"        401 $BASE/api/admin/v1/storages
 http "틀린 토큰 401"        401 -H "Authorization: Bearer nope" $BASE/api/admin/v1/storages
 http "storage 틀린시크릿 400" 400 -H "$AUTH" -H "$JSON" -X POST $BASE/api/admin/v1/storages -d "{\"id\":\"minio-a\",${SBAD#\{}"
@@ -116,11 +116,11 @@ http "사용중 client 삭제 409" 409 -H "$AUTH" -X DELETE $BASE/api/admin/v1/c
 sqlok "client 소유 file 정리" "DELETE FROM files WHERE client_id='notegate';"
 http "client 삭제(키·자격증명 cascade) 204" 204 -H "$AUTH" -X DELETE $BASE/api/admin/v1/clients/notegate
 http "client 삭제 멱등 204" 204 -H "$AUTH" -X DELETE $BASE/api/admin/v1/clients/notegate
-LEFT=$($PSQL "SELECT (SELECT count(*) FROM client_keys WHERE client_id='notegate')+(SELECT count(*) FROM s3_credentials WHERE client_id='notegate');" -t | tr -d ' \n')
+LEFT=$($PSQL "SELECT (SELECT count(*) FROM client_native_keys WHERE client_id='notegate')+(SELECT count(*) FROM client_s3_credentials WHERE client_id='notegate');" -t | tr -d ' \n')
 if [ "$LEFT" = "0" ]; then ok; else bad "client 소유물 cascade 잔여 $LEFT"; fi
 http "storage-b 삭제 204"   204 -H "$AUTH" -X DELETE $BASE/api/admin/v1/storages/minio-b
 http "storage 삭제 멱등 204" 204 -H "$AUTH" -X DELETE $BASE/api/admin/v1/storages/minio-b
-REMAIN=$($PSQL "SELECT (SELECT count(*) FROM storages)+(SELECT count(*) FROM clients)+(SELECT count(*) FROM client_keys)+(SELECT count(*) FROM s3_credentials)+(SELECT count(*) FROM files);" -t | tr -d ' \n')
+REMAIN=$($PSQL "SELECT (SELECT count(*) FROM storages)+(SELECT count(*) FROM clients)+(SELECT count(*) FROM client_native_keys)+(SELECT count(*) FROM client_s3_credentials)+(SELECT count(*) FROM files);" -t | tr -d ' \n')
 if [ "$REMAIN" = "0" ]; then ok; else bad "종료 후 잔여 행 $REMAIN"; fi
 
 echo ""

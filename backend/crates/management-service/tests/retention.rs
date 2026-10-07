@@ -4,8 +4,8 @@
 mod lifecycle;
 mod support;
 
-use filegate_core::ManagementLogRetention;
-use filegate_db::{PgPool, management as db};
+use grove_core::ManagementLogRetention;
+use grove_db::{PgPool, management as db};
 use grove_management_service::retention;
 use std::{num::NonZeroU16, time::Duration};
 
@@ -23,7 +23,7 @@ async fn seed(pool: &PgPool) {
         INSERT INTO management.security_events(created_at,actor_kind,request_id,surface,event_type,reason_code)
         SELECT now()-d*interval '1 day','anonymous',gen_random_uuid(),'console','authentication_failed','unauthenticated' FROM unnest(ARRAY[31,91,366]) d;
         INSERT INTO management.command_invocations(created_at,actor_kind,request_id,surface,operation,outcome,duration_ms)
-        SELECT now()-d*interval '1 day','master',gen_random_uuid(),'console','storage.list','succeeded',1 FROM unnest(ARRAY[31,91,366]) d;")
+        SELECT now()-d*interval '1 day','system',gen_random_uuid(),'console','storage.list','succeeded',1 FROM unnest(ARRAY[31,91,366]) d;")
         .execute(pool).await.unwrap();
 }
 
@@ -43,8 +43,8 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
     let admin = support::owner(&pool).await;
     lifecycle::wire(&pool, 1000).await;
     let file = lifecycle::create_ok(&pool, 10).await;
-    let client_key = filegate_core::client_key_hash("retention-test-client");
-    filegate_db::registry::insert_client_key(&pool, "c", &client_key)
+    let client_key = grove_core::client_key_hash("retention-test-client");
+    grove_db::registry::insert_client_key(&pool, "c", &client_key)
         .await
         .unwrap();
     let audit_before = support::audit_count(&pool).await;
@@ -66,11 +66,13 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
             .unwrap()
     );
     assert!(
-        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM client_keys WHERE key_hash=$1)")
-            .bind(client_key)
-            .fetch_one(&pool)
-            .await
-            .unwrap()
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM client_native_keys WHERE key_hash=$1)"
+        )
+        .bind(client_key)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
     );
     // Maintenance must not record its own invocations or audit events.
     retention::run(&pool, policy()).await;
@@ -80,9 +82,9 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
 #[sqlx::test(migrations = "../db/migrations")]
 async fn each_run_is_bounded_and_backlog_drains_on_later_ticks(pool: PgPool) {
     sqlx::raw_sql("INSERT INTO management.command_invocations(created_at,actor_kind,request_id,surface,operation,outcome,duration_ms)
-        SELECT now()-interval '31 days','master',gen_random_uuid(),'cli','storage.list','succeeded',1 FROM generate_series(1,2001);
+        SELECT now()-interval '31 days','system',gen_random_uuid(),'cli','storage.list','succeeded',1 FROM generate_series(1,2001);
         INSERT INTO management.command_invocations(actor_kind,request_id,surface,operation,outcome,duration_ms)
-        VALUES('master',gen_random_uuid(),'cli','storage.list','succeeded',1);")
+        VALUES('system',gen_random_uuid(),'cli','storage.list','succeeded',1);")
         .execute(&pool).await.unwrap();
     for remaining in [1002, 2, 1, 1] {
         retention::run(&pool, policy()).await;
@@ -223,7 +225,7 @@ async fn object_lock_does_not_block_retention_and_retention_does_not_block_objec
         let entered = entered.clone();
         let release = release.clone();
         tokio::spawn(async move {
-            filegate_db::with_reconciler_lock(&pool, || async {
+            grove_db::with_reconciler_lock(&pool, || async {
                 entered.notify_one();
                 release.notified().await;
             })
@@ -256,7 +258,7 @@ async fn object_lock_does_not_block_retention_and_retention_does_not_block_objec
     assert!(
         db::retention::with_lock(&maintenance_pool, || async {
             assert!(
-                filegate_db::with_reconciler_lock(&object_pool, || async {})
+                grove_db::with_reconciler_lock(&object_pool, || async {})
                     .await
                     .unwrap()
                     .is_some()

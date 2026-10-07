@@ -4,14 +4,14 @@
 
 | 역할 | 구현 |
 |---|---|
-| 서버 프로세스 | Rust filegate 바이너리, axum, tokio |
+| 서버 프로세스 | Rust grove-storage 바이너리, axum, tokio |
 | 원격 관리 CLI | 독립 gscli 바이너리, clap·reqwest, 관리자 HTTP API |
 | 메타데이터 | PostgreSQL + sqlx, 부팅 시 마이그레이션 |
 | 바이트 | 외부 S3 I/O는 aws-sdk-s3, 전송 임시 스풀은 tokio filesystem I/O |
 | 스트림 | axum body, 임시 스풀, 크기·MD5·SHA256 계측 |
 | 비밀 | AES-256-GCM, HKDF, secrecy, 상수시간 비교 |
 | 관측 | tracing 구조화 로그 |
-| 이미지 | `debian:bookworm-slim`, release 바이너리·CA 인증서, 비root 사용자 |
+| 이미지 | Distroless `cc-debian13:nonroot`, release 바이너리·콘솔·CA 인증서, 비root 사용자 |
 
 의존성 버전은 [Cargo.toml](../../Cargo.toml), 소스 책임은
 [소스 구조](../development/source-layout.md), 키 계약은 [등록부](../spec/01-registry.md)가 정본이다.
@@ -30,21 +30,26 @@
 `scripts/e2e-cli.py`는 Terraform 없이 임시 등록부의 전체 수명주기를 검증한다.
 `deploy/local/main.tf`는 운영 이관 완료까지 비교용으로 유지한다.
 
-## 현재 CLI
+## 실행 도구
+
+`grove-storage`는 서버 이미지에 포함된 서버·로컬 운영 명령이다. `gscli`는 원격
+관리 API에 연결하는 별도 사용자용 바이너리다. 서버 명령은 DB·서버 비밀을 읽고,
+원격 CLI는 Account 관리 토큰만 사용한다. Updater는 `gscli` 내부에 포함된다.
+서버 설정의 `GROVE_*` 이름은 유지한다.
 
 | 명령 | 현재 동작 |
 |---|---|
-| `filegate`, `filegate serve` | 서버 기동·migration·등록 저장소 검증 |
-| `filegate status` | 로컬 설정으로 DB·저장소 접근 검사, usage·client 수 출력 |
-| `filegate account init/recover` | 서버 운영자가 최초 Admin 생성·비밀번호 복구; 원격 CLI와 별도 |
-| `filegate --help` | 명령 도움말 |
+| `grove-storage`, `grove-storage serve` | 서버 기동·migration·등록 저장소 검증 |
+| `grove-storage status` | 로컬 설정으로 DB·저장소 접근 검사, usage·client 수 출력 |
+| `grove-storage account init/recover` | 서버 운영자가 최초 Admin 생성·비밀번호 복구; 원격 CLI와 별도 |
+| `grove-storage --help` | 명령 도움말 |
 | `gscli status` | 원격 HTTP 상태·등록부 요약, 물리 접근은 not_checked |
 | `gscli storage/client ...` | 등록부 조회·생성·교체·삭제, metadata 조회·교체 |
 | `gscli credential/client-key ...` | 자격증명 발급·키 해시 등록·목록·삭제 |
 | `gscli usage ...` | storage·client·일별 사용량 조회 |
 | `gscli update [--check]` | 서버 연결 없이 최신 CLI 확인·설치, 공식 설치 기록 검증 |
 
-`filegate status`는 HTTP 서버 없이 동작하고 DB URL·마스터 키를 포함한 서버 설정을 읽는다.
+`grove-storage status`는 HTTP 서버 없이 동작하고 DB URL·마스터 키를 포함한 서버 설정을 읽는다.
 DB migration은 수행하지 않으며, 등록된 S3 저장소의 접근을 검사한다.
 검사 성공은 exit 0, storage 실패는 exit 1이다. 테스트는 바이트·용량 표현 2개다.
 `gscli`은 DB·마스터 키 없이 `GROVE_ENDPOINT`·Account의 `gsm_` 관리 토큰으로 연결한다.
@@ -55,14 +60,36 @@ DB migration은 수행하지 않으며, 등록된 S3 저장소의 접근을 검�
 ## 컨테이너 연결
 
 ```sh
-docker build -f deploy/docker/Dockerfile -t filegate:dev .
+docker build -f deploy/docker/Dockerfile -t grove-storage:dev .
 docker run --rm -p 8080:8080 --env-file .env \
-  -e FILEGATE_BIND=0.0.0.0:8080 \
-  -e FILEGATE_DATABASE_URL=postgres://filegate:filegate@host.docker.internal:55432/filegate \
-  filegate:dev
+  -e GROVE_BIND=0.0.0.0:8080 \
+  -e GROVE_DATABASE_URL=postgres://grove:grove@host.docker.internal:55432/grove \
+  grove-storage:dev
 ```
 
 위 실행 예시는 Docker Desktop 기준이다. storage의 내부 endpoint도 컨테이너에서 접근 가능한 주소로 등록한다.
+
+서버 이미지는 Rust 바이너리와 콘솔을 함께 포함한다. Node는 빌드 단계에서만 사용한다.
+
+| 환경 변수 | 동작 |
+|---|---|
+| `GROVE_CONSOLE_DIST_DIR` | 콘솔 빌드 디렉터리; 이미지 기본값 `/app/web`, 소스 실행은 미설정 |
+| `GROVE_CONSOLE_ORIGIN` | 별도 HTTPS 관리 origin. 미설정이면 콘솔 정적 파일과 브라우저 인증이 비활성 |
+
+TLS는 ingress에서 종료하고 원래 `Host`를 보존한다. `X-Forwarded-Host`는 관리 호스트
+판정에 사용하지 않는다. 콘솔을 활성화한 이미지에서 관리 호스트는 콘솔·브라우저
+관리 API·OpenAPI 문서·probe만 제공하며, S3·Native·relay 객체 경로는 404다.
+다른 호스트에서는 콘솔·브라우저 관리 API가 404이고, 기존 객체·기계용 API 경로를 사용한다.
+관리 origin과 객체 origin은 서로 다른 호스트로 구성한다.
+콘솔 활성화 시 `GROVE_PUBLIC_URL`이 관리 호스트로 연결되면 DB 연결 전에 부팅을 거부한다.
+콘솔 HTML은 응답별 CSP nonce와 `no-store`를 사용한다. 설정한 콘솔 디렉터리의
+index·assets가 없거나 nonce 자리표시자가 잘못되면 서버 기동이 실패한다.
+
+실제 이미지 검증은 `python3 -B scripts/e2e-image.py <image>`로 실행한다.
+Docker·Node·boto3·`frontend/web`의 npm 의존성·Playwright Chromium이 필요하다.
+임시 PostgreSQL·MinIO와 네트워크를 생성해 계정 초기화·HTTPS 로그인·Swagger·호스트 경계·
+읽기 전용 실행·종료를 검사한다. 같은 이미지에서 표준 S3 SDK presigned PUT/GET·Range·
+잘못된 서명·만료 URL 거부·실제 저장 바이트·삭제도 검증한다. 임시 자원은 정리하고 운영 DB에는 연결하지 않는다.
 
 | 실행 위치 | DB 주소 | MinIO 내부 endpoint |
 |---|---|---|
@@ -72,7 +99,7 @@ docker run --rm -p 8080:8080 --env-file .env \
 | Linux Docker Engine host network | `127.0.0.1:55432` | `http://127.0.0.1:9000` |
 
 Linux의 기존 Compose loopback 공개 주소는
-`docker run --rm --network host --env-file .env filegate:dev`로 접근한다.
+`docker run --rm --network host --env-file .env grove-storage:dev`로 접근한다.
 전송 임시 스풀에는 쓰기 가능한 로컬 임시 공간을 제공한다. 영구 객체는 외부 S3에 저장한다.
 
 ## 워커
@@ -108,9 +135,9 @@ marker 또는 1,000페이지 초과 시 실패한다. 정리 장부를 확정하
 
 | 환경 변수 | 기본값 |
 |---|---:|
-| `FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS` | 365 |
-| `FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS` | 90 |
-| `FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS` | 30 |
+| `GROVE_MANAGEMENT_AUDIT_RETENTION_DAYS` | 365 |
+| `GROVE_MANAGEMENT_SECURITY_RETENTION_DAYS` | 90 |
+| `GROVE_MANAGEMENT_INVOCATION_RETENTION_DAYS` | 30 |
 
 값은 1–65535의 정수 일수이며 0·음수·잘못된 값은 부팅 시 거부한다. 하루는 24시간이다.
 관리 정리는 별도 Tokio task와 retention advisory lock으로 실행한다. 파일 복구가 S3
@@ -139,7 +166,7 @@ pool 대기까지 포함한 호출은 5초로 제한한다. 실패한 테이블�
 ## 검증
 
 ```sh
-export DATABASE_URL=postgres://filegate:filegate@127.0.0.1:55432/filegate
+export DATABASE_URL=postgres://grove:grove@127.0.0.1:55432/grove
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -147,9 +174,10 @@ cargo test --workspace
 
 | 검사 | 전제·범위 |
 |---|---|
-| API·core·infra 단위 테스트 | DB 연결 없는 테스트 |
+| API·core·infra 테스트 | 순수 단위 테스트와 `DATABASE_URL`이 필요한 API DB 통합 테스트 |
 | `db/tests` | PostgreSQL과 `DATABASE_URL`; sqlx가 테스트 DB 생성 |
-| `migrations.rs` | URL이 있으면 migration 검증, 없으면 조기 반환 |
+| `schema_baseline.rs` | 새 DB·재실행·다른 checksum 거절·실패 rollback; PostgreSQL 필수 |
+| `scripts/e2e-installation.py` | 새 설치·실제 S3 전송·정확한 DB 백업 복원·미완료 업로드 재개 |
 | `scripts/e2e-*.sh` | 로컬 전용 DB·MinIO·서버·스크립트별 등록 전제 |
 | `scripts/e2e-registry.sh` | 시작·종료 시 등록부 초기화, 전용 개발 DB에서 실행 |
 | `scripts/e2e-cli.py` | 임시 PostgreSQL·실제 서버에서 CLI 등록·조회·삭제 수명주기 |

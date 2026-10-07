@@ -1,7 +1,7 @@
 //! Console login. Browser admission is enforced by the HTTP boundary.
 use crate::{Error, logging};
-use filegate_core::SecretString;
-use filegate_db::{
+use grove_core::SecretString;
+use grove_db::{
     PgPool,
     management::{self as db, AuditActor, AuditContext, admission, telemetry},
 };
@@ -53,7 +53,7 @@ async fn record_login(
     result: Result<db::Session, Error>,
 ) -> Login {
     let context = result.as_ref().ok().map(|session| AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: session.account_id,
             credential_id: session.credential_id,
             session_id: Some(session.id),

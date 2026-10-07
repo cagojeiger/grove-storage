@@ -4,7 +4,7 @@
 mod lifecycle;
 #[path = "support/lock_wait.rs"]
 mod lock_wait;
-use filegate_db::{
+use grove_db::{
     files,
     registry::{self, UpdateStorageOutcome as Outcome},
 };

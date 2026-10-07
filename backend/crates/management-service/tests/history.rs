@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::unreachable)]
 mod support;
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AuditActor, AuditContext, NewAccount, telemetry},
 };
@@ -13,15 +13,14 @@ use uuid::Uuid;
 async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: PgPool) {
     let admin = owner(&pool).await;
     let reader = user_login(&pool, Role::Reader, 2).await;
-    let own_agent = user(&pool, Role::Reader).await;
-    let agent_key = db::issue_credential(&pool, &context(), own_agent, &key(&hash(3)))
+    let account_token = db::issue_credential(&pool, &context(), reader.account, &key(&hash(3)))
         .await
         .unwrap();
     let ctx = AuditContext {
-        actor: AuditActor::User {
-            id: own_agent,
+        actor: AuditActor::Account {
+            id: reader.account,
             session_id: None,
-            credential_id: Some(agent_key.id),
+            credential_id: Some(account_token.id),
         },
         request_id: Uuid::new_v4(),
         surface: Surface::Mcp,
@@ -47,17 +46,6 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     )
     .await
     .unwrap();
-    // Preserve the pre-unification owner snapshot independently of live accounts.
-    for table in ["audit_events", "command_invocations"] {
-        sqlx::query(&format!(
-            "UPDATE management.{table} SET actor_kind='agent',owner_user_id=$1 WHERE request_id=$2"
-        ))
-        .bind(reader.account)
-        .bind(ctx.request_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
     let foreign = context();
     db::create_account(
         &pool,
@@ -69,18 +57,6 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     )
     .await
     .unwrap();
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("DELETE FROM management.credentials WHERE account_id=$1")
-        .bind(own_agent)
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM management.accounts WHERE id=$1")
-        .bind(own_agent)
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
     let result = service::execute(
         &pool,
         Proof::Session(&reader.session),
@@ -111,9 +87,10 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
         _ => unreachable!(),
     };
     assert!(!rest.is_empty());
-    assert!(rest.iter().all(|row| row.context.id < cursor
-        && (row.context.actor_id == Some(reader.account)
-            || row.context.owner_user_id == Some(reader.account))));
+    assert!(
+        rest.iter()
+            .all(|row| row.context.id < cursor && row.context.actor_id == Some(reader.account))
+    );
     let result = service::execute(
         &pool,
         Proof::Session(&reader.session),
@@ -133,8 +110,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     );
     assert!(
         rows.iter()
-            .all(|row| row.context.actor_id == Some(reader.account)
-                || row.context.owner_user_id == Some(reader.account))
+            .all(|row| row.context.actor_id == Some(reader.account))
     );
     let result = service::execute(
         &pool,

@@ -1,15 +1,15 @@
 #![allow(dead_code, clippy::unwrap_used)]
 #[path = "../../../db/tests/support/management.rs"]
 mod fixtures;
-use filegate_db::{PgPool, management as db};
 pub use fixtures::*;
+use grove_db::{PgPool, management as db};
 use grove_management_policy::Role;
 use uuid::Uuid;
 
 #[allow(clippy::panic)]
 pub async fn unexpected_storage_probe(
     _: grove_management_service::resources::StorageOperation,
-) -> Result<filegate_db::registry::StorageRow, grove_management_service::Error> {
+) -> Result<grove_db::registry::StorageRow, grove_management_service::Error> {
     panic!("this command must not probe a storage")
 }
 

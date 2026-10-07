@@ -3,7 +3,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{
-    AuditActor, AuditContext, Credential, Error, NewCredential, audit, credentials, identity, lock,
+    AuditActor, AuditContext, Credential, Error, NewCredential, api_tokens, audit, identity, lock,
     queries::{CredentialSummary, Page},
 };
 
@@ -15,7 +15,7 @@ async fn password_session(
     let actor = identity::password_session(tx, session_hash).await?;
     let session_id = actor.session_id.ok_or(Error::Unauthenticated)?;
     let context = AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: actor.account_id,
             credential_id: None,
             session_id: Some(session_id),
@@ -35,7 +35,7 @@ pub async fn list(
     let (account, _) = password_session(&mut tx, Uuid::new_v4(), session_hash).await?;
     let rows = sqlx::query_as(
         "SELECT id,account_id,label,token_prefix,created_at,expires_at,revoked_at
-         FROM management.credentials
+         FROM management.api_tokens
          WHERE account_id=$1 AND ($2::uuid IS NULL OR id<$2)
          ORDER BY id DESC LIMIT $3",
     )
@@ -55,7 +55,7 @@ pub async fn issue(
 ) -> Result<Credential, Error> {
     let mut tx = lock(pool).await?;
     let (account, context) = password_session(&mut tx, request_id, session_hash).await?;
-    let issued = credentials::insert(&mut tx, account, key).await?;
+    let issued = api_tokens::insert(&mut tx, account, key).await?;
     audit::record(
         &mut tx,
         &context,
@@ -77,7 +77,7 @@ pub async fn revoke(
     let mut tx = lock(pool).await?;
     let (account, context) = password_session(&mut tx, request_id, session_hash).await?;
     let owned: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM management.credentials WHERE id=$1 AND account_id=$2)",
+        "SELECT EXISTS(SELECT 1 FROM management.api_tokens WHERE id=$1 AND account_id=$2)",
     )
     .bind(credential)
     .bind(account)
@@ -86,5 +86,5 @@ pub async fn revoke(
     if !owned {
         return Err(Error::NotFound);
     }
-    credentials::revoke_in(tx, &context, credential).await
+    api_tokens::revoke_in(tx, &context, credential).await
 }

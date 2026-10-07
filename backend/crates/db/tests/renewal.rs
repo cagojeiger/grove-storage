@@ -9,8 +9,8 @@
     clippy::indexing_slicing
 )]
 
-use filegate_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
-use filegate_db::registry::{self, StorageRow};
+use grove_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
+use grove_db::registry::{self, StorageRow};
 use sqlx::PgPool;
 
 // ── 픽스처 ──────────────────────────────────────────────────

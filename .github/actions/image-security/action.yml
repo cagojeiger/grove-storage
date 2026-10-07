@@ -1,5 +1,5 @@
 name: Image security gate
-description: Preserve scan evidence before enforcing vulnerability, secret and Rust inventory policy.
+description: Preserve image and console scan evidence before enforcing security policy.
 inputs:
   image:
     description: Exact image reference; remote scans require a SHA256 digest
@@ -47,14 +47,37 @@ runs:
         image-ref: ${{ inputs.image }}
         scanners: vuln,secret
         vuln-type: os,library
-        severity: HIGH,CRITICAL
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         ignore-unfixed: false
         trivyignores: ''
         exit-code: '0'
         format: json
-        output: reports/${{ inputs.artifact }}/trivy.json
+        output: reports/${{ inputs.artifact }}/image-trivy.json
         timeout: 15m
         cache: true
+    - name: Scan frontend inventory from the exact image
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        ARCHITECTURE: ${{ inputs.architecture }}
+        SOURCE: ${{ inputs.source }}
+        REPORT_DIR: reports/${{ inputs.artifact }}
+      run: |
+        set -euo pipefail
+        if [[ "$SOURCE" == remote ]]; then
+          docker pull --platform "linux/$ARCHITECTURE" "$IMAGE"
+        fi
+        container=$(docker create --platform "linux/$ARCHITECTURE" "$IMAGE")
+        trap 'docker rm "$container" >/dev/null' EXIT
+        mkdir -p "$REPORT_DIR/inventory/frontend"
+        docker cp "$container:/app/inventory/frontend/package-lock.json" \
+          "$REPORT_DIR/inventory/frontend/package-lock.json"
+        trivy fs --scanners vuln --pkg-types library --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+          --list-all-pkgs --ignorefile /dev/null --format json \
+          --output "$REPORT_DIR/frontend-trivy.json" "$REPORT_DIR"
+        jq --slurpfile frontend "$REPORT_DIR/frontend-trivy.json" \
+          '.Results += $frontend[0].Results' "$REPORT_DIR/image-trivy.json" \
+          > "$REPORT_DIR/trivy.json"
     - name: Generate readable and SARIF reports
       if: ${{ !cancelled() }}
       shell: bash

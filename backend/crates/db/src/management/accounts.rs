@@ -2,7 +2,7 @@ use grove_management_policy::Role;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{AuditContext, Credential, Error, NewCredential, audit, credentials, lock, role_name};
+use super::{AuditContext, Error, audit, lock, role_name};
 
 pub struct NewAccount<'a> {
     pub display_name: &'a str,
@@ -14,48 +14,6 @@ pub enum AccountChange {
     Role(Role),
     Active(bool),
     Delete,
-}
-
-/// Legacy token bootstrap retained for migration tests; account and key are atomic.
-pub async fn bootstrap(
-    pool: &PgPool,
-    context: &AuditContext,
-    name: &str,
-    key: &NewCredential<'_>,
-) -> Result<(Uuid, Credential), Error> {
-    bootstrap_in(lock(pool).await?, context, name, key).await
-}
-
-pub(super) async fn bootstrap_in(
-    mut tx: Transaction<'_, Postgres>,
-    context: &AuditContext,
-    name: &str,
-    key: &NewCredential<'_>,
-) -> Result<(Uuid, Credential), Error> {
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM management.accounts)")
-        .fetch_one(&mut *tx)
-        .await?;
-    if exists {
-        return Err(Error::AlreadyInitialized);
-    }
-    let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO management.accounts(id,display_name,role) VALUES($1,$2,'admin')")
-        .bind(id)
-        .bind(name)
-        .execute(&mut *tx)
-        .await?;
-    let credential = credentials::insert(&mut tx, id, key).await?;
-    audit::record(&mut tx, context, "user.bootstrap", "account", id).await?;
-    audit::record(
-        &mut tx,
-        context,
-        "credential.issue",
-        "credential",
-        credential.id,
-    )
-    .await?;
-    tx.commit().await.map_err(|_| Error::CommitUnknown)?;
-    Ok((id, credential))
 }
 
 pub async fn create_account(
@@ -164,7 +122,7 @@ pub(super) async fn change_in(
         sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL").bind(id).execute(&mut *tx).await?;
     }
     if deleted {
-        sqlx::query("UPDATE management.credentials SET revoked_at=grove_time.wall_now() WHERE revoked_at IS NULL AND account_id=$1")
+        sqlx::query("UPDATE management.api_tokens SET revoked_at=grove_time.wall_now() WHERE revoked_at IS NULL AND account_id=$1")
             .bind(id).execute(&mut *tx).await?;
     }
     let event = audit::record(&mut tx, context, action, "account", id).await?;

@@ -81,10 +81,10 @@ export async function permissionChecks(browser, admin, origin, endpoint, ownerPa
     await expect(page.getByRole("heading", { name: "My activity", exact: true })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Security events", exact: true })).toHaveCount(0);
     const scoped = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/audit?limit=100")).json()));
-    assert(scoped.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
+    assert(scoped.items.every((event) => event.context.actor_id === user.account_id));
     const calls = await page.evaluate(async () => (await (await fetch("/api/admin/identity/v1/history/invocations?limit=100")).json()));
     assert(calls.items.length > 0);
-    assert(calls.items.every((event) => event.context.actor_id === user.account_id || event.context.owner_user_id === user.account_id));
+    assert(calls.items.every((event) => event.context.actor_id === user.account_id));
     assert.equal(await page.evaluate(async () => (await fetch("/api/admin/identity/v1/history/security")).status), 403);
     await page.goto(`${origin}/api/admin/console/#settings`);
     await page.getByRole("tab", { name: "Sessions", exact: true }).click();

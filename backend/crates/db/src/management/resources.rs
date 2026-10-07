@@ -19,7 +19,7 @@ impl IdentityTransaction<'_> {
             .await?
             .ok_or(Error::NotFound)
     }
-    pub async fn client_keys(&mut self, id: &str) -> Result<Vec<String>, Error> {
+    pub async fn client_native_keys(&mut self, id: &str) -> Result<Vec<String>, Error> {
         self.client_storage(id).await?;
         Ok(registry::list_client_keys(&mut *self.inner, id).await?)
     }

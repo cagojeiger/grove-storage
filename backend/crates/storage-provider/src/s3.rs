@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::presigning::PresigningConfig;
-use filegate_core::time::{Clock, SystemClock};
+use grove_core::time::{Clock, SystemClock};
 use secrecy::{ExposeSecret, SecretString};
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ impl aws_smithy_async::time::TimeSource for SdkClock {
 /// S3 호환 storage 접근 명세: 등록부 행 + 복호된 자격증명.
 #[derive(Debug, Clone)]
 pub struct S3StorageSpec {
-    /// filegate 프로세스가 검증·실물 조회에 쓰는 내부 접근 주소.
+    /// Grove 프로세스가 검증·실물 조회에 쓰는 내부 접근 주소.
     pub endpoint: String,
     /// 전송 주체가 presigned URL로 접근할 공개 주소. 같을 수 있지만 같은 개념은 아니다.
     pub public_endpoint: String,
@@ -50,7 +50,7 @@ fn presigning(storage: &S3Storage, expires_in: Duration) -> anyhow::Result<Presi
 /// presign은 전송 주체가 실제 접속할 공개 주소로 서명해야 한다 (spec 01).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Address {
-    /// filegate 프로세스가 직접 부르는 경로 (검증, head_object).
+    /// Grove 프로세스가 직접 부르는 경로 (검증, head_object).
     Internal,
     /// 전송 주체에게 건네질 URL의 서명 (presign).
     Public,
@@ -114,7 +114,7 @@ fn client(spec: &S3StorageSpec, address: Address, clock: Arc<dyn Clock>) -> S3St
         spec.secret_key.expose_secret().to_owned(),
         None,
         None,
-        "filegate-registry",
+        "grove-storage",
     );
     let endpoint = match address {
         Address::Internal => &spec.endpoint,
@@ -147,7 +147,7 @@ fn client(spec: &S3StorageSpec, address: Address, clock: Arc<dyn Clock>) -> S3St
 
 /// 클라이언트를 만들고 버킷에 접근 가능한지 확인한다.
 ///
-/// filegate는 자기 버킷만 다룬다 — 버킷 프로비저닝은 운영자 몫이다. 버킷이
+/// Grove는 자기 버킷만 다룬다 — 버킷 프로비저닝은 운영자 몫이다. 버킷이
 /// 없거나 접근 권한이 없으면 실패한다 (등록 거부 또는 부팅 중단, ADR 001).
 /// head_bucket이 존재와 기본 접근을, list_multipart_uploads가 응답 유실 복구에
 /// 필요한 조회 권한을 확인한다.
@@ -264,7 +264,7 @@ pub fn rfc5987_encode(value: &str) -> String {
 }
 
 /// 중계 쓰기의 뒷단 업로드 — 스풀 파일에서 스트리밍한다 (크기 기지).
-/// filegate가 스트림 중 크기·MD5를 이미 검증했으므로 여기서는 전달만.
+/// Grove가 스트림 중 크기·MD5를 이미 검증했으므로 여기서는 전달만.
 pub async fn put_object_from_path(
     storage: &S3Storage,
     object_key: &str,
@@ -592,7 +592,7 @@ pub async fn abort_multipart(
     }
 }
 
-/// DB에 vendor upload_id를 붙이기 전에 실패한 create의 복구 경로. filegate의
+/// DB에 vendor upload_id를 붙이기 전에 실패한 create의 복구 경로. Grove의
 /// 물리 object_key는 파일별로 유일하므로, 그 정확한 key에 열린 multipart를
 /// 모두 찾아 중단한다. Create 응답 유실로 같은 key에 세션이 둘 생겨도 전부
 /// 정리한다. 이미 없으면 성공이다.

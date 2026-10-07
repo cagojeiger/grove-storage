@@ -4,10 +4,7 @@ use std::future::Future;
 pub trait MultipartCreate {
     type Error;
 
-    /// None denotes a backend without a vendor multipart session.
-    fn create_vendor_upload(
-        &self,
-    ) -> impl Future<Output = Result<Option<String>, Self::Error>> + Send;
+    fn create_vendor_upload(&self) -> impl Future<Output = Result<String, Self::Error>> + Send;
     fn attach_vendor_upload(
         &self,
         upload_id: &str,
@@ -28,14 +25,12 @@ pub async fn initialize<O: MultipartCreate>(operations: &O) -> Result<(), O::Err
             return Err(error);
         }
     };
-    if let Some(upload_id) = &upload_id
-        && let Err(error) = operations.attach_vendor_upload(upload_id).await
-    {
-        operations.compensate(Some(upload_id)).await;
+    if let Err(error) = operations.attach_vendor_upload(&upload_id).await {
+        operations.compensate(Some(&upload_id)).await;
         return Err(error);
     }
     if let Err(error) = operations.prepare_relay().await {
-        operations.compensate(upload_id.as_deref()).await;
+        operations.compensate(Some(&upload_id)).await;
         return Err(error);
     }
     Ok(())

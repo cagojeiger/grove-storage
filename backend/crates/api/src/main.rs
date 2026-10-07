@@ -1,20 +1,20 @@
-//! filegate 진입점: env 설정 → PostgreSQL(+마이그레이션) → storage 재검증
+//! Grove Storage 진입점: env 설정 → PostgreSQL(+마이그레이션) → storage 재검증
 //! → HTTP + reconciler → graceful shutdown.
 
-mod admin;
-mod admin_auth;
-mod blobs;
-mod console_identity;
+mod accounts;
+mod commands;
+mod console_web;
 mod cors;
 mod error;
 mod lease;
+mod lease_relay;
 mod local_accounts;
+mod log_retention;
 mod logging;
-mod management_maintenance;
 mod mcp;
+mod native;
 mod openapi;
 mod reconciler;
-mod resource_commands;
 mod routes;
 mod s3;
 mod shutdown;
@@ -22,12 +22,14 @@ mod spool;
 mod status;
 mod storage_access;
 mod storage_registration;
-mod v1;
+#[cfg(test)]
+#[path = "../../db/tests/support/management.rs"]
+mod test_management;
 
 use std::io;
 use std::sync::Arc;
 
-use filegate_core::{ExposeSecret, LogFormat};
+use grove_core::{ExposeSecret, LogFormat};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -39,7 +41,6 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
             Ok(std::process::ExitCode::SUCCESS)
         }
         Some("status") => status::run().await,
-        Some("admin") => admin_auth::cli::run().await,
         Some("account") => local_accounts::run().await,
         Some("openapi") => {
             println!("{}", serde_json::to_string_pretty(&openapi::documents())?);
@@ -50,7 +51,7 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
             Ok(std::process::ExitCode::SUCCESS)
         }
         Some(other) => {
-            eprintln!("filegate: unknown command '{other}'");
+            eprintln!("grove-storage: unknown command '{other}'");
             print_usage();
             Ok(std::process::ExitCode::from(2))
         }
@@ -59,21 +60,29 @@ async fn main() -> anyhow::Result<std::process::ExitCode> {
 
 fn print_usage() {
     eprintln!(
-        "filegate — file gateway\n\n\
+        "Grove Storage — S3 gateway\n\n\
          USAGE:\n    \
-         filegate [serve]   서버를 기동한다 (기본)\n    \
-         filegate status    배포 상태를 점검하고 요약을 출력한다\n    \
-         filegate admin     Legacy operator tokens (explicit compatibility mode)\n    \
-         filegate account   Initialize or recover a local password account\n    \
-         filegate openapi   Export public API contracts (no database required)"
+         grove-storage [serve]   Start the server (default)\n    \
+         grove-storage status    Inspect local database and storage access\n    \
+         grove-storage account   Initialize or recover a local password account\n    \
+         grove-storage openapi   Export API contracts (no database required)\n\n\
+         Remote resource management and CLI updates: gscli --help\n\
+         Server configuration: GROVE_* environment variables"
     );
 }
 
 /// 서버 기동: env 설정 → PostgreSQL(+마이그레이션) → storage 재검증
 /// → HTTP + object reconciler + management maintenance → graceful shutdown.
 async fn serve() -> anyhow::Result<()> {
-    let config = filegate_core::Config::load()?;
-    let console_origin = admin_auth::console_origin(std::env::var("FILEGATE_CONSOLE_ORIGIN").ok())?;
+    let config = grove_core::Config::load()?;
+    let console_origin = console_web::parse_origin(std::env::var("GROVE_CONSOLE_ORIGIN").ok())?;
+    let console_web = match (&console_origin, std::env::var_os("GROVE_CONSOLE_DIST_DIR")) {
+        (Some(origin), Some(directory)) => {
+            console_web::validate_object_host(origin, config.server.public_url.as_deref())?;
+            Some(console_web::ConsoleWeb::load(directory.into()).await?)
+        }
+        _ => None,
+    };
     init_tracing(config.server.log_format);
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.
@@ -83,25 +92,18 @@ async fn serve() -> anyhow::Result<()> {
     // shutdown이 불가능한 프로세스가 되므로 부팅 자체를 중단한다.
     let mut signals = ShutdownSignals::install()?;
 
-    let pool = filegate_db::connect(
+    let pool = grove_db::connect(
         config.database.url.expose_secret(),
         config.database.max_connections,
     )
     .await?;
-    filegate_db::migrate(&pool).await?;
+    grove_db::migrate(&pool).await?;
     anyhow::ensure!(
-        filegate_db::management::passwords::initialized(&pool)
+        grove_db::management::passwords::initialized(&pool)
             .await
-            .map_err(|_| anyhow::anyhow!("management initialization check failed"))?
-            || admin_auth::legacy_initialized(&pool, &config.security).await?,
-        "administrator not initialized; run filegate account init; legacy-only installations require explicit FILEGATE_LEGACY_ADMIN_ENABLED=true during migration"
+            .map_err(|_| anyhow::anyhow!("management initialization check failed"))?,
+        "administrator not initialized; run grove-storage account init"
     );
-    if config.security.legacy_admin_enabled {
-        tracing::warn!(
-            event = "admin.legacy_enabled",
-            "Legacy operator API bypasses Account roles; disable it after migrating management callers"
-        );
-    }
     info!(
         event = "db.connected",
         max_connections = config.database.max_connections
@@ -110,9 +112,9 @@ async fn serve() -> anyhow::Result<()> {
     // 등록된 storage 접근 재검증 — 실패하면 부팅 중단 (ADR 001).
     storage_registration::verify_registered(&pool, &crypto).await?;
 
-    let maintenance_pool = filegate_db::connect(
+    let maintenance_pool = grove_db::connect(
         config.database.url.expose_secret(),
-        management_maintenance::DB_CONNECTIONS,
+        log_retention::DB_CONNECTIONS,
     )
     .await?;
 
@@ -121,8 +123,8 @@ async fn serve() -> anyhow::Result<()> {
 
     let shutdown = CancellationToken::new();
     // 요청 경로와 reconciler가 같은 캐시를 공유한다 — 같은 storage의 웜 풀.
-    let clock: Arc<dyn filegate_core::time::Clock> = Arc::new(filegate_core::time::SystemClock);
-    let s3_clients = Arc::new(filegate_infra::S3ClientCache::new(clock.clone()));
+    let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
+    let s3_clients = Arc::new(grove_infra::S3ClientCache::new(clock.clone()));
     let mut workers = tokio::task::JoinSet::new();
     let tick = std::time::Duration::from_secs(config.server.reconciler_interval_secs);
     workers.spawn(reconciler::run(
@@ -133,7 +135,7 @@ async fn serve() -> anyhow::Result<()> {
         shutdown.clone(),
         clock.clone(),
     ));
-    workers.spawn(management_maintenance::run(
+    workers.spawn(log_retention::run(
         maintenance_pool.clone(),
         config.server.management_log_retention,
         tick,
@@ -143,15 +145,15 @@ async fn serve() -> anyhow::Result<()> {
     let state = routes::AppState {
         clock,
         pool: pool.clone(),
-        security: config.security.clone(),
         crypto,
         public_url: config.server.public_url.clone(),
         console_origin,
+        console_web,
         multipart_threshold: config.server.multipart_threshold_bytes,
         part_size: config.server.part_size_bytes,
         s3_clients,
         single_upload_claims: std::sync::Arc::new(tokio::sync::Semaphore::new(
-            blobs::SINGLE_UPLOAD_CLAIM_LIMIT,
+            lease_relay::SINGLE_UPLOAD_CLAIM_LIMIT,
         )),
         spool_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(
             spool::SPOOL_CONCURRENCY_LIMIT,

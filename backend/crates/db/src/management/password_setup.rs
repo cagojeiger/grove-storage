@@ -78,7 +78,7 @@ async fn admin_password_session(
         return Err(Error::Forbidden);
     }
     Ok(AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: actor.account_id,
             credential_id: actor.credential_id,
             session_id: Some(actor_session),
@@ -221,7 +221,7 @@ pub async fn complete(
         .execute(&mut *tx)
         .await?;
     let context = AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: account,
             credential_id: None,
             session_id: None,

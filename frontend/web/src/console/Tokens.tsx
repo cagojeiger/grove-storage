@@ -24,7 +24,7 @@ import {
   isIssued,
 } from "../api/identity";
 import { identity, request } from "../api/http";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 import { time } from "../design/format";
 import {
   Confirmation,

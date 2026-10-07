@@ -1,5 +1,5 @@
-use filegate_core::SecretString;
-use filegate_db::{PgPool, management as db};
+use grove_core::SecretString;
+use grove_db::{PgPool, management as db};
 use uuid::Uuid;
 
 use crate::{Error, logging, password_setups};

@@ -7,6 +7,7 @@ target
 .env
 .env.*
 **/node_modules
+frontend/web/dist
 **/__pycache__
 **/test-results
 **/playwright-report

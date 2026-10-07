@@ -1,7 +1,7 @@
 //! 클라이언트 키 해시 (spec 01 "키와 비밀").
 //!
 //! raw 키는 서버에 저장되지 않는다 — 인증은 제시된 키를 해시해
-//! client_keys의 저장 형식(`sha256:<64hex>`)과 대조하는 것뿐이다.
+//! client_native_keys의 저장 형식(`sha256:<64hex>`)과 대조하는 것뿐이다.
 
 use aes_gcm::aead::OsRng;
 use aes_gcm::aead::rand_core::RngCore;

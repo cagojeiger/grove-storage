@@ -1,8 +1,8 @@
 //! S3 single/multipart completion recovery.
 
-use filegate_core::Crypto;
-use filegate_db::{PgPool, registry, s3_registry as s3reg};
-use filegate_infra::S3ClientCache;
+use grove_core::Crypto;
+use grove_db::{PgPool, registry, s3_registry as s3reg};
+use grove_infra::S3ClientCache;
 use grove_object_policy::completion::{CompletionAction, completion_action};
 
 use super::BATCH_LIMIT;
@@ -118,7 +118,7 @@ async fn observe_s3_completion(
         .await?
         .ok_or_else(|| anyhow::anyhow!("storage '{}' not registered", candidate.storage_id))?;
     let backend = crate::storage_access::backend_from_row(crypto, &row)?;
-    filegate_infra::backend::observe_backend_object(
+    grove_infra::s3_io::observe_backend_object(
         s3_clients,
         &backend,
         &candidate.storage_id,

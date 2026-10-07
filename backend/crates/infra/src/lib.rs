@@ -2,7 +2,7 @@
 //! Backend operations consume resolved settings; registry writes, authorization,
 //! and object metadata transitions belong to their callers.
 
-pub mod backend;
+pub mod s3_io;
 pub mod temp_spool;
 
 // Keep existing adapters source-compatible while the SDK stays confined to its crate.

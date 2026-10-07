@@ -6,10 +6,8 @@ use super::Error;
 
 #[derive(Clone, Copy)]
 pub enum AuditActor {
-    Master {
-        session_id: Option<Uuid>,
-    },
-    User {
+    System,
+    Account {
         id: Uuid,
         credential_id: Option<Uuid>,
         session_id: Option<Uuid>,
@@ -26,35 +24,31 @@ pub struct AuditContext {
 pub(super) struct ActorColumns {
     pub kind: &'static str,
     pub actor: Option<Uuid>,
-    pub owner: Option<Uuid>,
     pub credential: Option<Uuid>,
     pub session: Option<Uuid>,
 }
 
 pub(super) fn columns(actor: Option<AuditActor>) -> ActorColumns {
     match actor {
-        Some(AuditActor::Master { session_id }) => ActorColumns {
-            kind: "master",
+        Some(AuditActor::System) => ActorColumns {
+            kind: "system",
             actor: None,
-            owner: None,
             credential: None,
-            session: session_id,
+            session: None,
         },
-        Some(AuditActor::User {
+        Some(AuditActor::Account {
             id,
             credential_id,
             session_id,
         }) => ActorColumns {
-            kind: "user",
+            kind: "account",
             actor: Some(id),
-            owner: None,
             credential: credential_id,
             session: session_id,
         },
         None => ActorColumns {
             kind: "anonymous",
             actor: None,
-            owner: None,
             credential: None,
             session: None,
         },
@@ -90,9 +84,9 @@ pub(super) async fn record_target(
 ) -> Result<i64, Error> {
     let fields = columns(Some(context.actor));
     let id = sqlx::query_scalar("INSERT INTO management.audit_events
-        (actor_kind, actor_id, owner_user_id, credential_id, session_id, request_id, surface, action, resource_type, resource_id)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id")
-        .bind(fields.kind).bind(fields.actor).bind(fields.owner).bind(fields.credential).bind(fields.session)
+        (actor_kind, actor_id, credential_id, session_id, request_id, surface, action, resource_type, resource_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id")
+        .bind(fields.kind).bind(fields.actor).bind(fields.credential).bind(fields.session)
         .bind(context.request_id).bind(surface_name(context.surface)).bind(action).bind(resource_type).bind(resource_id)
         .fetch_one(&mut **tx).await?;
     Ok(id)

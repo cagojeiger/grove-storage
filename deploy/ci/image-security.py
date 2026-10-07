@@ -13,6 +13,7 @@ def validate(report):
     if not isinstance(results, list) or not results:
         raise ValueError("Missing or empty image results")
     rust_inventory = False
+    frontend_inventory = False
     findings = 0
     for result in results:
         if not isinstance(result, dict):
@@ -25,6 +26,17 @@ def validate(report):
                    or not package.get("Version") for package in packages):
                 raise ValueError("Malformed Rust dependency inventory")
             rust_inventory = True
+        if result.get("Type") == "npm" and str(result.get("Target", "")).endswith(
+            "inventory/frontend/package-lock.json"
+        ):
+            if not isinstance(packages, list) or not packages or any(
+                not isinstance(package, dict) or not package.get("Name")
+                or not package.get("Version") for package in packages
+            ):
+                raise ValueError("Missing or malformed frontend dependency inventory")
+            frontend_inventory = {"react", "@mui/material", "swagger-ui-react"}.issubset(
+                {package["Name"] for package in packages}
+            )
         for kind in ("Vulnerabilities", "Secrets"):
             entries = result.get(kind)
             if entries is None:
@@ -39,6 +51,8 @@ def validate(report):
                 findings += entry["Severity"] in {"HIGH", "CRITICAL"}
     if not rust_inventory:
         raise ValueError("No Rust inventory; build with cargo-auditable")
+    if not frontend_inventory:
+        raise ValueError("No frontend inventory; package the built console lockfile")
     if findings:
         raise ValueError(f"{findings} HIGH/CRITICAL vulnerability or secret findings")
 

@@ -7,7 +7,7 @@
 use std::net::SocketAddr;
 use std::num::NonZeroU16;
 
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
 use crate::error::{Error, Result};
 
@@ -18,7 +18,7 @@ pub struct Config {
     pub security: SecurityConfig,
 }
 
-/// 마스터 키와 초기화 전 호환용 운영자 토큰. 관리자 토큰의 정본은 DB다.
+/// Storage credential encryption keys.
 #[derive(Debug, Clone)]
 pub struct SecurityConfig {
     /// storage 시크릿 암호화의 마스터 키 (최소 32바이트 검증은 Crypto::new가).
@@ -28,10 +28,6 @@ pub struct SecurityConfig {
     /// 회전 전환기의 이전 마스터 키 (복호 전용, spec 01 런북). 쌍으로만 유효.
     pub enc_root_secret_prev: Option<SecretString>,
     pub enc_key_id_prev: Option<String>,
-    /// 관리자 초기화 전까지 사용하는 호환용 운영자 토큰 목록.
-    pub operator_tokens: Vec<SecretString>,
-    /// Explicit compatibility mode for the old operator REST API and sessions.
-    pub legacy_admin_enabled: bool,
 }
 
 impl SecurityConfig {
@@ -42,26 +38,13 @@ impl SecurityConfig {
         }
         Ok(crypto)
     }
-
-    /// 제시된 토큰이 목록 중 하나와 일치하는가 (상수시간 비교).
-    pub fn operator_token_matches(&self, presented: &str) -> bool {
-        use sha2::{Digest, Sha256};
-        use subtle::ConstantTimeEq;
-        let presented_hash = Sha256::digest(presented.as_bytes());
-        let mut matched = 0_u8;
-        for token in &self.operator_tokens {
-            let token_hash = Sha256::digest(token.expose_secret().as_bytes());
-            matched |= token_hash.ct_eq(&presented_hash).unwrap_u8();
-        }
-        matched == 1
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub bind_addr: SocketAddr,
     pub log_format: LogFormat,
-    /// 중계 바이트 엔드포인트의 공개 베이스 URL (예: https://filegate.example.com).
+    /// 중계 바이트 엔드포인트의 공개 베이스 URL (예: https://objects.grove.example.com).
     /// force_relay storage 등록에 필요하다.
     pub public_url: Option<String>,
     /// reconciler tick 간격 (기본 60초).
@@ -72,7 +55,7 @@ pub struct ServerConfig {
     /// multipart part 크기 (균일, 마지막만 나머지). 업로드별로 동결된다 —
     /// 설정 변경은 새 업로드부터다 (spec 02). 벤더 규칙상 5MiB..=5GiB.
     pub part_size_bytes: i64,
-    /// S3 표면 CORS 허용 origin (FILEGATE_S3_CORS_ALLOWED_ORIGINS, 콤마구분).
+    /// S3 표면 CORS 허용 origin (GROVE_S3_CORS_ALLOWED_ORIGINS, 콤마구분).
     /// 비면 CORS 미적용 — 브라우저 직접 업로드는 이 목록의 origin에만 열린다.
     pub s3_cors_allowed_origins: Vec<String>,
 }
@@ -112,55 +95,55 @@ impl Config {
                 .map_err(|_| Error::config(format!("{key} must be an integer between 1 and 65535")))
         };
         let server = ServerConfig {
-            bind_addr: env("FILEGATE_BIND")
+            bind_addr: env("GROVE_BIND")
                 .unwrap_or_else(|| "127.0.0.1:8080".to_owned())
                 .parse()
-                .map_err(|e| Error::config(format!("FILEGATE_BIND: {e}")))?,
-            log_format: match env("FILEGATE_LOG_FORMAT").as_deref() {
+                .map_err(|e| Error::config(format!("GROVE_BIND: {e}")))?,
+            log_format: match env("GROVE_LOG_FORMAT").as_deref() {
                 None | Some("pretty") => LogFormat::Pretty,
                 Some("json") => LogFormat::Json,
                 Some(other) => {
                     return Err(Error::config(format!(
-                        "FILEGATE_LOG_FORMAT must be pretty|json, got '{other}'"
+                        "GROVE_LOG_FORMAT must be pretty|json, got '{other}'"
                     )));
                 }
             },
-            public_url: match env("FILEGATE_PUBLIC_URL") {
+            public_url: match env("GROVE_PUBLIC_URL") {
                 None => None,
                 Some(url) => {
                     let trimmed = url.trim_end_matches('/').to_owned();
                     let valid = (trimmed.starts_with("http://") && trimmed.len() > 7)
                         || (trimmed.starts_with("https://") && trimmed.len() > 8);
                     if !valid {
-                        return Err(Error::config("FILEGATE_PUBLIC_URL must be an http(s) URL"));
+                        return Err(Error::config("GROVE_PUBLIC_URL must be an http(s) URL"));
                     }
                     Some(trimmed)
                 }
             },
-            reconciler_interval_secs: env("FILEGATE_RECONCILER_INTERVAL_SECS")
+            reconciler_interval_secs: env("GROVE_RECONCILER_INTERVAL_SECS")
                 .map(|v| v.parse())
                 .transpose()
-                .map_err(|e| Error::config(format!("FILEGATE_RECONCILER_INTERVAL_SECS: {e}")))?
+                .map_err(|e| Error::config(format!("GROVE_RECONCILER_INTERVAL_SECS: {e}")))?
                 .unwrap_or(60),
             management_log_retention: ManagementLogRetention {
-                audit_days: retention_days("FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS", "365")?,
-                security_days: retention_days("FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS", "90")?,
+                audit_days: retention_days("GROVE_MANAGEMENT_AUDIT_RETENTION_DAYS", "365")?,
+                security_days: retention_days("GROVE_MANAGEMENT_SECURITY_RETENTION_DAYS", "90")?,
                 invocation_days: retention_days(
-                    "FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
+                    "GROVE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
                     "30",
                 )?,
             },
-            multipart_threshold_bytes: env("FILEGATE_MULTIPART_THRESHOLD_BYTES")
+            multipart_threshold_bytes: env("GROVE_MULTIPART_THRESHOLD_BYTES")
                 .map(|v| v.parse())
                 .transpose()
-                .map_err(|e| Error::config(format!("FILEGATE_MULTIPART_THRESHOLD_BYTES: {e}")))?
+                .map_err(|e| Error::config(format!("GROVE_MULTIPART_THRESHOLD_BYTES: {e}")))?
                 .unwrap_or(256 * 1024 * 1024),
-            part_size_bytes: env("FILEGATE_PART_SIZE_BYTES")
+            part_size_bytes: env("GROVE_PART_SIZE_BYTES")
                 .map(|v| v.parse())
                 .transpose()
-                .map_err(|e| Error::config(format!("FILEGATE_PART_SIZE_BYTES: {e}")))?
+                .map_err(|e| Error::config(format!("GROVE_PART_SIZE_BYTES: {e}")))?
                 .unwrap_or(64 * 1024 * 1024),
-            s3_cors_allowed_origins: env("FILEGATE_S3_CORS_ALLOWED_ORIGINS")
+            s3_cors_allowed_origins: env("GROVE_S3_CORS_ALLOWED_ORIGINS")
                 .map(|v| {
                     v.split(',')
                         .map(str::trim)
@@ -173,72 +156,52 @@ impl Config {
         // 벤더 규칙 (S3 multipart): part는 5MiB 이상(마지막 제외), 5GiB 이하.
         if !(5 * 1024 * 1024..=5 * 1024 * 1024 * 1024).contains(&server.part_size_bytes) {
             return Err(Error::config(
-                "FILEGATE_PART_SIZE_BYTES must be between 5MiB and 5GiB",
+                "GROVE_PART_SIZE_BYTES must be between 5MiB and 5GiB",
             ));
         }
         if server.multipart_threshold_bytes < 1 {
             return Err(Error::config(
-                "FILEGATE_MULTIPART_THRESHOLD_BYTES must be positive",
+                "GROVE_MULTIPART_THRESHOLD_BYTES must be positive",
             ));
         }
         // 0은 tokio::time::interval을 패닉시킨다 — 다른 숫자 설정처럼 도메인
         // 검사로 부팅에서 거부한다 (0을 받으면 정리 잡이 조용히 죽는다).
         if server.reconciler_interval_secs < 1 {
-            return Err(Error::config(
-                "FILEGATE_RECONCILER_INTERVAL_SECS must be >= 1",
-            ));
+            return Err(Error::config("GROVE_RECONCILER_INTERVAL_SECS must be >= 1"));
         }
         let database = DatabaseConfig {
-            url: SecretString::from(env("FILEGATE_DATABASE_URL").unwrap_or_else(|| {
-                "postgres://filegate:filegate@127.0.0.1:55432/filegate".to_owned()
-            })),
+            url: SecretString::from(
+                env("GROVE_DATABASE_URL")
+                    .unwrap_or_else(|| "postgres://grove:grove@127.0.0.1:55432/grove".to_owned()),
+            ),
             // 기본 20: 요청 트랜잭션이 커넥션을 duration 내내 쥐고, reconciler
             // tick이 최대 2개(advisory lock + 잡 tx)를 점유한다 — 5면 서빙에
             // ~3개만 남아 동시성이 조금만 있어도 acquire에서 큐잉된다.
-            max_connections: env("FILEGATE_DB_MAX_CONNECTIONS")
+            max_connections: env("GROVE_DB_MAX_CONNECTIONS")
                 .map(|v| v.parse())
                 .transpose()
-                .map_err(|e| Error::config(format!("FILEGATE_DB_MAX_CONNECTIONS: {e}")))?
+                .map_err(|e| Error::config(format!("GROVE_DB_MAX_CONNECTIONS: {e}")))?
                 .unwrap_or(20),
         };
         // reconciler가 advisory lock 트랜잭션으로 커넥션 하나를 쥔 채
         // 잡 트랜잭션을 pool에서 또 연다 — 1개면 데드락이다.
         if database.max_connections < 2 {
-            return Err(Error::config(
-                "FILEGATE_DB_MAX_CONNECTIONS must be at least 2",
-            ));
+            return Err(Error::config("GROVE_DB_MAX_CONNECTIONS must be at least 2"));
         }
         let required =
             |key: &str| env(key).ok_or_else(|| Error::config(format!("{key} is not set")));
-        let operator_tokens: Vec<SecretString> = env("FILEGATE_OPERATOR_TOKENS")
-            .unwrap_or_default()
-            .split(',')
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(|t| SecretString::from(t.to_owned()))
-            .collect();
-        let enc_root_secret_prev = env("FILEGATE_ENC_ROOT_SECRET_PREV").map(SecretString::from);
-        let enc_key_id_prev = env("FILEGATE_ENC_KEY_ID_PREV");
+        let enc_root_secret_prev = env("GROVE_ENC_ROOT_SECRET_PREV").map(SecretString::from);
+        let enc_key_id_prev = env("GROVE_ENC_KEY_ID_PREV");
         if enc_root_secret_prev.is_some() != enc_key_id_prev.is_some() {
             return Err(Error::config(
-                "FILEGATE_ENC_ROOT_SECRET_PREV and FILEGATE_ENC_KEY_ID_PREV must be set together",
+                "GROVE_ENC_ROOT_SECRET_PREV and GROVE_ENC_KEY_ID_PREV must be set together",
             ));
         }
         let security = SecurityConfig {
-            enc_root_secret: SecretString::from(required("FILEGATE_ENC_ROOT_SECRET")?),
-            enc_key_id: env("FILEGATE_ENC_KEY_ID").unwrap_or_else(|| "v1".to_owned()),
+            enc_root_secret: SecretString::from(required("GROVE_ENC_ROOT_SECRET")?),
+            enc_key_id: env("GROVE_ENC_KEY_ID").unwrap_or_else(|| "v1".to_owned()),
             enc_root_secret_prev,
             enc_key_id_prev,
-            operator_tokens,
-            legacy_admin_enabled: match env("FILEGATE_LEGACY_ADMIN_ENABLED").as_deref() {
-                None | Some("false") => false,
-                Some("true") => true,
-                Some(_) => {
-                    return Err(Error::config(
-                        "FILEGATE_LEGACY_ADMIN_ENABLED must be true|false",
-                    ));
-                }
-            },
         };
         Ok(Self {
             server,
@@ -253,14 +216,12 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use secrecy::ExposeSecret;
 
     /// 필수 비밀 env를 채운 기본 환경.
     fn base_env(key: &str) -> Option<String> {
         match key {
-            "FILEGATE_ENC_ROOT_SECRET" => {
-                Some("filegate-test-enc-root-secret-32-bytes!".to_owned())
-            }
-            "FILEGATE_OPERATOR_TOKENS" => Some("fgop_main, fgop_sub".to_owned()),
+            "GROVE_ENC_ROOT_SECRET" => Some("filegate-test-enc-root-secret-32-bytes!".to_owned()),
             _ => None,
         }
     }
@@ -272,8 +233,6 @@ mod tests {
         assert_eq!(config.server.log_format, LogFormat::Pretty);
         assert_eq!(config.database.max_connections, 20);
         assert_eq!(config.security.enc_key_id, "v1");
-        assert_eq!(config.security.operator_tokens.len(), 2);
-        assert!(!config.security.legacy_admin_enabled);
         assert_eq!(config.server.multipart_threshold_bytes, 256 * 1024 * 1024);
         assert_eq!(config.server.part_size_bytes, 64 * 1024 * 1024);
         let retention = config.server.management_log_retention;
@@ -285,7 +244,7 @@ mod tests {
     #[test]
     fn part_size_outside_vendor_bounds_is_rejected() {
         let too_small = |key: &str| match key {
-            "FILEGATE_PART_SIZE_BYTES" => Some("1048576".to_owned()), // 1MiB < 5MiB
+            "GROVE_PART_SIZE_BYTES" => Some("1048576".to_owned()), // 1MiB < 5MiB
             other => base_env(other),
         };
         assert!(Config::load_from(&too_small).is_err());
@@ -294,31 +253,19 @@ mod tests {
     #[test]
     fn missing_required_env_fails() {
         let without_root = |key: &str| {
-            (key != "FILEGATE_ENC_ROOT_SECRET")
+            (key != "GROVE_ENC_ROOT_SECRET")
                 .then(|| base_env(key))
                 .flatten()
         };
         assert!(Config::load_from(&without_root).is_err());
-        let without_tokens = |key: &str| {
-            (key != "FILEGATE_OPERATOR_TOKENS")
-                .then(|| base_env(key))
-                .flatten()
-        };
-        assert!(
-            Config::load_from(&without_tokens)
-                .unwrap()
-                .security
-                .operator_tokens
-                .is_empty()
-        );
     }
 
     #[test]
     fn env_overrides_apply() {
         let config = Config::load_from(&|key| match key {
-            "FILEGATE_BIND" => Some("0.0.0.0:9999".to_owned()),
-            "FILEGATE_LOG_FORMAT" => Some("json".to_owned()),
-            "FILEGATE_DB_MAX_CONNECTIONS" => Some("11".to_owned()),
+            "GROVE_BIND" => Some("0.0.0.0:9999".to_owned()),
+            "GROVE_LOG_FORMAT" => Some("json".to_owned()),
+            "GROVE_DB_MAX_CONNECTIONS" => Some("11".to_owned()),
             other => base_env(other),
         })
         .unwrap();
@@ -328,15 +275,39 @@ mod tests {
     }
 
     #[test]
+    fn filegate_configuration_is_not_an_alias() {
+        let old_env = |key: &str| match key {
+            "FILEGATE_BIND" => Some("0.0.0.0:9999".to_owned()),
+            "FILEGATE_DATABASE_URL" => Some("postgres://old/old".to_owned()),
+            "FILEGATE_LEGACY_ADMIN_ENABLED" => Some("true".to_owned()),
+            other => base_env(other),
+        };
+        let config = Config::load_from(&old_env).unwrap();
+        assert_eq!(config.server.bind_addr, "127.0.0.1:8080".parse().unwrap());
+        assert_eq!(
+            config.database.url.expose_secret(),
+            "postgres://grove:grove@127.0.0.1:55432/grove"
+        );
+        assert!(
+            Config::load_from(&|key| match key {
+                "GROVE_ENC_ROOT_SECRET" => None,
+                "FILEGATE_ENC_ROOT_SECRET" => base_env("GROVE_ENC_ROOT_SECRET"),
+                other => old_env(other),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
     fn invalid_values_are_rejected() {
         let bad_bind = |key: &str| {
-            (key == "FILEGATE_BIND")
+            (key == "GROVE_BIND")
                 .then(|| "nope".to_owned())
                 .or_else(|| base_env(key))
         };
         assert!(Config::load_from(&bad_bind).is_err());
         let bad_log = |key: &str| {
-            (key == "FILEGATE_LOG_FORMAT")
+            (key == "GROVE_LOG_FORMAT")
                 .then(|| "xml".to_owned())
                 .or_else(|| base_env(key))
         };
@@ -344,40 +315,10 @@ mod tests {
     }
 
     #[test]
-    fn operator_token_match_is_list_based() {
-        let config = Config::load_from(&base_env).unwrap();
-        assert!(config.security.operator_token_matches("fgop_main"));
-        assert!(config.security.operator_token_matches("fgop_sub"));
-        assert!(!config.security.operator_token_matches("fgop_other"));
-        assert!(!config.security.operator_token_matches("fgop_mai"));
-    }
-
-    #[test]
-    fn legacy_admin_requires_explicit_opt_in() {
-        for (input, expected) in [("true", true), ("false", false)] {
-            let config = Config::load_from(&|key| match key {
-                "FILEGATE_LEGACY_ADMIN_ENABLED" => Some(input.into()),
-                other => base_env(other),
-            })
-            .unwrap();
-            assert_eq!(config.security.legacy_admin_enabled, expected);
-        }
-        for input in ["", "TRUE", "1", "yes"] {
-            assert!(
-                Config::load_from(&|key| match key {
-                    "FILEGATE_LEGACY_ADMIN_ENABLED" => Some(input.into()),
-                    other => base_env(other),
-                })
-                .is_err()
-            );
-        }
-    }
-
-    #[test]
     fn zero_reconciler_interval_is_rejected() {
         // 0은 tokio::time::interval을 패닉시키므로 부팅에서 거부한다.
         let zero = |key: &str| match key {
-            "FILEGATE_RECONCILER_INTERVAL_SECS" => Some("0".to_owned()),
+            "GROVE_RECONCILER_INTERVAL_SECS" => Some("0".to_owned()),
             other => base_env(other),
         };
         assert!(Config::load_from(&zero).is_err());
@@ -386,9 +327,9 @@ mod tests {
     #[test]
     fn management_retention_accepts_positive_days_only() {
         for key in [
-            "FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS",
-            "FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS",
-            "FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
+            "GROVE_MANAGEMENT_AUDIT_RETENTION_DAYS",
+            "GROVE_MANAGEMENT_SECURITY_RETENTION_DAYS",
+            "GROVE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
         ] {
             for value in ["0", "-1", "", "1.5", "65536", "invalid"] {
                 assert!(
@@ -405,9 +346,9 @@ mod tests {
             }
         }
         let config = Config::load_from(&|key| match key {
-            "FILEGATE_MANAGEMENT_AUDIT_RETENTION_DAYS" => Some("730".into()),
-            "FILEGATE_MANAGEMENT_SECURITY_RETENTION_DAYS" => Some("180".into()),
-            "FILEGATE_MANAGEMENT_INVOCATION_RETENTION_DAYS" => Some("1".into()),
+            "GROVE_MANAGEMENT_AUDIT_RETENTION_DAYS" => Some("730".into()),
+            "GROVE_MANAGEMENT_SECURITY_RETENTION_DAYS" => Some("180".into()),
+            "GROVE_MANAGEMENT_INVOCATION_RETENTION_DAYS" => Some("1".into()),
             other => base_env(other),
         })
         .unwrap();
@@ -420,14 +361,14 @@ mod tests {
     #[test]
     fn prev_key_envs_must_come_as_a_pair() {
         let only_secret = |key: &str| match key {
-            "FILEGATE_ENC_ROOT_SECRET_PREV" => {
+            "GROVE_ENC_ROOT_SECRET_PREV" => {
                 Some("filegate-test-prev-root-secret-32-bytes!".to_owned())
             }
             other => base_env(other),
         };
         assert!(Config::load_from(&only_secret).is_err());
         let only_id = |key: &str| match key {
-            "FILEGATE_ENC_KEY_ID_PREV" => Some("v1".to_owned()),
+            "GROVE_ENC_KEY_ID_PREV" => Some("v1".to_owned()),
             other => base_env(other),
         };
         assert!(Config::load_from(&only_id).is_err());
@@ -436,11 +377,11 @@ mod tests {
     #[test]
     fn crypto_assembles_with_prev_for_rotation() {
         let rotation_env = |key: &str| match key {
-            "FILEGATE_ENC_KEY_ID" => Some("v2".to_owned()),
-            "FILEGATE_ENC_ROOT_SECRET_PREV" => {
+            "GROVE_ENC_KEY_ID" => Some("v2".to_owned()),
+            "GROVE_ENC_ROOT_SECRET_PREV" => {
                 Some("filegate-test-prev-root-secret-32-bytes!".to_owned())
             }
-            "FILEGATE_ENC_KEY_ID_PREV" => Some("v1".to_owned()),
+            "GROVE_ENC_KEY_ID_PREV" => Some("v1".to_owned()),
             other => base_env(other),
         };
         let config = Config::load_from(&rotation_env).unwrap();
@@ -451,10 +392,10 @@ mod tests {
     #[test]
     fn crypto_rejects_prev_id_equal_to_active() {
         let bad_env = |key: &str| match key {
-            "FILEGATE_ENC_ROOT_SECRET_PREV" => {
+            "GROVE_ENC_ROOT_SECRET_PREV" => {
                 Some("filegate-test-prev-root-secret-32-bytes!".to_owned())
             }
-            "FILEGATE_ENC_KEY_ID_PREV" => Some("v1".to_owned()), // 활성 기본값과 동일
+            "GROVE_ENC_KEY_ID_PREV" => Some("v1".to_owned()), // 활성 기본값과 동일
             other => base_env(other),
         };
         let config = Config::load_from(&bad_env).unwrap();

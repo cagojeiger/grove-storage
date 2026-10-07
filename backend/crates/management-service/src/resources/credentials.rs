@@ -1,5 +1,5 @@
-use filegate_core::{Crypto, EncryptedSecret, ExposeSecret, SecretString};
-use filegate_db::management::EncryptedServiceCredential;
+use grove_core::{Crypto, EncryptedSecret, ExposeSecret, SecretString};
+use grove_db::management::EncryptedServiceCredential;
 use grove_management_command::model::IssuedCredential;
 
 /// Shared key material preparation; callers own authorization, persistence and audit.
@@ -12,9 +12,9 @@ pub struct PreparedCredential {
 }
 
 impl PreparedCredential {
-    pub fn new(crypto: &Crypto) -> Result<Self, filegate_core::Error> {
-        let access_key_id = filegate_core::generate_access_key_id();
-        let secret = SecretString::from(filegate_core::generate_url_secret());
+    pub fn new(crypto: &Crypto) -> Result<Self, grove_core::Error> {
+        let access_key_id = grove_core::generate_access_key_id();
+        let secret = SecretString::from(grove_core::generate_url_secret());
         let encrypted = crypto.encrypt(&access_key_id, &secret)?;
         Ok(Self {
             access_key_id,

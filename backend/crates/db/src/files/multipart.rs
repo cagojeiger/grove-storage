@@ -1,12 +1,12 @@
 //! multipart part 원장 (spec 02) — 벤더 세션 핸들·part 실측·승격 직렬화.
 //!
-//! 기하(개수·offset·part별 크기)는 저장하지 않는다 — `filegate_core::multipart`가
+//! 기하(개수·offset·part별 크기)는 저장하지 않는다 — `grove_core::multipart`가
 //! 순수 계약으로 파생한다.
 //! 여기 남는 것은 파생 불가능한 외부 값(upload_id)과 실측, 그리고 승격
 //! 직렬화 상태(claimed/done)뿐이다. 중계 secret은 lease id에서 파생하므로
 //! 원문을 저장하지 않는다 — 인증용 해시만 남는다 (spec 02).
 
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 /// 직결 multipart의 벤더 세션 핸들을 write lease에 기록한다 (발급 직후 한 번).
@@ -21,61 +21,6 @@ pub async fn attach_upload_id(
         .execute(pool)
         .await
         .map(|_| ())
-}
-
-async fn lock_issued_part_lease(
-    tx: &mut Transaction<'_, Postgres>,
-    lease_id: Uuid,
-) -> Result<bool, sqlx::Error> {
-    let locked: Option<Uuid> = sqlx::query_scalar(
-        "SELECT f.id FROM files f JOIN leases le ON le.file_id = f.id \
-         WHERE le.id = $1 AND f.state = 'pending' FOR UPDATE OF f",
-    )
-    .bind(lease_id)
-    .fetch_optional(&mut **tx)
-    .await?;
-    let Some(file_id) = locked else {
-        return Ok(false);
-    };
-    // The file lock can wait past a completion claim; re-read related state afterward.
-    sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM leases le \
-         WHERE le.id = $1 AND le.file_id = $2 AND le.kind = 'write' AND le.state = 'issued' \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $2))",
-    )
-    .bind(lease_id)
-    .bind(file_id)
-    .fetch_one(&mut **tx)
-    .await
-}
-
-/// 이미 직렬화된 경로에서 part 완료를 원장에 즉시 기록한다. 외부 네트워크
-/// 업로드는 완료와 경합하므로 `claim_relay_part`/`finish_relay_part`를 사용한다.
-pub async fn record_part_done(
-    pool: &PgPool,
-    lease_id: Uuid,
-    part_no: i32,
-    size: i64,
-    md5: &str,
-) -> Result<bool, sqlx::Error> {
-    let mut tx = pool.begin().await?;
-    if !lock_issued_part_lease(&mut tx, lease_id).await? {
-        return Ok(false);
-    }
-    let recorded = sqlx::query(
-        "INSERT INTO lease_parts (lease_id, part_no, state, uploaded_size, uploaded_md5) \
-         VALUES ($1, $2, 'done', $3, $4) \
-         ON CONFLICT (lease_id, part_no) \
-         DO UPDATE SET state = 'done', uploaded_size = $3, uploaded_md5 = $4",
-    )
-    .bind(lease_id)
-    .bind(part_no)
-    .bind(size)
-    .bind(md5)
-    .execute(&mut *tx)
-    .await?;
-    tx.commit().await?;
-    Ok(recorded.rows_affected() == 1)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -309,69 +254,6 @@ pub async fn extend_write_lease(
     }
     tx.commit().await?;
     Ok(true)
-}
-
-/// part 승격 claim — 행을 잡아(INSERT‥ON CONFLICT UPDATE의 행 락) 같은
-/// part의 동시 승격을 직렬화한다 (spec 02: 단일 PUT temp 충돌과 같은 처방).
-/// 물리 승격을 마친 뒤 done()으로 닫는다 — 그때 tx가 커밋되며 락이 풀린다.
-/// drop되면 롤백이라 행은 claimed로 남고, 재시도가 덮어쓴다 (last-write-wins).
-pub struct PartClaim {
-    tx: sqlx::Transaction<'static, sqlx::Postgres>,
-    lease_id: Uuid,
-    part_no: i32,
-}
-
-pub async fn claim_part(
-    pool: &PgPool,
-    lease_id: Uuid,
-    part_no: i32,
-) -> Result<Option<PartClaim>, sqlx::Error> {
-    let mut tx = pool.begin().await?;
-    if !lock_issued_part_lease(&mut tx, lease_id).await? {
-        return Ok(None);
-    }
-    sqlx::query(
-        "INSERT INTO lease_parts (lease_id, part_no) VALUES ($1, $2) \
-         ON CONFLICT (lease_id, part_no) \
-         DO UPDATE SET state = 'claimed', uploaded_size = NULL, uploaded_md5 = NULL",
-    )
-    .bind(lease_id)
-    .bind(part_no)
-    .execute(&mut *tx)
-    .await?;
-    Ok(Some(PartClaim {
-        tx,
-        lease_id,
-        part_no,
-    }))
-}
-
-impl PartClaim {
-    /// 승격 완료 — 실측을 기록하고 커밋한다.
-    pub async fn done(mut self, size: i64, md5: &str) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "UPDATE lease_parts SET state = 'done', uploaded_size = $3, uploaded_md5 = $4 \
-             WHERE lease_id = $1 AND part_no = $2",
-        )
-        .bind(self.lease_id)
-        .bind(self.part_no)
-        .bind(size)
-        .bind(md5)
-        .execute(&mut *self.tx)
-        .await?;
-        self.tx.commit().await
-    }
-}
-
-/// done인 part가 하나라도 있는가 (fs 승격의 조립 파일 유실 방어용).
-/// 이미 done인 part가 있는데 조립 파일이 사라졌다면 그 바이트가 유실된 것이다.
-pub async fn has_done_parts(pool: &PgPool, lease_id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM lease_parts WHERE lease_id = $1 AND state = 'done')",
-    )
-    .bind(lease_id)
-    .fetch_one(pool)
-    .await
 }
 
 /// 완료된 part 실측 목록 (commit의 대조 재료): (번호, 크기, 체크섬), 번호순.

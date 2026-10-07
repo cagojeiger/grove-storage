@@ -48,11 +48,11 @@ def check(grove, directory, database, account, backend, notegate, origin, output
     management.command("storage.create", {"id": "browser-backend", "spec": backend.spec})
     management.command("client.create", {"id": "notegate-browser", "storage_id": "browser-backend"})
     credential = management.command("credential.create", {"client_id": "notegate-browser"})
-    docker("exec", database, "createdb", "-U", "filegate", "notegate_browser")
+    docker("exec", database, "createdb", "-U", "grove", "notegate_browser")
     port = docker("port", database, "5432").rsplit(":", 1)[1]
     with oidc_fixture(origin + "/auth/callback") as (issuer, events):
         env = {k: v for k, v in os.environ.items() if not k.startswith(("NOTEGATE_", "AWS_"))}
-        env.update(NOTEGATE_DATABASE_URL=f"postgres://filegate:filegate@127.0.0.1:{port}/notegate_browser",
+        env.update(NOTEGATE_DATABASE_URL=f"postgres://grove:grove@127.0.0.1:{port}/notegate_browser",
             NOTEGATE_BIND_ADDR=origin.removeprefix("http://"), NOTEGATE_PUBLIC_URL=origin,
             NOTEGATE_AUTHGATE_URL=issuer, NOTEGATE_OAUTH_CLIENT_ID="notegate-web",
             NOTEGATE_MCP_OAUTH_CLIENT_ID="notegate-mcp", NOTEGATE_CLI_OAUTH_CLIENT_ID="notegate-cli-local",

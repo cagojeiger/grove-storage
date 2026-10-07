@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use super::{
     AccountChange, AuditContext, Credential, Error, Identity, NewAccount, NewCredential, accounts,
-    credentials, identity, lock, sessions,
+    api_tokens, identity, lock, sessions,
 };
 
 /// Hashes produced by the trusted transport; intentionally not Debug/Serialize.
@@ -79,10 +79,10 @@ impl<'a> IdentityTransaction<'a> {
         account: Uuid,
         key: &NewCredential<'_>,
     ) -> Result<Credential, Error> {
-        credentials::issue_in(self.inner, context, account, key).await
+        api_tokens::issue_in(self.inner, context, account, key).await
     }
     pub async fn revoke_credential(self, context: &AuditContext, id: Uuid) -> Result<bool, Error> {
-        credentials::revoke_in(self.inner, context, id).await
+        api_tokens::revoke_in(self.inner, context, id).await
     }
     pub async fn revoke_session(
         self,

@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::admission::{self, Purpose},
 };

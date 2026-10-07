@@ -1,7 +1,7 @@
 #![allow(dead_code, clippy::unwrap_used)]
 
 use chrono::{Duration, Utc};
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AuditActor, AuditContext, NewCredential},
 };
@@ -14,7 +14,7 @@ pub fn hash(value: u64) -> String {
 
 pub fn context() -> AuditContext {
     AuditContext {
-        actor: AuditActor::Master { session_id: None },
+        actor: AuditActor::System,
         request_id: Uuid::new_v4(),
         surface: Surface::Console,
     }
@@ -30,9 +30,28 @@ pub fn key(hash: &str) -> NewCredential<'_> {
 }
 
 pub async fn bootstrap(pool: &PgPool) -> (Uuid, db::Credential) {
-    db::bootstrap(pool, &context(), "Owner", &key(&hash(1)))
+    seed_admin(pool, &context(), "Owner", &key(&hash(1)))
         .await
         .unwrap()
+}
+
+pub async fn seed_admin(
+    pool: &PgPool,
+    context: &AuditContext,
+    name: &str,
+    key: &NewCredential<'_>,
+) -> Result<(Uuid, db::Credential), db::Error> {
+    let id = Uuid::new_v4();
+    sqlx::query("INSERT INTO management.accounts(id,display_name,role) VALUES($1,$2,'admin')")
+        .bind(id)
+        .bind(name)
+        .execute(pool)
+        .await?;
+    sqlx::query("INSERT INTO management.audit_events(actor_kind,request_id,surface,action,resource_type,resource_id)
+        VALUES('system',$1,'console','account.create','account',$2)")
+        .bind(context.request_id).bind(id.to_string()).execute(pool).await?;
+    let credential = db::issue_credential(pool, context, id, key).await?;
+    Ok((id, credential))
 }
 
 pub async fn audit_count(pool: &PgPool) -> i64 {

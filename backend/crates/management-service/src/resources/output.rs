@@ -1,6 +1,6 @@
 //! Public resource projections shared by legacy REST and command transports.
 use crate::Error;
-use filegate_db::{registry::StorageRow, usage};
+use grove_db::{registry::StorageRow, usage};
 use grove_management_command::model::{self, StorageKind};
 
 fn kind(value: &str) -> Result<StorageKind, Error> {

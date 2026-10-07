@@ -34,7 +34,7 @@ import {
 } from "../api/identity";
 import { clearSession } from "../auth/session";
 import { useRoute } from "../app/navigation";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 import { time } from "../design/format";
 import {
   isBrowserSession,

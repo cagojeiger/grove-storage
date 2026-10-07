@@ -1,7 +1,7 @@
 use super::PreparedCredential;
 use crate::Error;
-use filegate_core::Crypto;
-use filegate_db::management::{AuditContext, IdentityTransaction};
+use grove_core::Crypto;
+use grove_db::management::{AuditContext, IdentityTransaction};
 use grove_management_command::{Command, Output, model};
 
 pub(super) async fn run(
@@ -16,7 +16,7 @@ pub(super) async fn run(
                 metadata: tx
                     .replace_resource_metadata(
                         ctx,
-                        filegate_db::management::MetadataResource::Storage,
+                        grove_db::management::MetadataResource::Storage,
                         &input.id,
                         &input.metadata,
                     )
@@ -29,7 +29,7 @@ pub(super) async fn run(
                 metadata: tx
                     .replace_resource_metadata(
                         ctx,
-                        filegate_db::management::MetadataResource::Client,
+                        grove_db::management::MetadataResource::Client,
                         &input.id,
                         &input.metadata,
                     )

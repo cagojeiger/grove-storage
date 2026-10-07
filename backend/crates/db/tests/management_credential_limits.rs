@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, Error},
 };
@@ -40,20 +40,25 @@ async fn concurrent_issuance_respects_limit_and_releases_revoked_or_expired_slot
         .await
         .unwrap();
     assert_eq!(active_count(&pool, owner).await, 32);
-    sqlx::query("UPDATE management.credentials SET created_at=clock_timestamp()-interval '2 days', expires_at=clock_timestamp()-interval '1 day' WHERE id=$1")
+    sqlx::query("UPDATE management.api_tokens SET created_at=clock_timestamp()-interval '2 days', expires_at=clock_timestamp()-interval '1 day' WHERE id=$1")
         .bind(replacement.id).execute(&pool).await.unwrap();
     db::issue_credential(&pool, &context(), owner, &key(&hash(35)))
         .await
         .unwrap();
     assert_eq!(active_count(&pool, owner).await, 32);
 
-    db::recover_admin(&pool, &context(), owner, &key(&hash(36)))
+    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXJhbmRvbXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    db::passwords::recover(&pool, uuid::Uuid::new_v4(), owner, "owner", PHC)
+        .await
+        .unwrap();
+    assert_eq!(active_count(&pool, owner).await, 0);
+    db::issue_credential(&pool, &context(), owner, &key(&hash(36)))
         .await
         .unwrap();
     assert_eq!(active_count(&pool, owner).await, 1);
 }
 
 async fn active_count(pool: &PgPool, account: uuid::Uuid) -> i64 {
-    sqlx::query_scalar("SELECT count(*) FROM management.credentials WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()")
+    sqlx::query_scalar("SELECT count(*) FROM management.api_tokens WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()")
         .bind(account).fetch_one(pool).await.unwrap()
 }

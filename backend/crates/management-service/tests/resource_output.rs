@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use filegate_db::usage;
+use grove_db::usage;
 use grove_management_service::{
     Error,
     resources::{client_usage_output, snapshot_output, storage_usage_output},

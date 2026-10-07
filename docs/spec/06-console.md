@@ -130,7 +130,7 @@ Missing usage stays unavailable; a successful empty result means zero stored fil
 | Draft | Registration/replacement runs pre-save checks; standalone draft Test connection remains deferred |
 
 `readyz` and remote `status` describe API/registry state, not provider health.
-Server-local `filegate status` probes registered backends using server settings.
+Server-local `grove-storage status` probes registered backends using server settings.
 
 ## Account Workflows
 
@@ -154,13 +154,13 @@ Overview; an authenticated reload retains the current route.
 
 | Flow | Contract |
 |---|---|
-| First Admin | `filegate account init` in a server terminal, then normal password sign-in |
+| First Admin | `grove-storage account init` in a server terminal, then normal password sign-in |
 | Create account | Admin re-enters current password; username, display name, role and setup link created atomically |
 | Initial password | Recipient consumes one-time fragment link, sets password, then signs in |
 | Unavailable setup | Expired, used or invalid link shows an unavailable state; an Admin can replace the link while the account has no password |
 | Reissue setup | Active, non-deleted account without a password; reserved username is read-only |
 | Password configured | Initial setup action disabled; use own password change or operator recovery |
-| Recovery | `filegate account recover`; same account ID, sessions and management tokens revoked |
+| Recovery | `grove-storage account recover`; same account ID, sessions and management tokens revoked |
 | Forgotten password | Recovery help points to the server operator |
 | Session expired | Sign-in state; sensitive form values and private cached data are cleared |
 | Management token | Label and 1-90 day expiry; current-password reauthentication; masked one-time display with reveal/copy and saved acknowledgement |

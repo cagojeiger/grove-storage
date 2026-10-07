@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the gscli registry lifecycle against a disposable FileGate API."""
+"""Exercise the gscli registry lifecycle against a disposable Grove Storage API."""
 
 import hashlib
 import json
@@ -17,7 +17,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
-SERVER = TARGET / "debug" / "filegate"
+SERVER = TARGET / "debug" / "grove-storage"
 CLI = TARGET / "debug" / "gscli"
 
 
@@ -57,7 +57,7 @@ def check_s3_lifecycle(endpoint, directory, backend, account):
 
     from cli_management_fixture import Management
     management = Management(endpoint, account)
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("FILEGATE_", "GROVE_"))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GROVE_",))}
     env.pop("DATABASE_URL", None)
     env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
 
@@ -179,36 +179,35 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
-        raise RuntimeError("Run cargo build --bin filegate --bin gscli --locked first")
-    container = "filegate-cli-e2e-" + uuid.uuid4().hex[:12]
+        raise RuntimeError("Run cargo build --bin grove-storage --bin gscli --locked first")
+    container = "grove-cli-e2e-" + uuid.uuid4().hex[:12]
     try:
         docker("run", "--rm", "-d", "--name", container,
-               "-e", "POSTGRES_USER=filegate", "-e", "POSTGRES_PASSWORD=filegate",
-               "-e", "POSTGRES_DB=filegate", "-p", "127.0.0.1::5432", "postgres:17-alpine")
+               "-e", "POSTGRES_USER=grove", "-e", "POSTGRES_PASSWORD=grove",
+               "-e", "POSTGRES_DB=grove", "-p", "127.0.0.1::5432", "postgres:17-alpine")
         db_port = docker("port", container, "5432").rsplit(":", 1)[1]
-        with tempfile.TemporaryDirectory(prefix="filegate-cli-e2e-") as directory:
+        with tempfile.TemporaryDirectory(prefix="grove-cli-e2e-") as directory:
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]
             endpoint = f"http://127.0.0.1:{port}"
-            env = {k: v for k, v in os.environ.items() if not k.startswith("FILEGATE_")}
+            env = {k: v for k, v in os.environ.items() if not k.startswith("GROVE_")}
             env.update(
-                FILEGATE_DATABASE_URL=f"postgres://filegate:filegate@127.0.0.1:{db_port}/filegate",
-                FILEGATE_ENC_ROOT_SECRET="local-cli-integration-root-secret-32bytes",
-                FILEGATE_BIND=f"127.0.0.1:{port}",
-                FILEGATE_LEGACY_ADMIN_ENABLED="false",
-                FILEGATE_CONSOLE_ORIGIN=console_origin or "https://console.test",
-                FILEGATE_PUBLIC_URL=endpoint, FILEGATE_LOG_FORMAT="json",
+                GROVE_DATABASE_URL=f"postgres://grove:grove@127.0.0.1:{db_port}/grove",
+                GROVE_ENC_ROOT_SECRET="local-cli-integration-root-secret-32bytes",
+                GROVE_BIND=f"127.0.0.1:{port}",
+                GROVE_CONSOLE_ORIGIN=console_origin or "https://console.test",
+                GROVE_PUBLIC_URL=endpoint, GROVE_LOG_FORMAT="json",
             )
             if with_database:
-                env["FILEGATE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
+                env["GROVE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
             if multipart:
-                env.update(FILEGATE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
-                           FILEGATE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
+                env.update(GROVE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
+                           GROVE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
             if s3_cors_origins:
-                env["FILEGATE_S3_CORS_ALLOWED_ORIGINS"] = ",".join(s3_cors_origins)
+                env["GROVE_S3_CORS_ALLOWED_ORIGINS"] = ",".join(s3_cors_origins)
             deadline = time.monotonic() + 20
-            while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "filegate"],
+            while subprocess.run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "grove"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
                 if time.monotonic() >= deadline:
                     raise RuntimeError("Test database did not become ready")
@@ -270,7 +269,7 @@ def verify_modern_startup(endpoint):
             raise AssertionError("legacy management must be disabled")
     except urllib.error.HTTPError as error:
         assert error.code == 410
-        assert json.load(error) == {"error": "legacy_admin_disabled"}
+        assert json.load(error) == {"error": "legacy_admin_removed"}
     print("PASS local Account bootstrap; legacy management disabled (410)")
 
 

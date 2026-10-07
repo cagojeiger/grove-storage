@@ -1,8 +1,8 @@
 //! Native multipart completion recovery.
 
-use filegate_core::Crypto;
-use filegate_db::{PgPool, files, registry};
-use filegate_infra::S3ClientCache;
+use grove_core::Crypto;
+use grove_db::{PgPool, files, registry};
+use grove_infra::S3ClientCache;
 use grove_object_policy::completion::{CompletionAction, completion_action};
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 
@@ -40,7 +40,7 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                 continue;
             }
         };
-        let observation = filegate_infra::backend::observe_backend_object(
+        let observation = grove_infra::s3_io::observe_backend_object(
             s3_clients,
             &backend,
             &candidate.storage_id,

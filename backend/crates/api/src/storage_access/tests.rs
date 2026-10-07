@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 use super::*;
-use filegate_core::{ExposeSecret, SecretString};
+use grove_core::{ExposeSecret, SecretString};
 
 fn fixture() -> (Crypto, StorageRow) {
     let crypto = Crypto::new("key", &SecretString::from("x".repeat(32))).unwrap();

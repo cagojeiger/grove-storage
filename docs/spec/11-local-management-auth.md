@@ -1,9 +1,8 @@
 # Local Management Authentication
 
-Status: locally implemented and verified. Console routes accept password sessions
-only. Migration 0024 removes inactive Root/Master authentication structures;
-their original migrations and historical audit actors remain. Deployment and
-OIDC are separate work.
+Status: current implementation contract. Console routes accept password sessions
+only. The fresh DB baseline creates Account authentication directly, without
+Root/Master authentication tables. Deployment and OIDC are separate work.
 
 ## Boundaries
 
@@ -29,25 +28,19 @@ Account, session and token revocation take effect on the next authorized request
 CLI/MCP share resource commands and outcomes. Identity administration belongs to
 the console session boundary, including for tokens owned by an admin.
 
-### Legacy Operator Cutover
+### Retired Operator API
 
-| Setting / path | Contract |
+| Path / operation | Contract |
 |---|---|
-| `FILEGATE_LEGACY_ADMIN_ENABLED=false` (default) | `/api/admin/v1` and all descendants return 410 `legacy_admin_disabled`, without authentication or DB access |
-| Explicit `true` | Retains old `fgop_`, environment operator tokens, `fgss_` sessions and REST resource routes; startup emits a warning |
-| `filegate admin init/recover/token create` | Requires explicit legacy mode |
-| `filegate admin token list/revoke` | Available locally for retiring old credentials even with legacy mode disabled |
-| Startup | An active local password admin, or explicitly enabled and initialized legacy authentication |
-| Database | Existing operator credentials, sessions and audit records remain; no migration deletes them |
+| `/api/admin/v1` and descendants | Always 410 `legacy_admin_removed`, without authentication or DB access |
+| `grove-storage admin` | Removed; initialization and recovery use `account` |
+| Startup | Requires an active local password Admin |
+| Database | No legacy operator tables or Agent-owner history columns |
 
-Initialize an Account with `filegate account init`, migrate management callers to
-`gscli`/MCP/command API with named `gsm_` tokens, then disable legacy mode on every
-API replica. Old operator authority is independent of Account roles and revocation
-while compatibility mode is enabled. Turning it off is a process configuration
-change, not token revocation; turning it back on restores still-valid credentials.
-Native/S3 Client keys and presigned/relay contracts are unchanged. With legacy
-mode disabled, startup accepts an active local password Admin. Legacy-only
-installations start with explicitly enabled and initialized legacy authentication.
+Initialize an Account with `grove-storage account init`. Console sessions use its
+password; `gscli`/MCP/command API use named `gsm_` tokens. Environment operator
+tokens and compatibility switches no longer grant authority. Native/S3 Client
+keys and presigned/relay contracts remain separate and unchanged.
 
 Console navigation, forms and account workflows are in
 [the console contract](06-console.md#account-workflows).
@@ -58,14 +51,14 @@ Console navigation, forms and account workflows are in
 management.accounts              identity / role / active state
   +-- password_credentials       username / Argon2id PHC / generation
   +-- sessions                   account-bound opaque browser sessions
-  +-- credentials                named, expiring management API tokens
+  +-- api_tokens                 named, expiring management API tokens
   +-- password_setup_tokens      expiring single-use initial setup challenges
   +-- authentication_budgets     separate login / reauthentication admission
 
 audit_events                     committed administrative changes
 security_events                  authentication and authorization events
 command_invocations              management command outcomes
-login_budget                     fixed fallback for unknown users / legacy token exchange
+login_budget                     fixed fallback for unknown users
 ```
 
 Accounts have no subtype discriminator: every account has its own role and
@@ -74,30 +67,25 @@ that same account's credential through a composite foreign key, while password
 sessions carry a password generation. These management identities are independent
 of Client S3 credentials and provider secrets.
 
-### Schema Cleanup / Offline Upgrade
+### Fresh Database Baseline
 
-Migration `0024_account_authentication_cleanup.sql` is transactional:
+`0004_management.sql` creates Accounts, API tokens, password credentials, setup
+challenges, sessions, admission budgets and management history. `account_id` is
+mandatory for sessions; token ownership and password generation checks remain.
+There are no User/Agent subtype tables or Root/Master login tables.
 
-| Before | After / preservation |
-|---|---|
-| Account `kind='user'` | Constant column and dependent checks removed; account IDs, roles, names and state unchanged |
-| Session `user_id` | Renamed to mandatory `account_id`; ownership foreign keys and expiry rules retained |
-| Token/password sessions | IDs, hashes, generations, expiry and revocation timestamps unchanged |
-| Master sessions, `master_configuration`, `root_sessions` | Obsolete credentials/sessions removed; never converted into Account authority |
-| Historical Master/Agent audit actors | Preserved as recorded, including session IDs and owner snapshots |
-| `admin_*` compatibility tables | Unchanged; explicit legacy mode remains a separate cutover decision |
-| Storage/Client/file/upload tables | Unchanged; S3 protocol, SigV4 keys and object locations unchanged |
+History stores Account and System actor snapshots; unauthenticated security
+events use Anonymous. Account-scoped queries match `actor_id` before pagination.
 
-The offline upgrade starts with **all old servers and other DB writers stopped**
-and a database backup whose restoration has been verified. Migration precedes
-startup of the matching new binaries. Old binaries are incompatible with the new
-schema. Rollback restores the previous binary and its matching pre-upgrade database
-backup; changing the image alone leaves an incompatible schema.
-The migration lock serializes migrations, not application writers.
+This baseline initializes a new database. It does not upgrade an existing
+FileGate/Grove database or import its rows. A mismatched migration history is
+rejected. Backup restoration is tested against the same Grove schema and binary.
+See [fresh installation](../development/fresh-installation.md).
 
-Console JSON retains the compatibility fields `kind: "user"` and `user_id`;
-they no longer reflect separate DB identity types. External S3 clients require
-no protocol or credential change for this cleanup.
+Console JSON retains `kind: "user"` and `user_id` as compatibility fields.
+`/accounts/{id}/credentials` remains the HTTP path for issuing an API token;
+the DB table is `management.api_tokens`. S3 clients keep the same protocol but
+use credentials issued for the new installation.
 
 Local usernames belong to password credentials, not the account identity. An
 OIDC identity can later reference the same account through `(issuer, subject)`.
@@ -109,7 +97,7 @@ Password admission allows 60 attempts per minute per account and purpose. Login
 and authenticated password checks have separate budgets; password changes, setup
 issuance and token issuance share the account's reauthentication budget. Attempts
 include successes. PostgreSQL atomically enforces the limit across API replicas.
-Unknown users and legacy token exchanges use the existing shared 60/minute fallback;
+Unknown users use the shared 60/minute fallback;
 arbitrary usernames create no budget rows. DB errors fail closed. HTTP 429 includes
 `Retry-After: 60`; window expiry admits the next attempt. This is not a network
 DoS defense: ingress limits and bounded hash workers remain separate protections.
@@ -186,11 +174,11 @@ used as authorization evidence.
 ## Server-local Operations
 
 ```sh
-filegate account init owner "Owner"
-filegate account recover <account-id> owner --yes
+grove-storage account init owner "Owner"
+grove-storage account recover <account-id> owner --yes
 ```
 
-`FILEGATE_DATABASE_URL` selects the database. Password input is hidden and
+`GROVE_DATABASE_URL` selects the database. Password input is hidden and
 confirmed in a terminal. The commands return account/request IDs, never the
 password or PHC hash. These are server operator commands, separate from `gscli`.
 
@@ -199,7 +187,7 @@ password or PHC hash. These are server operator commands, separate from `gscli`.
 Test locations are in [source layout](../development/source-layout.md#검증-위치).
 Historical implementation results are in
 [the verification record](../development/local-auth-verification.md).
-Release and migration evidence is tracked in
+Release and fresh installation evidence is tracked in
 [production readiness](../development/production-readiness.md).
 
 ## References

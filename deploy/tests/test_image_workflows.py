@@ -21,15 +21,39 @@ class ImageWorkflowTests(unittest.TestCase):
                 continue
             self.assertRegex(image, r"@sha256:[a-f0-9]{64}$")
         self.assertIn("cargo-auditable --version 0.7.6 --locked", dockerfile)
-        self.assertIn("cargo auditable build --release --locked --bin filegate", dockerfile)
+        self.assertIn("cargo auditable build --release --locked --bin grove-storage", dockerfile)
 
     def test_runtime_preserves_non_root_identity_without_package_installation(self):
         dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
         runtime = dockerfile[dockerfile.index("FROM gcr.io/distroless/"):]
         self.assertIn("cc-debian13:nonroot@sha256:", runtime)
         self.assertIn("USER 10001:10001", runtime)
-        self.assertIn('ENTRYPOINT ["/usr/local/bin/filegate"]', runtime)
+        self.assertIn('ENTRYPOINT ["/usr/local/bin/grove-storage"]', runtime)
         self.assertNotRegex(runtime, r"(?m)^RUN\s")
+
+    def test_console_is_built_locked_and_shipped_without_node_runtime(self):
+        dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
+        self.assertIn("npm ci && npm audit --audit-level=high", dockerfile)
+        self.assertIn("RUN npm run build", dockerfile)
+        runtime = dockerfile[dockerfile.index("FROM gcr.io/distroless/"):]
+        self.assertIn("/app/frontend/web/dist /app/web", runtime)
+        self.assertIn("/app/inventory/frontend/package-lock.json", runtime)
+        self.assertIn("GROVE_CONSOLE_DIST_DIR=/app/web", runtime)
+        self.assertNotIn("node_modules", runtime)
+        for path in ("ci.yml", "release.yml"):
+            self.assertIn("scripts/e2e-image.py", (ROOT / ".github/workflows" / path).read_text())
+
+    def test_image_runtime_gate_installs_pinned_s3_sdk_and_checks_objects(self):
+        for path in ("ci.yml", "release.yml"):
+            workflow = (ROOT / ".github/workflows" / path).read_text()
+            self.assertIn("/tmp/grove-image-sdk/bin/pip install boto3==1.43.99", workflow)
+            self.assertIn("/tmp/grove-image-sdk/bin/python -B scripts/e2e-image.py", workflow)
+        fixture = (ROOT / "scripts/e2e-image.py").read_text()
+        self.assertIn("check_s3(endpoint, origin, password, name, report_dir)", fixture)
+
+    def test_image_database_readiness_requires_tcp(self):
+        fixture = (ROOT / "scripts/e2e-image.py").read_text()
+        self.assertIn('"pg_isready", "-h", "127.0.0.1", "-U", "grove", "-d", "grove"', fixture)
 
     def test_image_policy_cannot_ignore_unfixed_findings_or_rust_inventory(self):
         action = (ROOT / ".github/actions/image-security/action.yml").read_text()
@@ -40,9 +64,24 @@ class ImageWorkflowTests(unittest.TestCase):
         self.assertIn("python3 deploy/ci/image-security.py validate", action)
         self.assertLess(action.index("Preserve scan evidence"), action.index("Enforce image security policy"))
 
+    def test_frontend_scan_uses_the_image_inventory_not_checkout_files(self):
+        action = (ROOT / ".github/actions/image-security/action.yml").read_text()
+        self.assertIn('docker create --platform "linux/$ARCHITECTURE" "$IMAGE"', action)
+        self.assertIn('docker cp "$container:/app/inventory/frontend/package-lock.json"', action)
+        self.assertIn("trivy fs --scanners vuln --pkg-types library", action)
+        self.assertIn('trap \'docker rm "$container" >/dev/null\' EXIT', action)
+        self.assertIn("'.Results += $frontend[0].Results'", action)
+        self.assertNotIn("frontend/web/package-lock.json", action)
+
+    def test_reports_retain_findings_below_the_release_threshold(self):
+        action = (ROOT / ".github/actions/image-security/action.yml").read_text()
+        self.assertIn("severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", action)
+        self.assertIn("--severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", action)
+
     def test_release_checks_candidates_and_final_index_before_promotion(self):
         release = (ROOT / ".github/workflows/release.yml").read_text()
-        steps = ["Scan candidate before signing", "Sign scanned candidate evidence",
+        steps = ["Scan candidate before signing", "Test packaged release console and API",
+                 "Sign scanned candidate evidence",
                  "Verify signed candidate evidence", "Export digest", "Sign final index",
                  "Verify final index before promotion", "Promote verified digest"]
         positions = [release.index(step) for step in steps]

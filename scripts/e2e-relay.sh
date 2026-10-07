@@ -3,8 +3,8 @@
 # Run the same scenario through two clients to compare lifecycle and accounting.
 # 중계 전용 강화 케이스(secret·CL·CORS·kind 교차)를 추가로 찌른다.
 #
-# 전제: docker compose up, 서버 실행 중(FILEGATE_PUBLIC_URL 필수, tick 짧게,
-#       FILEGATE_S3_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173),
+# 전제: docker compose up, 서버 실행 중(GROVE_PUBLIC_URL 필수, tick 짧게,
+#       GROVE_S3_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173),
 #       Register minio-local/minio-relay and their client keys first.
 # 사용: sh scripts/e2e-relay.sh   (종료 코드 = FAIL 수)
 BASE=http://127.0.0.1:8080
@@ -12,8 +12,8 @@ AUTH_DIRECT="Authorization: Bearer fg_local-dev-notegate-key-0123456789abcdef"
 AUTH_RELAY="Authorization: Bearer fg_local-dev-notegate-relay-key-0123456789abcdef"
 CORS_ORIGIN=http://127.0.0.1:5173
 JSON="Content-Type: application/json"
-PG_CONTAINER="${FILEGATE_PG_CONTAINER:-filegate-postgres-1}"
-PSQL="docker exec $PG_CONTAINER psql -U filegate -d filegate -qtc"
+PG_CONTAINER="${GROVE_PG_CONTAINER:-grove-postgres-1}"
+PSQL="docker exec $PG_CONTAINER psql -U grove -d grove -qtc"
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); }
 bad() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }

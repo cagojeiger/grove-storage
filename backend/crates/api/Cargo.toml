@@ -1,10 +1,10 @@
 [package]
-name = "filegate-api"
+name = "grove-api"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "filegate"
+name = "grove-storage"
 path = "src/main.rs"
 
 [dependencies]
@@ -16,9 +16,9 @@ crc32fast = "1.5"
 grove-s3-protocol = { workspace = true }
 grove-object-service = { workspace = true }
 grove-object-policy = { workspace = true }
-filegate-core = { workspace = true }
-filegate-db = { workspace = true }
-filegate-infra = { workspace = true }
+grove-core = { workspace = true }
+grove-db = { workspace = true }
+grove-infra = { workspace = true }
 
 anyhow = { workspace = true }
 axum = { workspace = true }

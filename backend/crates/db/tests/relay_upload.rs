@@ -5,7 +5,7 @@ mod lifecycle;
 #[path = "support/time.rs"]
 mod time;
 
-use filegate_db::files;
+use grove_db::files;
 use sqlx::PgPool;
 use std::time::Duration;
 

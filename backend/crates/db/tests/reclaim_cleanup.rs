@@ -4,7 +4,7 @@
 #[path = "support/lifecycle.rs"]
 mod lifecycle;
 
-use filegate_db::{files, registry, registry::UpdateStorageOutcome};
+use grove_db::{files, registry, registry::UpdateStorageOutcome};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "./migrations")]
@@ -40,7 +40,7 @@ async fn unknown_vendor_id_still_retains_key_and_multipart_cleanup_intent(pool: 
     assert_eq!(retry.upload_id, None);
     assert_eq!(retry.object_key, file.object_key);
     assert_eq!(retry.write_lease_id, Some(file.lease_id));
-    let usage = filegate_db::usage::by_storage(&pool).await.unwrap();
+    let usage = grove_db::usage::by_storage(&pool).await.unwrap();
     assert_eq!(usage.first().unwrap().purge_pending_files, 1);
 }
 

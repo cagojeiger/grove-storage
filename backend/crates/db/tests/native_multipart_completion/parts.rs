@@ -3,8 +3,6 @@ use super::*;
 #[derive(Clone, Copy, Debug)]
 enum PartAction {
     ClaimRelay,
-    ClaimPart,
-    RecordDone,
     ExtendWrite,
 }
 
@@ -34,23 +32,6 @@ async fn completion_wins_lock_wait(pool: PgPool, action: PartAction) {
                     .await
                     .unwrap()
                     == files::RelayPartClaim::Unavailable
-            }
-            PartAction::ClaimPart => {
-                match files::claim_part(&part_pool, file.lease_id, 1)
-                    .await
-                    .unwrap()
-                {
-                    None => true,
-                    Some(claim) => {
-                        claim.done(49, "changed").await.unwrap();
-                        false
-                    }
-                }
-            }
-            PartAction::RecordDone => {
-                !files::record_part_done(&part_pool, file.lease_id, 1, 49, "changed")
-                    .await
-                    .unwrap()
             }
             PartAction::ExtendWrite => !files::extend_write_lease(&part_pool, file.lease_id, 3600)
                 .await
@@ -85,16 +66,6 @@ async fn completion_wins_lock_wait(pool: PgPool, action: PartAction) {
 #[sqlx::test(migrations = "./migrations")]
 async fn claim_relay_rechecks_completion_after_file_lock_wait(pool: PgPool) {
     completion_wins_lock_wait(pool, PartAction::ClaimRelay).await;
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn claim_part_rechecks_completion_after_file_lock_wait(pool: PgPool) {
-    completion_wins_lock_wait(pool, PartAction::ClaimPart).await;
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn record_done_rechecks_completion_after_file_lock_wait(pool: PgPool) {
-    completion_wins_lock_wait(pool, PartAction::RecordDone).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]

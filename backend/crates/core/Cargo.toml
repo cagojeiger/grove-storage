@@ -1,5 +1,5 @@
 [package]
-name = "filegate-core"
+name = "grove-core"
 version.workspace = true
 edition.workspace = true
 

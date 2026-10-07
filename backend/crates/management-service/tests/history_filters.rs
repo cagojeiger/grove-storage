@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::unreachable)]
 mod support;
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AuditActor, AuditContext, history::HistoryQuery, telemetry},
 };
@@ -33,7 +33,7 @@ async fn actor_and_token_filters_intersect_scope_before_pagination(pool: PgPool)
         (writer.account, writer.credential),
     ] {
         let ctx = AuditContext {
-            actor: AuditActor::User {
+            actor: AuditActor::Account {
                 id,
                 credential_id: Some(credential),
                 session_id: None,

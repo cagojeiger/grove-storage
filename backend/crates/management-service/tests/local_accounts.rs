@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
-use filegate_core::{ExposeSecret, SecretString};
-use filegate_db::{PgPool, management::passwords as db};
+use grove_core::{ExposeSecret, SecretString};
+use grove_db::{PgPool, management::passwords as db};
 use grove_management_service::{Error, local_accounts, passwords};
 use uuid::Uuid;
 

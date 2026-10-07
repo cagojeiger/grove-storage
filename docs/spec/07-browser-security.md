@@ -63,6 +63,7 @@ HttpOnly·SameSite·CSRF는 같은 origin에서 실행되는 공격 스크립트
 정본은 [security-headers.mjs](../../frontend/web/security-headers.mjs)의 `consoleHeaders(false, nonce)` 정책이다.
 HTML 응답마다 암호학적 난수 nonce를 발급하고 `index.html`의 `__GROVE_CSP_NONCE__`를 교체한다.
 MUI/Emotion은 같은 nonce로 style 요소를 삽입한다. nonce 없는 inline style/script는 차단한다.
+Rust의 [콘솔 제공 경로](../../backend/crates/api/src/console_web.rs)와
 `scripts/preview.mjs`는 빌드 화면에 이 정책을 적용한다. Vite 개발 모드는 React refresh·
 스타일 삽입·HMR용 inline script/style 및 websocket을 추가 허용한다. 운영은 기본 정책을 쓴다.
 
@@ -79,7 +80,8 @@ MUI/Emotion은 같은 nonce로 style 요소를 삽입한다. nonce 없는 inline
 헤더는 정적 HTML 응답에 실려야 한다. API 응답에만 CSP를 붙이거나 HTML meta만 사용하는
 것으로 frame-ancestors를 대신할 수 없다. 운영 ingress의 실제 응답 헤더를 배포 후 확인한다.
 로컬 HTTP 샘플 서버는 인증을 모사한다. 실제 인증의 브라우저 근거는
-`scripts/e2e-console.py`의 HTTPS·Rust 서버·PostgreSQL fixture다.
+`scripts/e2e-console.py`의 HTTPS·Rust 서버·PostgreSQL fixture와
+`scripts/e2e-image.py`의 실제 이미지·새 DB·HTTPS ingress fixture다.
 신원 변경은 Admin 비밀번호 세션으로 제한하며 Bearer·cross-origin 요청을 거부한다.
 비밀번호 로그인·설정 링크·쿠키·CSRF·폐기·역할 강등은 실제 HTTPS UI에서 검증한다.
 
@@ -87,11 +89,11 @@ MUI/Emotion은 같은 nonce로 style 요소를 삽입한다. nonce 없는 inline
 
 | 기능 | 구현·검증 조건 |
 |---|---|
-| 최초 설정 | 서버 운영자가 `filegate account init`으로 첫 Admin 생성; 브라우저는 일반 로그인 사용 |
+| 최초 설정 | 서버 운영자가 `grove-storage account init`으로 첫 Admin 생성; 브라우저는 일반 로그인 사용 |
 | 로그인 | 공통 실패 응답·공유 rate limit; 인증 성공 시 새 세션 발급 |
 | 폼 | ID·비밀번호 입력·붙여넣기·password manager 지원; 관리 토큰은 CLI/MCP에 사용 |
 | 폐기 | 계정 비활성화·역할 변경을 후속 요청에 반영; 관리 토큰과 브라우저 세션은 별도 수명주기 |
-| 분실 복구 | 서버의 `filegate account recover`; 대상 비밀번호 변경과 세션·관리 토큰 폐기 |
+| 분실 복구 | 서버의 `grove-storage account recover`; 대상 비밀번호 변경과 세션·관리 토큰 폐기 |
 | 세션 관리 | 목록·현재 세션 표시·개별 종료; 비밀번호 변경/로컬 복구 시 전체 폐기; 세션 원문 대신 공개 ID 사용 |
 | 권한 | User·role·진입 경계를 서버에서 집행; Admin Bearer의 신원 API 호출도 거부 |
 | 설정 링크 | 비밀번호 미설정 계정에 단일 사용 challenge 발급; 로그인 세션과 별개 |

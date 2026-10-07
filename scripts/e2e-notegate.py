@@ -33,12 +33,12 @@ def check(endpoint, directory, database, account, backend, notegate):
         assert {"content-type", "if-none-match"} <= {header.strip() for header in allowed}
     print("PASS NoteGate browser origin and conditional PUT CORS preflight")
     # The fixture owns this entire container. NoteGate uses a separate database.
-    docker("exec", database, "createdb", "-U", "filegate", "notegate_contract")
+    docker("exec", database, "createdb", "-U", "grove", "notegate_contract")
     db_port = docker("port", database, "5432").rsplit(":", 1)[1]
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("NOTEGATE_", "AWS_"))}
     env.update(
-        NOTEGATE_TEST_DATABASE_URL=f"postgres://filegate:filegate@127.0.0.1:{db_port}/notegate_contract",
+        NOTEGATE_TEST_DATABASE_URL=f"postgres://grove:grove@127.0.0.1:{db_port}/notegate_contract",
         NOTEGATE_TEST_S3_ENDPOINT=endpoint,
         NOTEGATE_TEST_S3_PUBLIC_ENDPOINT=endpoint,
         NOTEGATE_TEST_S3_REGION="us-east-1",

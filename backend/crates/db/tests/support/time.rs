@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use chrono::{DateTime, Utc};
-use filegate_db::PgPool;
+use grove_db::PgPool;
 
 pub fn base() -> DateTime<Utc> {
     DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")

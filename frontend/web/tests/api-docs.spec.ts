@@ -20,7 +20,7 @@ test("documentation failure is explicit and can be retried", async ({ page }) =>
 });
 
 test.describe("Rust-generated Swagger documents", () => {
-  test.skip(!documents, "Set GROVE_TEST_OPENAPI to the filegate openapi export");
+  test.skip(!documents, "Set GROVE_TEST_OPENAPI to the grove-storage openapi export");
 
   for (const built of [false, true]) {
     test(`all API surfaces render read-only without leaking styles or credentials (${built ? "production CSP" : "development"})`, async ({ page }) => {

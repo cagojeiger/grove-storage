@@ -1,6 +1,6 @@
 //! Bounded management maintenance, separate from object reconciliation.
-use filegate_core::ManagementLogRetention;
-use filegate_db::{
+use grove_core::ManagementLogRetention;
+use grove_db::{
     PgPool,
     management::retention::{self as db, Stream},
 };

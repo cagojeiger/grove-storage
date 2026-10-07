@@ -21,7 +21,7 @@ MCP client ── User Bearer ── /api/admin/mcp
 |---|---|
 | URL | `https://<api-host>/api/admin/mcp` |
 | 인증 | `Authorization: Bearer gsm_…`; 콘솔 세션 API에서 발급한 User 토큰 |
-| Host | loopback 또는 `FILEGATE_PUBLIC_URL`의 authority; proxy는 허용된 Host를 전달 |
+| Host | loopback 또는 `GROVE_PUBLIC_URL`의 authority; proxy는 허용된 Host를 전달 |
 | 브라우저 경계 | Origin이 있으면 403; Cookie·중복 Authorization·master/이전 운영자 토큰은 401 |
 | proxy | Bearer를 보존하는 기계용 API 경로; 콘솔 OAuth 로그인 redirect와 분리 |
 | MCP 버전 | `2026-07-28` stateless 요청; SDK가 protocol·method/name 헤더와 body를 대조 |

@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use filegate_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
-use filegate_db::registry::{self, StorageRow};
-use filegate_db::s3_registry as s3;
+use grove_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
+use grove_db::registry::{self, StorageRow};
+use grove_db::s3_registry as s3;
 use sqlx::PgPool;
 
 pub const KEY: &str = "dir/large.bin";
@@ -70,4 +70,18 @@ pub async fn file_row(pool: &PgPool, id: uuid::Uuid) -> (String, i64, Option<Str
         .fetch_one(pool)
         .await
         .unwrap()
+}
+
+pub async fn upload_part(pool: &PgPool, file: &CreatedFile, part: i32, size: i64, etag: &str) {
+    assert_eq!(
+        s3::claim_upload_part(pool, "c", KEY, file.file_id, file.lease_id, part, 900)
+            .await
+            .unwrap(),
+        s3::UploadPartClaim::Claimed
+    );
+    assert!(
+        s3::finish_upload_part(pool, file.file_id, file.lease_id, part, size, etag)
+            .await
+            .unwrap()
+    );
 }

@@ -5,15 +5,15 @@ database time with an application clock or use wall time to measure deadlines.
 
 | Responsibility | Production authority | Test control |
 |---|---|---|
-| SigV4 validation, presigning, cookie age, token expiry inputs, local spool age | `filegate_core::time::Clock` / `SystemClock` | Inject `FixedClock` through `AppState`, `S3ClientCache`, or `s3_connect_with_clock`; spool cleanup also accepts an explicit timestamp |
+| SigV4 validation, presigning, cookie age, token expiry inputs, local spool age | `grove_core::time::Clock` / `SystemClock` | Inject `FixedClock` through `AppState`, `S3ClientCache`, or `s3_connect_with_clock`; spool cleanup also accepts an explicit timestamp |
 | Timeouts, heartbeat, object/management worker ticks, SDK sleep/retry, elapsed logging | Tokio monotonic clock | Pause/advance the Tokio scheduler; timeout/heartbeat helpers accept durations |
 | Sessions, setup links, authentication budgets, leases, lifecycle GC, retention, resource timestamps and usage history | PostgreSQL | Replace the two clock functions only inside each disposable SQLx test database |
 
 ## Database Contract
 
-Migration `0023_time_boundaries.sql` adds `grove_time.transaction_now()` and
+Baseline `0001_time.sql` defines `grove_time.transaction_now()` and
 `grove_time.wall_now()`. Production implementations retain `CURRENT_TIMESTAMP`
-(transaction-stable) and `clock_timestamp()` (wall time), respectively. Existing
+(transaction-stable) and `clock_timestamp()` (wall time), respectively. All business
 timestamp defaults and Rust lifecycle queries use these functions. No business
 columns or stored object keys are rewritten. New object keys use the inserted
 file's database timestamp, without an extra database round trip.
@@ -25,9 +25,9 @@ settings. Never run this helper against an operational database.
 The helper records clock versions against PostgreSQL transaction-start time so
 that advancing virtual wall time does not advance an already-open transaction.
 
-Historical migration fixtures insert historical rows directly before upgrading;
-current writers require the latest migration. New migrations adding time-based
-defaults must use the common functions. Keep timezone behavior explicit when
+The fresh baseline uses these functions from its first table definitions.
+SQLx's own migration bookkeeping is outside the business clock boundary.
+Keep timezone behavior explicit when
 deriving calendar dates; usage snapshot creation uses the UTC date.
 
 ## Coverage

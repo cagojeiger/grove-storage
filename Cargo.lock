@@ -990,86 +990,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
-name = "filegate-api"
-version = "0.4.1"
-dependencies = [
- "anyhow",
- "axum",
- "chrono",
- "crc32fast",
- "filegate-core",
- "filegate-db",
- "filegate-infra",
- "futures-util",
- "grove-management-command",
- "grove-management-policy",
- "grove-management-service",
- "grove-object-policy",
- "grove-object-service",
- "grove-s3-protocol",
- "hex",
- "md-5 0.10.6",
- "percent-encoding",
- "rmcp",
- "rpassword",
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "subtle",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "filegate-core"
-version = "0.4.1"
-dependencies = [
- "aes-gcm",
- "chrono",
- "dotenvy",
- "grove-object-policy",
- "hex",
- "hkdf",
- "secrecy",
- "sha2 0.10.9",
- "subtle",
- "thiserror",
-]
-
-[[package]]
-name = "filegate-db"
-version = "0.4.1"
-dependencies = [
- "chrono",
- "grove-management-policy",
- "serde_json",
- "sqlx",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "filegate-infra"
-version = "0.4.1"
-dependencies = [
- "anyhow",
- "axum",
- "filegate-core",
- "grove-object-policy",
- "grove-storage-provider",
- "secrecy",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1260,8 +1180,87 @@ dependencies = [
 ]
 
 [[package]]
+name = "grove-api"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "crc32fast",
+ "futures-util",
+ "grove-core",
+ "grove-db",
+ "grove-infra",
+ "grove-management-command",
+ "grove-management-policy",
+ "grove-management-service",
+ "grove-object-policy",
+ "grove-object-service",
+ "grove-s3-protocol",
+ "hex",
+ "md-5 0.10.6",
+ "percent-encoding",
+ "rmcp",
+ "rpassword",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "subtle",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "grove-core"
+version = "0.5.0"
+dependencies = [
+ "aes-gcm",
+ "chrono",
+ "dotenvy",
+ "grove-object-policy",
+ "hex",
+ "hkdf",
+ "secrecy",
+ "sha2 0.10.9",
+ "subtle",
+ "thiserror",
+]
+
+[[package]]
+name = "grove-db"
+version = "0.5.0"
+dependencies = [
+ "chrono",
+ "grove-management-policy",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "grove-infra"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "grove-object-policy",
+ "grove-storage-provider",
+ "secrecy",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "grove-management-command"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "grove-management-policy",
  "schemars",
@@ -1271,21 +1270,20 @@ dependencies = [
 
 [[package]]
 name = "grove-management-policy"
-version = "0.4.1"
+version = "0.5.0"
 
 [[package]]
 name = "grove-management-service"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "argon2",
  "chrono",
- "filegate-core",
- "filegate-db",
+ "grove-core",
+ "grove-db",
  "grove-management-command",
  "grove-management-policy",
  "serde_json",
  "sqlx",
- "subtle",
  "tokio",
  "tracing",
  "unicode-normalization",
@@ -1294,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "grove-object-policy"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "hex",
  "md-5 0.10.6",
@@ -1302,14 +1300,14 @@ dependencies = [
 
 [[package]]
 name = "grove-object-service"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "grove-s3-protocol"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "hex",
@@ -1320,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "grove-storage-provider"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
@@ -1328,14 +1326,14 @@ dependencies = [
  "aws-smithy-http-client",
  "axum",
  "chrono",
- "filegate-core",
+ "grove-core",
  "secrecy",
  "tokio",
 ]
 
 [[package]]
 name = "gscli"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "axum",
  "clap",
@@ -1478,6 +1476,12 @@ dependencies = [
  "http-body",
  "pin-project-lite",
 ]
+
+[[package]]
+name = "http-range-header"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c"
 
 [[package]]
 name = "httparse"
@@ -1870,6 +1874,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "mio"
@@ -3293,12 +3307,19 @@ checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
 dependencies = [
  "bitflags",
  "bytes",
+ "futures-core",
  "futures-util",
  "http",
  "http-body",
  "http-body-util",
+ "http-range-header",
+ "httpdate",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
  "tower",
  "tower-layer",
  "tower-service",
@@ -3405,6 +3426,12 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "unicase"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357cc3acc6a036009fd6c973ed009037c732d60d0b4f6c673e9041497482a28f"
 
 [[package]]
 name = "unicode-bidi"

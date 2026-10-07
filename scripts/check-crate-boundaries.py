@@ -11,18 +11,18 @@ ALLOWED = {
     "grove-object-policy": set(),
     "grove-object-service": set(),
     "grove-s3-protocol": set(),
-    "filegate-core": {"grove-object-policy"},
-    "filegate-db": {"grove-management-policy"},
+    "grove-core": {"grove-object-policy"},
+    "grove-db": {"grove-management-policy"},
     "grove-management-service": {
-        "filegate-core", "filegate-db", "grove-management-policy", "grove-management-command",
+        "grove-core", "grove-db", "grove-management-policy", "grove-management-command",
     },
-    "grove-storage-provider": {"filegate-core"},
-    "filegate-infra": {"filegate-core", "grove-storage-provider", "grove-object-policy"},
+    "grove-storage-provider": {"grove-core"},
+    "grove-infra": {"grove-core", "grove-storage-provider", "grove-object-policy"},
     "gscli": {"grove-management-command"},
-    "filegate-api": {
+    "grove-api": {
         "grove-management-service", "grove-management-command", "grove-management-policy",
         "grove-s3-protocol", "grove-object-service", "grove-object-policy",
-        "filegate-core", "filegate-db", "filegate-infra",
+        "grove-core", "grove-db", "grove-infra",
     },
 }
 PURE = {
@@ -50,7 +50,7 @@ def violations(metadata):
             provider_sdk = target.startswith(("aws-sdk-", "aws-smithy-"))
             if provider_sdk and name != "grove-storage-provider":
                 errors.append(f"{name} -> {target}: provider SDK belongs to grove-storage-provider")
-            if (name in PURE or name in {"grove-storage-provider", "filegate-core", "filegate-infra"}) and target in {
+            if (name in PURE or name in {"grove-storage-provider", "grove-core", "grove-infra"}) and target in {
                 "sqlx", "axum", "reqwest",
             }:
                 errors.append(f"{name} -> {target}: database/HTTP adapters belong outside this crate")

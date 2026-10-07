@@ -30,7 +30,7 @@ multipart의 누락·중복·상충 파라미터는 400 InvalidArgument로 거�
 
 | 항목 | 계약 |
 |---|---|
-| 리스너 | 컨트롤 API와 FILEGATE_BIND 공유 |
+| 리스너 | 컨트롤 API와 GROVE_BIND 공유 |
 | 주소 | path-style /{bucket}/{key} |
 | bucket | client_id와 일치; 다른 이름은 404 NoSuchBucket |
 | 예약 경로 | api·blobs·healthz·readyz, 인코딩된 이름도 확인 |
@@ -171,14 +171,7 @@ lease 만료 후 새 프로세스가 복구한다. `--db-failure`는 vendor 성�
 DB 커밋을 거부해 요청·Reconciler의 롤백과 장애 제거 후 복구·정산을 검증한다.
 쓰기 진행 도중 종료·DB COMMIT 응답 유실은 별도 검증 범위다.
 
-## 0005 이전 세션 전환
+## Installation
 
-| 순서 | 작업 |
-|---|---|
-| 1 | 구버전 writer 종료·진행 요청 drain |
-| 2 | storage 자격증명에 열린 multipart 목록 조회 권한 부여 |
-| 3 | 새 writer로 migration 실행·서버 시작 |
-| 4 | 이전 pending multipart는 새 업로드로 재시작, 기존 세션은 만료 회수 |
-
-이전 세션에는 logical key가 없어 backfill 대신 재시작한다. 전환은 같은 DB에
-구버전·신버전 writer가 겹치지 않는 순서로 수행한다.
+The current schema uses a fresh database, not an in-place multipart-session upgrade.
+See [fresh installation and backup restore](../development/fresh-installation.md).

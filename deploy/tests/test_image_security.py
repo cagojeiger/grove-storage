@@ -12,7 +12,12 @@ spec.loader.exec_module(security)
 def clean_report():
     return {
         "SchemaVersion": 2,
-        "Results": [{"Type": "rustbinary", "Packages": [{"Name": "tokio", "Version": "1.0.0"}]}],
+        "Results": [
+            {"Type": "rustbinary", "Packages": [{"Name": "tokio", "Version": "1.0.0"}]},
+            {"Type": "npm", "Target": "app/inventory/frontend/package-lock.json",
+             "Packages": [{"Name": name, "Version": "1.0.0"}
+                          for name in ("react", "@mui/material", "swagger-ui-react")]},
+        ],
     }
 
 
@@ -37,6 +42,24 @@ class ImageSecurityTests(unittest.TestCase):
             report["Results"][0]["Packages"] = packages
             with self.subTest(packages=packages), self.assertRaises(ValueError):
                 security.validate(report)
+
+    def test_missing_incomplete_or_malformed_frontend_inventory_fails(self):
+        for packages in (None, [], {}, [None], [{"Name": "react"}],
+                         [{"Name": "react", "Version": "18.3.1"}]):
+            report = clean_report()
+            report["Results"][1]["Packages"] = packages
+            with self.subTest(packages=packages), self.assertRaises(ValueError):
+                security.validate(report)
+        report = clean_report()
+        report["Results"].pop()
+        with self.assertRaises(ValueError):
+            security.validate(report)
+
+    def test_high_frontend_vulnerability_blocks_the_image(self):
+        report = clean_report()
+        report["Results"][1]["Vulnerabilities"] = [{"Severity": "HIGH"}]
+        with self.assertRaises(ValueError):
+            security.validate(report)
 
     def test_high_critical_vulnerabilities_and_secrets_fail_even_without_a_fix(self):
         for kind in ("Vulnerabilities", "Secrets"):

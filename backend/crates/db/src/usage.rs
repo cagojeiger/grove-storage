@@ -84,7 +84,7 @@ pub async fn record_snapshot(pool: &PgPool, day: chrono::NaiveDate) -> Result<u6
     // 이 가드는 최적화일 뿐이다 — 직렬화의 진짜 지점은 아래 INSERT의
     // ON CONFLICT DO NOTHING이라, 다른 write 경로와 달리 트랜잭션이 필요 없다.
     let recorded: bool =
-        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM usage_snapshot WHERE day = $1)")
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM usage_snapshots WHERE day = $1)")
             .bind(day)
             .fetch_one(pool)
             .await?;
@@ -92,7 +92,7 @@ pub async fn record_snapshot(pool: &PgPool, day: chrono::NaiveDate) -> Result<u6
         return Ok(0);
     }
     let result = sqlx::query(
-        "INSERT INTO usage_snapshot (day, storage_id, client_id, active_bytes, active_files) \
+        "INSERT INTO usage_snapshots (day, storage_id, client_id, active_bytes, active_files) \
          SELECT $1, l.storage_id, f.client_id, \
          coalesce(sum(f.declared_size), 0)::bigint, count(*) \
          FROM files f \
@@ -125,7 +125,7 @@ pub async fn snapshot_history<'e>(
 ) -> Result<Vec<SnapshotRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT day, storage_id, client_id, active_bytes, active_files \
-         FROM usage_snapshot \
+         FROM usage_snapshots \
          WHERE day >= grove_time.transaction_now()::date - $1 \
          ORDER BY day, storage_id, client_id",
     )

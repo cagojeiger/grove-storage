@@ -31,7 +31,7 @@ def check_conditional_recovery(client, sql, backend, restart, wait_for, ready):
             raise AssertionError("injected commit failure must not report success")
         file_id = str(uuid.UUID(sql(f"SELECT file_id FROM s3_uploads WHERE key = '{key}'")))
         assert sql(f"SELECT state || ':' || if_none_match FROM s3_uploads WHERE file_id = '{file_id}'") == "completing:true"
-        assert sql(f"SELECT count(*) FROM s3_keys WHERE client_id = 'recovery' AND key = '{key}'") == "0"
+        assert sql(f"SELECT count(*) FROM s3_object_keys WHERE client_id = 'recovery' AND key = '{key}'") == "0"
         physical = sql(f"SELECT object_key FROM locations WHERE file_id = '{file_id}'")
         assert backend.vendor.get_object(Bucket=backend.spec["bucket"], Key=physical)["Body"].read() == body
         sql("DROP TRIGGER conditional_commit_failure ON s3_uploads; DROP FUNCTION reject_conditional_commit();")

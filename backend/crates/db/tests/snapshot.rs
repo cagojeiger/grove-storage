@@ -10,9 +10,9 @@
 )]
 
 use chrono::{Days, NaiveDate, Utc};
-use filegate_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
-use filegate_db::registry::{self, StorageRow};
-use filegate_db::usage;
+use grove_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
+use grove_db::registry::{self, StorageRow};
+use grove_db::usage;
 use sqlx::PgPool;
 
 // ── 픽스처 ──────────────────────────────────────────────────
@@ -144,7 +144,7 @@ async fn record_snapshot_excludes_files_created_after_day_end(pool: PgPool) {
 async fn snapshot_history_windows_by_days_oldest_first(pool: PgPool) {
     // 스냅샷 행은 FK 없는 독립 기록 — 과거 날짜는 직접 심는다.
     sqlx::query(
-        "INSERT INTO usage_snapshot (day, storage_id, client_id, active_bytes, active_files) \
+        "INSERT INTO usage_snapshots (day, storage_id, client_id, active_bytes, active_files) \
          VALUES (current_date - 10, 's', 'c', 700, 7), \
                 (current_date, 's', 'c', 100, 1)",
     )

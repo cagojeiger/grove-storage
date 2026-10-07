@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use axum::{Router, body::Body, extract::State, http::Request, routing::any};
-use filegate_infra::{S3StorageSpec, backend::StorageBackend};
+use grove_infra::{S3StorageSpec, s3_io::StorageBackend};
 use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
 

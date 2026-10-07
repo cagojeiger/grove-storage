@@ -5,7 +5,7 @@ mod authorization;
 mod failures;
 mod support;
 
-use filegate_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db};
 use grove_management_command::{Command, ErrorCode, Output, input};
 use grove_management_policy::{Role, Surface};
 use grove_management_service::{Proof, resources};
@@ -14,8 +14,8 @@ use support::*;
 fn clients() -> Command {
     Command::ClientList(input::EmptyInput {})
 }
-fn crypto() -> filegate_core::Crypto {
-    filegate_core::Crypto::new("test", &"resource-test-root-at-least-32-bytes".into()).unwrap()
+fn crypto() -> grove_core::Crypto {
+    grove_core::Crypto::new("test", &"resource-test-root-at-least-32-bytes".into()).unwrap()
 }
 fn keys() -> Command {
     Command::ClientKeyList(input::ClientInput {
@@ -25,7 +25,7 @@ fn keys() -> Command {
 async fn seed(pool: &PgPool) {
     sqlx::raw_sql("INSERT INTO storages(id,kind,endpoint,public_endpoint,region,bucket,access_key,secret_key_ciphertext,secret_key_nonce,enc_key_id,capacity_bytes) VALUES('local','s3','https://storage.example','https://storage.example','us-east-1','objects','key',decode('01','hex'),decode(repeat('00',12),'hex'),'test',100);
         INSERT INTO clients(id,storage_id) VALUES('app','local');
-        INSERT INTO client_keys(client_id,key_hash) VALUES('app','sha256:'||repeat('a',64));")
+        INSERT INTO client_native_keys(client_id,key_hash) VALUES('app','sha256:'||repeat('a',64));")
         .execute(pool).await.unwrap();
 }
 

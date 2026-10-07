@@ -1,6 +1,5 @@
 //! PostgreSQL 접근. 풀 생성과 reconciler 단일 실행 보장이 여기 있다.
 
-pub mod admin_auth;
 pub mod files;
 pub mod management;
 pub mod registry;
@@ -27,7 +26,7 @@ pub async fn ping(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").execute(pool).await.map(|_| ())
 }
 
-/// 모든 filegate 인스턴스가 같은 DB에서 경합하는 고정 키 ("FILEGATE").
+/// 같은 DB의 object reconciler가 공유하는 고정 advisory-lock 키.
 const RECONCILER_LOCK_KEY: i64 = 0x4649_4c45_4741_5445;
 
 /// advisory lock을 쥔 채 잡을 1회 실행한다. 못 잡으면(다른 파드 실행 중)
