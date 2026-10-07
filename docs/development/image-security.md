@@ -21,7 +21,8 @@ Node and build tools remain in build stages, not in the runtime.
    needs boto3 and builds the existing pinned test-only MinIO image.
    Desktop/mobile screenshots and `s3.json` bind runtime evidence to the inspected
    local image ID. Broader S3/NoteGate integration tests remain separate gates.
-2. Trivy scans OS/library vulnerabilities and embedded secrets. HIGH/CRITICAL
+2. Trivy reports all severity levels for OS/library vulnerabilities and embedded
+   secrets. HIGH/CRITICAL
    findings block release even without an available fix. Missing/malformed reports
    and missing Rust or frontend package inventories also block release. No image scan
    ignore list is used. `cargo-auditable` embeds the compiled Rust dependencies;
@@ -119,3 +120,11 @@ References: [Docker attestations](https://docs.docker.com/build/ci/github-action
 [Trivy npm coverage](https://trivy.dev/docs/v0.74/guide/coverage/language/nodejs/).
 The candidate-scan/evidence workflow follows the responsibilities used by
 RelayGate and NoteGate without importing their Helm or runtime roles.
+
+## Known Dependency Advisory
+
+On 2026-10-07, Dependabot reported the medium-severity
+[GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c)
+for `sprintf-js` through Swagger UI's `remarkable` / `argparse` dependency chain.
+The advisory had no patched version. No suppression is configured; lower-severity
+findings remain in scan evidence and do not pass as a vulnerability-free result.

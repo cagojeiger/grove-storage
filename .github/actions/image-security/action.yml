@@ -47,7 +47,7 @@ runs:
         image-ref: ${{ inputs.image }}
         scanners: vuln,secret
         vuln-type: os,library
-        severity: HIGH,CRITICAL
+        severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
         ignore-unfixed: false
         trivyignores: ''
         exit-code: '0'
@@ -72,7 +72,7 @@ runs:
         mkdir -p "$REPORT_DIR/inventory/frontend"
         docker cp "$container:/app/inventory/frontend/package-lock.json" \
           "$REPORT_DIR/inventory/frontend/package-lock.json"
-        trivy fs --scanners vuln --pkg-types library --severity HIGH,CRITICAL \
+        trivy fs --scanners vuln --pkg-types library --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
           --list-all-pkgs --ignorefile /dev/null --format json \
           --output "$REPORT_DIR/frontend-trivy.json" "$REPORT_DIR"
         jq --slurpfile frontend "$REPORT_DIR/frontend-trivy.json" \

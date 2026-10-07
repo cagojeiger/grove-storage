@@ -73,6 +73,11 @@ class ImageWorkflowTests(unittest.TestCase):
         self.assertIn("'.Results += $frontend[0].Results'", action)
         self.assertNotIn("frontend/web/package-lock.json", action)
 
+    def test_reports_retain_findings_below_the_release_threshold(self):
+        action = (ROOT / ".github/actions/image-security/action.yml").read_text()
+        self.assertIn("severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", action)
+        self.assertIn("--severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", action)
+
     def test_release_checks_candidates_and_final_index_before_promotion(self):
         release = (ROOT / ".github/workflows/release.yml").read_text()
         steps = ["Scan candidate before signing", "Test packaged release console and API",
