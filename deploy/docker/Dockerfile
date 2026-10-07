@@ -3,7 +3,7 @@
 # opsgate의 하우스 Dockerfile 패턴: cargo-chef + sccache로 의존성 레이어를
 # 캐시하고, 런타임은 Distroless + 비루트 사용자 + 바이너리만 담는다.
 
-FROM rust:1.96.1-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS chef
+FROM rust:1.98.1-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e AS chef
 
 WORKDIR /app
 RUN apt-get update \
