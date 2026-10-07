@@ -23,7 +23,7 @@ async fn seed(pool: &PgPool) {
         INSERT INTO management.security_events(created_at,actor_kind,request_id,surface,event_type,reason_code)
         SELECT now()-d*interval '1 day','anonymous',gen_random_uuid(),'console','authentication_failed','unauthenticated' FROM unnest(ARRAY[31,91,366]) d;
         INSERT INTO management.command_invocations(created_at,actor_kind,request_id,surface,operation,outcome,duration_ms)
-        SELECT now()-d*interval '1 day','master',gen_random_uuid(),'console','storage.list','succeeded',1 FROM unnest(ARRAY[31,91,366]) d;")
+        SELECT now()-d*interval '1 day','system',gen_random_uuid(),'console','storage.list','succeeded',1 FROM unnest(ARRAY[31,91,366]) d;")
         .execute(pool).await.unwrap();
 }
 
@@ -82,9 +82,9 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
 #[sqlx::test(migrations = "../db/migrations")]
 async fn each_run_is_bounded_and_backlog_drains_on_later_ticks(pool: PgPool) {
     sqlx::raw_sql("INSERT INTO management.command_invocations(created_at,actor_kind,request_id,surface,operation,outcome,duration_ms)
-        SELECT now()-interval '31 days','master',gen_random_uuid(),'cli','storage.list','succeeded',1 FROM generate_series(1,2001);
+        SELECT now()-interval '31 days','system',gen_random_uuid(),'cli','storage.list','succeeded',1 FROM generate_series(1,2001);
         INSERT INTO management.command_invocations(actor_kind,request_id,surface,operation,outcome,duration_ms)
-        VALUES('master',gen_random_uuid(),'cli','storage.list','succeeded',1);")
+        VALUES('system',gen_random_uuid(),'cli','storage.list','succeeded',1);")
         .execute(&pool).await.unwrap();
     for remaining in [1002, 2, 1, 1] {
         retention::run(&pool, policy()).await;
