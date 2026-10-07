@@ -3,13 +3,13 @@
 #
 # boto3가 단일 객체 수명과 multipart 자동 전환·Abort를 완주하는지 검증하고,
 # 와이어에 나간 요청 전부(메서드·경로·서명 헤더)를 기록한다. endpoint와 해당
-# 대상의 자격증명·bucket을 넣어 MinIO와 filegate 양쪽에서 동일하게 통과해야
+# 대상의 자격증명·bucket을 넣어 MinIO와 grove 양쪽에서 동일하게 통과해야
 # 한다 — 그것이 표면 동등성의 정의다.
 #
 # 사용:
 #   S3_ENDPOINT=http://127.0.0.1:9000 S3_ACCESS_KEY=… S3_SECRET_KEY=… \
-#   S3_BUCKET=filegate-std python3 scripts/s3-capture.py
-# filegate의 엄격한 UploadId-key 바인딩까지 강제할 때:
+#   S3_BUCKET=grove-std python3 scripts/s3-capture.py
+# grove의 엄격한 UploadId-key 바인딩까지 강제할 때:
 #   S3_EXPECT_WRONG_KEY_404=1 ... python3 scripts/s3-capture.py
 #
 # 의존: boto3 (pip install boto3)
@@ -132,7 +132,7 @@ transfer = TransferConfig(
     multipart_chunksize=5 * MIB,
     max_concurrency=3,
 )
-with tempfile.TemporaryDirectory(prefix="filegate-s3-capture-") as temp_dir:
+with tempfile.TemporaryDirectory(prefix="grove-s3-capture-") as temp_dir:
     source = Path(temp_dir) / "source.bin"
     downloaded = Path(temp_dir) / "downloaded.bin"
     remaining = 11 * MIB + 123
@@ -157,7 +157,7 @@ with tempfile.TemporaryDirectory(prefix="filegate-s3-capture-") as temp_dir:
     check("multipart download_file 본문 일치", sha256_file(downloaded) == sha256_file(source))
     s3.delete_object(Bucket=BUCKET, Key=MULTIPART_KEY)
 
-# UploadId는 create 때의 key에 묶인다. FileGate는 다른 key에 NoSuchUpload를,
+# UploadId는 create 때의 key에 묶인다. Grove Storage는 다른 key에 NoSuchUpload를,
 # MinIO는 204를 반환하지만 둘 다 원 세션을 건드리지 않아야 한다. 원 key에
 # part를 하나 올려 생존을 확인한 뒤 Abort한다.
 opened = s3.create_multipart_upload(Bucket=BUCKET, Key=ABORT_KEY)

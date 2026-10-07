@@ -10,8 +10,8 @@
 #[path = "support/s3_single.rs"]
 mod support;
 
-use filegate_db::files;
-use filegate_db::s3_registry as s3;
+use grove_db::files;
+use grove_db::s3_registry as s3;
 use sqlx::PgPool;
 use support::{create_ok, file_state, wire};
 

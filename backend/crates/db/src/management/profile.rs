@@ -22,7 +22,7 @@ pub async fn rename(
     let mut tx = lock(pool).await?;
     let actor = identity::password_session(&mut tx, session_hash).await?;
     let context = AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: actor.account_id,
             credential_id: None,
             session_id: actor.session_id,

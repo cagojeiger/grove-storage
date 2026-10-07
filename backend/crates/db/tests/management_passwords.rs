@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, Error, passwords},
 };
@@ -44,7 +44,7 @@ async fn concurrent_initialization_has_one_account_and_audit(pool: PgPool) {
     let counts: (i64, i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM management.accounts),
                 (SELECT count(*) FROM management.password_credentials),
-                (SELECT count(*) FROM management.credentials)",
+                (SELECT count(*) FROM management.api_tokens)",
     )
     .fetch_one(&pool)
     .await
@@ -83,7 +83,7 @@ async fn audit_failure_rolls_back_initialization(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn recovery_replaces_generation_and_preserves_other_identities_and_legacy_auth(pool: PgPool) {
+async fn recovery_replaces_generation_and_preserves_other_identities(pool: PgPool) {
     let (owner, _) = bootstrap(&pool).await;
     let other = user(&pool, Role::Writer).await;
     db::issue_credential(&pool, &context(), other, &key(&hash(2)))
@@ -95,15 +95,6 @@ async fn recovery_replaces_generation_and_preserves_other_identities_and_legacy_
     db::create_session(&pool, Uuid::new_v4(), &hash(2), &hash(20))
         .await
         .unwrap();
-    let legacy = filegate_db::admin_auth::issue(
-        &pool,
-        filegate_db::admin_auth::IssueMode::Initialize,
-        "legacy",
-        "legacy-hash",
-    )
-    .await
-    .unwrap()
-    .unwrap();
     passwords::recover(&pool, Uuid::new_v4(), owner, "owner", HASH)
         .await
         .unwrap();
@@ -119,12 +110,6 @@ async fn recovery_replaces_generation_and_preserves_other_identities_and_legacy_
     assert!(db::session_actor(&pool, &hash(10)).await.unwrap().is_none());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_some());
     assert!(db::session_actor(&pool, &hash(20)).await.unwrap().is_some());
-    assert_eq!(
-        filegate_db::admin_auth::authenticate(&pool, "legacy-hash")
-            .await
-            .unwrap(),
-        Some(legacy.id)
-    );
     let role: String = sqlx::query_scalar("SELECT role FROM management.accounts WHERE id=$1")
         .bind(owner)
         .fetch_one(&pool)

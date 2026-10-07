@@ -1,0 +1,452 @@
+//! Lease-authenticated byte relay at `/blobs/{lease_id}`.
+//!
+//! 인증은 lease별 secret (ADR 003): URL 쿼리의 raw를 해시해 lease 행과
+//! 대조한다 — 서버는 해시만 안다 (클라이언트 키와 같은 원칙). 유효하지
+//! 않은 조합은 구분 없이 403 — presigned의 서명 불일치와 같은 성질이다.
+//!
+//! 쓰기는 스트림을 통과시키며 크기·MD5를 직접 계산하고, 선언 크기를
+//! 넘는 순간 스트림을 끊는다 (ADR 002 — 직결이 못 하는 사전 차단).
+//! 요청 스풀에서 S3로 업로드한다. commit의 사후 검증은 여기서 기록한
+//! 실측을 대조한다.
+//!
+//! 에러 번역은 다른 표면과 같이 ApiError가 담당하고, 이 라우터의
+//! map_response 레이어가 성공·실패 가리지 않고 CORS 헤더를 붙인다 —
+//! 전송 주체가 브라우저일 수 있다는 성질은 응답의 종류를 가리지 않는다.
+
+use axum::Router;
+use axum::body::Body;
+use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::response::{IntoResponse, Response};
+use axum::routing::put;
+use grove_db::files::{self, ByteLease};
+use grove_infra::{Address, rfc5987_encode, s3_open_read, temp_spool};
+use grove_object_policy::multipart::{part_count, part_expected_size, part_number_ok};
+use serde::Deserialize;
+use tokio::io::AsyncWriteExt;
+use tokio_util::io::ReaderStream;
+use uuid::Uuid;
+
+use crate::error::{ApiError, internal, not_found, status};
+use crate::lease::{WRITE_LEASE_TTL, run_with_native_upload_part_heartbeat};
+use crate::routes::AppState;
+use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
+use crate::storage_access::backend_from_row;
+use grove_infra::s3_io::{StorageBackend, commit_temp_to_backend};
+
+/// Single relay uploads hold a bounded number of DB claims.
+/// 풀(기본 20)의 나머지 연결은 인증·확정·회수 요청에 남긴다.
+pub const SINGLE_UPLOAD_CLAIM_LIMIT: usize = 4;
+
+pub fn routes(cors_allowed_origins: &[String]) -> Router<AppState> {
+    let router = Router::new().route("/{lease_id}", put(upload).get(download).options(preflight));
+    match crate::cors::layer(cors_allowed_origins) {
+        Some(cors) => router.layer(cors),
+        None => router,
+    }
+}
+
+#[derive(Deserialize)]
+struct SecretQuery {
+    s: String,
+    /// 읽기의 표현 파일명 — 발급이 URL에 실어 보낸 것 (spec 00: 저장하지
+    /// 않는다). 소지자가 바꿔도 자기 다운로드의 저장 이름만 달라진다.
+    f: Option<String>,
+    /// multipart part 번호 (spec 02) — multipart lease의 PUT에 필수.
+    part: Option<i32>,
+}
+
+/// 브라우저 preflight — presigned 직결에서 저장소가 하던 응대의 등가물.
+/// CORS 헤더는 레이어가 붙인다.
+async fn preflight() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn upload(
+    State(state): State<AppState>,
+    Path(lease_id): Path<Uuid>,
+    Query(query): Query<SecretQuery>,
+    headers: HeaderMap,
+    body: Body,
+) -> Result<Response, ApiError> {
+    let lease = authorize(&state, lease_id, &query.s, "write").await?;
+
+    // 전송 주체는 Content-Length를 보낸다 (spec 00 — 길이 미상 전송 거부).
+    let content_length = headers
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<i64>().ok());
+    let Some(content_length) = content_length else {
+        return Err(status(
+            StatusCode::LENGTH_REQUIRED,
+            "content-length required",
+        ));
+    };
+
+    let Some((object_key, storage_row)) = &lease.location else {
+        return Err(not_found("object not found"));
+    };
+    let backend = backend_from_row(&state.crypto, storage_row)?;
+
+    // multipart lease면 part 수신 경로로 (spec 02) — 계측 계약은 같고
+    // 단위가 part다.
+    if let Some(part_size) = lease.part_size {
+        return upload_part(
+            &state,
+            lease_id,
+            &lease,
+            part_size,
+            query.part,
+            content_length,
+            &storage_row.id,
+            object_key,
+            &backend,
+            body,
+        )
+        .await;
+    }
+    if query.part.is_some() {
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "part is only valid for multipart uploads",
+        ));
+    }
+    if content_length != lease.declared_size {
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "content-length must equal the declared size",
+        ));
+    }
+
+    // Relay transfers use disposable local request spools.
+    let temp_root = spool_root();
+    // S3 중계는 공유 임시 볼륨에 스풀한다 — 동시 스풀 볼륨 고갈(DoS)을 막는
+    // 슬롯을 잡는다(스코프 종료 시 자동 반납).
+    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
+    // Bound the DB-claim budget for single uploads. Waiting requests
+    // hold no DB connection and must claim again after admission.
+    let _promotion = state
+        .single_upload_claims
+        .acquire()
+        .await
+        .map_err(|error| internal(format!("promotion semaphore closed: {error}")))?;
+    let claim = files::claim_relay_upload(&state.pool, lease.file_id, lease_id)
+        .await?
+        .ok_or_else(|| status(StatusCode::CONFLICT, "upload is busy or no longer writable"))?;
+    // 같은 lease의 재PUT이 겹쳐도 서로 다른 임시 파일에 쓴다 — 이름을
+    // lease_id로만 지으면 truncate로 두 스트림이 섞여 손상본이 커밋될 수 있다.
+    let temp_name = format!("{lease_id}-{}", Uuid::new_v4());
+    let (temp_path, file) = temp_spool::begin_write(&temp_root, &temp_name)
+        .await
+        .map_err(internal)?;
+    let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
+
+    let (written, md5_hex) =
+        spool_measured(body, &mut writer, &temp_path, lease.declared_size).await?;
+
+    if claim
+        .declared_md5
+        .as_ref()
+        .is_some_and(|expected| !expected.eq_ignore_ascii_case(&md5_hex))
+    {
+        temp_spool::abort_write(&temp_path).await;
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "uploaded content does not match declared md5",
+        ));
+    }
+    // Published measurements are immutable. This also prevents a failed DB
+    // commit after a retry from restoring old measurements over new bytes.
+    if let Some((size, md5)) = &claim.recorded {
+        temp_spool::abort_write(&temp_path).await;
+        if *size != written || md5 != &md5_hex {
+            return Err(status(
+                StatusCode::CONFLICT,
+                "upload already contains different content",
+            ));
+        }
+        claim
+            .done(written, &md5_hex, WRITE_LEASE_TTL.as_secs() as i64)
+            .await?;
+        return Ok(ok_with_etag(&md5_hex));
+    }
+
+    // Flush buffered bytes before uploading the spool to S3.
+    if let Err(error) = writer.flush().await {
+        temp_spool::abort_write(&temp_path).await;
+        return Err(internal(error));
+    }
+    let file = writer.into_inner();
+
+    // Upload the spool to S3; the helper owns temporary-file cleanup.
+    if let Err(error) = commit_temp_to_backend(
+        &state.s3_clients,
+        &backend,
+        &storage_row.id,
+        file,
+        &temp_path,
+        object_key,
+        lease.content_type.as_deref(),
+    )
+    .await
+    {
+        return Err(ApiError::Storage(error));
+    }
+
+    claim
+        .done(written, &md5_hex, WRITE_LEASE_TTL.as_secs() as i64)
+        .await?;
+    tracing::info!(event = "blobs.uploaded", lease = %lease_id, file = %lease.file_id, size = written);
+
+    Ok(ok_with_etag(&md5_hex))
+}
+
+/// Measure each part in a unique spool, claim upload ownership, then forward to
+/// S3. Heartbeats preserve ownership without holding a DB lock across network I/O.
+#[allow(clippy::too_many_arguments)]
+async fn upload_part(
+    state: &AppState,
+    lease_id: Uuid,
+    lease: &ByteLease,
+    part_size: i64,
+    part: Option<i32>,
+    content_length: i64,
+    storage_id: &str,
+    object_key: &str,
+    backend: &StorageBackend,
+    body: Body,
+) -> Result<Response, ApiError> {
+    let Some(part_no) = part else {
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "part number required for multipart uploads",
+        ));
+    };
+    let count = part_count(lease.declared_size, part_size);
+    if !part_number_ok(part_no, count) {
+        return Err(status(StatusCode::BAD_REQUEST, "part number out of range"));
+    }
+    let expected = part_expected_size(lease.declared_size, part_size, part_no);
+    if content_length != expected {
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "content-length must equal the part size",
+        ));
+    }
+
+    let temp_root = spool_root();
+    // S3 중계 part도 공유 임시 볼륨에 스풀한다 — 동시 스풀 슬롯을 잡는다
+    // (스코프 종료 시 자동 반납).
+    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
+    let temp_name = format!("{lease_id}-p{part_no}-{}", Uuid::new_v4());
+    let (temp_path, file) = temp_spool::begin_write(&temp_root, &temp_name)
+        .await
+        .map_err(internal)?;
+    let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
+    let (written, md5_hex) = spool_measured(body, &mut writer, &temp_path, expected).await?;
+    if let Err(error) = writer.flush().await {
+        temp_spool::abort_write(&temp_path).await;
+        return Err(internal(error));
+    }
+    drop(writer.into_inner());
+
+    let spec = &backend.spec;
+    let Some(upload_id) = &lease.upload_id else {
+        temp_spool::abort_write(&temp_path).await;
+        return Err(internal("multipart lease has no upload id"));
+    };
+    match files::claim_relay_part(
+        &state.pool,
+        lease.file_id,
+        lease_id,
+        part_no,
+        WRITE_LEASE_TTL.as_secs() as i64,
+    )
+    .await?
+    {
+        files::RelayPartClaim::Claimed => {}
+        files::RelayPartClaim::Busy => {
+            temp_spool::abort_write(&temp_path).await;
+            return Err(status(
+                StatusCode::CONFLICT,
+                "another upload for this part is still in progress; retry",
+            ));
+        }
+        files::RelayPartClaim::Unavailable => {
+            temp_spool::abort_write(&temp_path).await;
+            return Err(status(
+                StatusCode::CONFLICT,
+                "multipart upload is no longer accepting parts",
+            ));
+        }
+    }
+
+    // claimed 원장이 완료를 막는 동안 외부 UploadPart를 수행한다.
+    // 트랜잭션은 네트워크를 기다리지 않고 heartbeat가 lease만 갱신한다.
+    let storage = state.s3_clients.get(storage_id, spec, Address::Internal);
+    let physical_upload = async {
+        let vendor_etag = grove_infra::s3_upload_part_from_path(
+            &storage, object_key, upload_id, part_no, &temp_path,
+        )
+        .await
+        .map_err(ApiError::Storage)?;
+        if !vendor_etag.eq_ignore_ascii_case(&md5_hex) {
+            return Err(ApiError::Storage(anyhow::anyhow!(
+                "vendor part etag does not match measured md5"
+            )));
+        }
+        Ok(vendor_etag)
+    };
+    let uploaded = run_with_native_upload_part_heartbeat(
+        &state.pool,
+        lease.file_id,
+        lease_id,
+        part_no,
+        physical_upload,
+    )
+    .await;
+    temp_spool::abort_write(&temp_path).await;
+    let Some(uploaded) = uploaded else {
+        return Err(status(
+            StatusCode::CONFLICT,
+            "part upload ownership was lost; retry the multipart upload",
+        ));
+    };
+    let vendor_etag = match uploaded {
+        Ok(etag) => etag,
+        Err(error) => {
+            if let Err(cancel_error) =
+                files::cancel_relay_part(&state.pool, lease.file_id, lease_id, part_no).await
+            {
+                tracing::warn!(
+                    event = "file.upload_part_cancel_failed",
+                    file = %lease.file_id,
+                    part = part_no,
+                    error = %cancel_error,
+                );
+            }
+            return Err(error);
+        }
+    };
+    if !files::finish_relay_part(
+        &state.pool,
+        lease.file_id,
+        lease_id,
+        part_no,
+        written,
+        &vendor_etag,
+    )
+    .await?
+    {
+        return Err(status(
+            StatusCode::CONFLICT,
+            "part upload ownership was lost; retry the multipart upload",
+        ));
+    }
+    tracing::info!(event = "blobs.part_uploaded", lease = %lease_id, file = %lease.file_id, part = part_no, size = written);
+    Ok(ok_with_etag(&md5_hex))
+}
+
+/// 공유 스풀 프리미티브(ADR 002)를 blobs 표면 에러로 번역한다 — 단일
+/// PUT·part 공용. 스풀이 유휴·단절·초과·IO 실패 시 임시 파일을 지우므로,
+/// 여기서는 미달(선언보다 작음)만 추가로 검사한다.
+async fn spool_measured(
+    body: Body,
+    writer: &mut (impl tokio::io::AsyncWrite + Unpin),
+    temp_path: &std::path::Path,
+    declared_size: i64,
+) -> Result<(i64, String), ApiError> {
+    let measured = spool::spool_to_temp(body, writer, temp_path, declared_size, false)
+        .await
+        .map_err(|error| match error {
+            spool::SpoolError::Idle => status(
+                StatusCode::REQUEST_TIMEOUT,
+                "upload stream idle for too long",
+            ),
+            spool::SpoolError::Aborted => status(StatusCode::BAD_REQUEST, "upload stream aborted"),
+            spool::SpoolError::TooLarge => status(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "upload exceeds the declared size",
+            ),
+            spool::SpoolError::Io(error) => internal(error),
+        })?;
+    if measured.written != declared_size {
+        temp_spool::abort_write(temp_path).await;
+        return Err(status(
+            StatusCode::BAD_REQUEST,
+            "upload is smaller than the declared size",
+        ));
+    }
+    Ok((measured.written, measured.md5_hex))
+}
+
+async fn download(
+    State(state): State<AppState>,
+    Path(lease_id): Path<Uuid>,
+    Query(query): Query<SecretQuery>,
+) -> Result<Response, ApiError> {
+    let lease = authorize(&state, lease_id, &query.s, "read").await?;
+    // purge 뒤에는 lease가 유효해도 실물이 없다 — presigned의 NoSuchKey 등가.
+    let Some((object_key, storage_row)) = &lease.location else {
+        return Err(not_found("object not found"));
+    };
+    let backend = backend_from_row(&state.crypto, storage_row)?;
+
+    let spec = &backend.spec;
+    let (reader, size) = {
+        let storage = state
+            .s3_clients
+            .get(&storage_row.id, spec, Address::Internal);
+        match s3_open_read(&storage, object_key).await {
+            Ok(Some((reader, size))) => (Box::new(reader), size),
+            Ok(None) => return Err(not_found("object not found")),
+            Err(error) => return Err(ApiError::Storage(error)),
+        }
+    };
+
+    tracing::info!(event = "blobs.downloaded", lease = %lease_id, file = %lease.file_id);
+    let mut response =
+        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)).into_response();
+    let headers = response.headers_mut();
+    if let Ok(value) = HeaderValue::from_str(&size.to_string()) {
+        headers.insert(header::CONTENT_LENGTH, value);
+    }
+    let content_type = lease
+        .content_type
+        .as_deref()
+        .unwrap_or("application/octet-stream");
+    if let Ok(value) = HeaderValue::from_str(content_type) {
+        headers.insert(header::CONTENT_TYPE, value);
+    }
+    if let Some(filename) = query.f.as_deref().filter(|name| !name.is_empty()) {
+        let disposition = format!("attachment; filename*=UTF-8''{}", rfc5987_encode(filename));
+        if let Ok(value) = HeaderValue::from_str(&disposition) {
+            headers.insert(header::CONTENT_DISPOSITION, value);
+        }
+    }
+    Ok(response)
+}
+
+/// 실측 md5를 따옴표 ETag 헤더로 실은 200 응답 — 단일 PUT·part 공용.
+fn ok_with_etag(md5_hex: &str) -> Response {
+    let mut response = StatusCode::OK.into_response();
+    if let Ok(value) = HeaderValue::from_str(&format!("\"{md5_hex}\"")) {
+        response.headers_mut().insert(header::ETAG, value);
+    }
+    response
+}
+
+/// lease id + secret → 접근 정보. 실패는 원인 구분 없이 403 —
+/// lease 존재 여부를 노출하지 않는다 (presigned 서명 불일치의 등가).
+async fn authorize(
+    state: &AppState,
+    lease_id: Uuid,
+    secret: &str,
+    expected_kind: &str,
+) -> Result<ByteLease, ApiError> {
+    let hash = grove_core::client_key_hash(secret);
+    match files::byte_lease(&state.pool, lease_id, &hash).await? {
+        Some(lease) if lease.lease_kind == expected_kind => Ok(lease),
+        _ => Err(status(StatusCode::FORBIDDEN, "invalid or expired lease")),
+    }
+}

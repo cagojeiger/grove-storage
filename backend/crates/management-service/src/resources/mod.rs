@@ -7,8 +7,8 @@ mod storage;
 mod writes;
 
 use crate::{Error, Proof, audit_context, logging};
-use filegate_core::Crypto;
-use filegate_db::{
+use grove_core::Crypto;
+use grove_db::{
     PgPool,
     management::{AuditContext, IdentityTransaction},
     registry::StorageRow,

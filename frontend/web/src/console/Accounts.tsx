@@ -19,7 +19,7 @@ import {
 } from "../api/identity";
 import { type Session } from "../api/http";
 import { cspNonce } from "../app/csp";
-import { isAccountPage, useAccountList } from "../features/access/accountList";
+import { isAccountPage, useAccountList } from "../features/accounts/accountList";
 import { activityLink } from "../features/activity/filters";
 import { clearSession } from "../auth/session";
 import {

@@ -1,5 +1,5 @@
 [package]
-name = "filegate-db"
+name = "grove-db"
 version.workspace = true
 edition.workspace = true
 

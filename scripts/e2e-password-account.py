@@ -12,27 +12,13 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
-SERVER = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve() / "debug/filegate"
+SERVER = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve() / "debug/grove-storage"
 
 
-def main():
-    if len(sys.argv) not in (2, 3):
-        raise SystemExit("usage: e2e-password-account.py <container> [account-id]")
-    password = os.environ["GROVE_E2E_PASSWORD"]
-    port = subprocess.check_output(
-        ["docker", "port", sys.argv[1], "5432"], text=True, timeout=10
-    ).strip().rsplit(":", 1)[1]
-    env = dict(os.environ)
-    env["FILEGATE_DATABASE_URL"] = f"postgres://filegate:filegate@127.0.0.1:{port}/filegate"
-    command = (["recover", sys.argv[2], os.environ.get("GROVE_E2E_USERNAME", "owner"), "--yes"] if len(sys.argv) == 3 else
-               ["init", "owner", os.environ.get("GROVE_E2E_DISPLAY_NAME", "Fixture owner")])
+def run_tty(command, password, env=None):
     pid, terminal = pty.fork()
     if pid == 0:
-        os.execve(
-            SERVER,
-            [str(SERVER), "account", *command],
-            env,
-        )
+        os.execvpe(command[0], command, os.environ if env is None else env)
     output = bytearray()
     prompts = [b"New password: ", b"Confirm password: "]
     deadline = time.monotonic() + 30
@@ -62,6 +48,21 @@ def main():
     if status != 0 or prompts:
         raise RuntimeError("local account command failed")
     result = json.loads(output.decode().splitlines()[-1])
+    return result
+
+
+def main():
+    if len(sys.argv) not in (2, 3):
+        raise SystemExit("usage: e2e-password-account.py <container> [account-id]")
+    password = os.environ["GROVE_E2E_PASSWORD"]
+    port = subprocess.check_output(
+        ["docker", "port", sys.argv[1], "5432"], text=True, timeout=10
+    ).strip().rsplit(":", 1)[1]
+    env = dict(os.environ)
+    env["GROVE_DATABASE_URL"] = f"postgres://grove:grove@127.0.0.1:{port}/grove"
+    command = (["recover", sys.argv[2], os.environ.get("GROVE_E2E_USERNAME", "owner"), "--yes"] if len(sys.argv) == 3 else
+               ["init", "owner", os.environ.get("GROVE_E2E_DISPLAY_NAME", "Fixture owner")])
+    result = run_tty([str(SERVER), "account", *command], password, env)
     if len(sys.argv) == 3 and result["account_id"] != sys.argv[2]:
         raise RuntimeError("local recovery changed the account identity")
     print(json.dumps(result))

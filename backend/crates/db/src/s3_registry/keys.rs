@@ -9,7 +9,7 @@ pub async fn get_key(
     client_id: &str,
     key: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
-    sqlx::query_scalar("SELECT file_id FROM s3_keys WHERE client_id = $1 AND key = $2")
+    sqlx::query_scalar("SELECT file_id FROM s3_object_keys WHERE client_id = $1 AND key = $2")
         .bind(client_id)
         .bind(key)
         .fetch_optional(pool)
@@ -47,7 +47,7 @@ pub(super) async fn upsert_key_in_tx(
     }
 
     let old: Uuid = sqlx::query_scalar(
-        "SELECT file_id FROM s3_keys \
+        "SELECT file_id FROM s3_object_keys \
          WHERE client_id = $1 AND key = $2 FOR UPDATE",
     )
     .bind(client_id)
@@ -55,7 +55,7 @@ pub(super) async fn upsert_key_in_tx(
     .fetch_one(&mut **tx)
     .await?;
     sqlx::query(
-        "UPDATE s3_keys SET file_id = $3, updated_at = grove_time.transaction_now() \
+        "UPDATE s3_object_keys SET file_id = $3, updated_at = grove_time.transaction_now() \
          WHERE client_id = $1 AND key = $2",
     )
     .bind(client_id)
@@ -77,7 +77,7 @@ pub(super) async fn insert_key_in_tx(
     file_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let inserted = sqlx::query(
-        "INSERT INTO s3_keys (client_id, key, file_id) VALUES ($1, $2, $3) \
+        "INSERT INTO s3_object_keys (client_id, key, file_id) VALUES ($1, $2, $3) \
          ON CONFLICT (client_id, key) DO NOTHING",
     )
     .bind(client_id)
@@ -98,7 +98,7 @@ pub async fn delete_key(
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let removed: Option<Uuid> = sqlx::query_scalar(
-        "DELETE FROM s3_keys WHERE client_id = $1 AND key = $2 \
+        "DELETE FROM s3_object_keys WHERE client_id = $1 AND key = $2 \
          RETURNING file_id",
     )
     .bind(client_id)

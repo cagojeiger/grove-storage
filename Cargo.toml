@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 
 [workspace.dependencies]
@@ -26,15 +26,15 @@ grove-management-policy = { path = "backend/crates/management-policy" }
 grove-s3-protocol = { path = "backend/crates/s3-protocol" }
 grove-object-service = { path = "backend/crates/object-service" }
 grove-object-policy = { path = "backend/crates/object-policy" }
-filegate-core = { path = "backend/crates/core" }
-filegate-db = { path = "backend/crates/db" }
-filegate-infra = { path = "backend/crates/infra" }
+grove-core = { path = "backend/crates/core" }
+grove-db = { path = "backend/crates/db" }
+grove-infra = { path = "backend/crates/infra" }
 grove-storage-provider = { path = "backend/crates/storage-provider" }
 
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
 axum = { version = "0.8" }
-tower-http = { version = "0.6", features = ["trace", "request-id", "limit", "timeout", "cors"] }
+tower-http = { version = "0.6", features = ["trace", "request-id", "limit", "timeout", "cors", "fs"] }
 sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",
     "tls-rustls",

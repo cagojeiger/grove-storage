@@ -3,7 +3,7 @@
 #[path = "support/s3_single.rs"]
 mod support;
 
-use filegate_db::s3_registry as s3;
+use grove_db::s3_registry as s3;
 use sqlx::PgPool;
 use support::{claim_single, create_s3_upload, create_s3_upload_with_condition, file_state, wire};
 

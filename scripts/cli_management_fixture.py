@@ -15,7 +15,7 @@ IDENTITY = "/api/admin/identity/v1"
 
 def initialize_owner(database):
     password = "fixture-" + secrets.token_urlsafe(32)
-    env = {k: v for k, v in os.environ.items() if not k.startswith("FILEGATE_")}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GROVE_")}
     owner = json.loads(subprocess.check_output(
         [sys.executable, "scripts/e2e-password-account.py", database],
         cwd=Path(__file__).resolve().parent.parent,

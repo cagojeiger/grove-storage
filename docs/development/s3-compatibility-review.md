@@ -50,7 +50,7 @@ NoteGate REST/MCP handlers + Rust AWS SDK
 ```
 
 ```sh
-cargo build --bin filegate --bin gscli --locked
+cargo build --bin grove-storage --bin gscli --locked
 python3 -B -u scripts/e2e-notegate.py --notegate-dir ../notegate
 ```
 
@@ -63,7 +63,7 @@ python3 -B -u scripts/e2e-notegate.py --notegate-dir ../notegate
 | 소스 | 실행한 NoteGate revision·작업 중 diff hash 출력; NoteGate 소스 변경 없음 |
 | 검증 경계 | NoteGate 핸들러는 테스트 프로세스 내 실행. OIDC 로그인·브라우저 UI·운영 Ingress/TLS 검증은 별도 |
 
-배포 환경은 `FILEGATE_S3_CORS_ALLOWED_ORIGINS`에 실제 NoteGate 브라우저 origin을 설정한다.
+배포 환경은 `GROVE_S3_CORS_ALLOWED_ORIGINS`에 실제 NoteGate 브라우저 origin을 설정한다.
 
 ### CI 소비자 계약
 
@@ -163,7 +163,7 @@ percent encoding의 모든 동등 표현까지 AWS와 같다고 판단하는 근
 
 ```sh
 cargo test -p grove-s3-protocol --locked
-cargo build --bin filegate --bin gscli --locked
+cargo build --bin grove-storage --bin gscli --locked
 python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio

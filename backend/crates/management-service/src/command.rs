@@ -1,4 +1,4 @@
-use filegate_db::management::{
+use grove_db::management::{
     AccountChange, NewAccount, NewCredential,
     history::HistoryQuery,
     queries::{AccountQuery, Page},
@@ -16,7 +16,7 @@ pub enum Command<'a> {
     IssueCredential {
         account: Uuid,
         key: NewCredential<'a>,
-        current_password: filegate_core::SecretString,
+        current_password: grove_core::SecretString,
     },
     RevokeCredential(Uuid),
     RevokeOwnSession(Uuid),

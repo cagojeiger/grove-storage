@@ -13,7 +13,7 @@ import {
   parseMetadata,
   type ResourceMetadata,
 } from "../features/metadata/model";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 import { FormDialog, QueryState } from "./ui";
 
 export function Metadata({

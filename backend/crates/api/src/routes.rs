@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
-use filegate_db::PgPool;
+use grove_db::PgPool;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::timeout::TimeoutLayer;
@@ -25,24 +25,24 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// 단일 리스너의 최상위 제어 경로 세그먼트다. client id(= S3 버킷, 루트
 /// path-style)가 이 중 하나와 같으면 제어 라우트를 가리므로 예약된다
 /// (admin::clients가 client id로 거부한다).
-pub(crate) const RESERVED_TOP_LEVEL: &[&str] = filegate_db::registry::RESERVED_CLIENT_IDS;
+pub(crate) const RESERVED_TOP_LEVEL: &[&str] = grove_db::registry::RESERVED_CLIENT_IDS;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub clock: Arc<dyn filegate_core::time::Clock>,
+    pub clock: Arc<dyn grove_core::time::Clock>,
     pub pool: PgPool,
-    pub security: filegate_core::SecurityConfig,
-    pub crypto: Arc<filegate_core::Crypto>,
-    /// 중계 바이트 URL의 공개 베이스 (FILEGATE_PUBLIC_URL). 중계 storage
+    pub crypto: Arc<grove_core::Crypto>,
+    /// 중계 바이트 URL의 공개 베이스 (GROVE_PUBLIC_URL). 중계 storage
     /// 등록·발급이 요구한다 — 없으면 등록이 400으로 거부된다.
     pub public_url: Option<String>,
     pub console_origin: Option<String>,
+    pub console_web: Option<crate::console_web::ConsoleWeb>,
     /// 이 선언 크기를 넘으면 create가 multipart를 발급한다 (spec 02).
     pub multipart_threshold: i64,
     /// multipart part 크기 — create 시점 값이 업로드별로 동결된다 (spec 02).
     pub part_size: i64,
     /// storage당 S3 클라이언트 재사용 — 커넥션 풀을 웜 상태로 유지한다.
-    pub s3_clients: Arc<filegate_infra::S3ClientCache>,
+    pub s3_clients: Arc<grove_infra::S3ClientCache>,
     /// Bound the DB connections held by Native single-upload relay claims.
     pub single_upload_claims: Arc<tokio::sync::Semaphore>,
     /// S3 중계 스풀 동시성 상한 — 공유 임시 볼륨(temp_dir)을 채우는 자원
@@ -69,6 +69,7 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
         .route("/", get(root))
         .merge(system_routes())
         .merge(management::routes(state.clone()))
+        .merge(crate::console_web::routes(&state))
         .merge(objects::control(state.clone()))
         .layer(RequestBodyLimitLayer::new(CONTROL_BODY_LIMIT))
         .layer(TimeoutLayer::with_status_code(
@@ -79,10 +80,19 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     // 컨트롤 표면과 한 리스너를 공유하되, control의 본문 상한·타임아웃(스트리밍
     // 업로드를 자른다)은 피한다. api·blobs·probes 이름의 버킷은 예약된다
     // (admin::clients가 client id로 거부한다).
+    let boundary = state.console_web.as_ref().and(state.console_origin.clone());
     let app = Router::new()
         .merge(control)
         .merge(objects::streaming(s3_cors_allowed_origins))
         .with_state(state);
+    let app = if let Some(origin) = boundary {
+        app.layer(axum::middleware::from_fn_with_state(
+            origin,
+            crate::console_web::host_boundary,
+        ))
+    } else {
+        app
+    };
     with_telemetry(app)
 }
 
@@ -114,7 +124,7 @@ pub(crate) fn is_system_path(path: &str) -> bool {
 
 async fn root() -> impl IntoResponse {
     Json(serde_json::json!({
-        "name": "filegate",
+        "name": "grove-storage",
         "version": env!("CARGO_PKG_VERSION"),
     }))
 }
@@ -126,7 +136,7 @@ async fn health() -> impl IntoResponse {
 
 /// Readiness: DB에 닿을 수 있어야 트래픽을 받는다 (k8s readinessProbe).
 async fn ready(State(state): State<AppState>) -> impl IntoResponse {
-    match filegate_db::ping(&state.pool).await {
+    match grove_db::ping(&state.pool).await {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({ "status": "ready" })),

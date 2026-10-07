@@ -9,14 +9,14 @@ mod failures;
 mod lifecycle;
 mod support;
 
-use filegate_db::{PgPool, management as db, registry, registry::StorageRow};
+use grove_db::{PgPool, management as db, registry, registry::StorageRow};
 use grove_management_command::{Command, ErrorCode, Outcome, Output, input, model::StorageKind};
 use grove_management_policy::{Role, Surface};
 use grove_management_service::{Error, Proof, resources};
 use support::*;
 
-fn crypto() -> filegate_core::Crypto {
-    filegate_core::Crypto::new("test", &"storage-test-root-at-least-32-bytes".into()).unwrap()
+fn crypto() -> grove_core::Crypto {
+    grove_core::Crypto::new("test", &"storage-test-root-at-least-32-bytes".into()).unwrap()
 }
 fn submission(id: &str, root: &str, capacity: i64) -> input::StorageInput {
     input::StorageInput {

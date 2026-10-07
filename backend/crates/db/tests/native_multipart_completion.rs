@@ -2,8 +2,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use filegate_db::files::{self, CompletionStart, CreateOutcome, CreateSpec, CreatedFile};
-use filegate_db::registry::{self, StorageRow};
+use grove_db::files::{self, CompletionStart, CreateOutcome, CreateSpec, CreatedFile};
+use grove_db::registry::{self, StorageRow};
 use sqlx::PgPool;
 
 #[path = "native_multipart_completion/mod.rs"]

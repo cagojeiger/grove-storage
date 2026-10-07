@@ -47,6 +47,27 @@ jobs:
         run: |
           docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
             "grove-security:$GITHUB_SHA" --help
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: frontend/web/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+      - name: Test packaged console and API with a fresh database
+        run: |
+          npm --prefix frontend/web ci
+          cd frontend/web && npx playwright install --with-deps chromium && cd ../..
+          python3 -m venv /tmp/grove-image-sdk
+          /tmp/grove-image-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-image-sdk/bin/python -B scripts/e2e-image.py "grove-security:$GITHUB_SHA" \
+            --report-dir "reports/trivy-ci-${{ matrix.architecture }}/runtime"
+      - name: Preserve CI runtime evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-runtime-ci-${{ matrix.architecture }}
+          path: reports/trivy-ci-${{ matrix.architecture }}/runtime/
+          retention-days: 30
+          if-no-files-found: error
       - uses: ./.github/actions/image-security
         with:
           image: grove-security:${{ github.sha }}
@@ -115,20 +136,20 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: filegate
-          POSTGRES_PASSWORD: filegate
-          POSTGRES_DB: filegate
+          POSTGRES_USER: grove
+          POSTGRES_PASSWORD: grove
+          POSTGRES_DB: grove
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U filegate -d filegate"
+          --health-cmd "pg_isready -h 127.0.0.1 -U grove -d grove"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
     env:
-      FILEGATE_DATABASE_URL: postgres://filegate:filegate@localhost:5432/filegate
-      # sqlx 표준 변수 — 마이그레이션 실행 테스트(db/tests/migrations.rs)가 읽는다
-      DATABASE_URL: postgres://filegate:filegate@localhost:5432/filegate
+      GROVE_DATABASE_URL: postgres://grove:grove@localhost:5432/grove
+      # SQLx 테스트는 격리 DB에서 현재 baseline을 검증한다.
+      DATABASE_URL: postgres://grove:grove@localhost:5432/grove
 
     steps:
       - name: Checkout
@@ -148,7 +169,7 @@ jobs:
 
       - name: CLI API contract
         run: |
-          cargo build --bin filegate --bin gscli --locked
+          cargo build --bin grove-storage --bin gscli --locked
           python3 -m venv /tmp/grove-s3-sdk
           /tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-cli.py
@@ -181,7 +202,7 @@ jobs:
       - name: Swagger UI with Rust-generated public contracts
         working-directory: frontend/web
         run: |
-          ../../target/debug/filegate openapi > /tmp/grove-openapi.json
+          ../../target/debug/grove-storage openapi > /tmp/grove-openapi.json
           npm run build
           GROVE_TEST_OPENAPI=/tmp/grove-openapi.json npx playwright test tests/api-docs.spec.ts
 
@@ -213,7 +234,7 @@ jobs:
             .compat/notegate -> target
 
       - name: Build Grove
-        run: cargo build --bin filegate --bin gscli --locked
+        run: cargo build --bin grove-storage --bin gscli --locked
 
       - name: Build NoteGate upload contracts
         working-directory: .compat/notegate
@@ -226,8 +247,8 @@ jobs:
           /tmp/grove-notegate-sdk/bin/pip install boto3==1.43.99
           /tmp/grove-notegate-sdk/bin/python -B -u scripts/e2e-notegate.py --notegate-dir .compat/notegate
 
-  migration:
-    name: Offline FileGate migration rehearsal
+  installation:
+    name: Fresh installation and backup restore
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -238,34 +259,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout released FileGate v0.4.1
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: cagojeiger/filegate
-          ref: af685807e5561885616e00918f0207e25188fb3a
-          path: .compat/filegate
-          persist-credentials: false
-
-      - name: Cache both Rust workspaces
+      - name: Cache Rust workspace
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          workspaces: |
-            . -> target
-            .compat/filegate -> target
+          workspaces: . -> target
 
       - name: Build Grove
-        run: cargo build --bin filegate --locked
+        run: cargo build --bin grove-storage --locked
 
-      - name: Build released FileGate
-        working-directory: .compat/filegate
-        run: cargo build --bin filegate --locked
-
-      - name: Rehearse stopped-writer upgrade and backup restore
+      - name: Verify fresh installation and backup restore
         run: |
-          python3 -m venv /tmp/grove-migration-sdk
-          /tmp/grove-migration-sdk/bin/pip install boto3==1.43.99
-          /tmp/grove-migration-sdk/bin/python -B -m unittest discover -s scripts/tests -v
-          /tmp/grove-migration-sdk/bin/python -B -u scripts/e2e-migration.py --filegate-dir .compat/filegate
+          python3 -m venv /tmp/grove-installation-sdk
+          /tmp/grove-installation-sdk/bin/pip install boto3==1.43.99
+          /tmp/grove-installation-sdk/bin/python -B -m unittest discover -s scripts/tests -v
+          /tmp/grove-installation-sdk/bin/python -B -u scripts/e2e-installation.py
 
   audit:
     name: Audit

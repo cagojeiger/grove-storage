@@ -67,7 +67,7 @@ async fn queued_mutation_rechecks_revocation_and_user_demotion(pool: PgPool) {
         wait_for_identity_lock(&pool).await;
         if revoke {
             sqlx::query(
-                "UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE id=$1",
+                "UPDATE management.api_tokens SET revoked_at=clock_timestamp() WHERE id=$1",
             )
             .bind(issued.id)
             .execute(&mut *fence)

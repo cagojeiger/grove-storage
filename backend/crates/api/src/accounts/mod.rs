@@ -1,0 +1,96 @@
+//! Console identity surface, separate from Client and Resource token authentication.
+mod admin;
+mod api_tokens;
+mod browser;
+mod history;
+mod inputs;
+mod output;
+mod password;
+mod password_setup;
+mod personal_tokens;
+mod profile;
+pub(crate) mod resources;
+pub(crate) mod secrets;
+mod session;
+
+use axum::{
+    Json, Router,
+    http::{StatusCode, header},
+    middleware,
+    response::{IntoResponse, Response},
+    routing::{delete, get, post},
+};
+use grove_management_service::Error;
+use uuid::Uuid;
+
+use crate::routes::AppState;
+
+pub fn routes(state: AppState) -> Router<AppState> {
+    Router::new()
+        .route(
+            "/session",
+            post(session::login)
+                .get(session::current)
+                .delete(session::logout),
+        )
+        .route("/accounts", get(admin::list).post(admin::create))
+        .route(
+            "/accounts/{id}",
+            get(admin::get).patch(admin::change).delete(admin::remove),
+        )
+        .route(
+            "/accounts/{id}/credentials",
+            get(api_tokens::list).post(api_tokens::issue),
+        )
+        .route("/credentials/{id}", delete(api_tokens::revoke))
+        .route("/me/password", post(password::change))
+        .route("/me", get(profile::get).patch(profile::rename))
+        .route("/me/sessions", get(history::sessions))
+        .route("/me/sessions/{id}", delete(history::revoke_session))
+        .route(
+            "/me/tokens",
+            get(personal_tokens::list).post(personal_tokens::issue),
+        )
+        .route("/me/tokens/{id}", delete(personal_tokens::revoke))
+        .route("/accounts/{id}/password-setup", post(password_setup::issue))
+        .route("/password-setup/inspect", post(password_setup::inspect))
+        .route("/password-setup", post(password_setup::complete))
+        .route("/history/audit", get(history::audit))
+        .route("/history/invocations", get(history::invocations))
+        .route("/history/security", get(history::security))
+        .layer(middleware::from_fn_with_state(state, browser::guard))
+}
+
+fn failure(error: Error, request_id: Uuid) -> Response {
+    let status = match error {
+        Error::Unauthenticated => StatusCode::UNAUTHORIZED,
+        Error::Forbidden => StatusCode::FORBIDDEN,
+        Error::NotFound => StatusCode::NOT_FOUND,
+        Error::Conflict => StatusCode::CONFLICT,
+        Error::InvalidInput | Error::RequestRejected => StatusCode::BAD_REQUEST,
+        Error::Unavailable | Error::OutcomeUnknown => StatusCode::SERVICE_UNAVAILABLE,
+        Error::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+    };
+    let mut response = (
+        status,
+        Json(serde_json::json!({"error": error.code(), "request_id": request_id})),
+    )
+        .into_response();
+    if error == Error::RateLimited {
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            axum::http::HeaderValue::from_static("60"),
+        );
+    }
+    identified(response, request_id)
+}
+
+fn identified(mut response: Response, id: Uuid) -> Response {
+    if let Ok(value) = id.to_string().parse() {
+        response.headers_mut().insert("x-request-id", value);
+    }
+    response
+}
+
+#[cfg(test)]
+mod tests;

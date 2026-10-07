@@ -7,10 +7,10 @@
 ## 책임 경계
 
 ```text
-gscli → POST /api/admin/commands/v1 → 현재 User 권한
+gscli → POST /api/admin/commands/v1 → 현재 Account 권한
                                     → 등록부 변경 + 감사 transaction
                                     → PostgreSQL / backend 접근 검사
-filegate status → 로컬 DB·복호 키·저장소 probe
+grove-storage status → 로컬 DB·복호 키·저장소 probe
 ```
 
 | 구성 | 책임 |
@@ -18,11 +18,11 @@ filegate status → 로컬 DB·복호 키·저장소 probe
 | CLI | 인자·설정·파일·확인·HTTP·공개 출력·종료 코드 |
 | 공통 명령 계약 | 이름·입출력 DTO·schema·권한 매핑·오류 코드·변경 결과 |
 | 서버 실행기 | 현재 role/owner 확인·참조 제약·키 발급·DB 변경·감사 |
-| 로컬 진단 | `filegate status`: migration 없이 DB·등록 저장소 접근 확인 |
+| 로컬 진단 | `grove-storage status`: migration 없이 DB·등록 저장소 접근 확인 |
 | 배포 | GitOps·Vault가 프로세스와 비밀 공급; CLI는 DB·서버 복호 키 없이 실행 |
 
 등록부 정본은 PostgreSQL이다. 조회 결과는 비밀 없는 inventory이며 백업 파일이 아니다.
-기존 서버의 REST·바이너리·환경변수·데이터 API는 유지한다. 이 CLI는 공통 API와 `gsm_`
+서버 실행 파일은 `grove-storage`다. 기존 REST·환경변수·데이터 API는 유지한다. 이 CLI는 공통 API와 `gsm_`
 토큰이 있는 서버를 대상으로 하며 이전 REST로 자동 fallback하지 않는다. 운영 인증 전환
 전의 서버는 기존 CLI 바이너리를 사용한다. 패키지 버전과 command protocol은 별개다.
 
@@ -31,10 +31,10 @@ filegate status → 로컬 DB·복호 키·저장소 probe
 | CLI | MCP |
 |---|---|
 | 24개 → 공통 schema·명령명·권한·결과 | 같은 24개 tool·실행기, 실제 HTTP/CLI 결과 대조 |
-| User 토큰 → 서버가 현재 권한 판정 | 같은 토큰·현재 권한; [전송·비밀 전달 차이](10-management-mcp.md) |
+| Account 토큰 → 서버가 현재 권한 판정 | 같은 토큰·현재 권한; [전송·비밀 전달 차이](10-management-mcp.md) |
 | HTTP 호출의 서버 surface는 `resource_api` | MCP 진입점은 서버가 `mcp`로 기록 |
 
-User·role·관리 토큰·관리 이력은 콘솔 세션 API 소유다. `credential`·`client-key`는
+Account·role·관리 토큰·관리 이력은 콘솔 세션 API 소유다. `credential`·`client-key`는
 Client의 서비스 키를 다룬다. CLI의 User-Agent는 신원이나 `surface=cli`의 증거가 아니다.
 
 ## 명령 구조
@@ -87,7 +87,7 @@ gscli
 | 명령 | 확인 범위 | 출력 |
 |---|---|---|
 | `gscli status` | 공통 `status` 한 번: 서버의 신원·DB·등록부 관찰 | Status DTO·등록 Storage/Client 수 |
-| `filegate status` | 기존 로컬 설정·DB·등록 저장소 접근 검사 | 서버 진단 결과 |
+| `grove-storage status` | 기존 로컬 설정·DB·등록 저장소 접근 검사 | 서버 진단 결과 |
 
 CLI의 이전 `/`, `/healthz`, `/readyz`, `/usage`, `/clients` 5회 호출은 공통 명령으로
 전환했다. 응답 실패 시 개별 HTTP 상태를 추정한 부분 결과 대신 명령 오류를 반환한다.
@@ -104,7 +104,7 @@ CLI의 이전 `/`, `/healthz`, `/readyz`, `/usage`, `/clients` 5회 호출은 �
 |---|---|
 | endpoint | `--endpoint` > `GROVE_ENDPOINT` |
 | 관리 토큰 | `--token-file PATH` > `GROVE_TOKEN` |
-| 토큰 종류 | `gsm_` + 소문자 hex 64자, User; 기존 운영자/master/서비스 키는 로컬에서 거부 |
+| 토큰 종류 | `gsm_` + 소문자 hex 64자, Account; 기존 운영자/master/서비스 키는 로컬에서 거부 |
 | 우선순위 | 우선 설정 값이 비어 있거나 잘못됐으면 오류; 하위 값으로 재시도하지 않음 |
 | 파일 | regular file·최대 8 KiB 읽기, 말미 LF/CRLF 한 개 허용 |
 | origin | HTTPS, 또는 literal loopback HTTP; userinfo·query·fragment·하위 path 제외 |
@@ -113,9 +113,9 @@ CLI의 이전 `/`, `/healthz`, `/readyz`, `/usage`, `/clients` 5회 호출은 �
 | 응답 크기 | 최대 8 MiB |
 | 로컬 설정 | cwd `.env` 자동 로딩·토큰 원문 인자 없이 명시적 환경변수/파일 사용 |
 
-최초 Admin은 서버의 `filegate account init`으로 만든다. 비밀번호로 콘솔에 로그인한 뒤
+최초 Admin은 서버의 `grove-storage account init`으로 만든다. 비밀번호로 콘솔에 로그인한 뒤
 Accounts 또는 My account에서 관리 토큰을 발급한다. [현행 인증 계약](11-local-management-auth.md).
-API 앞단 proxy는 이 Bearer 경로와 콘솔 OAuth 인증 경계를 분리한다.
+API 앞단 proxy는 이 Bearer 경로와 콘솔 비밀번호·세션 인증 경계를 분리한다.
 연결 profile·OS 키체인은 후속이다. `serve`의 기존 환경변수와 `.env` 로딩은 유지한다.
 
 ## 출력과 종료

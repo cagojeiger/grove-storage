@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use filegate_core::{Crypto, EncryptedSecret, ExposeSecret, SecretString};
+use grove_core::{Crypto, EncryptedSecret, ExposeSecret, SecretString};
 use grove_management_service::resources::PreparedCredential;
 
 fn root() -> SecretString {

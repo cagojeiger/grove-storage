@@ -32,7 +32,7 @@ Clients                      Native / S3 service credentials
 |---|---|
 | `GROVE_ROOT_TOKEN` | `gsrt_` followed by 64 lowercase hex digits |
 | `GROVE_ROOT_GENERATION` | Positive integer, increased on token rotation |
-| Legacy compatibility | Existing `FILEGATE_MASTER_TOKEN` / `FILEGATE_MASTER_GENERATION`, token prefixes, hash domains and setup endpoints remain supported |
+| Legacy compatibility | Existing `GROVE_MASTER_TOKEN` / `GROVE_MASTER_GENERATION`, token prefixes, hash domains and setup endpoints remain supported |
 | Ambiguity | Configure one environment-variable pair; mixed pairs fail startup |
 
 Migration `0014_root_sessions.sql` adds only the separate Root session table.

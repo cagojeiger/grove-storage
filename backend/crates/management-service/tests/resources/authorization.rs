@@ -21,10 +21,14 @@ async fn named_tokens_share_user_role_but_keep_separate_history_and_revocation(p
         )
         .await;
         assert!(result.result.is_ok());
-        let event: (uuid::Uuid, uuid::Uuid, Option<uuid::Uuid>) = sqlx::query_as(
-            "SELECT actor_id,credential_id,owner_user_id FROM management.command_invocations WHERE request_id=$1")
-            .bind(result.request_id).fetch_one(&pool).await.unwrap();
-        assert_eq!(event, (user, credential.id, None));
+        let event: (uuid::Uuid, uuid::Uuid) = sqlx::query_as(
+            "SELECT actor_id,credential_id FROM management.command_invocations WHERE request_id=$1",
+        )
+        .bind(result.request_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(event, (user, credential.id));
         credentials.push(credential.id);
     }
     assert_ne!(*credentials.first().unwrap(), *credentials.get(1).unwrap());

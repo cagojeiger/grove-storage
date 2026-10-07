@@ -135,7 +135,7 @@ async fn spool_to_temp_with_idle_timeout(
 }
 
 async fn abort_spool(temp_path: &Path) {
-    filegate_infra::temp_spool::abort_write(temp_path).await;
+    grove_infra::temp_spool::abort_write(temp_path).await;
 }
 
 #[cfg(test)]

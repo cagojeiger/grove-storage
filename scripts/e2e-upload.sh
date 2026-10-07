@@ -9,8 +9,8 @@ BASE=http://127.0.0.1:8080
 RAW_KEY="fg_local-dev-notegate-key-0123456789abcdef"   # deploy/local/main.tf의 로컬 키
 AUTH="Authorization: Bearer $RAW_KEY"
 JSON="Content-Type: application/json"
-PG_CONTAINER="${FILEGATE_PG_CONTAINER:-filegate-postgres-1}"
-PSQL="docker exec $PG_CONTAINER psql -U filegate -d filegate -qtc"
+PG_CONTAINER="${GROVE_PG_CONTAINER:-grove-postgres-1}"
+PSQL="docker exec $PG_CONTAINER psql -U grove -d grove -qtc"
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); }
 bad() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
@@ -26,7 +26,7 @@ $PSQL "DELETE FROM leases;" >/dev/null 2>&1
 $PSQL "DELETE FROM locations;" >/dev/null 2>&1
 $PSQL "DELETE FROM files;" >/dev/null 2>&1
 
-PAYLOAD="hello filegate upload loop"
+PAYLOAD="hello grove upload loop"
 SIZE=$(printf '%s' "$PAYLOAD" | wc -c | tr -d ' ')
 MD5=$(printf '%s' "$PAYLOAD" | md5 -q 2>/dev/null || printf '%s' "$PAYLOAD" | md5sum | cut -d' ' -f1)
 
@@ -113,7 +113,7 @@ expect_any "purge 대기 회계(대기중|정리됨)" "$SIZE 0" "$($PSQL "SELECT
 echo "=== reconciler: 만료 회수 + purge (tick 대기) ==="
 # pending 파일(F2)의 쓰기 lease를 강제 만료시킨다 (테스트 전용)
 $PSQL "UPDATE leases SET expires_at = now() - interval '1 second' WHERE file_id='$F2' AND kind='write';" >/dev/null
-sleep 7   # FILEGATE_RECONCILER_INTERVAL_SECS=2 기준 tick 3회 이상
+sleep 7   # GROVE_RECONCILER_INTERVAL_SECS=2 기준 tick 3회 이상
 expect "pending → reclaimed" "reclaimed" "$($PSQL "SELECT state FROM files WHERE id='$F2';" | tr -d ' ')"
 expect "회수된 파일 stat 404 (내부 상태 비노출)" 404 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" $BASE/api/v1/files/$F2)"
 expect "회수된 파일 delete 404 (일관성)" 404 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" -X DELETE $BASE/api/v1/files/$F2)"

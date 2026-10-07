@@ -29,7 +29,7 @@ def check(endpoint, directory, database, account, backend):
             return json.loads(payload) if payload else None
 
     def sql(query):
-        return HARNESS["docker"]("exec", database, "psql", "-U", "filegate", "-d", "filegate",
+        return HARNESS["docker"]("exec", database, "psql", "-U", "grove", "-d", "grove",
                                 "-v", "ON_ERROR_STOP=1", "-Atc", query)
 
     def put(url, body):

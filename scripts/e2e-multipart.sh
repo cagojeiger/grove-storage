@@ -5,17 +5,17 @@
 #   미완성 회수(벤더 Abort), purge 후 소멸.
 #
 # 전제: 서버가 작은 multipart 설정으로 실행 중이어야 한다:
-#   FILEGATE_MULTIPART_THRESHOLD_BYTES=6291456 (6MiB)
-#   FILEGATE_PART_SIZE_BYTES=5242880 (5MiB)
-#   (+ FILEGATE_PUBLIC_URL, 짧은 reconciler tick)
+#   GROVE_MULTIPART_THRESHOLD_BYTES=6291456 (6MiB)
+#   GROVE_PART_SIZE_BYTES=5242880 (5MiB)
+#   (+ GROVE_PUBLIC_URL, 짧은 reconciler tick)
 #   Register minio-local/minio-relay and their client keys first.
 # 12MiB 파일 → part 3개 (5MiB, 5MiB, 2MiB). 사용: sh scripts/e2e-multipart.sh
 BASE=http://127.0.0.1:8080
 AUTH_DIRECT="Authorization: Bearer fg_local-dev-notegate-key-0123456789abcdef"
 AUTH_RELAY="Authorization: Bearer fg_local-dev-notegate-relay-key-0123456789abcdef"
 JSON="Content-Type: application/json"
-PG_CONTAINER="${FILEGATE_PG_CONTAINER:-filegate-postgres-1}"
-PSQL="docker exec $PG_CONTAINER psql -U filegate -d filegate -qtc"
+PG_CONTAINER="${GROVE_PG_CONTAINER:-grove-postgres-1}"
+PSQL="docker exec $PG_CONTAINER psql -U grove -d grove -qtc"
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); }
 bad() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
@@ -125,7 +125,7 @@ sleep 6
 expect "미완성 파일 reclaimed" "reclaimed" "$($PSQL "SELECT state FROM files WHERE id='$FIDX';" | tr -d ' ')"
 # 벤더에 미완성 multipart 세션이 남지 않았는지 (mc ls --incomplete)
 INCOMPLETE=$(docker run --rm --network host --entrypoint sh minio/mc:RELEASE.2025-08-13T08-35-41Z -c \
-  "mc alias set m http://127.0.0.1:9000 filegate filegate-secret >/dev/null 2>&1 && mc ls --incomplete --recursive m/filegate-std 2>/dev/null | wc -l" | tr -d ' ')
+  "mc alias set m http://127.0.0.1:9000 grove grove-secret >/dev/null 2>&1 && mc ls --incomplete --recursive m/grove-std 2>/dev/null | wc -l" | tr -d ' ')
 expect "벤더 미완성 세션 0 (Abort 확인)" 0 "$INCOMPLETE"
 
 echo "=== S3 direct/relay delete -> purge -> usage 0 ==="

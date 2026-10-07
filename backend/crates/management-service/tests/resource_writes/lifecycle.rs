@@ -1,5 +1,5 @@
 use super::*;
-use filegate_core::{EncryptedSecret, ExposeSecret};
+use grove_core::{EncryptedSecret, ExposeSecret};
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) {
@@ -54,7 +54,7 @@ async fn all_six_mutations_work_with_same_results_for_cli_and_mcp(pool: PgPool) 
         let output = issued.result.unwrap();
         assert!(matches!(output, Output::CredentialCreate(_)));
         if let Output::CredentialCreate(key) = output {
-            let saved = filegate_db::s3_registry::get_credential(&pool, &key.access_key_id)
+            let saved = grove_db::s3_registry::get_credential(&pool, &key.access_key_id)
                 .await
                 .unwrap()
                 .unwrap();

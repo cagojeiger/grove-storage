@@ -1,4 +1,4 @@
-use filegate_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db};
 use uuid::Uuid;
 
 use crate::{Error, logging};

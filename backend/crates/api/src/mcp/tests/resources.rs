@@ -102,7 +102,7 @@ async fn user_demotion_limits_writes_and_revocation_stops_discovery(pool: PgPool
     )
     .await
     .unwrap();
-    let token = format!("gsm_{}", filegate_core::generate_url_secret());
+    let token = format!("gsm_{}", grove_core::generate_url_secret());
     db::issue_credential(
         &pool,
         &ctx,
@@ -192,7 +192,7 @@ async fn mcp_rejects_filesystem_storage_commands(pool: PgPool) {
         );
     }
     assert!(
-        filegate_db::registry::list_storages(&pool)
+        grove_db::registry::list_storages(&pool)
             .await
             .unwrap()
             .is_empty()

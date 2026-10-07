@@ -8,7 +8,7 @@ User 관리 토큰(`gsm_`)을 사용한다. 이전 운영자 토큰 전환은 �
 ## 연결
 
 ```sh
-export GROVE_ENDPOINT=https://filegate.example.com
+export GROVE_ENDPOINT=https://api.grove.example.com
 export GROVE_TOKEN="$(cat /path/to/management-token)"
 gscli status
 ```

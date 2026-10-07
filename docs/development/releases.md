@@ -5,26 +5,37 @@
 | 대상 | 계약 |
 |---|---|
 | CLI 패키지·실행 파일 | `gscli` (Grove Storage CLI) |
-| 서버 실행 파일·환경변수 | `filegate`·`FILEGATE_*` 유지 |
+| 서버 실행 파일 | `grove-storage`; 서버 실행·로컬 진단·Account 초기화·복구 |
+| 서버 설정·내부 crate | `GROVE_*`·`grove-*`; `FILEGATE_*` 별칭 없음 |
 | 이미지 | `ghcr.io/cagojeiger/grove-storage` |
 | CLI 연결 | `GROVE_ENDPOINT`, `GROVE_TOKEN`, `--token-file` |
 | 배포 채널 | `cagojeiger/grove-storage` GitHub Releases의 독립 실행 파일 |
 | 패키지 버전 | 서버·CLI가 workspace의 `MAJOR.MINOR.PATCH`를 공유 |
 | 버전 정합성 | `VERSION` = `Cargo.toml` workspace = 내부 패키지 `Cargo.lock` |
-| API 호환성 | `/api/admin/commands/v1` protocol 1과 User 인증 지원 필요; 서버·CLI 버전 숫자의 일치와 별개, 이전 서버에는 이전 CLI 사용 |
+| API 호환성 | `/api/admin/commands/v1` protocol 1과 Account 인증 지원 필요; 서버·CLI 버전 숫자의 일치와 별개, 이전 서버에는 이전 CLI 사용 |
 | JSON 출력 | CLI envelope의 `schema_version: 1`로 별도 관리 |
 | 업데이트 | `gscli update`로 최신 안정 버전 설치; `update --check`는 확인만 수행 |
 | 버전 고정·이전 버전 | 설치 스크립트의 `--version X.Y.Z`로 명시적 재설치 |
 | 자동 업데이트 | 일반 명령은 설치된 버전으로 실행; 업데이트는 명시적 명령에서 수행 |
 
+서버 이미지의 진입점은 `/usr/local/bin/grove-storage`다. `gscli`는 별도 사용자용
+릴리스 자산이고 updater는 그 바이너리 안에 포함된다. 서버의 업데이트는 이미지
+배포가 소유하며 `gscli update`는 서버·콘솔·DB를 변경하지 않는다.
+기존 `filegate` 명령을 직접 지정한 배포·스크립트는 `grove-storage`로 변경한다.
+Native·S3 HTTP 경로와 토큰 형식은 유지한다. 서버 설정과 DB baseline은 새 설치용이다.
+기존 DB에 이 버전을 실행하지 않는다. [새 설치 계약](fresh-installation.md)을 따른다.
+자동 새 버전 알림과 배포물 서명 검증은 현재 updater에 포함되지 않는다.
+현재 updater의 검증 범위는 아래 설치·업데이트 계약을 따른다.
+
 | 릴리스 계열 | 관리 기준 |
 |---|---|
 | `0.3.x` | Terraform provider가 등록부를 관리 |
-| `0.4.x` | `gscli`가 등록부를 관리하며 CLI 전환 기능을 이 계열에서 안정화 |
+| `0.4.x` | FileGate 관리 CLI 전환 |
+| `0.5.x` | Grove 이름·새 DB baseline·Account 전용 관리 인증·콘솔 포함 이미지 |
 
 NoteGate CLI의 workspace 버전·GitHub Release 바이너리 패턴을 따른다.
 첫 배포에 수동 업데이트를 포함한다. 프로필·키체인은 후속 범위다.
-현재 개발 버전은 `v0.4.1`이다. FileGate의 기존 태그·자산과 Grove의 릴리스 채널은
+현재 `VERSION` 값은 `0.5.0`이다. FileGate의 기존 태그·자산과 Grove의 릴리스 채널은
 독립적이다. 아래 설치 명령은 Grove 채널에 해당 버전의 자산이 발행된 뒤 사용한다.
 
 ## 설치

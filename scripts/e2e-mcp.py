@@ -108,7 +108,7 @@ def check_s3(endpoint, directory, backend, account):
     SECRETS.append(issued["secret_key"])
     spec["capacity_bytes"] *= 2
     call("storage.replace", {"id": "mcp-storage", "spec": spec})
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("GROVE_", "FILEGATE_"))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GROVE_",))}
     env.update(GROVE_ENDPOINT=endpoint, GROVE_TOKEN=management.token, NO_PROXY="127.0.0.1")
     SECRETS.append("Resource metadata e2e")
     for resource, resource_id in [("storage", "mcp-storage"), ("client", "mcp-client")]:

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-filegate-core.workspace = true
+grove-core.workspace = true
 aws-smithy-async.workspace = true
 aws-sdk-s3.workspace = true
 aws-smithy-http-client.workspace = true

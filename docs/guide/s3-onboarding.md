@@ -6,7 +6,7 @@
 
 | 항목 | 예 |
 |---|---|
-| endpoint | https://filegate.internal |
+| endpoint | https://api.grove.internal |
 | access key·secret | 운영자 API에서 client에 발급 |
 | bucket | client id |
 | 주소 방식 | path-style |
@@ -20,7 +20,7 @@ from botocore.client import Config
 
 s3 = boto3.client(
     "s3",
-    endpoint_url=FILEGATE_S3_ENDPOINT,
+    endpoint_url=GROVE_S3_ENDPOINT,
     aws_access_key_id=ACCESS_KEY,
     aws_secret_access_key=SECRET_KEY,
     region_name="us-east-1",

@@ -1,5 +1,5 @@
-use filegate_core::SecretString;
-use filegate_db::{
+use grove_core::SecretString;
+use grove_db::{
     PgPool,
     management::{self as db, admission},
 };
@@ -71,12 +71,12 @@ async fn run(
     let new_hash = passwords::hash(&credential.login_name, replacement)
         .await
         .map_err(password_error)?;
-    filegate_db::management::passwords::change(
+    grove_db::management::passwords::change(
         pool,
         request_id,
         session_hash,
         credential.generation,
-        filegate_core::ExposeSecret::expose_secret(&new_hash),
+        grove_core::ExposeSecret::expose_secret(&new_hash),
     )
     .await
     .map_err(Error::from)?

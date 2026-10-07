@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AccountChange, Error},
 };

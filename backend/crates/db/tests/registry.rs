@@ -4,12 +4,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use filegate_db::registry::{self, StorageRow, WriteOp, WriteViolation};
+use grove_db::registry::{self, StorageRow, WriteOp, WriteViolation};
 use sqlx::PgPool;
 
 // ── 픽스처 ──────────────────────────────────────────────────
 
-/// 유효한 클라이언트 키 해시 — `sha256:` + 64 hex (client_keys CHECK).
+/// 유효한 클라이언트 키 해시 — `sha256:` + 64 hex (client_native_keys CHECK).
 const HASH: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn s3_row(id: &str, capacity: i64) -> StorageRow {

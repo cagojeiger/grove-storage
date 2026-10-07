@@ -7,7 +7,7 @@ use super::keys::{insert_key_in_tx, upsert_key_in_tx};
 use crate::files::{CreateOutcome, CreateSpec, SweepCandidate};
 
 /// pending 파일 생성과 S3 논리키 세션 등록을 한 트랜잭션으로 묶는다.
-/// 활성 이름공간(s3_keys)은 성공 전까지 건드리지 않는다.
+/// 활성 이름공간(s3_object_keys)은 성공 전까지 건드리지 않는다.
 pub async fn create_upload(
     pool: &PgPool,
     spec: CreateSpec<'_>,

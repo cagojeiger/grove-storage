@@ -10,8 +10,8 @@
 #[path = "support/s3_multipart.rs"]
 mod support;
 
-use filegate_db::files;
-use filegate_db::s3_registry as s3;
+use grove_db::files;
+use grove_db::s3_registry as s3;
 use sqlx::PgPool;
 use support::{KEY, file_row, open_multipart, open_native_multipart, upload_part, wire};
 

@@ -2,7 +2,7 @@
 
 #[path = "support/lifecycle.rs"]
 mod lifecycle;
-use filegate_db::{
+use grove_db::{
     files,
     registry::{self, UpdateStorageOutcome as Outcome},
 };

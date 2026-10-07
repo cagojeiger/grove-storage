@@ -62,7 +62,7 @@ Content-Type: application/json
 CLI HTTP는 User 토큰을 사용하며 서버가 `resource_api`로 기록한다.
 CLI/MCP Surface 동등성은 같은 실행기의 PG 정책 테스트다. 실제 CLI 전송은 E2E로
 검증하며 실제 MCP HTTP도 CLI 결과와 대조한다. 기존 `/api/admin/v1`은
-[명시적 호환 모드](05-admin-auth.md)에서 이전 소비자에게 제공한다.
+인증·DB 접근 없이 410을 반환한다.
 
 ### 브라우저 전송
 
@@ -200,10 +200,10 @@ CLI 출력 envelope는 `schema_version: 1`을 유지한다. 안정 코드·outco
 | `api/src/mcp/tests/`, `scripts/e2e-mcp.py` | 24개 tool schema·실제 HTTP/CLI 결과·MCP 감사·owner·폐기·rollback·unknown·서버 비밀 로그 제외 |
 | `management-service/tests/resources.rs` + `resources/` | CLI/MCP/API 권한 동등성·User 현재 역할·잠금 대기 후 role 재확인·호출 한 번·DB/로그 실패 |
 | `management-service/tests/resource_writes.rs` + `resource_writes/` | 8개 PG 테스트: 변경 6개·암호화·현재 권한·소유 범위·삭제 제약·감사 rollback·commit unknown·telemetry 장애 |
-| `api/src/resource_commands/tests/` | 조회·metadata·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
+| `api/src/commands/tests/` | 조회·metadata·기존 REST 응답 비교·Cookie/Bearer 분리·입력/표면 검증·폐기·비밀 제외 |
 | 같은 경로의 `writes.rs`, `write_failures.rs` | 4개 PG HTTP 테스트: 변경 왕복·기존 키 조회/인증·409/400·감사 rollback·원문 없는 unknown |
 | `management-service/tests/storage_writes.rs` + `storage_writes/` | 8개 PG 테스트: 변경 3개·참조·probe 중 폐기/User 강등·참조 경합·감사 rollback·unknown |
-| `api/src/resource_commands/tests/storage*.rs` | PG HTTP 테스트: FS 등록/교체 거부·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
+| `api/src/commands/tests/storage*.rs` | PG HTTP 테스트: FS 등록/교체 거부·기존 REST 결과·필드/설정 검사·S3 대역 probe/키 교체·비밀 제외·감사/commit 장애 |
 | 로컬 서버 smoke | 임시 PG·실제 프로세스에서 조회 11개·User 현재 역할·폐기·기존 REST 유지 확인; HTTP 헤더 직접 전송, TLS/브라우저/proxy와 구분 |
 | 변경 서버 smoke | 변경 6개·기존 S3 키 목록·Native PUT/commit/GET 바이트 일치·파일 참조 삭제 409·키 폐기 후 401·비밀 없는 감사 확인; S3 실제 전송은 이번 검증에서 제외 |
 | Storage 서버 smoke (이전 단계 기록) | 임시 PG·실제 프로세스의 생성/교체/삭제·기존 REST 조회 일치·당시 fs 바이트 왕복·파일 존재 중 용량 변경·주소/삭제 409·멱등 삭제·주소 없는 감사 확인 |

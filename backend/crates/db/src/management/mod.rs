@@ -6,8 +6,8 @@
 
 mod accounts;
 pub mod admission;
+mod api_tokens;
 mod audit;
-mod credentials;
 pub mod history;
 mod identity;
 pub mod password_setup;
@@ -24,9 +24,9 @@ mod storage_writes;
 pub mod telemetry;
 mod transaction;
 
-pub use accounts::{AccountChange, NewAccount, bootstrap, change_account, create_account};
+pub use accounts::{AccountChange, NewAccount, change_account, create_account};
+pub use api_tokens::{Credential, NewCredential, issue_credential, revoke_credential};
 pub use audit::{AuditActor, AuditContext};
-pub use credentials::{Credential, NewCredential, issue_credential, revoke_credential};
 pub use identity::{Identity, authenticate, session_actor};
 pub use resource_metadata::MetadataResource;
 pub use resource_writes::EncryptedServiceCredential;
@@ -55,7 +55,7 @@ impl From<sqlx::Error> for Error {
     }
 }
 
-// Small management population: one lock orders bootstrap, account changes,
+// Small management population: one lock orders initialization, account changes,
 // issuance, recovery, login, and revocation. Data-plane work never takes it.
 async fn lock(pool: &PgPool) -> Result<Transaction<'_, Postgres>, Error> {
     let mut tx = pool.begin().await?;

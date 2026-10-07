@@ -6,9 +6,9 @@ mod protocol;
 mod resources;
 
 use super::*;
-use crate::resource_commands::tests::{owner, seed};
+use crate::commands::tests::{owner, seed};
 use axum::{body::to_bytes, http::Request as HttpRequest};
-use filegate_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db};
 use grove_management_policy::{Role, Surface};
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -87,7 +87,7 @@ async fn json_body(response: Response) -> Value {
 
 fn context() -> db::AuditContext {
     db::AuditContext {
-        actor: db::AuditActor::Master { session_id: None },
+        actor: db::AuditActor::System,
         request_id: Uuid::new_v4(),
         surface: Surface::Console,
     }

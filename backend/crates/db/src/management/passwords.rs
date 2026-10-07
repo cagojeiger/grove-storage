@@ -109,7 +109,7 @@ pub async fn change(
     sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
     let context = super::AuditContext {
-        actor: super::AuditActor::User {
+        actor: super::AuditActor::Account {
             id: account,
             credential_id: None,
             session_id: Some(session),
@@ -186,7 +186,7 @@ pub async fn recover(
         .await?;
     sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
-    sqlx::query("UPDATE management.credentials SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
+    sqlx::query("UPDATE management.api_tokens SET revoked_at=grove_time.wall_now() WHERE account_id=$1 AND revoked_at IS NULL")
         .bind(account).execute(&mut *tx).await?;
     local_audit(&mut tx, request_id, account, "account.password_recover").await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;

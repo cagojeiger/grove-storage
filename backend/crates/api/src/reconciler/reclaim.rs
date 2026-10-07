@@ -1,7 +1,7 @@
 use super::{BATCH_LIMIT, sweep_object};
-use filegate_core::Crypto;
-use filegate_db::{PgPool, files};
-use filegate_infra::S3ClientCache;
+use grove_core::Crypto;
+use grove_db::{PgPool, files};
+use grove_infra::S3ClientCache;
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 
 #[cfg(test)]

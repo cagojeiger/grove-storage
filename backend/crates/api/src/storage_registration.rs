@@ -1,17 +1,17 @@
 //! Shared storage registration, provider probes and credential encryption.
 
 use axum::http::StatusCode;
-use filegate_core::time::Clock;
-use filegate_core::{Crypto, SecretString};
-use filegate_db::PgPool;
-use filegate_db::registry::{self, StorageRow};
-use filegate_infra::{S3StorageSpec, s3_connect, s3_connect_with_clock};
+use grove_core::time::Clock;
+use grove_core::{Crypto, SecretString};
+use grove_db::PgPool;
+use grove_db::registry::{self, StorageRow};
+use grove_infra::{S3StorageSpec, s3_connect, s3_connect_with_clock};
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::error::{ApiError, bad_request};
 use crate::storage_access::backend_from_row;
-use filegate_infra::backend::StorageBackend;
+use grove_infra::s3_io::StorageBackend;
 
 /// Shared registration fields; legacy JSON defaults remain compatible.
 #[derive(Deserialize)]
@@ -139,7 +139,7 @@ fn validated_s3_submission(
     }
     if body.force_relay && !relay_base_ready {
         return Err(bad_request(
-            "relay storage requires FILEGATE_PUBLIC_URL to be configured",
+            "relay storage requires GROVE_PUBLIC_URL to be configured",
         ));
     }
     let endpoint = require(body.endpoint, "endpoint")?;

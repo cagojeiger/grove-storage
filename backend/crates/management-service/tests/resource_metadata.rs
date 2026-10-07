@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 mod support;
-use filegate_db::PgPool;
+use grove_db::PgPool;
 use grove_management_command::{Command, ErrorCode, Outcome, decode};
 use grove_management_policy::{Role, Surface};
 use grove_management_service::{Proof, resources};
@@ -20,7 +20,7 @@ async fn execute(
     command: Command,
 ) -> resources::Execution {
     let crypto =
-        filegate_core::Crypto::new("test", &"metadata-test-root-at-least-32-bytes".into()).unwrap();
+        grove_core::Crypto::new("test", &"metadata-test-root-at-least-32-bytes".into()).unwrap();
     resources::execute(
         pool,
         &crypto,
@@ -217,20 +217,8 @@ async fn database_enforces_shape_and_exact_normalized_byte_limit(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn existing_rows_upgrade_to_empty_metadata_and_legacy_updates_preserve_it(pool: PgPool) {
-    sqlx::raw_sql(
-        "ALTER TABLE storages DROP COLUMN metadata; ALTER TABLE clients DROP COLUMN metadata;",
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+async fn fresh_rows_default_to_empty_metadata_and_legacy_updates_preserve_it(pool: PgPool) {
     seed(&pool).await;
-    sqlx::raw_sql(include_str!(
-        "../../db/migrations/0015_resource_metadata.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
     let initial: (Value, Value) = sqlx::query_as(
         "SELECT s.metadata,c.metadata FROM storages s JOIN clients c ON c.storage_id=s.id",
     )
@@ -243,12 +231,12 @@ async fn existing_rows_upgrade_to_empty_metadata_and_legacy_updates_preserve_it(
         .execute(&pool)
         .await
         .unwrap();
-    let mut row = filegate_db::registry::get_storage(&pool, "local")
+    let mut row = grove_db::registry::get_storage(&pool, "local")
         .await
         .unwrap()
         .unwrap();
     row.capacity_bytes = 200;
-    filegate_db::registry::update_storage(&pool, &row)
+    grove_db::registry::update_storage(&pool, &row)
         .await
         .unwrap();
     let metadata: Value = sqlx::query_scalar("SELECT metadata FROM storages WHERE id='local'")

@@ -1,5 +1,5 @@
 use crate::{Command, Output};
-use filegate_db::management::{
+use grove_db::management::{
     AuditContext, Error, IdentityTransaction, ResolvedIdentity, history::HistoryScope,
 };
 use grove_management_policy::Scope;

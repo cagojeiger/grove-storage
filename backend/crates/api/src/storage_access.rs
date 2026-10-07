@@ -1,14 +1,11 @@
 //! Read-only registry-to-backend adapter shared by management and object paths.
 //! Decrypts provider credentials without probing storage or changing metadata.
 
-use filegate_core::{Crypto, EncryptedSecret};
-use filegate_db::registry::StorageRow;
-use filegate_infra::{S3StorageSpec, backend::StorageBackend};
+use grove_core::{Crypto, EncryptedSecret};
+use grove_db::registry::StorageRow;
+use grove_infra::{S3StorageSpec, s3_io::StorageBackend};
 
-pub fn backend_from_row(
-    crypto: &Crypto,
-    row: &StorageRow,
-) -> filegate_core::Result<StorageBackend> {
+pub fn backend_from_row(crypto: &Crypto, row: &StorageRow) -> grove_core::Result<StorageBackend> {
     match row.kind.as_str() {
         "s3" => {
             let secret_key = crypto.decrypt(
@@ -40,20 +37,20 @@ pub fn backend_from_row(
                 force_relay: row.force_relay,
             })
         }
-        other => Err(filegate_core::Error::internal(format!(
+        other => Err(grove_core::Error::internal(format!(
             "storage '{}' has unknown kind '{other}'",
             row.id
         ))),
     }
 }
 
-fn field(row: &StorageRow, value: Option<String>, name: &str) -> filegate_core::Result<String> {
+fn field(row: &StorageRow, value: Option<String>, name: &str) -> grove_core::Result<String> {
     value.ok_or_else(|| missing(row, name))
 }
 
 /// 종류별 필수는 DB CHECK가 집행하므로, 여기 도달하면 스키마 위반이다.
-fn missing(row: &StorageRow, name: &str) -> filegate_core::Error {
-    filegate_core::Error::internal(format!("storage '{}' is missing {name}", row.id))
+fn missing(row: &StorageRow, name: &str) -> grove_core::Error {
+    grove_core::Error::internal(format!("storage '{}' is missing {name}", row.id))
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
-use filegate_core::SecretString;
-use filegate_db::{PgPool, management as db};
+use grove_core::SecretString;
+use grove_db::{PgPool, management as db};
 use grove_management_policy::{Actor, Role};
 use uuid::Uuid;
 
@@ -143,7 +143,7 @@ pub async fn complete(
         pool,
         request_id,
         token_hash,
-        filegate_core::ExposeSecret::expose_secret(&password_hash),
+        grove_core::ExposeSecret::expose_secret(&password_hash),
     )
     .await
     .map_err(Error::from)?

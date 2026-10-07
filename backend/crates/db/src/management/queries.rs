@@ -201,7 +201,7 @@ impl IdentityTransaction<'_> {
         account: Uuid,
         page: Page<Uuid>,
     ) -> Result<Vec<CredentialSummary>, Error> {
-        Ok(sqlx::query_as("SELECT id,account_id,label,token_prefix,created_at,expires_at,revoked_at FROM management.credentials
+        Ok(sqlx::query_as("SELECT id,account_id,label,token_prefix,created_at,expires_at,revoked_at FROM management.api_tokens
             WHERE account_id=$1 AND ($2::uuid IS NULL OR id<$2) ORDER BY id DESC LIMIT $3")
             .bind(account).bind(page.before).bind(page.limit).fetch_all(&mut *self.inner).await?)
     }

@@ -14,7 +14,7 @@ import {
   isChanged,
 } from "../api/identity";
 import { identity, request } from "../api/http";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 import { FormDialog, SecretDialog } from "./ui";
 import {
   isSetupLink,

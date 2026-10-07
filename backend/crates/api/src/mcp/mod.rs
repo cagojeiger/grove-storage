@@ -3,7 +3,7 @@
 mod contract;
 mod server;
 
-use crate::{console_identity::secrets, routes::AppState};
+use crate::{accounts::secrets, routes::AppState};
 use axum::{
     body::Body,
     extract::{Request, State},
@@ -34,7 +34,7 @@ async fn serve(state: AppState, request: Request) -> Response {
     if request.headers().contains_key(header::ORIGIN) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let hash = crate::resource_commands::token(request.headers())
+    let hash = crate::commands::token(request.headers())
         .map(secrets::token_hash)
         .unwrap_or_default();
     if let Err((id, error)) =

@@ -7,9 +7,9 @@ use super::AppState;
 pub(super) fn control(state: AppState) -> Router<AppState> {
     Router::new().nest(
         "/api/v1",
-        crate::v1::v1_routes().route_layer(middleware::from_fn_with_state(
+        crate::native::routes().route_layer(middleware::from_fn_with_state(
             state,
-            crate::v1::require_client,
+            crate::native::require_client,
         )),
     )
 }
@@ -17,6 +17,6 @@ pub(super) fn control(state: AppState) -> Router<AppState> {
 // Streaming paths keep their existing limits; they do not inherit the JSON body limit.
 pub(super) fn streaming(cors_allowed_origins: &[String]) -> Router<AppState> {
     Router::new()
-        .nest("/blobs", crate::blobs::routes(cors_allowed_origins))
+        .nest("/blobs", crate::lease_relay::routes(cors_allowed_origins))
         .merge(crate::s3::routes(cors_allowed_origins))
 }

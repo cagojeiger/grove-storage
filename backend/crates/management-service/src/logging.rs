@@ -1,5 +1,5 @@
 use crate::Error;
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{
         self as db, AuditActor, AuditContext,
@@ -25,7 +25,7 @@ pub(crate) async fn session_operation<T>(
         .ok()
         .flatten()
         .map(|actor| AuditContext {
-            actor: AuditActor::User {
+            actor: AuditActor::Account {
                 id: actor.account_id,
                 credential_id: actor.credential_id,
                 session_id: actor.session_id,

@@ -1,6 +1,6 @@
 # Management 완성도 점검
 
-기준: 2026-10-05 작업 트리. 현재 구현과 운영 준비 항목을 구분한다.
+구조 기준: 2026-10-07 작업 트리. 실행 결과는 각 절의 날짜·revision에 해당한다.
 리소스 검증 이력은 [체크포인트](refactor-checkpoint.md), 인증의 상세 계약은
 [로컬 관리 인증](../spec/11-local-management-auth.md)이 정본이다.
 
@@ -10,7 +10,7 @@
 Console cookie                   CLI / MCP Bearer
     |                                 |
     +--> 계정·비밀번호·토큰·세션·이력   |
-    |    console_identity             |
+    |    accounts                     |
     |       -> service::Command       |
     |                                 |
     +------> 공통 자원 명령 <----------+
@@ -38,7 +38,7 @@ Account·역할·브라우저 세션을 조회하지 않는다. 삭제·주소 �
 management.accounts                 Admin / Writer / Reader
     +--> password_credentials       고유 login_name·Argon2id hash·generation
     +--> password_setup_tokens      일회성 설정 링크의 hash·만료
-    +--> credentials                관리 API 토큰의 hash·만료·폐기
+    +--> api_tokens                 관리 API 토큰의 hash·만료·폐기
     +--> sessions                   password generation 또는 원본 token 연결
     +--> authentication_budgets      login / reauthentication 요청 예산
 
@@ -48,15 +48,12 @@ management.accounts                 Admin / Writer / Reader
 익명 로그인 예산 ----> login_budget
 ```
 
-`password_credentials`, `sessions`, `password_setup_tokens`,
-`authentication_budgets`는 migrations `0019`–`0022`에서 추가·확장된다.
+`0004_management.sql`이 현재 인증 테이블을 직접 생성한다.
 계정과 자격증명은 권한·수명주기가 달라 별도 테이블을 유지한다.
-migration `0024`는 상수 `accounts.kind`, Master/Root 인증 테이블과 과거 Master
-세션을 제거하고 `sessions.user_id`를 필수 `account_id`로 통일한다.
-정상 token/password 세션과 과거 감사 actor snapshot은 보존한다.
-기존 migration을 지워 스키마 이력을 바꾸지 않으며, 이전 writer를 모두 중지한
-오프라인 업그레이드가 필요하다. 상세 절차는 [로컬 인증](../spec/11-local-management-auth.md)의
-Schema Cleanup 절을 따른다.
+Session의 `account_id`는 필수이며 Root/Master 인증 구조는 생성하지 않는다.
+이 기준 스키마는 새 DB용이다. 기존 DB 업그레이드는 제공하지 않는다.
+상세 계약은 [로컬 인증](../spec/11-local-management-auth.md), 검증 흐름은
+[새 설치·복원](fresh-installation.md)을 따른다.
 
 | 현재 동작 | 코드 근거 |
 |---|---|
@@ -90,9 +87,9 @@ Client 파일 전송 로그와 관리 감사는 별개다. 조회도 command inv
 |---|---|---|
 | 1. 브라우저 회귀 정리 | 현재 탐색·템플릿으로 검사 갱신; 전체 494개 통과 | 이번 작업 트리에서 확인; 권한·비밀·오류·복원 검사를 유지 |
 | 2. 문서 정합성 | README·소스 구조·콘솔·브라우저 보안 문서 갱신 | 이번 범위의 현재/역사/계획 구분 완료; 후속 변경 시 함께 갱신 |
-| 3. 운영 콘솔 제공 | backend Dockerfile은 Rust 실행 파일만 포함; sample preview는 운영 인증 서버가 아님 | 전용 HTTPS origin, dist 제공·응답별 CSP nonce·API proxy·이미지 검증 |
+| 3. 운영 콘솔 제공 | 작업 트리의 Dockerfile은 서버와 콘솔 dist를 함께 포함 | 전용 HTTPS origin·응답별 CSP nonce·패키징 이미지 검증 |
 | 4. 관리 이력 보존 | 기간 설정·테이블별 1,000건 배치·timeout·재시도 구현; 격리 PG 경계·배치·잠금·독립성 검증 통과 | 운영 증가량/정리 속도 측정; 외부 보관은 별도 |
-| 5. FileGate 전환 준비 | 오프라인 이관 리허설과 NoteGate 계약 검증이 CI에 존재 | 대상 버전의 CI 성공, backup 복원·중단된 writer·실제 endpoint 검증 근거 확보 |
+| 5. 릴리스 준비 | 새 DB 설치·복원과 NoteGate 계약 검증이 CI에 존재 | 같은 후보 SHA의 CI·이미지·자산 검증; 운영 이관은 별도 |
 
 서버를 추가하지 않으며 crate는 검증된 책임 경계에만 추출한다. S3 SDK는 현재
 `storage-provider`에 격리했다. 템플릿의 기본 표시를 사용해도 기존 비밀 취급·권한·
@@ -164,15 +161,15 @@ Rust audit에는 `spin` 0.9.8·0.10.0의 yanked 경고 2개가 남아 있다. �
 |---|---|
 | 역할·표면·자원 권한 | `management-policy/tests`, `management-service/tests/authorization.rs`, `management-service/tests/resources/authorization.rs` |
 | 계정·토큰·세션·마지막 Admin | `db/tests/management_accounts.rs`, `db/tests/management_credentials.rs`, `db/tests/management_sessions.rs` |
-| 초기화·비밀번호·복구·설정 링크 | `management-service/tests/local_accounts.rs`, `api/src/console_identity/tests/password_login`, `db/tests/management_passwords.rs` |
+| 초기화·비밀번호·복구·설정 링크 | `management-service/tests/local_accounts.rs`, `api/src/accounts/tests/password_login`, `db/tests/management_passwords.rs` |
 | 재인증 예산·감사 원자성·기록 timeout | `management-service/tests/admission.rs`, `management-service/tests/logging.rs`, `management-service/tests/resource_writes/failures.rs` |
 | 관리 로그 보존·경계·배치·잠금·재시도·파일 독립성 | `db/src/management/retention.rs`, `management-service/tests/retention.rs` |
 | multipart 정리 페이지 오류·유계 순회 | `storage-provider/tests/multipart_cleanup.rs` |
 | 종료 유예시간·SQLx close 순서·실제 SIGTERM | `api/src/shutdown.rs`, `scripts/e2e-shutdown.py` |
-| 자기 이력·타인 필터·cursor | `management-service/tests/history.rs`, `management-service/tests/history_filters.rs`, `api/src/console_identity/tests/identity/history.rs` |
+| 자기 이력·타인 필터·cursor | `management-service/tests/history.rs`, `management-service/tests/history_filters.rs`, `api/src/accounts/tests/identity/history.rs` |
 | 관리 계정과 파일 요청의 독립성 | `api/src/routes/tests/independence.rs` |
 | 브라우저·CSP·권한·비밀·오류 상태 | `frontend/web/tests`, 실제 서버 연결은 `scripts/e2e-console.py` |
-| 소비자 호환·오프라인 이관 | `scripts/e2e-notegate.py`, `scripts/e2e-migration.py`, `.github/workflows/ci.yml` |
+| 소비자 호환·새 설치 복원 | `scripts/e2e-notegate.py`, `scripts/e2e-installation.py`, `.github/workflows/ci.yml` |
 
 집중 테스트의 통과를 전체 suite 통과로 표현하지 않는다. 테스트 실패는 오래된
 화면 구조 검사, 실제 기능 회귀, 환경 문제를 코드와 실행 결과로 구분한다.

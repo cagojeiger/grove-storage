@@ -17,9 +17,9 @@ pub mod resources;
 pub mod retention;
 pub mod sessions;
 pub use command::Command;
-pub use filegate_db::management::{Proof, queries::Page};
+pub use grove_db::management::{Proof, queries::Page};
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AuditActor, AuditContext, IdentityTransaction},
 };
@@ -190,7 +190,7 @@ fn audit_context(
     surface: Surface,
 ) -> Result<AuditContext, Error> {
     let actor = match identity {
-        db::ResolvedIdentity::User(identity) => AuditActor::User {
+        db::ResolvedIdentity::User(identity) => AuditActor::Account {
             id: identity.account_id,
             credential_id: identity.credential_id,
             session_id: identity.session_id,

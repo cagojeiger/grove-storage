@@ -1,7 +1,7 @@
 //! Server-local account provisioning. These functions are deliberately outside
 //! the remotely callable command catalog and require server/DB operator access.
-use filegate_core::{ExposeSecret, SecretString};
-use filegate_db::{PgPool, management::passwords as db};
+use grove_core::{ExposeSecret, SecretString};
+use grove_db::{PgPool, management::passwords as db};
 use uuid::Uuid;
 
 use crate::{Error, passwords};

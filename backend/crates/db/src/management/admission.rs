@@ -37,7 +37,7 @@ pub async fn account_allowed(
     .unwrap_or(false))
 }
 
-/// Fixed-size fallback for unknown users and the legacy token exchange.
+/// Fixed-size fallback for unknown usernames.
 pub async fn anonymous_allowed(pool: &PgPool) -> Result<bool, Error> {
     Ok(sqlx::query_scalar("UPDATE management.login_budget SET
         attempts=CASE WHEN window_start<=grove_time.wall_now()-interval '1 minute' THEN 1 ELSE attempts+1 END,

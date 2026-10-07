@@ -6,40 +6,37 @@
 
 Product scope: phase one supports external S3-compatible backends only
 ([ADR 007](../adr/007-grove-storage-foundation.md#phase-one-supported-backends)).
-Console, CLI, MCP and legacy REST accept S3 create/replace requests only.
-Migration `0017` makes the resource registry S3-only and removes `root_path`.
-It aborts if any FS row remains, preserving the old schema and data for explicit
-migration. S3 transfer spooling remains separate from filesystem storage support.
+Console, CLI and MCP accept S3 create/replace requests only.
+The fresh baseline defines an S3-only registry without `root_path`.
+S3 transfer spooling remains separate from filesystem storage support.
 
 ## Resource database boundary
 
 ```text
-Registry:  storages <- clients <- client_keys / s3_credentials
+Registry:  storages <- clients <- client_native_keys / client_s3_credentials
 Objects:   clients <- files -> locations -> storages
-Names:     (client, logical key) -> s3_keys -> files
+Names:     (client, logical key) -> s3_object_keys -> files
 Uploads:   files <- leases <- lease_parts
            files <- s3_uploads / native_multipart_completions
-History:   lease_history / usage_snapshot (independent ID snapshots)
+History:   lease_history / usage_snapshots (independent ID snapshots)
 ```
 
 | Scope | S3-only contract |
 |---|---|
-| Resource tables | Existing 13 tables retain their responsibilities |
+| Resource tables | 13 tables, separated into registry, lifecycle, names and history |
 | storages | kind=s3; required S3 fields; no root_path or FS-specific checks |
 | Placement | Client selects one Storage; locations preserves each object's actual location |
-| Physical keys | Existing object_key values and new S3 key generation remain unchanged |
+| Physical keys | Object key generation retains the current contract |
 | Protocols | Native and S3 APIs retain their existing contracts |
 | Relay | force_relay and temporary spooling remain available |
-| Management | Account, token, session and management-history tables remain unchanged |
+| Management | Independent Account, API-token, session and history tables |
 | Response compatibility | Management DTOs keep root_path=null; this is not a DB column |
 
-The offline upgrade starts with all old DB writers stopped and a verified backup
-of the database and encryption keys. Remaining FS rows prevent this migration.
-Issued presigned URLs can continue to write to external S3 after server shutdown.
-The cutover checks object IDs, locations, logical keys, encrypted credentials and
-recovery rows before traffic resumes. Rollback restores the previous binary and
-its matching database backup. The old binary is incompatible with the S3-only schema.
-The procedure is in [migration rehearsal](../development/migration-rehearsal.md).
+The baseline is for a new database, not an upgrade of an existing FileGate/Grove
+database. Registration, file state, encrypted secrets and pending uploads are
+verified through a same-version backup/restore rehearsal. Importing old resource
+rows or external objects is separate work. See
+[fresh installation](../development/fresh-installation.md).
 
 ## 등록 관계
 
@@ -67,7 +64,7 @@ Console은 세션으로 `/api/admin/console-commands/v1`을 호출한다. 관리
 Account 토큰으로 `/api/admin/commands/v1`을 호출하고 MCP는 같은 명령을 실행한다.
 입력·출력은 [명령 계약](09-management-commands.md), 인증은
 [로컬 관리 인증](11-local-management-auth.md)에 있다.
-구형 `/api/admin/v1` REST는 [명시적 호환 모드](05-admin-auth.md)에서 제공한다.
+구형 `/api/admin/v1` REST는 제거되어 410을 반환한다.
 
 ## 저장소와 배치
 
@@ -75,7 +72,7 @@ Account 토큰으로 `/api/admin/commands/v1`을 호출하고 MCP는 같은 명�
 |---|---|
 | id | 운영자가 지정한 안정 슬러그, 생성 후 고정 |
 | S3 | endpoint·public_endpoint·region·bucket·자격증명 |
-| 중계 storage | 서버에 FILEGATE_PUBLIC_URL 설정 |
+| 중계 storage | 서버에 GROVE_PUBLIC_URL 설정 |
 | 등록·부팅 | 저장소 접근 검증 |
 | client 배치 | 생성 시 storage_id 하나 지정 |
 | storage 삭제 | client·location 참조가 정리된 뒤 수행 |
@@ -102,11 +99,10 @@ vendor 세션을 재발견하는 내부 복구에 사용한다.
 | 비밀 | 공급·저장 | 회전 |
 |---|---|---|
 | Account 관리 토큰 | DB 해시, [계정·토큰 계약](11-local-management-auth.md) | 새 토큰 발급 → 소비자 전환 → 옛 토큰 폐기 |
-| 구형 운영자 토큰 | 명시적 호환 모드의 DB 해시 또는 env FILEGATE_OPERATOR_TOKENS | [이전 인증 전환](11-local-management-auth.md#legacy-operator-cutover) |
 | client 키 | 생성자가 raw 전달, API에는 sha256:64hex 등록 | 해시 추가 → 소비자 전환 → 옛 해시 삭제 |
 | S3 secret | 서버 생성·발급 시 1회 반환, AES-GCM 저장 | 재발급 → 소비자 전환 → 옛 자격증명 삭제 |
 | storage secret | 운영자가 제출, 접근 검증 후 AES-GCM 저장 | 새 vendor 키로 storage 갱신 |
-| 마스터 키 | env FILEGATE_ENC_ROOT_SECRET·ENC_KEY_ID | 아래 절차 |
+| 마스터 키 | env GROVE_ENC_ROOT_SECRET·ENC_KEY_ID | 아래 절차 |
 
 암호문은 enc_key_id로 복호 키를 선택한다. AAD는 storage id 또는 S3 access key id다.
 메모리 비밀은 SecretString으로 다룬다.

@@ -10,8 +10,8 @@
 #[path = "support/lifecycle.rs"]
 mod support;
 
-use filegate_db::files::{self, CreateSpec};
-use filegate_db::registry;
+use grove_db::files::{self, CreateSpec};
+use grove_db::registry;
 use sqlx::PgPool;
 use support::{create_ok, observed, spec, wire};
 

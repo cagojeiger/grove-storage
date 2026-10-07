@@ -1,6 +1,6 @@
 use super::{client_usage_output, snapshot_output, storage_output, storage_usage_output};
 use crate::Error;
-use filegate_db::management::IdentityTransaction;
+use grove_db::management::IdentityTransaction;
 use grove_management_command::{
     Command, Output,
     model::{self, State},
@@ -14,17 +14,14 @@ pub(super) async fn run(
         Command::StorageMetadataShow(input) => {
             Output::StorageMetadataShow(model::ResourceMetadata {
                 metadata: tx
-                    .resource_metadata(
-                        filegate_db::management::MetadataResource::Storage,
-                        &input.id,
-                    )
+                    .resource_metadata(grove_db::management::MetadataResource::Storage, &input.id)
                     .await?,
                 id: input.id,
             })
         }
         Command::ClientMetadataShow(input) => Output::ClientMetadataShow(model::ResourceMetadata {
             metadata: tx
-                .resource_metadata(filegate_db::management::MetadataResource::Client, &input.id)
+                .resource_metadata(grove_db::management::MetadataResource::Client, &input.id)
                 .await?,
             id: input.id,
         }),
@@ -47,7 +44,7 @@ pub(super) async fn run(
             Output::CredentialList(tx.service_credentials(&input.client_id).await?)
         }
         Command::ClientKeyList(input) => {
-            Output::ClientKeyList(tx.client_keys(&input.client_id).await?)
+            Output::ClientKeyList(tx.client_native_keys(&input.client_id).await?)
         }
         Command::UsageStorages(_) => Output::UsageStorages(
             tx.storage_usage()

@@ -59,6 +59,11 @@ the [readiness review](../../docs/development/management-review.md).
 
 ## Browser Preview
 
+The server image includes the production console; Node is only a build dependency.
+The configured HTTPS management host serves `/api/admin/console/` with per-response
+CSP nonces. See [container connections](../../docs/stack/README.md#컨테이너-연결)
+and the [actual-image security gates](../../docs/development/image-security.md).
+
 Run `npm run build` and `node scripts/preview.mjs` in this directory. The printed
 HTTP address opens in browsers that do not trust a local test certificate. It serves
 sample registry data in memory; edits reset when the preview server stops. It does
@@ -102,7 +107,7 @@ Run these commands from the repository root after building the Rust binaries.
 removes its database and accounts. Automated browser checks accept only the local
 test certificate; this does not validate production certificate trust.
 
-From the repository root, build `filegate` and `gscli` with `cargo build --bin filegate --bin gscli --locked`.
+From the repository root, build `grove-storage` and `gscli` with `cargo build --bin grove-storage --bin gscli --locked`.
 On macOS use `DEVELOPER_DIR=/Library/Developer/CommandLineTools` if required by the Rust linker.
 
 ```sh
@@ -147,10 +152,10 @@ GROVE_DEV_TLS_KEY=/absolute/path/key.pem \
 GROVE_DEV_TLS_CERT=/absolute/path/cert.pem npm run dev
 ```
 
-Set the API's `FILEGATE_CONSOLE_ORIGIN` to the exact HTTPS Vite origin. On an
-empty database, run `filegate account init <username> <display-name>` on the
-server with `FILEGATE_DATABASE_URL` set, then sign in with that username and
-the privately entered password. Use `filegate account recover <account-id>
+Set the API's `GROVE_CONSOLE_ORIGIN` to the exact HTTPS Vite origin. On an
+empty database, run `grove-storage account init <username> <display-name>` on the
+server with `GROVE_DATABASE_URL` set, then sign in with that username and
+the privately entered password. Use `grove-storage account recover <account-id>
 <username> --yes` from the server terminal to replace a lost password. This
 revokes that account's browser sessions and management API tokens. The real
 HTTPS fixture verifies the password flow; its `--serve` mode provisions a local
@@ -211,16 +216,16 @@ The Rust backend exposes public, secret-free OpenAPI 3.1 documents:
 - `/api/docs/native.json`: FileGate-compatible file lifecycle DTOs generated
   from the API's Rust types. Native Client key auth.
 
-Browser identity and console commands are internal surfaces; disabled legacy
+Browser identity and console commands are internal surfaces; retired legacy
 admin routes and the MCP protocol are not presented as public REST endpoints.
 Documentation adds no resource permissions or changes to S3/Native behavior.
 
-`filegate openapi` exports all three contracts without starting the server or
+`grove-storage openapi` exports all three contracts without starting the server or
 connecting to PostgreSQL. To show them in the in-memory sample preview and run
 the full Swagger browser tests:
 
 ```sh
-cargo run -q -p filegate-api -- openapi > /tmp/grove-openapi.json
+cargo run -q -p grove-api -- openapi > /tmp/grove-openapi.json
 GROVE_PREVIEW_OPENAPI=/tmp/grove-openapi.json node frontend/web/scripts/preview.mjs
 cd frontend/web
 GROVE_TEST_OPENAPI=/tmp/grove-openapi.json npx playwright test tests/api-docs.spec.ts

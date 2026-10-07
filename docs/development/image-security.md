@@ -5,22 +5,36 @@
 One server image, `ghcr.io/cagojeiger/grove-storage`, supports Linux amd64 and
 arm64. These are platform builds, not separate application roles. Keep the
 existing `quick-deploy` chart; this change adds no dedicated Helm chart, execution
-role split, GitOps rollout or cluster changes. The current Dockerfile still
-packages the Rust server only, not the console's static assets.
+role split, GitOps rollout or cluster changes. The Dockerfile packages the Rust
+server, production console assets and the matching npm lockfile in one image.
+Node and build tools remain in build stages, not in the runtime.
 
 ## Build And Release Gates
 
 1. CI builds the actual runtime image on native amd64/arm64 runners without
-   publishing. A non-root, read-only, capability-dropped `--help` smoke test must
-   pass. Existing integration tests remain required; the smoke is not an API test.
+   publishing. A non-root, read-only, capability-dropped `--help` smoke runs first.
+   `scripts/e2e-image.py` then uses the actual image and a fresh PostgreSQL fixture
+   for hidden-TTY account initialization, readiness, HTTPS console login/logout,
+   navigation, Swagger, host isolation and SIGTERM. The same console-enabled image
+   also passes standard S3 SDK presigned PUT/GET, Range, signature/expiry rejection,
+   physical MinIO byte verification and delete after browser logout. The fixture
+   needs boto3 and builds the existing pinned test-only MinIO image.
+   Desktop/mobile screenshots and `s3.json` bind runtime evidence to the inspected
+   local image ID. Broader S3/NoteGate integration tests remain separate gates.
 2. Trivy scans OS/library vulnerabilities and embedded secrets. HIGH/CRITICAL
    findings block release even without an available fix. Missing/malformed reports
-   and missing Rust binary package inventories also block release. No image scan
+   and missing Rust or frontend package inventories also block release. No image scan
    ignore list is used. `cargo-auditable` embeds the compiled Rust dependencies;
-   a scan of OS packages alone is insufficient.
+   a scan of OS packages alone is insufficient. `/app/inventory/frontend/package-lock.json`
+   retains npm dependency information because minified browser bundles alone do
+   not provide a reliable package inventory. Trivy's image scanner does not read
+   npm lockfiles: the gate extracts this file from the exact image without running
+   it, scans it with `trivy fs`, and joins the results for enforcement and SARIF.
+   Both original reports are preserved. Node is not installed to enable scanning.
 3. The release follows a successful main **push** CI from this repository and
    checks out that exact source SHA. BuildKit emits SBOM and maximum provenance
-   attestations. The actual immutable platform manifests are scanned again.
+   attestations. The actual immutable platform manifests are scanned again and
+   pass the packaged-console/API fixture before any signing or promotion.
 4. After successful scans, GitHub OIDC signs custom release evidence binding the
    candidate digest to the source SHA, workflow SHA, successful CI run/attempt and
    release run/attempt. `gh attestation verify` verifies the repository, signing
@@ -62,13 +76,20 @@ CA bundle and C/C++ runtime support the Rust binary's dynamic dependencies. Ther
 is no shell or package manager: use HTTP probes, not shell-based exec probes, and
 an ephemeral debug container for operational troubleshooting.
 
+`GROVE_CONSOLE_ORIGIN` enables the packaged console on its dedicated HTTPS
+host. TLS termination preserves `Host`; forwarded host headers are not trusted.
+The management host does not serve user objects, and other hosts do not serve
+the console or its browser-only identity/command APIs. Packaging does not create
+an ingress or a default administrator password. Runtime configuration is described
+in [container connections](../stack/README.md#컨테이너-연결).
+
 Deploy a reviewed version with its recorded digest through existing GitOps; do
 not deploy `latest` or candidate tags. Set non-root, read-only root filesystem,
 `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, RuntimeDefault
 seccomp and a bounded writable `/tmp` emptyDir in `quick-deploy` values. Do not
 store database, S3 or account secrets in the image; use existing Secrets.
 
-Older released images may fail the new policy because they lack Rust inventories.
+Older released images may fail the new policy because they lack Rust or frontend inventories.
 These changes do not attest or repair `0.4.1` retroactively. A new unpublished
 version, successful main CI and an actual signed release are required before
 claiming the new published artifact passed these gates.
@@ -80,20 +101,21 @@ The tests cover findings, incomplete inventories, platform ambiguity, source/CI
 evidence mismatches and fail-closed version promotion. Registry publication and
 OIDC signing require the trusted GitHub workflow and are not simulated by tests.
 
-Local ARM64 verification on 2026-10-05 used Trivy 0.74.0 with a refreshed database
-and no ignore rules. The Debian slim candidate had 57 HIGH/CRITICAL finding
-instances across 88 OS packages. The Distroless candidate had zero HIGH/CRITICAL
-findings and zero detected secrets across 14 OS packages and 279 compiled Rust
-dependencies. This is a point-in-time scan, not a guarantee against future CVEs.
-Its local Docker image ID was
-`sha256:dac59b5543e143efb979a407a4bfc1474aeb159b906926a99f2d9f43607a433d`;
+Local ARM64 verification on 2026-10-06 used Trivy 0.74.0 with a refreshed database
+and no ignore rules. The packaged image had zero HIGH/CRITICAL findings and zero
+detected secrets across 14 OS packages, 282 compiled Rust dependencies and 301
+production npm dependencies. This is a point-in-time scan, not a guarantee against
+future CVEs. Its local Docker image ID was
+`sha256:00b487184769efb7dde209052ce7c268f67166ae829e3fc4f4dfc7a5aa76f344`;
 this is not a published registry manifest digest. With a fresh isolated PostgreSQL
-database, account initialization, migrations, HTTP health/readiness and SIGTERM
-shutdown passed under non-root, read-only, capability-dropped execution. This
-does not establish amd64, S3 end-to-end, OIDC signing or registry release evidence.
+database, account initialization, readiness, HTTPS console login/logout, resource
+navigation, Swagger, desktop/mobile rendering, host isolation and SIGTERM passed
+under non-root, read-only, capability-dropped execution. This does not establish
+amd64, S3 end-to-end, OIDC signing or registry release evidence.
 
 References: [Docker attestations](https://docs.docker.com/build/ci/github-actions/attestations/),
 [GitHub verification](https://cli.github.com/manual/gh_attestation_verify),
-[Distroless runtime](https://github.com/GoogleContainerTools/distroless).
+[Distroless runtime](https://github.com/GoogleContainerTools/distroless),
+[Trivy npm coverage](https://trivy.dev/docs/v0.74/guide/coverage/language/nodejs/).
 The candidate-scan/evidence workflow follows the responsibilities used by
-project-jelly RelayGate and ShiftPV without importing their Helm or runtime roles.
+RelayGate and NoteGate without importing their Helm or runtime roles.

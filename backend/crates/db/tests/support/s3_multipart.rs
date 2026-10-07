@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use filegate_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
-use filegate_db::registry::{self, StorageRow};
-use filegate_db::s3_registry as s3;
+use grove_db::files::{self, CreateOutcome, CreateSpec, CreatedFile};
+use grove_db::registry::{self, StorageRow};
+use grove_db::s3_registry as s3;
 use sqlx::PgPool;
 
 pub const KEY: &str = "dir/large.bin";

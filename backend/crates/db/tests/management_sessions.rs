@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AccountChange},
 };
@@ -109,7 +109,7 @@ async fn session_bounds_and_parent_expiry_are_enforced(pool: PgPool) {
             .unwrap()
             .is_none()
     );
-    sqlx::query("UPDATE management.credentials SET created_at=clock_timestamp()-interval '2 hours',expires_at=clock_timestamp()-interval '1 hour'").execute(&pool).await.unwrap();
+    sqlx::query("UPDATE management.api_tokens SET created_at=clock_timestamp()-interval '2 hours',expires_at=clock_timestamp()-interval '1 hour'").execute(&pool).await.unwrap();
     assert!(
         db::session_actor(&pool, &hash(164))
             .await

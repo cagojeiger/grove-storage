@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 mod support;
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AccountChange, NewAccount},
 };
@@ -260,7 +260,7 @@ async fn waiting_mutation_rechecks_credential_after_lock_acquisition(pool: PgPoo
         .await
     });
     wait_for_identity_lock(&pool).await;
-    sqlx::query("UPDATE management.credentials SET revoked_at=clock_timestamp() WHERE id=$1")
+    sqlx::query("UPDATE management.api_tokens SET revoked_at=clock_timestamp() WHERE id=$1")
         .bind(login.credential)
         .execute(&mut *fence)
         .await

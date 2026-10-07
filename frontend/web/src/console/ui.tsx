@@ -25,7 +25,7 @@ import {
 import { Copy, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { message } from "../api/http";
 import { bytes } from "../design/format";
-import { useAction } from "../features/access/useAction";
+import { useAction } from "../hooks/useAction";
 
 export function Page({
   title,

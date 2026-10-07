@@ -35,11 +35,11 @@ pub async fn create_session(
         (SELECT id FROM management.sessions WHERE credential_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC,id DESC OFFSET 63) RETURNING id")
         .bind(credential_id).fetch_all(&mut *tx).await?;
     let session: Session = sqlx::query_as("INSERT INTO management.sessions(id,session_hash,auth_method,account_id,credential_id,expires_at)
-        SELECT $1,$2,'token',account_id,id,LEAST(expires_at,grove_time.wall_now()+interval '8 hours') FROM management.credentials WHERE id=$3
+        SELECT $1,$2,'token',account_id,id,LEAST(expires_at,grove_time.wall_now()+interval '8 hours') FROM management.api_tokens WHERE id=$3
         RETURNING id,account_id,credential_id,expires_at")
         .bind(Uuid::new_v4()).bind(session_hash).bind(credential_id).fetch_one(&mut *tx).await?;
     let context = AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: actor.account_id,
             credential_id: actor.credential_id,
             session_id: Some(session.id),
@@ -51,7 +51,7 @@ pub async fn create_session(
         audit::record(&mut tx, &context, "session.evict", "session", id).await?;
     }
     audit::record(&mut tx, &context, "session.create", "session", session.id).await?;
-    sqlx::query("UPDATE management.credentials SET last_used_at=grove_time.wall_now() WHERE id=$1")
+    sqlx::query("UPDATE management.api_tokens SET last_used_at=grove_time.wall_now() WHERE id=$1")
         .bind(credential_id)
         .execute(&mut *tx)
         .await?;
@@ -94,7 +94,7 @@ pub async fn create_password_session(
         .bind(Uuid::new_v4()).bind(session_hash).bind(account).bind(generation)
         .fetch_one(&mut *tx).await?;
     let context = AuditContext {
-        actor: AuditActor::User {
+        actor: AuditActor::Account {
             id: account,
             credential_id: None,
             session_id: Some(session.id),

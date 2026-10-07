@@ -1,4 +1,4 @@
-use filegate_core::LogFormat;
+use grove_core::LogFormat;
 use tracing_subscriber::{EnvFilter, filter::filter_fn, prelude::*};
 
 fn payload_safe(metadata: &tracing::Metadata<'_>) -> bool {

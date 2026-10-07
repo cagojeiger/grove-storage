@@ -22,7 +22,8 @@
 | 시간 의존성·만료 경계·가상 시간 테스트 | [시간 테스트](development/time-testing.md) |
 | 리소스 구조 마감·검증 경계 | [리소스 체크포인트](development/refactor-checkpoint.md) · [S3/NoteGate 검증](development/s3-compatibility-review.md) |
 | Management 완성도·운영 준비 우선순위·테스트 지도 | [완성도 점검](development/management-review.md) |
-| main 반영·릴리스·FileGate 운영 이관 게이트 | [운영 전환 준비](development/production-readiness.md) |
+| 새 DB 초기화·백업 복원 | [새 설치 검증](development/fresh-installation.md) |
+| main 반영·이미지·릴리스 게이트 | [운영 전환 준비](development/production-readiness.md) |
 | 실행·설정·검증 | [기술·운영](stack/README.md) |
 | 외부 저장소 조사 기록 | [벤더 노트](vendors/README.md) |
 | 과거 코드 이관·단계별 검증 기록 | [이관 분석](development/import-review.md) |
@@ -42,10 +43,11 @@
 | 관리 | 운영자 API, gscli 조회·변경, Terraform 비교 예제 | 등록부 Terraform 운영 이관 | Storage Server·Agent 조인 |
 | 관리 인증 | 로컬 비밀번호·Accounts·관리 토큰·브라우저 세션; 이전 REST는 명시적 호환 모드 | 운영 인증 이관·proxy 검증 | OIDC·노드 조인 자격증명은 별도 계약 |
 | 관리 명령·감사 | CLI/MCP/콘솔 공통 자원 실행기, 변경 audit·호출·보안 로그·Activity UI | 로그 보존·조회 비용 점검, 운영 전환 | 데이터 경로의 로그와 별도 |
-| 실행 이름 | 서버 `filegate`·`FILEGATE_*`, CLI `gscli`·`GROVE_*` | 기존 서버 계약 유지 | 서버 이름 변경은 별도 릴리스 |
+| 실행 도구 | 서버 `grove-storage`·`GROVE_*`, 원격 CLI `gscli`·`GROVE_*`; updater는 `gscli`에 포함 | 플랫폼별 릴리스 검증 | API·설정 계약과 실행 파일 이름은 별도 |
 
-Grove Storage는 후속 제품명이다. 현재 등록부와 backend는 S3-only다.
-Migration `0017`은 FS 행이 있으면 중단하며, 독립 filesystem Node는 2차 설계 대상이다.
+Grove Storage는 현재 제품명이다. 현재 등록부와 backend는 S3-only다.
+DB는 현재 기준 스키마로 새로 생성한다. 기존 DB 업그레이드는 제공하지 않는다.
+독립 filesystem Node는 2차 설계 대상이다.
 운영 이관 완료 여부는 로컬 코드·검증과 구분하고 현재 계약은 spec을 따른다.
 
 ## 문서 책임

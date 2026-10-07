@@ -6,8 +6,8 @@
 //! verify_part_sizes)은 쓰지 않는다 — part별 실측 크기를 원장에 저장해 Complete
 //! 시점에 합으로 크기를 정하고 offset을 누계로 조립한다.
 //!
-//! UploadId 핸들은 filegate file_id다 — 벤더 upload_id는 lease에 내부 저장되고
-//! client는 보지 않는다 (인증은 filegate SigV4 자격으로만). 4 오퍼레이션:
+//! UploadId 핸들은 Grove file_id다 — 벤더 upload_id는 lease에 내부 저장되고
+//! client는 보지 않는다 (인증은 Grove SigV4 자격으로만). 4 오퍼레이션:
 //! Create(세션 개시) · UploadPart(part 계측·중계) · Complete(대조·조립·확정) ·
 //! Abort(중단·회수). 확정점은 Complete다 — S3 프로토콜이 명시적 완료를 부르며,
 //! 단일 PUT의 관찰-확정과 달리 관찰 확정 후보에서 제외된다 (part_size 표식).
@@ -15,9 +15,9 @@
 use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use filegate_db::files::{self, CreateOutcome, CreateSpec};
-use filegate_db::s3_registry as s3reg;
-use filegate_infra::{Address, temp_spool};
+use grove_db::files::{self, CreateOutcome, CreateSpec};
+use grove_db::s3_registry as s3reg;
+use grove_infra::{Address, temp_spool};
 use grove_object_policy::multipart::{MAX_PARTS, composite_etag, part_number_ok};
 use uuid::Uuid;
 
@@ -34,7 +34,7 @@ use crate::lease::{
 use crate::routes::AppState;
 use crate::spool::{self, STREAM_BUF_SIZE, spool_root};
 use crate::storage_access::backend_from_row;
-use filegate_infra::backend::cleanup_backend_upload;
+use grove_infra::s3_io::cleanup_backend_upload;
 use grove_object_policy::validation::content_type_ok;
 
 /// Complete 요청 XML 본문 상한 — part 목록만 담긴다 (10,000개 × ~120B ≈ 1.2MB).
@@ -101,7 +101,7 @@ pub(super) async fn create_multipart(
             .s3_clients
             .get(&created.storage.id, spec, Address::Internal);
         let upload_id =
-            match filegate_infra::s3_create_multipart(&storage, &created.object_key, content_type)
+            match grove_infra::s3_create_multipart(&storage, &created.object_key, content_type)
                 .await
             {
                 Ok(upload_id) => upload_id,
@@ -112,9 +112,7 @@ pub(super) async fn create_multipart(
             };
         if let Err(error) = files::attach_upload_id(&state.pool, created.lease_id, &upload_id).await
         {
-            match filegate_infra::s3_abort_multipart(&storage, &created.object_key, &upload_id)
-                .await
-            {
+            match grove_infra::s3_abort_multipart(&storage, &created.object_key, &upload_id).await {
                 Ok(()) => discard_unstarted_create(state, created.file_id).await,
                 Err(cleanup_error) => {
                     tracing::error!(
@@ -281,7 +279,7 @@ pub(super) async fn upload_part(
         let storage = state
             .s3_clients
             .get(&file.storage.id, spec, Address::Internal);
-        let vendor_etag = filegate_infra::s3_upload_part_from_path(
+        let vendor_etag = grove_infra::s3_upload_part_from_path(
             &storage,
             &file.object_key,
             vendor_upload_id,
@@ -489,7 +487,7 @@ pub(super) async fn complete_multipart(
             .iter()
             .map(|(n, _, etag)| (*n, etag.clone()))
             .collect();
-        let vendor_etag = filegate_infra::s3_complete_multipart(
+        let vendor_etag = grove_infra::s3_complete_multipart(
             &storage,
             &file.object_key,
             vendor_upload_id,

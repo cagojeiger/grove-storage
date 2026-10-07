@@ -3,8 +3,8 @@
 
 use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::Response;
-use filegate_core::ExposeSecret as _;
-use filegate_db::s3_registry as s3reg;
+use grove_core::ExposeSecret as _;
+use grove_db::s3_registry as s3reg;
 use grove_s3_protocol::auth::{
     canonical_header_value, credential_scope, presigned_expiry, signed_headers, valid_payload_hash,
 };
@@ -148,7 +148,7 @@ fn from_header(
 
 /// query-signed(presigned) 재료 — 서명·자격이 쿼리스트링에 있다. payload는
 /// UNSIGNED-PAYLOAD로 고정, 만료는 X-Amz-Expires 창으로 검사한다. 이게 서비스가
-/// 자기 S3 SDK의 `generate_presigned_url`을 filegate에 그대로 겨누는 경로다.
+/// 자기 S3 SDK의 `generate_presigned_url`을 Grove에 그대로 겨누는 경로다.
 #[allow(clippy::result_large_err)]
 fn from_query(uri: &Uri, now: chrono::DateTime<chrono::Utc>) -> Result<SigV4, Response> {
     let query = uri.query().unwrap_or_default();
@@ -317,7 +317,7 @@ pub(super) async fn authenticate(
         .decrypt(
             &credential.enc_key_id,
             &sig.access_key,
-            &filegate_core::EncryptedSecret {
+            &grove_core::EncryptedSecret {
                 ciphertext: credential.secret_ciphertext,
                 nonce: credential.secret_nonce,
             },

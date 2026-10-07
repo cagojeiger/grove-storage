@@ -6,7 +6,6 @@ export type EventContext = {
   created_at: string;
   actor_kind: string;
   actor_id: string | null;
-  owner_user_id: string | null;
   credential_id: string | null;
   session_id: string | null;
   request_id: string;
@@ -42,7 +41,7 @@ export function isContext(v: unknown): v is EventContext {
       (k) => typeof v[k] === "string",
     ) &&
     date(v.created_at) &&
-    ["actor_id", "owner_user_id", "credential_id", "session_id"].every((k) =>
+    ["actor_id", "credential_id", "session_id"].every((k) =>
       nullable(v[k]),
     )
   );
@@ -81,4 +80,4 @@ export const eventResult = (event: Event) =>
       ? event.outcome
       : event.reason_code;
 export const actor = (context: EventContext) =>
-  context.actor_kind === "master" ? "Root" : (context.actor_id ?? "Unknown");
+  context.actor_kind === "system" ? "System" : (context.actor_id ?? "Unknown");

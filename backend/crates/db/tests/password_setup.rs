@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db};
 use grove_management_policy::Role;
 use support::*;
 use uuid::Uuid;

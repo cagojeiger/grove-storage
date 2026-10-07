@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db};
 use grove_management_policy::Role;
 use support::*;
 use uuid::Uuid;
@@ -33,6 +33,53 @@ async fn accounts_are_complete_without_a_subtype_table(pool: PgPool) {
         .await
         .unwrap();
     assert!(users.is_none());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn history_rejects_retired_actor_kinds_and_keeps_deleted_account_snapshots(pool: PgPool) {
+    bootstrap(&pool).await;
+    let id = user(&pool, Role::Reader).await;
+    for kind in ["user", "agent", "master"] {
+        let error = sqlx::query("INSERT INTO management.audit_events(actor_kind,actor_id,request_id,surface,action,resource_type,resource_id)
+            VALUES($1,$2,$3,'console','account.create','account','fixture')")
+            .bind(kind).bind(id).bind(Uuid::new_v4()).execute(&pool).await.unwrap_err();
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23514")
+        );
+    }
+    let request = Uuid::new_v4();
+    let context = db::AuditContext {
+        actor: db::AuditActor::Account {
+            id,
+            credential_id: None,
+            session_id: None,
+        },
+        request_id: request,
+        surface: grove_management_policy::Surface::Console,
+    };
+    db::create_account(
+        &pool,
+        &context,
+        db::NewAccount {
+            display_name: "Recorded",
+            role: Role::Reader,
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query("DELETE FROM management.accounts WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let actor: Uuid =
+        sqlx::query_scalar("SELECT actor_id FROM management.audit_events WHERE request_id=$1")
+            .bind(request)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(actor, id);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -94,7 +141,7 @@ async fn live_credentials_and_sessions_protect_their_account(pool: PgPool) {
             .is_err()
     );
     assert!(
-        sqlx::query("DELETE FROM management.credentials WHERE id=$1")
+        sqlx::query("DELETE FROM management.api_tokens WHERE id=$1")
             .bind(credential.id)
             .execute(&pool)
             .await

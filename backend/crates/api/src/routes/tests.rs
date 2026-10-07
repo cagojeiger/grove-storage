@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::body::{Body, to_bytes};
 use axum::http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header};
-use filegate_core::SecurityConfig;
+use grove_core::SecurityConfig;
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
 
@@ -23,24 +23,21 @@ pub(crate) fn test_state() -> AppState {
         enc_key_id: "test-v1".to_owned(),
         enc_root_secret_prev: None,
         enc_key_id_prev: None,
-        operator_tokens: vec!["test-operator-token".to_owned().into()],
-        // Keep compatibility contract fixtures explicit; production defaults to false.
-        legacy_admin_enabled: true,
     };
     let crypto = Arc::new(security.crypto().unwrap());
     let pool = PgPoolOptions::new()
         .connect_lazy(LAZY_DATABASE_URL)
         .unwrap();
     AppState {
-        clock: Arc::new(filegate_core::time::SystemClock),
+        clock: Arc::new(grove_core::time::SystemClock),
         pool,
-        security,
         crypto,
-        public_url: Some("http://filegate.test".to_owned()),
+        public_url: Some("http://grove.test".to_owned()),
         console_origin: None,
+        console_web: None,
         multipart_threshold: 8 * 1024 * 1024,
         part_size: 5 * 1024 * 1024,
-        s3_clients: Arc::new(filegate_infra::S3ClientCache::default()),
+        s3_clients: Arc::new(grove_infra::S3ClientCache::default()),
         single_upload_claims: Arc::new(tokio::sync::Semaphore::new(1)),
         spool_slots: Arc::new(tokio::sync::Semaphore::new(1)),
     }
@@ -122,7 +119,7 @@ async fn public_routes_are_reachable_without_authentication() {
     assert_eq!(
         body_text(root).await,
         format!(
-            "{{\"name\":\"filegate\",\"version\":\"{}\"}}",
+            "{{\"name\":\"grove-storage\",\"version\":\"{}\"}}",
             env!("CARGO_PKG_VERSION")
         )
     );
@@ -135,10 +132,10 @@ async fn public_routes_are_reachable_without_authentication() {
 #[tokio::test]
 async fn matched_control_routes_enforce_their_own_authentication() {
     let admin = send(Method::GET, "/api/admin/v1/clients").await;
-    assert_eq!(admin.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(admin.status(), StatusCode::GONE);
     assert_eq!(
         body_text(admin).await,
-        "{\"error\":\"operator token required\"}"
+        "{\"error\":\"legacy_admin_removed\"}"
     );
 
     let client = send(Method::POST, "/api/v1/files").await;
@@ -154,7 +151,6 @@ async fn reserved_paths_never_fall_through_to_the_s3_surface() {
     for uri in [
         "/api/not-a-route",
         "/%61pi/not-a-route",
-        "/api/admin/v1/not-a-route",
         "/blobs/not-a-lease/extra",
         "/healthz/not-a-route",
         "/readyz/not-a-route",

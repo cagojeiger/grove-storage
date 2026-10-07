@@ -2,7 +2,7 @@
 #[path = "support/management.rs"]
 mod support;
 
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, AccountChange, Error},
 };
@@ -24,7 +24,7 @@ async fn issuance_racing_deletion_never_leaves_a_valid_key(pool: PgPool) {
     assert!(issued.is_ok() || matches!(issued, Err(Error::InactiveAccount)));
     assert!(db::authenticate(&pool, &hash).await.unwrap().is_none());
     let valid: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM management.credentials WHERE account_id=$1 AND revoked_at IS NULL",
+        "SELECT count(*) FROM management.api_tokens WHERE account_id=$1 AND revoked_at IS NULL",
     )
     .bind(account)
     .fetch_one(&pool)

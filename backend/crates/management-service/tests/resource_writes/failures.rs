@@ -26,7 +26,7 @@ async fn commit_failure_is_unknown_never_retried_and_never_returns_secret(pool: 
     sqlx::raw_sql("CREATE SEQUENCE public.commit_attempts;
         CREATE FUNCTION public.reject_credential_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         PERFORM nextval('public.commit_attempts'); RAISE EXCEPTION 'private-db-detail'; END $$;
-        CREATE CONSTRAINT TRIGGER reject_commit AFTER INSERT ON s3_credentials
+        CREATE CONSTRAINT TRIGGER reject_commit AFTER INSERT ON client_s3_credentials
         DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.reject_credential_commit();")
         .execute(&pool).await.unwrap();
     let before = audit_count(&pool).await;
@@ -80,7 +80,7 @@ async fn retained_files_block_deletion_and_registration_constraints_survive(pool
     assert_eq!(error.outcome, Outcome::NotApplied);
     assert_eq!(resource_counts(&pool).await, (1, 1, 1));
     assert_eq!(audit_count(&pool).await, before);
-    for id in filegate_db::registry::RESERVED_CLIENT_IDS {
+    for id in grove_db::registry::RESERVED_CLIENT_IDS {
         let error = execute(
             &pool,
             &admin.token,

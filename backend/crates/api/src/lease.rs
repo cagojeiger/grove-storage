@@ -5,7 +5,7 @@
 use std::future::Future;
 use std::time::Duration;
 
-use filegate_db::{PgPool, files, s3_registry};
+use grove_db::{PgPool, files, s3_registry};
 use uuid::Uuid;
 
 /// 쓰기 lease TTL — 짧게 둔다 (spec 00: 쓰기 URL은 확정 후에도 만료 전까지

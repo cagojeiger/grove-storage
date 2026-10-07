@@ -153,7 +153,7 @@ fn native() -> Value {
         "Grove Storage - Native compatibility API",
         "FileGate-compatible JSON file lifecycle API. New S3 SDK integrations should use the S3 protocol instead. Authenticate using a Native Client key, not an Account token. Transfer bytes using the opaque, expiring URL returned by the API; then commit an upload. URL structure and provider identity are not a client contract. The Swagger view is read-only.",
     );
-    let mut schemas: Map<String, Value> = crate::v1::schemas()
+    let mut schemas: Map<String, Value> = crate::native::schemas()
         .map(|(name, schema)| (name.into(), embed(schema, name)))
         .collect();
     schemas.insert("NativeError".into(), json!({"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}}));

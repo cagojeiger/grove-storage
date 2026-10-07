@@ -1,10 +1,10 @@
 use std::io::IsTerminal;
 
-use filegate_core::{ExposeSecret, SecretString};
+use grove_core::{ExposeSecret, SecretString};
 use grove_management_service::{local_accounts as service, passwords};
 use uuid::Uuid;
 
-const USAGE: &str = "usage: filegate account init <username> <display-name> | recover <account-id> <username> --yes\nPasswords are entered privately at the terminal. FILEGATE_DATABASE_URL is required.";
+const USAGE: &str = "usage: grove-storage account init <username> <display-name> | grove-storage account recover <account-id> <username> --yes\nPasswords are entered privately at the terminal. GROVE_DATABASE_URL is required.";
 
 #[derive(Debug, PartialEq, Eq)]
 enum Command<'a> {
@@ -48,8 +48,8 @@ pub async fn run() -> anyhow::Result<std::process::ExitCode> {
     let username =
         passwords::username(username).map_err(|_| anyhow::anyhow!("invalid username"))?;
     let url = SecretString::from(
-        std::env::var("FILEGATE_DATABASE_URL")
-            .map_err(|_| anyhow::anyhow!("FILEGATE_DATABASE_URL is required"))?,
+        std::env::var("GROVE_DATABASE_URL")
+            .map_err(|_| anyhow::anyhow!("GROVE_DATABASE_URL is required"))?,
     );
     anyhow::ensure!(
         std::io::stdin().is_terminal(),
@@ -68,10 +68,10 @@ pub async fn run() -> anyhow::Result<std::process::ExitCode> {
         "passwords do not match"
     );
     drop(confirmation);
-    let pool = filegate_db::connect(url.expose_secret(), 2)
+    let pool = grove_db::connect(url.expose_secret(), 2)
         .await
         .map_err(|_| anyhow::anyhow!("database connection failed"))?;
-    filegate_db::migrate(&pool)
+    grove_db::migrate(&pool)
         .await
         .map_err(|_| anyhow::anyhow!("database migration failed"))?;
     let request_id = Uuid::new_v4();

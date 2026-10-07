@@ -21,10 +21,10 @@ mod s3_completion;
 use std::sync::Arc;
 use std::time::Duration;
 
-use filegate_core::Crypto;
-use filegate_db::files::{self, SweepCandidate};
-use filegate_db::{PgPool, registry, s3_registry as s3reg, usage};
-use filegate_infra::{Address, S3ClientCache, s3_head_object, temp_spool};
+use grove_core::Crypto;
+use grove_db::files::{self, SweepCandidate};
+use grove_db::{PgPool, registry, s3_registry as s3reg, usage};
+use grove_infra::{Address, S3ClientCache, s3_head_object, temp_spool};
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
@@ -54,7 +54,7 @@ pub async fn run(
     s3_clients: Arc<S3ClientCache>,
     tick: Duration,
     shutdown: CancellationToken,
-    clock: Arc<dyn filegate_core::time::Clock>,
+    clock: Arc<dyn grove_core::time::Clock>,
 ) {
     tracing::info!(event = "reconciler.started", tick_secs = tick.as_secs());
 
@@ -72,7 +72,7 @@ pub async fn run(
                 // 치운다 — 자기 디스크는 자기 몫이고, 락 승자만 치우면
                 // 락을 못 이긴 pod의 잔여물이 밀린다.
                 sweep_local_temps(clock.now().into()).await;
-                let result = filegate_db::with_reconciler_lock(&pool, || async {
+                let result = grove_db::with_reconciler_lock(&pool, || async {
                     run_jobs(&pool, &crypto, &s3_clients).await;
                 })
                 .await;
@@ -92,7 +92,7 @@ pub async fn run(
 async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
     // 잡 0: 관찰 확정 (spec 00) — 단일 PUT pending의 실물이 선언과 맞으면
     // 서비스의 commit 없이 확정한다. 직결 presigned 패턴("URL 주고 잊기")이
-    // filegate에서도 성립하는 지점이다. commit API는 즉시 확정이 필요한
+    // Grove에서도 성립하는 지점이다. commit API는 즉시 확정이 필요한
     // 서비스의 선택지로 남는다 (멱등 공존). multipart는 후보가 아니다 —
     // 완료는 벤더도 선언이다 (spec 02).
     match files::observed_commit_candidates(pool, BATCH_LIMIT).await {
@@ -285,7 +285,7 @@ async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
     // stock의 과거는 소급 계산이 불가하므로 매일 남긴다. 이미 찍힌 날은 0.
     // 자정에 서버가 없었으면 첫 tick에 늦게 찍히는 근사치고, 그제 이전의
     // 빈 날은 소급하지 않는다 — 지어낼 수 없는 값이다.
-    let today = filegate_db::time::now(pool).await;
+    let today = grove_db::time::now(pool).await;
     match today {
         Ok(today) => record_daily_snapshot(pool, today.date_naive() - chrono::Days::new(1)).await,
         Err(error) => tracing::error!(event = "reconciler.snapshot_failed", %error),
@@ -296,10 +296,10 @@ async fn record_daily_snapshot(pool: &PgPool, yesterday: chrono::NaiveDate) {
     match usage::record_snapshot(pool, yesterday).await {
         Ok(0) => {}
         Ok(rows) => {
-            tracing::info!(event = "reconciler.usage_snapshot", day = %yesterday, rows)
+            tracing::info!(event = "reconciler.usage_snapshots", day = %yesterday, rows)
         }
         Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "usage_snapshot", %error)
+            tracing::error!(event = "reconciler.scan_failed", job = "usage_snapshots", %error)
         }
     }
 }
@@ -366,7 +366,7 @@ async fn sweep_object(
         .await?
         .ok_or_else(|| anyhow::anyhow!("storage '{}' not registered", candidate.storage_id))?;
     let backend = crate::storage_access::backend_from_row(crypto, &row)?;
-    filegate_infra::backend::cleanup_backend_upload(
+    grove_infra::s3_io::cleanup_backend_upload(
         s3_clients,
         &backend,
         &candidate.storage_id,

@@ -227,7 +227,7 @@ Git 이력에 기록된 release 이름은 새 저장소에서 바이너리를 �
 | 책임 | 업로드 선언 검증, part 수·크기·offset, composite ETag |
 | 의존성 | `hex`, `md-5`; DB·HTTP·런타임·환경 설정 독립 |
 | 호출자 | Native/S3 API와 blob 전송이 직접 사용 |
-| 기존 Rust 경로 | `filegate_core::multipart`는 새 구현을 재노출 |
+| 기존 Rust 경로 | `grove_core::multipart`는 새 구현을 재노출 |
 | 동작 | 오류 문구·검증 순서·계산 유지; schema·SQL·복구 흐름 유지 |
 | 테스트 | 기존 8개 이동 + 경계값·검증 순서 5개 추가, 세 파일로 분리 |
 | CI | DB service 없는 독립 policy 테스트 job 추가 |

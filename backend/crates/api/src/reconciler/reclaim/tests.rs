@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 
-use filegate_db::{files, registry};
+use grove_db::{files, registry};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "../db/migrations")]

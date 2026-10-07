@@ -10,8 +10,8 @@
 #[path = "support/lifecycle.rs"]
 mod support;
 
-use filegate_db::files::{self, CreateOutcome, DeleteOutcome};
-use filegate_db::registry::{self, WriteOp, WriteViolation};
+use grove_db::files::{self, CreateOutcome, DeleteOutcome};
+use grove_db::registry::{self, WriteOp, WriteViolation};
 use sqlx::PgPool;
 use support::{create_ok, observed, s3_row, spec, wire};
 

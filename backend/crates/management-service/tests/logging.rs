@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 mod support;
-use filegate_db::{
+use grove_db::{
     PgPool,
     management::{self as db, NewAccount, admission},
 };
@@ -92,7 +92,7 @@ async fn token_denial_retains_user_and_credential_without_creating_audit(pool: P
     .await;
     assert!(matches!(denied.result, Err(Error::Forbidden)));
     let row: (String, uuid::Uuid, uuid::Uuid) = sqlx::query_as("SELECT actor_kind,actor_id,credential_id FROM management.command_invocations WHERE request_id=$1").bind(denied.request_id).fetch_one(&pool).await.unwrap();
-    assert_eq!(row.0, "user");
+    assert_eq!(row.0, "account");
     assert_eq!(row.1, admin.account);
     assert_ne!(row.2, admin.credential);
     assert_eq!(audit_count(&pool).await, before);

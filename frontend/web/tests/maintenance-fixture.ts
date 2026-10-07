@@ -4,9 +4,8 @@ import { session } from "./command-fixture";
 export const context = {
   id: "9007199254740993",
   created_at: "2026-09-25T00:00:00Z",
-  actor_kind: "user",
+  actor_kind: "account",
   actor_id: "user",
-  owner_user_id: null,
   credential_id: "credential",
   session_id: "session",
   request_id: "12345678-1234-1234-1234-123456789abc",

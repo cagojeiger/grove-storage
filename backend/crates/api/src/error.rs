@@ -3,16 +3,16 @@
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use filegate_db::registry::{self, WriteOp, WriteViolation};
+use grove_db::registry::{self, WriteOp, WriteViolation};
 
 pub(crate) enum ApiError {
     /// 명시적 상태와 메시지 (400/401/404).
     Status(StatusCode, String),
     /// DB 쓰기 거부 — 분류는 IntoResponse에서 (중복 409, 참조 없음 404,
     /// 사용 중 409, CHECK 위반 400).
-    Db(filegate_db::DbError, WriteOp),
+    Db(grove_db::DbError, WriteOp),
     /// 내부 실패 — 상세는 로그로, 응답은 일반 문구.
-    Internal(filegate_core::Error),
+    Internal(grove_core::Error),
     /// 저장소 호출 실패 — 502, 상세는 로그로.
     Storage(anyhow::Error),
 }
@@ -38,25 +38,17 @@ pub(crate) fn status(code: StatusCode, message: &str) -> ApiError {
 }
 
 pub(crate) fn internal(detail: impl std::fmt::Display) -> ApiError {
-    ApiError::Internal(filegate_core::Error::internal(detail))
+    ApiError::Internal(grove_core::Error::internal(detail))
 }
 
-impl ApiError {
-    /// DELETE 경로의 DB 에러 — FK 위반을 "참조가 남아 삭제 불가"(409)로 읽는다.
-    /// 나머지 경로는 `From`(Insert 방향: 참조 대상 없음 = 404)이 담당한다.
-    pub(crate) fn on_delete(error: filegate_db::DbError) -> Self {
-        Self::Db(error, WriteOp::Delete)
-    }
-}
-
-impl From<filegate_db::DbError> for ApiError {
-    fn from(error: filegate_db::DbError) -> Self {
+impl From<grove_db::DbError> for ApiError {
+    fn from(error: grove_db::DbError) -> Self {
         Self::Db(error, WriteOp::Insert)
     }
 }
 
-impl From<filegate_core::Error> for ApiError {
-    fn from(error: filegate_core::Error) -> Self {
+impl From<grove_core::Error> for ApiError {
+    fn from(error: grove_core::Error) -> Self {
         Self::Internal(error)
     }
 }

@@ -1,4 +1,4 @@
-//! `filegate status` — 배포 자가 점검.
+//! `grove-storage status` — 배포 자가 점검.
 //!
 //! 서버를 띄우지 않고 Config로 DB에 붙어 등록부·스토리지 접근을 직접 점검하고
 //! 사람이 읽을 요약을 stdout에 찍는다. 전부 정상이면 exit 0, 스토리지 접근이
@@ -7,12 +7,12 @@
 
 use std::process::ExitCode;
 
-use filegate_core::{Config, ExposeSecret};
+use grove_core::{Config, ExposeSecret};
 
 pub async fn run() -> anyhow::Result<ExitCode> {
     let config = Config::load()?;
     let crypto = config.security.crypto()?;
-    let pool = filegate_db::connect(
+    let pool = grove_db::connect(
         config.database.url.expose_secret(),
         config.database.max_connections,
     )
@@ -20,11 +20,11 @@ pub async fn run() -> anyhow::Result<ExitCode> {
 
     // 부팅과 같은 재검증을 storage별로(abort 없이) 돌린다.
     let checks = crate::storage_registration::check_registered(&pool, &crypto).await?;
-    let usage = filegate_db::usage::by_storage(&pool).await?;
-    let clients = filegate_db::registry::list_clients(&pool).await?;
+    let usage = grove_db::usage::by_storage(&pool).await?;
+    let clients = grove_db::registry::list_clients(&pool).await?;
     pool.close().await;
 
-    println!("filegate {}   db ok", env!("CARGO_PKG_VERSION"));
+    println!("grove-storage {}   db ok", env!("CARGO_PKG_VERSION"));
     println!();
     println!("STORAGES ({})", checks.len());
     for check in &checks {
