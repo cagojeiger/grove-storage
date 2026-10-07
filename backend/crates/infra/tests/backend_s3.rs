@@ -15,7 +15,7 @@ async fn observation_uses_internal_endpoint_and_preserves_size_and_etag() {
             .unwrap()
             .unwrap();
     assert_eq!(observed.size, 7);
-    assert_eq!(observed.etag.as_deref(), Some("abc123"));
+    assert_eq!(observed.etag, "abc123");
     assert_eq!(*provider.requests.lock().unwrap(), ["HEAD /objects/file"]);
 }
 

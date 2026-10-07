@@ -16,7 +16,7 @@ pub(super) struct Operations<'a> {
 impl MultipartCreate for Operations<'_> {
     type Error = ApiError;
 
-    async fn create_vendor_upload(&self) -> Result<Option<String>, ApiError> {
+    async fn create_vendor_upload(&self) -> Result<String, ApiError> {
         let spec = &self.backend.spec;
         let storage = self
             .state
@@ -24,7 +24,6 @@ impl MultipartCreate for Operations<'_> {
             .get(&self.created.storage.id, spec, Address::Internal);
         filegate_infra::s3_create_multipart(&storage, &self.created.object_key, self.content_type)
             .await
-            .map(Some)
             .map_err(ApiError::Storage)
     }
 

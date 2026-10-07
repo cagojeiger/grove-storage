@@ -44,16 +44,19 @@ async fn create_multipart(pool: &PgPool) -> CreatedFile {
         CreateOutcome::Created(created) => *created,
         CreateOutcome::NoClient => panic!("expected created file"),
     };
-    assert!(
-        files::record_part_done(pool, created.lease_id, 1, 50, "aaaaaaaa")
-            .await
-            .unwrap()
-    );
-    assert!(
-        files::record_part_done(pool, created.lease_id, 2, 50, "bbbbbbbb")
-            .await
-            .unwrap()
-    );
+    for (part, etag) in [(1, "aaaaaaaa"), (2, "bbbbbbbb")] {
+        assert_eq!(
+            files::claim_relay_part(pool, created.file_id, created.lease_id, part, 900)
+                .await
+                .unwrap(),
+            files::RelayPartClaim::Claimed
+        );
+        assert!(
+            files::finish_relay_part(pool, created.file_id, created.lease_id, part, 50, etag)
+                .await
+                .unwrap()
+        );
+    }
     created
 }
 
@@ -111,16 +114,11 @@ async fn completion_claim_blocks_new_parts_and_duplicate_completion(pool: PgPool
         files::begin_completion(&pool, file.file_id).await.unwrap(),
         CompletionStart::Resuming
     ));
-    assert!(
-        files::claim_part(&pool, file.lease_id, 1)
+    assert_eq!(
+        files::claim_relay_part(&pool, file.file_id, file.lease_id, 1, 900)
             .await
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        !files::record_part_done(&pool, file.lease_id, 1, 50, "cccccccc")
-            .await
-            .unwrap()
+            .unwrap(),
+        files::RelayPartClaim::Unavailable
     );
     assert!(
         !files::extend_write_lease(&pool, file.lease_id, 900)

@@ -13,25 +13,21 @@ mod support;
 use filegate_db::files;
 use filegate_db::s3_registry as s3;
 use sqlx::PgPool;
-use support::{KEY, file_row, open_multipart, wire};
+use support::{KEY, file_row, open_multipart, upload_part, wire};
 
 #[sqlx::test(migrations = "./migrations")]
 async fn complete_finalizes_with_summed_size_and_composite_etag(pool: PgPool) {
     wire(&pool).await;
     let created = open_multipart(&pool).await;
     let lease_id = created.lease_id;
-    files::record_part_done(&pool, lease_id, 1, 50, "aaaa")
-        .await
-        .unwrap();
-    files::record_part_done(&pool, lease_id, 2, 30, "bbbb")
-        .await
-        .unwrap();
+    upload_part(&pool, &created, 1, 50, "aaaa").await;
+    upload_part(&pool, &created, 2, 30, "bbbb").await;
     // Complete: 실측 합(80)과 합성 ETag로 pending→active. create의 sentinel
     // 0이 실측 합으로 갱신된다.
     let total = 80;
-    // generic multipart 확정은 S3 세션을 건드리지 못한다.
+    // Native commit cannot bypass S3 completion ownership.
     assert!(
-        !files::finalize_multipart_commit(&pool, created.file_id, total, "hexhex-2")
+        !files::finalize_commit(&pool, created.file_id, "hexhex-2")
             .await
             .unwrap()
     );

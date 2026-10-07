@@ -13,7 +13,7 @@ mod support;
 use filegate_db::files;
 use filegate_db::s3_registry as s3;
 use sqlx::PgPool;
-use support::{KEY, file_row, open_multipart, open_native_multipart, wire};
+use support::{KEY, file_row, open_multipart, open_native_multipart, upload_part, wire};
 
 #[sqlx::test(migrations = "./migrations")]
 async fn open_records_pending_with_unknown_size(pool: PgPool) {
@@ -79,16 +79,9 @@ async fn parts_recorded_out_of_order_read_back_ascending(pool: PgPool) {
     wire(&pool).await;
     let created = open_multipart(&pool).await;
     let lease_id = created.lease_id;
-    // 비순차 기록: 3 → 1 → 2 (s3 백엔드 경로 = record_part_done upsert).
-    files::record_part_done(&pool, lease_id, 3, 20, "cccc")
-        .await
-        .unwrap();
-    files::record_part_done(&pool, lease_id, 1, 50, "aaaa")
-        .await
-        .unwrap();
-    files::record_part_done(&pool, lease_id, 2, 30, "bbbb")
-        .await
-        .unwrap();
+    for (part, size, etag) in [(3, 20, "cccc"), (1, 50, "aaaa"), (2, 30, "bbbb")] {
+        upload_part(&pool, &created, part, size, etag).await;
+    }
     let parts = files::done_parts(&pool, lease_id).await.unwrap();
     assert_eq!(
         parts,
@@ -99,25 +92,17 @@ async fn parts_recorded_out_of_order_read_back_ascending(pool: PgPool) {
         ]
     );
     // 같은 part 재업로드는 last-write-wins (실측 갱신).
-    files::record_part_done(&pool, lease_id, 2, 33, "bbbb2")
-        .await
-        .unwrap();
+    upload_part(&pool, &created, 2, 33, "bbbb2").await;
     let parts = files::done_parts(&pool, lease_id).await.unwrap();
     assert_eq!(parts[1], (2, 33, "bbbb2".to_owned()));
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn claim_path_serializes_and_records_measured(pool: PgPool) {
-    // fs 백엔드 경로 = claim_part(행 락) → done(실측). 크기-비선언이라 실측
-    // 크기가 그대로 원장에 남는다 (기하 파생 없음).
+async fn upload_part_records_measured_size_without_declared_geometry(pool: PgPool) {
     wire(&pool).await;
     let created = open_multipart(&pool).await;
     let lease_id = created.lease_id;
-    let claim = files::claim_part(&pool, lease_id, 1)
-        .await
-        .unwrap()
-        .expect("part claim");
-    claim.done(4096, "dddd").await.unwrap();
+    upload_part(&pool, &created, 1, 4096, "dddd").await;
     let parts = files::done_parts(&pool, lease_id).await.unwrap();
     assert_eq!(parts, vec![(1, 4096, "dddd".to_owned())]);
 }

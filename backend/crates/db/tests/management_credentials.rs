@@ -34,61 +34,13 @@ async fn issuance_racing_deletion_never_leaves_a_valid_key(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn recovery_is_targeted_and_preserves_legacy_auth(pool: PgPool) {
-    let (owner, _) = bootstrap(&pool).await;
-    let other = user(&pool, Role::Admin).await;
-    db::issue_credential(&pool, &context(), other, &key(&hash(2)))
-        .await
-        .unwrap();
-    db::create_session(&pool, uuid::Uuid::new_v4(), &hash(1), &hash(10))
-        .await
-        .unwrap()
-        .unwrap();
-    let legacy = filegate_db::admin_auth::issue(
-        &pool,
-        filegate_db::admin_auth::IssueMode::Initialize,
-        "legacy",
-        "legacy-hash",
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    let recovered = db::recover_admin(&pool, &context(), owner, &key(&hash(3)))
-        .await
-        .unwrap();
-    assert!(db::authenticate(&pool, &hash(1)).await.unwrap().is_none());
-    assert!(db::session_actor(&pool, &hash(10)).await.unwrap().is_none());
-    assert_eq!(
-        db::authenticate(&pool, &hash(3))
-            .await
-            .unwrap()
-            .unwrap()
-            .credential_id,
-        Some(recovered.id)
-    );
-    assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_some());
-    assert_eq!(
-        filegate_db::admin_auth::authenticate(&pool, "legacy-hash")
-            .await
-            .unwrap(),
-        Some(legacy.id)
-    );
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn audit_failure_rolls_back_issuance_revocation_and_recovery(pool: PgPool) {
+async fn audit_failure_rolls_back_issuance_and_revocation(pool: PgPool) {
     let (owner, original) = bootstrap(&pool).await;
     db::create_session(&pool, uuid::Uuid::new_v4(), &hash(1), &hash(10))
         .await
         .unwrap()
         .unwrap();
     let before = audit_count(&pool).await;
-    assert!(
-        db::recover_admin(&pool, &context(), owner, &key(&hash(1)))
-            .await
-            .is_err()
-    );
-    assert!(db::authenticate(&pool, &hash(1)).await.unwrap().is_some());
     reject_audit(&pool).await;
     assert!(
         db::issue_credential(&pool, &context(), owner, &key(&hash(2)))
@@ -100,15 +52,9 @@ async fn audit_failure_rolls_back_issuance_revocation_and_recovery(pool: PgPool)
             .await
             .is_err()
     );
-    assert!(
-        db::recover_admin(&pool, &context(), owner, &key(&hash(3)))
-            .await
-            .is_err()
-    );
     assert!(db::authenticate(&pool, &hash(1)).await.unwrap().is_some());
     assert!(db::session_actor(&pool, &hash(10)).await.unwrap().is_some());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_none());
-    assert!(db::authenticate(&pool, &hash(3)).await.unwrap().is_none());
     assert_eq!(audit_count(&pool).await, before);
 }
 

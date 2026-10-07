@@ -39,21 +39,23 @@ async fn sweep_removes_only_old_request_files() {
     let dir = Scratch::new();
     let old = dir.0.join(".fg-tmp-old");
     let unrelated = dir.0.join("unrelated");
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
     for path in [&old, &unrelated] {
         let file = std::fs::File::create(path).unwrap();
-        file.set_times(
-            std::fs::FileTimes::new().set_modified(SystemTime::now() - Duration::from_secs(3600)),
-        )
-        .unwrap();
+        file.set_times(std::fs::FileTimes::new().set_modified(now - Duration::from_secs(3600)))
+            .unwrap();
     }
     let (fresh, file) = temp_spool::begin_write(&dir.0, "fresh").await.unwrap();
-    drop(file);
+    file.into_std()
+        .await
+        .set_times(std::fs::FileTimes::new().set_modified(now))
+        .unwrap();
     let nested = dir.0.join(".fg-tmp-directory");
     std::fs::create_dir(&nested).unwrap();
     std::fs::write(nested.join("keep"), b"keep").unwrap();
 
     assert_eq!(
-        temp_spool::sweep_stale_temps(&dir.0, Duration::from_secs(60))
+        temp_spool::sweep_stale_temps_at(&dir.0, Duration::from_secs(60), now)
             .await
             .unwrap(),
         1
@@ -63,7 +65,7 @@ async fn sweep_removes_only_old_request_files() {
     assert!(unrelated.exists());
     assert!(nested.join("keep").exists());
     assert_eq!(
-        temp_spool::sweep_stale_temps(&dir.0, Duration::from_secs(60))
+        temp_spool::sweep_stale_temps_at(&dir.0, Duration::from_secs(60), now)
             .await
             .unwrap(),
         0

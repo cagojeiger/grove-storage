@@ -1061,7 +1061,6 @@ version = "0.4.1"
 dependencies = [
  "anyhow",
  "axum",
- "filegate-core",
  "grove-object-policy",
  "grove-storage-provider",
  "secrecy",
@@ -1285,7 +1284,6 @@ dependencies = [
  "grove-management-policy",
  "serde_json",
  "sqlx",
- "subtle",
  "tokio",
  "tracing",
  "unicode-normalization",

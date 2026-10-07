@@ -70,10 +70,23 @@ async fn prepare_parts(api: &Fixture) {
         .await
         .unwrap();
     for (number, size, etag) in [(1, 4, ETAG), (2, 3, SECOND_ETAG)] {
-        assert!(
-            files::record_part_done(&api.state.pool, lease.lease_id, number, size, etag)
+        assert_eq!(
+            files::claim_relay_part(&api.state.pool, api.file, lease.lease_id, number, 900)
                 .await
-                .unwrap()
+                .unwrap(),
+            files::RelayPartClaim::Claimed
+        );
+        assert!(
+            files::finish_relay_part(
+                &api.state.pool,
+                api.file,
+                lease.lease_id,
+                number,
+                size,
+                etag
+            )
+            .await
+            .unwrap()
         );
     }
 }

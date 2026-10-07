@@ -27,10 +27,7 @@ pub async fn observe_backend_object(
     let storage = s3_clients.get(storage_id, &backend.spec, Address::Internal);
     Ok(s3_head_object(&storage, object_key)
         .await?
-        .map(|(size, etag)| ObjectObservation {
-            size,
-            etag: Some(etag),
-        }))
+        .map(|(size, etag)| ObjectObservation { size, etag }))
 }
 
 /// Attempt both multipart and final-object cleanup, even if one fails.

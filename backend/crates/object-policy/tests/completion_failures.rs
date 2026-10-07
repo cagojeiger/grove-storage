@@ -29,7 +29,7 @@ fn retry_after_observation_failure_uses_fresh_evidence() {
             Err(ObservationFailure::Unavailable),
             Ok(Some(ObjectObservation {
                 size: 12,
-                etag: Some("ABC".to_owned()),
+                etag: "ABC".to_owned(),
             })),
         ];
         let actions: Vec<_> = observations

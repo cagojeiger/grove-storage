@@ -71,3 +71,17 @@ pub async fn file_row(pool: &PgPool, id: uuid::Uuid) -> (String, i64, Option<Str
         .await
         .unwrap()
 }
+
+pub async fn upload_part(pool: &PgPool, file: &CreatedFile, part: i32, size: i64, etag: &str) {
+    assert_eq!(
+        s3::claim_upload_part(pool, "c", KEY, file.file_id, file.lease_id, part, 900)
+            .await
+            .unwrap(),
+        s3::UploadPartClaim::Claimed
+    );
+    assert!(
+        s3::finish_upload_part(pool, file.file_id, file.lease_id, part, size, etag)
+            .await
+            .unwrap()
+    );
+}

@@ -26,9 +26,7 @@ mod transaction;
 
 pub use accounts::{AccountChange, NewAccount, bootstrap, change_account, create_account};
 pub use audit::{AuditActor, AuditContext};
-pub use credentials::{
-    Credential, NewCredential, issue_credential, recover_admin, revoke_credential,
-};
+pub use credentials::{Credential, NewCredential, issue_credential, revoke_credential};
 pub use identity::{Identity, authenticate, session_actor};
 pub use resource_metadata::MetadataResource;
 pub use resource_writes::EncryptedServiceCredential;

@@ -83,7 +83,7 @@ async fn audit_failure_rolls_back_initialization(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn recovery_replaces_generation_and_revokes_only_target_identity(pool: PgPool) {
+async fn recovery_replaces_generation_and_preserves_other_identities_and_legacy_auth(pool: PgPool) {
     let (owner, _) = bootstrap(&pool).await;
     let other = user(&pool, Role::Writer).await;
     db::issue_credential(&pool, &context(), other, &key(&hash(2)))
@@ -95,6 +95,15 @@ async fn recovery_replaces_generation_and_revokes_only_target_identity(pool: PgP
     db::create_session(&pool, Uuid::new_v4(), &hash(2), &hash(20))
         .await
         .unwrap();
+    let legacy = filegate_db::admin_auth::issue(
+        &pool,
+        filegate_db::admin_auth::IssueMode::Initialize,
+        "legacy",
+        "legacy-hash",
+    )
+    .await
+    .unwrap()
+    .unwrap();
     passwords::recover(&pool, Uuid::new_v4(), owner, "owner", HASH)
         .await
         .unwrap();
@@ -110,6 +119,12 @@ async fn recovery_replaces_generation_and_revokes_only_target_identity(pool: PgP
     assert!(db::session_actor(&pool, &hash(10)).await.unwrap().is_none());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_some());
     assert!(db::session_actor(&pool, &hash(20)).await.unwrap().is_some());
+    assert_eq!(
+        filegate_db::admin_auth::authenticate(&pool, "legacy-hash")
+            .await
+            .unwrap(),
+        Some(legacy.id)
+    );
     let role: String = sqlx::query_scalar("SELECT role FROM management.accounts WHERE id=$1")
         .bind(owner)
         .fetch_one(&pool)
@@ -131,6 +146,7 @@ async fn recovery_audit_failure_preserves_hash_token_and_session(pool: PgPool) {
         .await
         .unwrap();
     let before = passwords::find(&pool, "owner").await.unwrap().unwrap();
+    let before_audit = audit_count(&pool).await;
     reject_audit(&pool).await;
     assert!(
         passwords::recover(&pool, Uuid::new_v4(), owner, "owner", NEXT_HASH)
@@ -143,6 +159,7 @@ async fn recovery_audit_failure_preserves_hash_token_and_session(pool: PgPool) {
     assert!(passwords::find(&pool, "renamed").await.unwrap().is_none());
     assert!(db::authenticate(&pool, &hash(2)).await.unwrap().is_some());
     assert!(db::session_actor(&pool, &hash(20)).await.unwrap().is_some());
+    assert_eq!(audit_count(&pool).await, before_audit);
 }
 
 #[sqlx::test(migrations = "./migrations")]

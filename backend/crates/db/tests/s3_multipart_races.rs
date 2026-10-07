@@ -13,7 +13,7 @@ mod support;
 use filegate_db::files;
 use filegate_db::s3_registry as s3;
 use sqlx::PgPool;
-use support::{KEY, open_multipart, wire};
+use support::{KEY, open_multipart, upload_part, wire};
 
 #[sqlx::test(migrations = "./migrations")]
 async fn heartbeat_and_expired_recovery_have_exactly_one_winner(pool: PgPool) {
@@ -62,9 +62,7 @@ async fn heartbeat_and_expired_recovery_have_exactly_one_winner(pool: PgPool) {
 async fn claimed_upload_part_fences_complete_until_its_measurement_is_done(pool: PgPool) {
     wire(&pool).await;
     let created = open_multipart(&pool).await;
-    files::record_part_done(&pool, created.lease_id, 1, 50, "old-etag")
-        .await
-        .unwrap();
+    upload_part(&pool, &created, 1, 50, "old-etag").await;
 
     assert_eq!(
         s3::claim_upload_part(&pool, "c", KEY, created.file_id, created.lease_id, 1, 900,)

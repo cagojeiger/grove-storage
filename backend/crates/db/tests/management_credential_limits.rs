@@ -47,7 +47,12 @@ async fn concurrent_issuance_respects_limit_and_releases_revoked_or_expired_slot
         .unwrap();
     assert_eq!(active_count(&pool, owner).await, 32);
 
-    db::recover_admin(&pool, &context(), owner, &key(&hash(36)))
+    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXJhbmRvbXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    db::passwords::recover(&pool, uuid::Uuid::new_v4(), owner, "owner", PHC)
+        .await
+        .unwrap();
+    assert_eq!(active_count(&pool, owner).await, 0);
+    db::issue_credential(&pool, &context(), owner, &key(&hash(36)))
         .await
         .unwrap();
     assert_eq!(active_count(&pool, owner).await, 1);

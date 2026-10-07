@@ -2,8 +2,7 @@
 
 pub struct ObjectObservation {
     pub size: i64,
-    /// Filesystems without ETag metadata provide None.
-    pub etag: Option<String>,
+    pub etag: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,10 +22,7 @@ pub fn completion_action<E>(
     Ok(match observation? {
         Some(observed)
             if observed.size == expected_size
-                && observed
-                    .etag
-                    .as_deref()
-                    .is_none_or(|etag| etag.eq_ignore_ascii_case(expected_etag)) =>
+                && observed.etag.eq_ignore_ascii_case(expected_etag) =>
         {
             CompletionAction::Finalize
         }
