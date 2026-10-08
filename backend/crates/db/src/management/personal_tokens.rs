@@ -3,7 +3,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{
-    AuditActor, AuditContext, Credential, Error, NewCredential, api_tokens, audit, identity, lock,
+    AuditActor, AuditContext, Credential, Error, NewCredential, api_tokens, identity, lock,
     queries::{CredentialSummary, Page},
 };
 
@@ -56,14 +56,7 @@ pub async fn issue(
     let mut tx = lock(pool).await?;
     let (account, context) = password_session(&mut tx, request_id, session_hash).await?;
     let issued = api_tokens::insert(&mut tx, account, key).await?;
-    audit::record(
-        &mut tx,
-        &context,
-        "credential.issue",
-        "credential",
-        issued.id,
-    )
-    .await?;
+    api_tokens::record_audit(&mut tx, &context, "credential.issue", issued.id).await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(issued)
 }

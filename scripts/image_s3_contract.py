@@ -14,7 +14,7 @@ from botocore.exceptions import ClientError
 from s3_backend_fixture import docker, minio_backend
 
 
-def check(endpoint, origin, password, network, report_dir):
+def check(endpoint, origin, password, network, report_dir, restart):
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}),
         urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
@@ -75,7 +75,7 @@ def check(endpoint, origin, password, network, report_dir):
         with opener.open(urllib.request.Request(put, method="PUT", data=body), timeout=30) as response:
             assert response.status == 200
         assert client.head_object(**params)["ContentLength"] == len(body)
-        get = client.generate_presigned_url("get_object", Params=params, ExpiresIn=60)
+        get = client.generate_presigned_url("get_object", Params=params, ExpiresIn=300)
         with opener.open(get, timeout=30) as response:
             assert response.read() == body
         with opener.open(urllib.request.Request(get, headers={"Range": "bytes=0-9"}), timeout=30) as response:
@@ -95,6 +95,10 @@ def check(endpoint, origin, password, network, report_dir):
             assert stored["Body"].read() == body
         finally:
             stored["Body"].close()
+        restart()
+        assert client.head_object(**params)["ContentLength"] == len(body)
+        with opener.open(get, timeout=30) as response:
+            assert response.read() == body
         client.delete_object(**params)
         try:
             client.head_object(**params)
@@ -106,6 +110,7 @@ def check(endpoint, origin, password, network, report_dir):
             "presigned_put_get": True, "range_get": True, "invalid_signature_rejected": True,
             "expired_url_rejected": True, "console_host_isolated": True,
             "physical_bytes_verified": True, "delete_verified": True,
+            "existing_credentials_and_presigned_url_after_restart": True,
             "browser_session_required": False, "sha256": hashlib.sha256(body).hexdigest(),
         }, indent=2))
-    print("PASS packaged S3: presigned PUT/GET, Range, signature/expiry rejection, physical bytes, delete, no browser session")
+    print("PASS packaged S3: presigned PUT/GET, Range, signature/expiry rejection, physical bytes, restart, delete, no browser session")

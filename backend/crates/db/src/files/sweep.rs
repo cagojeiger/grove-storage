@@ -25,7 +25,8 @@ pub async fn mark_deleted(
     file_id: Uuid,
 ) -> Result<DeleteOutcome, sqlx::Error> {
     let transitioned = sqlx::query(
-        "UPDATE files SET state = 'deleted', deleted_at = grove_time.transaction_now() \
+        "UPDATE files SET state = 'deleted', deleted_at = grove_time.transaction_now(), \
+         recovery_after = grove_time.transaction_now() \
          WHERE id = $1 AND client_id = $2 AND state = 'active'",
     )
     .bind(file_id)
@@ -80,9 +81,8 @@ pub async fn expired_pending(
          JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
          JOIN locations l ON l.file_id = f.id \
          WHERE f.state = 'pending' AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = f.id) \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c WHERE c.file_id = f.id) \
-         LIMIT $1",
+         AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id = f.id) \
+         ORDER BY le.expires_at, f.id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -110,10 +110,9 @@ pub async fn finalize_reclaim(
     // files 행을 먼저 잠근다 — finalize_commit과 같은 잠금 순서(files→leases)라
     // 교착이 없다. 늦은 commit이 이겼다면 여기서 0행이다.
     let transitioned = sqlx::query(
-        "UPDATE files SET state = 'reclaimed' WHERE id = $1 AND state = 'pending' \
-             AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = files.id) \
-             AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
-                             WHERE c.file_id = files.id)",
+        "UPDATE files SET state = 'reclaimed', recovery_after = grove_time.transaction_now() \
+         WHERE id = $1 AND state = 'pending' \
+             AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id = files.id)",
     )
     .bind(candidate.file_id)
     .execute(&mut *tx)
@@ -148,9 +147,7 @@ pub async fn reclaim_pending(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx:
     let mut tx = pool.begin().await?;
     let transitioned = sqlx::query(
         "UPDATE files SET state = 'reclaimed' WHERE id = $1 AND state = 'pending' \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = files.id) \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
-                         WHERE c.file_id = files.id)",
+         AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id = files.id)",
     )
     .bind(file_id)
     .execute(&mut *tx)
@@ -179,7 +176,9 @@ pub async fn purgeable(pool: &PgPool, limit: i64) -> Result<Vec<SweepCandidate>,
     let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
         "SELECT f.id, l.storage_id, l.object_key \
          FROM files f JOIN locations l ON l.file_id = f.id \
-         WHERE f.state = 'deleted' LIMIT $1",
+         WHERE f.state = 'deleted' AND f.recovery_after <= grove_time.transaction_now() \
+         AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id=f.id) \
+         ORDER BY f.recovery_after, f.id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -193,10 +192,16 @@ pub async fn finalize_purge(
     pool: &PgPool,
     candidate: &SweepCandidate,
 ) -> Result<bool, sqlx::Error> {
-    let removed = sqlx::query("DELETE FROM locations WHERE file_id = $1")
-        .bind(candidate.file_id)
-        .execute(pool)
-        .await?;
+    let removed = sqlx::query(
+        "DELETE FROM locations l USING files f \
+         WHERE l.file_id=f.id AND f.id=$1 AND f.state='deleted' \
+         AND l.storage_id=$2 AND l.object_key=$3",
+    )
+    .bind(candidate.file_id)
+    .bind(&candidate.storage_id)
+    .bind(&candidate.object_key)
+    .execute(pool)
+    .await?;
     Ok(removed.rows_affected() > 0)
 }
 
@@ -240,9 +245,7 @@ pub async fn prune_terminal_leases(
          SELECT le.id FROM leases le \
          WHERE le.state <> 'issued' \
          AND le.created_at < grove_time.transaction_now() - $1 * interval '1 second' \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads u WHERE u.file_id = le.file_id) \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
-                         WHERE c.file_id = le.file_id) \
+         AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id = le.file_id) \
          AND NOT EXISTS (SELECT 1 FROM files f JOIN locations l ON l.file_id = f.id \
                          WHERE f.id = le.file_id AND f.state = 'reclaimed') \
          LIMIT $2)",
@@ -271,26 +274,8 @@ pub async fn prune_terminal_files(
          AND COALESCE(f.deleted_at, f.created_at) < grove_time.transaction_now() - $1 * interval '1 second' \
          AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.file_id = f.id) \
          AND NOT EXISTS (SELECT 1 FROM leases le WHERE le.file_id = f.id) \
-         LIMIT $2)",
-    )
-    .bind(retention_secs)
-    .bind(limit)
-    .execute(pool)
-    .await?;
-    Ok(deleted.rows_affected())
-}
-
-/// 대여 이력 보존 정리 — 보존 기간(3개월)을 지난 이력을 오래된 것부터
-/// 배치 삭제한다. 이력은 PK가 없는 로그라 ctid로 배치를 자른다.
-pub async fn prune_history(
-    pool: &PgPool,
-    retention_secs: i64,
-    limit: i64,
-) -> Result<u64, sqlx::Error> {
-    let deleted = sqlx::query(
-        "DELETE FROM lease_history WHERE ctid IN ( \
-         SELECT ctid FROM lease_history \
-         WHERE at < grove_time.transaction_now() - $1 * interval '1 second' \
+         AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id = f.id) \
+         ORDER BY COALESCE(f.deleted_at, f.created_at), f.id \
          LIMIT $2)",
     )
     .bind(retention_secs)

@@ -18,6 +18,21 @@ fn all_result_shapes_round_trip_without_changing_the_public_payload() {
 }
 
 #[test]
+fn usage_observation_time_survives_output_decoding() {
+    let mut fixture = support::output(CommandName::UsageHistory);
+    fixture
+        .get_mut(0)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("observed_at".into(), json!("2026-09-25T00:02:00Z"));
+    let output = CommandName::UsageHistory
+        .decode_output(fixture.clone())
+        .unwrap();
+    assert_eq!(serde_json::to_value(output).unwrap(), fixture);
+}
+
+#[test]
 fn storage_output_excludes_secret_and_encryption_fields() {
     let mut fixture = support::storage();
     for key in [

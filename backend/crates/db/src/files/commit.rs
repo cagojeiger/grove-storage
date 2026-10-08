@@ -18,8 +18,7 @@ pub async fn finalize_commit(
     let transitioned = sqlx::query(
         "UPDATE files SET state = 'active', etag = $2, committed_at = grove_time.transaction_now() \
          WHERE id = $1 AND state = 'pending' \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $1) \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $1)",
+         AND NOT EXISTS (SELECT 1 FROM uploads WHERE file_id = $1)",
     )
     .bind(file_id)
     .bind(etag)
@@ -63,9 +62,10 @@ pub async fn observed_commit_candidates(
          JOIN locations l ON l.file_id = f.id \
          JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
          WHERE f.state = 'pending' AND f.part_size IS NULL \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads su WHERE su.file_id = f.id) \
+         AND NOT EXISTS (SELECT 1 FROM uploads su WHERE su.file_id = f.id) \
          AND le.state = 'issued' AND le.expires_at > grove_time.transaction_now() \
-         LIMIT $1",
+         AND f.recovery_after <= grove_time.transaction_now() \
+         ORDER BY f.recovery_after, f.id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)

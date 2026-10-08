@@ -224,13 +224,12 @@ async fn heartbeat_and_expired_recovery_have_exactly_one_winner(pool: PgPool) {
     let recovery_won = recovery.unwrap();
     assert_ne!(heartbeat_won, recovery_won);
 
-    let completion_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $1)",
-    )
-    .bind(file.file_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let completion_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM uploads WHERE file_id = $1)")
+            .bind(file.file_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(completion_exists, heartbeat_won);
 }
 

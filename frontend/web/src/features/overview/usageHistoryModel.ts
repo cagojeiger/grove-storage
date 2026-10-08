@@ -4,6 +4,7 @@ export type Snapshot = {
   client_id: string;
   active_files: number;
   active_bytes: number;
+  observed_at?: string | null;
 };
 
 export function dailyUsage(rows: Snapshot[]) {

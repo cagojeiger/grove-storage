@@ -1,6 +1,6 @@
 # 소스 구조
 
-기준: 2026-10-07 작업 트리. 리소스 검증 이력은 [마감 점검](refactor-checkpoint.md),
+기준: 2026-10-08 작업 트리. 리소스 검증 이력은 [마감 점검](refactor-checkpoint.md),
 현재 관리 영역의 완료·미검증 범위는 [완성도 점검](management-review.md)을 따른다.
 
 ## 파일 트리
@@ -20,7 +20,7 @@ backend/crates/
 │   ├── src/personal_tokens.rs 본인 관리 API 토큰
 │   ├── src/password_changes.rs 비밀번호 변경·세션 무효화
 │   ├── src/logging.rs          bounded best-effort 호출·보안 기록
-│   └── src/retention.rs        관리 로그의 기간별 유계 정리·실패 격리
+│   └── src/retention.rs        이력·만료 인증 정보의 유계 정리·실패 격리
 ├── s3-protocol/                 SigV4·XML·작업 분류·완료 목록·무결성 규칙
 ├── object-policy/               업로드 검증·파트 계산·ETag·완료 복구 판단
 ├── object-service/
@@ -42,17 +42,20 @@ backend/crates/
 │   ├── lease_relay.rs         lease URL 바이트 전송
 │   ├── spool.rs               스트림 크기·해시 계측
 │   ├── reconciler/            관찰·완료 복구·정리·사용량 스냅샷
-│   ├── log_retention.rs       관리 로그 정리의 독립 주기·시간 제한
+│   │   └── schedule.rs        회차 예산·취소·작업 종류 순환
+│   ├── log_retention.rs       이력·인증 정리의 독립 주기·시간 제한
 │   ├── shutdown.rs            HTTP·모든 작업·DB 종료의 공통 유예시간
 │   └── status.rs              로컬 DB·등록 저장소 진단
 ├── db/
 │   ├── src/management/        신원·설정 변경·감사 트랜잭션
-│   │   ├── api_tokens.rs      Account 관리 API 토큰
-│   │   └── retention.rs       만료된 관리 로그의 제한된 배치 삭제
+│   │   └── api_tokens.rs      Account 관리 API 토큰
+│   ├── src/retention.rs       이력·만료 인증 정보의 DB 배치 정리
 │   ├── src/registry.rs        Storage·Client·서비스 키 등록 정보
 │   ├── src/files/             파일·위치·lease 상태 전이
+│   │   └── recovery.rs        일반 관찰·회수·purge 재시도 시각
 │   ├── src/s3_registry/       S3 자격증명·논리키·업로드 세션
-│   ├── migrations/            새 설치 기준 SQL 5개
+│   ├── src/upload_recovery.rs 완료·정리 시도의 영속 재시도 시각
+│   ├── migrations/            baseline 4개·보강 SQL 4개
 │   └── tests/                 PostgreSQL 정합성·경합·초기화·복원
 ├── infra/src/
 │   ├── s3_io.rs               전송·물리 정리 조율, DB 상태 변경 없음
@@ -79,6 +82,7 @@ scripts/
 ├── e2e-cli.py                  격리 DB·실제 서버 CLI 검증
 ├── e2e-s3.py                   MinIO SDK 계약 검증
 ├── e2e-s3-recovery.py          응답 유실·재시작·커밋 거부
+├── e2e-recovery-hardening.py   COMMIT 응답 유실·진행 중 종료·장애 후보 순환
 ├── e2e-installation.py         새 DB 초기화·백업 복원·업로드 재개
 ├── e2e-notegate.py             실제 NoteGate 핸들러 연결
 └── e2e-notegate-browser.py     NoteGate 서버·UI·로컬 OIDC·바이트 검증
@@ -125,7 +129,7 @@ api (composition)
 
 Background tasks (same process and database)
   +-- Object reconciliation -> main pool -> object advisory lock -> provider I/O
-  +-- Management retention  -> dedicated pool (2) -> retention lock -> log pruning
+  +-- Retention maintenance -> dedicated pool (2) -> retention lock -> history/auth GC
 ```
 
 S3 SDK를 `storage-provider`에 한정한다. `infra`의 재노출은 기존 내부 adapter import를

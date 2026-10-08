@@ -53,7 +53,7 @@ async fn heartbeat_rechecks_upload_after_waiting_for_recovery(pool: PgPool) {
     lock_wait::wait_for_blocker(&pool, blocker).await;
 
     sqlx::query(
-        "UPDATE s3_uploads SET state = 'open', expected_size = NULL, expected_etag = NULL \
+        "UPDATE uploads SET state = 'open', expected_size = NULL, expected_etag = NULL \
          WHERE file_id = $1",
     )
     .bind(file.file_id)

@@ -25,9 +25,7 @@ pub async fn begin_completion(
     let mut tx = pool.begin().await?;
     let locked: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM files WHERE id = $1 AND state = 'pending' \
-         AND part_size IS NOT NULL \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $1) \
-         FOR UPDATE",
+         AND part_size IS NOT NULL FOR UPDATE",
     )
     .bind(file_id)
     .fetch_optional(&mut *tx)
@@ -36,14 +34,18 @@ pub async fn begin_completion(
         return Ok(CompletionStart::Unavailable);
     }
 
-    let existing: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $1)",
-    )
-    .bind(file_id)
-    .fetch_one(&mut *tx)
-    .await?;
-    if existing {
-        return Ok(CompletionStart::Resuming);
+    // Read ownership after the file lock; a wait may outlive another protocol's claim.
+    let existing: Option<String> =
+        sqlx::query_scalar("SELECT protocol FROM uploads WHERE file_id = $1")
+            .bind(file_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if let Some(protocol) = existing {
+        return Ok(if protocol == "native" {
+            CompletionStart::Resuming
+        } else {
+            CompletionStart::Unavailable
+        });
     }
 
     let part_uploading: bool = sqlx::query_scalar(
@@ -92,7 +94,8 @@ impl Completion {
         }
 
         sqlx::query(
-            "INSERT INTO native_multipart_completions (file_id, expected_etag) VALUES ($1, $2)",
+            "INSERT INTO uploads (file_id, protocol, multipart, state, expected_etag) \
+             VALUES ($1, 'native', true, 'completing', $2)",
         )
         .bind(self.file_id)
         .bind(expected_etag)
@@ -119,8 +122,8 @@ pub async fn renew_completion_lease(
     }
     // A lock wait can outlive a recovery commit; read ownership in a fresh snapshot.
     let completing: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM native_multipart_completions \
-         WHERE file_id = $1 AND state = 'completing')",
+        "SELECT EXISTS (SELECT 1 FROM uploads \
+         WHERE file_id = $1 AND protocol = 'native' AND state = 'completing')",
     )
     .bind(file_id)
     .fetch_one(&mut *tx)
@@ -160,9 +163,10 @@ pub async fn finalize_completion(
     // Check the completion row after any recovery holding this file lock has committed.
     let transitioned = sqlx::query(
         "UPDATE files f SET state = 'active', etag = $2, committed_at = grove_time.transaction_now() \
-         FROM native_multipart_completions c \
+         FROM uploads c \
          WHERE f.id = $1 AND f.state = 'pending' AND c.file_id = f.id \
-         AND c.state = 'completing' AND lower(c.expected_etag) = lower($2)",
+         AND c.protocol = 'native' AND c.state = 'completing' \
+         AND lower(c.expected_etag) = lower($2)",
     )
     .bind(file_id)
     .bind(etag)
@@ -178,7 +182,7 @@ pub async fn finalize_completion(
     .bind(file_id)
     .execute(&mut *tx)
     .await?;
-    sqlx::query("DELETE FROM native_multipart_completions WHERE file_id = $1")
+    sqlx::query("DELETE FROM uploads WHERE file_id = $1 AND protocol = 'native'")
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
@@ -201,11 +205,13 @@ pub async fn completion_candidates(
 ) -> Result<Vec<CompletionCandidate>, sqlx::Error> {
     sqlx::query_as::<_, CompletionCandidate>(
         "SELECT c.file_id, f.declared_size AS expected_size, c.expected_etag, \
-         l.storage_id, l.object_key FROM native_multipart_completions c \
+         l.storage_id, l.object_key FROM uploads c \
          JOIN files f ON f.id = c.file_id JOIN locations l ON l.file_id = c.file_id \
          JOIN leases le ON le.file_id = c.file_id AND le.kind = 'write' \
-         WHERE c.state = 'completing' AND f.state = 'pending' \
-         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() LIMIT $1",
+         WHERE c.protocol = 'native' AND c.state = 'completing' AND f.state = 'pending' \
+         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() \
+         AND c.recovery_after <= grove_time.transaction_now() \
+         ORDER BY c.recovery_after, c.file_id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -226,8 +232,8 @@ async fn lock_expired_completion(
         return Ok(false);
     }
     let completion: Option<Uuid> = sqlx::query_scalar(
-        "SELECT file_id FROM native_multipart_completions \
-         WHERE file_id = $1 AND state = $2 FOR UPDATE",
+        "SELECT file_id FROM uploads \
+         WHERE file_id = $1 AND protocol = 'native' AND state = $2 FOR UPDATE",
     )
     .bind(file_id)
     .bind(state)
@@ -256,8 +262,8 @@ pub async fn reopen_completion(
         return Ok(false);
     }
     let deleted = sqlx::query(
-        "DELETE FROM native_multipart_completions \
-         WHERE file_id = $1 AND state = 'completing'",
+        "DELETE FROM uploads \
+         WHERE file_id = $1 AND protocol = 'native' AND state = 'completing'",
     )
     .bind(file_id)
     .execute(&mut *tx)
@@ -283,8 +289,9 @@ pub async fn claim_cleanup(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx::E
         return Ok(false);
     }
     let changed = sqlx::query(
-        "UPDATE native_multipart_completions SET state = 'cleaning', updated_at = grove_time.transaction_now() \
-         WHERE file_id = $1 AND state = 'completing'",
+        "UPDATE uploads SET state = 'cleaning', updated_at = grove_time.transaction_now(), \
+         recovery_after = grove_time.transaction_now() \
+         WHERE file_id = $1 AND protocol = 'native' AND state = 'completing'",
     )
     .bind(file_id)
     .execute(&mut *tx)
@@ -309,10 +316,12 @@ pub async fn cleanup_candidates(
 ) -> Result<Vec<SweepCandidate>, sqlx::Error> {
     let rows: Vec<(Uuid, String, String, Option<String>, Uuid)> = sqlx::query_as(
         "SELECT c.file_id, l.storage_id, l.object_key, le.upload_id, le.id \
-         FROM native_multipart_completions c \
+         FROM uploads c \
          JOIN locations l ON l.file_id = c.file_id \
          JOIN leases le ON le.file_id = c.file_id AND le.kind = 'write' \
-         WHERE c.state = 'cleaning' LIMIT $1",
+         WHERE c.protocol = 'native' AND c.state = 'cleaning' \
+         AND c.recovery_after <= grove_time.transaction_now() \
+         ORDER BY c.recovery_after, c.file_id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -336,9 +345,9 @@ pub async fn finalize_cleanup(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx
     let mut tx = pool.begin().await?;
     let transitioned = sqlx::query(
         "UPDATE files f SET state = 'reclaimed' \
-         FROM native_multipart_completions c \
+         FROM uploads c \
          WHERE f.id = $1 AND f.state = 'pending' AND c.file_id = f.id \
-         AND c.state = 'cleaning'",
+         AND c.protocol = 'native' AND c.state = 'cleaning'",
     )
     .bind(file_id)
     .execute(&mut *tx)
@@ -350,7 +359,7 @@ pub async fn finalize_cleanup(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
-    sqlx::query("DELETE FROM native_multipart_completions WHERE file_id = $1")
+    sqlx::query("DELETE FROM uploads WHERE file_id = $1 AND protocol = 'native'")
         .bind(file_id)
         .execute(&mut *tx)
         .await?;

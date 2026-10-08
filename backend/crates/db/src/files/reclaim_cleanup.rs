@@ -12,7 +12,9 @@ pub async fn reclaim_cleanup_candidates(
          le.id AS write_lease_id, f.part_size IS NOT NULL AS multipart \
          FROM files f JOIN locations l ON l.file_id = f.id \
          LEFT JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
-         WHERE f.state = 'reclaimed' ORDER BY f.created_at, f.id LIMIT $1",
+         WHERE f.state = 'reclaimed' AND f.recovery_after <= grove_time.transaction_now() \
+         AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.file_id=f.id) \
+         ORDER BY f.recovery_after, f.id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)

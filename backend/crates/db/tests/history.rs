@@ -139,10 +139,15 @@ async fn prune_history_removes_only_expired_retention(pool: PgPool) {
         .await
         .unwrap();
 
-    let pruned = files::prune_history(&pool, 90 * 24 * 3600, 100)
-        .await
-        .unwrap();
-    assert_eq!(pruned, 1, "보존 밖 1건만 삭제");
+    let pruned = grove_db::retention::prune(
+        &pool,
+        grove_db::retention::Stream::ObjectAccess,
+        std::num::NonZeroU16::new(90).unwrap(),
+        std::num::NonZeroU16::new(100).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(pruned.deleted, 1, "보존 밖 1건만 삭제");
     assert_eq!(history(&pool, "write").await, (0, 0));
     assert_eq!(history(&pool, "read").await, (1, 100), "보존 안은 남는다");
 }

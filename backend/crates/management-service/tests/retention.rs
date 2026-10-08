@@ -5,7 +5,7 @@ mod lifecycle;
 mod support;
 
 use grove_core::ManagementLogRetention;
-use grove_db::{PgPool, management as db};
+use grove_db::{PgPool, management as db, retention as maintenance};
 use grove_management_service::retention;
 use std::{num::NonZeroU16, time::Duration};
 
@@ -13,7 +13,7 @@ fn policy() -> ManagementLogRetention {
     ManagementLogRetention {
         audit_days: NonZeroU16::new(365).unwrap(),
         security_days: NonZeroU16::new(90).unwrap(),
-        invocation_days: NonZeroU16::new(30).unwrap(),
+        invocation_days: NonZeroU16::new(90).unwrap(),
     }
 }
 
@@ -50,7 +50,7 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
     let audit_before = support::audit_count(&pool).await;
     seed(&pool).await;
     retention::run(&pool, policy()).await;
-    assert_eq!(counts(&pool).await, (audit_before + 2, 1, 0));
+    assert_eq!(counts(&pool).await, (audit_before + 2, 1, 1));
     assert!(
         db::session_actor(&pool, &admin.session)
             .await
@@ -76,20 +76,18 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
     );
     // Maintenance must not record its own invocations or audit events.
     retention::run(&pool, policy()).await;
-    assert_eq!(counts(&pool).await, (audit_before + 2, 1, 0));
+    assert_eq!(counts(&pool).await, (audit_before + 2, 1, 1));
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn each_run_is_bounded_and_backlog_drains_on_later_ticks(pool: PgPool) {
+async fn multiple_bounded_batches_drain_backlog_within_one_pass(pool: PgPool) {
     sqlx::raw_sql("INSERT INTO management.command_invocations(created_at,actor_kind,request_id,surface,operation,outcome,duration_ms)
-        SELECT now()-interval '31 days','system',gen_random_uuid(),'cli','storage.list','succeeded',1 FROM generate_series(1,2001);
+        SELECT now()-interval '91 days','system',gen_random_uuid(),'cli','storage.list','succeeded',1 FROM generate_series(1,2001);
         INSERT INTO management.command_invocations(actor_kind,request_id,surface,operation,outcome,duration_ms)
         VALUES('system',gen_random_uuid(),'cli','storage.list','succeeded',1);")
         .execute(&pool).await.unwrap();
-    for remaining in [1002, 2, 1, 1] {
-        retention::run(&pool, policy()).await;
-        assert_eq!(counts(&pool).await, (0, 0, remaining));
-    }
+    retention::run(&pool, policy()).await;
+    assert_eq!(counts(&pool).await, (0, 0, 1));
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
@@ -104,9 +102,9 @@ async fn locked_stream_is_bounded_other_streams_continue_and_retry_succeeds(pool
         .await
         .unwrap();
     fence.rollback().await.unwrap();
-    assert_eq!(counts(&pool).await, (3, 1, 0));
+    assert_eq!(counts(&pool).await, (3, 1, 1));
     retention::run(&pool, policy()).await;
-    assert_eq!(counts(&pool).await, (2, 1, 0));
+    assert_eq!(counts(&pool).await, (2, 1, 1));
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
@@ -119,7 +117,7 @@ async fn retention_lock_selects_one_runner_and_releases_for_next_tick(pool: PgPo
         let entered = entered.clone();
         let release = release.clone();
         tokio::spawn(async move {
-            db::retention::with_lock(&pool, || async {
+            maintenance::with_lock(&pool, || async {
                 entered.notify_one();
                 release.notified().await;
                 retention::run(&pool, policy()).await;
@@ -133,7 +131,7 @@ async fn retention_lock_selects_one_runner_and_releases_for_next_tick(pool: PgPo
         .unwrap();
     let executed = std::sync::atomic::AtomicBool::new(false);
     assert!(
-        db::retention::with_lock(&pool, || async {
+        maintenance::with_lock(&pool, || async {
             executed.store(true, std::sync::atomic::Ordering::SeqCst);
             retention::run(&pool, policy()).await;
         })
@@ -151,9 +149,9 @@ async fn retention_lock_selects_one_runner_and_releases_for_next_tick(pool: PgPo
             .unwrap()
             .is_some()
     );
-    assert_eq!(counts(&pool).await, (2, 1, 0));
+    assert_eq!(counts(&pool).await, (2, 1, 1));
     assert!(
-        db::retention::with_lock(&pool, || retention::run(&pool, policy()))
+        maintenance::with_lock(&pool, || retention::run(&pool, policy()))
             .await
             .unwrap()
             .is_some()
@@ -174,7 +172,7 @@ async fn cancelled_runner_releases_lock_and_retention_works_with_two_connections
         let pool = small_pool.clone();
         let entered = entered.clone();
         tokio::spawn(async move {
-            db::retention::with_lock(&pool, || async {
+            maintenance::with_lock(&pool, || async {
                 entered.notify_one();
                 std::future::pending::<()>().await;
             })
@@ -189,7 +187,7 @@ async fn cancelled_runner_releases_lock_and_retention_works_with_two_connections
     // SQLx queues rollback on transaction drop; the next tick must regain the lock.
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            if db::retention::with_lock(&small_pool, || retention::run(&small_pool, policy()))
+            if maintenance::with_lock(&small_pool, || retention::run(&small_pool, policy()))
                 .await
                 .unwrap()
                 .is_some()
@@ -201,7 +199,7 @@ async fn cancelled_runner_releases_lock_and_retention_works_with_two_connections
     })
     .await
     .unwrap();
-    assert_eq!(counts(&pool).await, (2, 1, 0));
+    assert_eq!(counts(&pool).await, (2, 1, 1));
     small_pool.close().await;
 }
 
@@ -241,7 +239,7 @@ async fn object_lock_does_not_block_retention_and_retention_does_not_block_objec
     assert!(
         tokio::time::timeout(
             Duration::from_secs(3),
-            db::retention::with_lock(&maintenance_pool, || retention::run(
+            maintenance::with_lock(&maintenance_pool, || retention::run(
                 &maintenance_pool,
                 policy()
             ))
@@ -251,12 +249,12 @@ async fn object_lock_does_not_block_retention_and_retention_does_not_block_objec
         .unwrap()
         .is_some()
     );
-    assert_eq!(counts(&pool).await, (2, 1, 0));
+    assert_eq!(counts(&pool).await, (2, 1, 1));
     drop(occupied);
     release.notify_one();
     assert!(object_worker.await.unwrap().is_some());
     assert!(
-        db::retention::with_lock(&maintenance_pool, || async {
+        maintenance::with_lock(&maintenance_pool, || async {
             assert!(
                 grove_db::with_reconciler_lock(&object_pool, || async {})
                     .await

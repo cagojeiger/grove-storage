@@ -63,5 +63,6 @@ pub fn snapshot_output(row: usage::SnapshotRow) -> model::Snapshot {
         client_id: row.client_id,
         active_bytes: row.active_bytes,
         active_files: row.active_files,
+        observed_at: row.observed_at.map(|at| at.to_rfc3339()),
     }
 }

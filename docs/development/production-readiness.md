@@ -1,7 +1,7 @@
 # 릴리스 준비
 
-기준: 2026-10-07 작업 트리. 현재 후보는 새 DB 설치용 Grove Storage다.
-FileGate/이전 Grove DB의 인플레이스 업그레이드와 운영 이관은 이 범위에서 제외한다.
+기준: 2026-10-08 작업 트리. 현재 후보는 새 DB 설치용 Grove Storage다.
+새 설치와 Grove 0.5.0의 보강 migration을 지원한다. FileGate와 0.5.0 이전 Grove는 새 DB 설치 경로를 사용한다.
 작업 트리, 후보 커밋, CI, 발행 산출물, 실제 배포는 각각 다른 검증 상태다.
 
 ## 변경 경계
@@ -11,7 +11,7 @@ FileGate/이전 Grove DB의 인플레이스 업그레이드와 운영 이관은 
 | 실행 파일 | 서버 `grove-storage`, 원격 CLI `gscli` |
 | 설정 | `GROVE_*`; `FILEGATE_*` 별칭 없음 |
 | 내부 crate | `grove-*` |
-| DB | 23개 테이블·SQL baseline 4개; 기존 이력과 checksum 불일치 시 거절 |
+| DB | 22개 테이블·SQL baseline 4개와 보강 migration 4개; checksum 불일치 시 거절 |
 | Native / S3 | 기존 HTTP 경로·SigV4·presigned 전송·완료/복구 계약 유지 |
 | 인증 | Account는 관리 영역, Client 서비스 키는 파일 영역 |
 | 이미지 | 서버와 콘솔 dist를 포함하는 한 종류의 이미지; `gscli`는 별도 자산 |
@@ -41,7 +41,9 @@ FileGate/이전 Grove DB의 인플레이스 업그레이드와 운영 이관은 
 과거 체크포인트의 테스트 수와 CI 성공은 당시 revision의 기록이다.
 최종 후보 검증이나 발행 이미지 검증을 대체하지 않는다.
 현재 작업 트리의 로컬 실행 결과는 [새 설치 검증](fresh-installation.md#local-verification)에
-기록한다. 후보 이미지 보안 검사와 발행 자산 확인은 아직 별도 검증 대상이다.
+기록한다. 현재 ARM64 작업 트리 이미지의 실행·보안 결과는
+[이미지 검증 체크포인트](image-security.md#candidate-checkpoint-2026-10-08)에 기록한다.
+동일 후보 커밋의 amd64/arm64 CI와 발행 자산 확인은 별도 검증 대상이다.
 
 ## 운영 구성
 

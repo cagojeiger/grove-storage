@@ -50,7 +50,7 @@ async fn heartbeat_and_expired_recovery_have_exactly_one_winner(pool: PgPool) {
     let recovery_won = recovery.unwrap();
     assert_ne!(heartbeat_won, recovery_won);
 
-    let state: String = sqlx::query_scalar("SELECT state FROM s3_uploads WHERE file_id = $1")
+    let state: String = sqlx::query_scalar("SELECT state FROM uploads WHERE file_id = $1")
         .bind(created.file_id)
         .fetch_one(&pool)
         .await
@@ -195,7 +195,7 @@ async fn complete_and_abort_claims_have_exactly_one_winner(pool: PgPool) {
     let abort_won = abort.unwrap() == s3::AbortClaim::Claimed;
     assert_ne!(complete_won, abort_won);
 
-    let state: String = sqlx::query_scalar("SELECT state FROM s3_uploads WHERE file_id = $1")
+    let state: String = sqlx::query_scalar("SELECT state FROM uploads WHERE file_id = $1")
         .bind(created.file_id)
         .fetch_one(&pool)
         .await
@@ -205,7 +205,7 @@ async fn complete_and_abort_claims_have_exactly_one_winner(pool: PgPool) {
         if complete_won {
             "completing"
         } else {
-            "aborting"
+            "cleaning"
         }
     );
 }

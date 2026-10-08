@@ -1,11 +1,11 @@
 //! S3 single/multipart completion recovery.
 
 use grove_core::Crypto;
-use grove_db::{PgPool, registry, s3_registry as s3reg};
+use grove_db::{PgPool, registry, s3_registry as s3reg, upload_recovery::Job};
 use grove_infra::S3ClientCache;
 use grove_object_policy::completion::{CompletionAction, completion_action};
 
-use super::BATCH_LIMIT;
+use super::{BATCH_LIMIT, begin_recovery, recovery_io};
 use crate::lease::WRITE_LEASE_TTL;
 
 pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
@@ -17,7 +17,11 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
         }
     };
     for candidate in candidates {
-        let observation = observe_s3_completion(pool, crypto, s3_clients, &candidate).await;
+        if !begin_recovery(pool, candidate.file_id, Job::S3Complete).await {
+            continue;
+        }
+        let observation =
+            recovery_io(observe_s3_completion(pool, crypto, s3_clients, &candidate)).await;
         let action = match completion_action(
             candidate.expected_size,
             &candidate.expected_etag,

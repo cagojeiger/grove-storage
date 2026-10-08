@@ -117,12 +117,11 @@ async fn multipart_validates_parts_before_provider_completion_and_is_idempotent(
         );
     }
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
-    let recovery: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM native_multipart_completions WHERE file_id=$1")
-            .bind(api.file)
-            .fetch_one(&api.state.pool)
-            .await
-            .unwrap();
+    let recovery: i64 = sqlx::query_scalar("SELECT count(*) FROM uploads WHERE file_id=$1")
+        .bind(api.file)
+        .fetch_one(&api.state.pool)
+        .await
+        .unwrap();
     assert_eq!(recovery, 0);
 }
 
@@ -139,13 +138,12 @@ async fn failed_provider_completion_retains_claim_and_does_not_finalize(pool: Pg
         )
     );
     api.assert_pending().await;
-    let recovery: (String, String) = sqlx::query_as(
-        "SELECT state,expected_etag FROM native_multipart_completions WHERE file_id=$1",
-    )
-    .bind(api.file)
-    .fetch_one(&api.state.pool)
-    .await
-    .unwrap();
+    let recovery: (String, String) =
+        sqlx::query_as("SELECT state,expected_etag FROM uploads WHERE file_id=$1")
+            .bind(api.file)
+            .fetch_one(&api.state.pool)
+            .await
+            .unwrap();
     assert_eq!(
         recovery,
         ("completing".into(), composite_etag([ETAG, SECOND_ETAG]))

@@ -3,8 +3,10 @@
 pub mod files;
 pub mod management;
 pub mod registry;
+pub mod retention;
 pub mod s3_registry;
 pub mod time;
+pub mod upload_recovery;
 pub mod usage;
 
 pub use sqlx::Error as DbError;

@@ -546,7 +546,7 @@ pub(super) async fn complete_multipart(
     Ok(complete_result(bucket, key, &etag))
 }
 
-/// aborting 선점 뒤 벤더 세션·임시·최종 객체를 멱등 정리하고 pending을
+/// cleaning 선점 뒤 벤더 세션·임시·최종 객체를 멱등 정리하고 pending을
 /// 회수한다. 실패하면 session/location이 남아 reconciler가 재시도한다.
 /// 없는·다른 key·네이티브 세션은 NoSuchUpload다.
 pub(super) async fn abort_multipart(

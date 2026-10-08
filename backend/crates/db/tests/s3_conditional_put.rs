@@ -116,7 +116,7 @@ async fn failed_activation_rolls_back_conditional_key_claim(pool: PgPool) {
     assert!(s3::get_key(&pool, "c", "k").await.unwrap().is_none());
     assert_eq!(file_state(&pool, upload.file_id).await, "pending");
     let session: (String, bool) =
-        sqlx::query_as("SELECT state, if_none_match FROM s3_uploads WHERE file_id = $1")
+        sqlx::query_as("SELECT state, if_none_match FROM uploads WHERE file_id = $1")
             .bind(upload.file_id)
             .fetch_one(&pool)
             .await

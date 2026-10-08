@@ -80,7 +80,6 @@ pub async fn by_client<'e>(
 /// 점유의 과거는 소급 계산이 불가하므로 이 근사가 얻을 수 있는 전부다.
 pub async fn record_snapshot(pool: &PgPool, day: chrono::NaiveDate) -> Result<u64, sqlx::Error> {
     // 매 tick 무거운 집계를 반복하지 않기 위한 가드 — PK 인덱스 한 번.
-    // 활성 파일이 0이었던 날은 행이 없어 재시도되지만, 빈 집계는 싸다.
     // 이 가드는 최적화일 뿐이다 — 직렬화의 진짜 지점은 아래 INSERT의
     // ON CONFLICT DO NOTHING이라, 다른 write 경로와 달리 트랜잭션이 필요 없다.
     let recorded: bool =
@@ -92,14 +91,20 @@ pub async fn record_snapshot(pool: &PgPool, day: chrono::NaiveDate) -> Result<u6
         return Ok(0);
     }
     let result = sqlx::query(
-        "INSERT INTO usage_snapshots (day, storage_id, client_id, active_bytes, active_files) \
-         SELECT $1, l.storage_id, f.client_id, \
-         coalesce(sum(f.declared_size), 0)::bigint, count(*) \
+        "WITH stock AS ( \
+         SELECT l.storage_id, f.client_id, \
+         sum(f.declared_size)::bigint AS active_bytes, count(*) AS active_files \
          FROM files f \
          JOIN locations l ON l.file_id = f.id \
          WHERE f.state = 'active' \
          AND f.created_at < (($1::date + 1)::timestamp AT TIME ZONE 'UTC') \
-         GROUP BY l.storage_id, f.client_id \
+         GROUP BY l.storage_id, f.client_id), \
+         pairs AS (SELECT storage_id, id AS client_id FROM clients \
+                   UNION SELECT storage_id, client_id FROM stock) \
+         INSERT INTO usage_snapshots (day, storage_id, client_id, active_bytes, active_files) \
+         SELECT $1, p.storage_id, p.client_id, \
+         coalesce(s.active_bytes, 0), coalesce(s.active_files, 0) \
+         FROM pairs p LEFT JOIN stock s USING(storage_id, client_id) \
          ON CONFLICT DO NOTHING",
     )
     .bind(day)
@@ -115,6 +120,7 @@ pub struct SnapshotRow {
     pub client_id: String,
     pub active_bytes: i64,
     pub active_files: i64,
+    pub observed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// 최근 days일의 스냅샷 — 오래된 날부터. storage 합계·전체 합계 등
@@ -124,9 +130,9 @@ pub async fn snapshot_history<'e>(
     days: i32,
 ) -> Result<Vec<SnapshotRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT day, storage_id, client_id, active_bytes, active_files \
+        "SELECT day, storage_id, client_id, active_bytes, active_files, observed_at \
          FROM usage_snapshots \
-         WHERE day >= grove_time.transaction_now()::date - $1 \
+         WHERE day >= (grove_time.transaction_now() AT TIME ZONE 'UTC')::date - $1 \
          ORDER BY day, storage_id, client_id",
     )
     .bind(days)

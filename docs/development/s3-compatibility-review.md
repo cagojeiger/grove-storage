@@ -153,7 +153,7 @@ SigV4 요청 재료·시각 검증은 현재 API에 남아 있다. 트랜잭션�
 | 1 | SigV4 추가 호환성 | percent encoding 동등 표현·SDK별 서명 벡터·프록시/HTTPS 경로 |
 | 2 | multipart 추가 옵션 | 추가 checksum 사용 시 연속 번호 등 별도 계약 검증 |
 | 3 | 읽기·쓰기 추가 옵션 | 단일 PUT wildcard 외 조건부 쓰기·checksum 저장/조회/전체 multipart·suffix Range |
-| 4 | 쓰기 장애 복구 | DB COMMIT 응답 유실·쓰기 진행 도중 종료, AWS S3/R2 별도 호환성 |
+| 4 | 쓰기 장애 복구 | AWS S3/R2 별도 호환성·다른 종료 시점·장기 장애와 대규모 backlog |
 
 현재 raw query 정렬 방식은 유지한다. 필수 query 인증 파라미터의 중복은 거부하며,
 percent encoding의 모든 동등 표현까지 AWS와 같다고 판단하는 근거로 사용하지 않는다.
@@ -170,6 +170,7 @@ python3 -m venv /tmp/grove-s3-sdk
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --restart
 /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py --db-failure
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-recovery-hardening.py
 ```
 
 MinIO 경로에서 SDK 성공·거부·재시도 시나리오를 실행한다. 테스트가
@@ -225,6 +226,21 @@ rollback에 영향받지 않는 sequence로 요청과 Reconciler 양쪽의 주�
 
 실패 시에도 fixture DB 전체를 폐기한다. 이 검증은 확실한 rollback이며,
 DB가 COMMIT한 뒤 응답만 유실되는 결과 불명확성이나 DB 전체 장애와 구분한다.
+
+### 복구 경계 보강
+
+`e2e-recovery-hardening.py`는 같은 격리 MinIO·PostgreSQL fixture에서 실행한다.
+
+| 시나리오 | 확인 |
+|---|---|
+| COMMIT 응답 유실 | PostgreSQL의 실제 COMMIT 확인 뒤 ACK 차단; HTTP 500이어도 active·committed·새 객체 유지, 재시작 후 읽기 |
+| Complete 진행 중 SIGKILL | MinIO 200 응답을 보류한 동안 서버 종료; 기존 읽기 유지, lease 만료 후 실물 관찰 확정, 중복 Complete 없음 |
+| 실패 후보 40건 + 정상 1건 | 장애 후보의 completing·위치·만료 lease 보존, 재시도 연기, 정상 객체 확정 |
+
+`db/tests/upload_recovery.rs`는 주입 시계로 Native/S3 완료·정리 후보 순환,
+30초 전후 경계, 동시 선점, 잠금 대기 중 소유권·lease 변경을 검증한다.
+API의 paused-time 테스트는 10초 I/O 제한과 성공·실패 전달을 검증한다.
+전체 tick 지연·generic reclaim/purge의 순환·AWS/R2 장애 양상은 이 범위에 포함되지 않는다.
 
 기준: [AWS CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html),
 [roxmltree 파싱 옵션](https://docs.rs/roxmltree/0.21.1/roxmltree/struct.ParsingOptions.html).

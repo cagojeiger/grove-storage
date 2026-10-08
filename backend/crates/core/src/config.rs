@@ -130,7 +130,7 @@ impl Config {
                 security_days: retention_days("GROVE_MANAGEMENT_SECURITY_RETENTION_DAYS", "90")?,
                 invocation_days: retention_days(
                     "GROVE_MANAGEMENT_INVOCATION_RETENTION_DAYS",
-                    "30",
+                    "90",
                 )?,
             },
             multipart_threshold_bytes: env("GROVE_MULTIPART_THRESHOLD_BYTES")
@@ -238,7 +238,7 @@ mod tests {
         let retention = config.server.management_log_retention;
         assert_eq!(retention.audit_days.get(), 365);
         assert_eq!(retention.security_days.get(), 90);
-        assert_eq!(retention.invocation_days.get(), 30);
+        assert_eq!(retention.invocation_days.get(), 90);
     }
 
     #[test]

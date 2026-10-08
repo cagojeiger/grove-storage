@@ -126,6 +126,7 @@ function output(name: string, value: unknown, input: object): boolean {
         object(row) && typeof row.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.day)
         && Number.isFinite(Date.parse(row.day)) && new Date(row.day).toISOString().slice(0, 10) === row.day
         && typeof row.storage_id === "string" && typeof row.client_id === "string"
+        && (row.observed_at == null || (typeof row.observed_at === "string" && Number.isFinite(Date.parse(row.observed_at))))
         && ["active_files", "active_bytes"].every((key) => typeof row[key] === "number" && Number.isSafeInteger(row[key]) && row[key] >= 0));
     case "usage.clients":
       return (

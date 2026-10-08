@@ -17,13 +17,13 @@ Registry:  storages <- clients <- client_native_keys / client_s3_credentials
 Objects:   clients <- files -> locations -> storages
 Names:     (client, logical key) -> s3_object_keys -> files
 Uploads:   files <- leases <- lease_parts
-           files <- s3_uploads / native_multipart_completions
+           files <- uploads (protocol: native / s3)
 History:   lease_history / usage_snapshots (independent ID snapshots)
 ```
 
 | Scope | S3-only contract |
 |---|---|
-| Resource tables | 13 tables, separated into registry, lifecycle, names and history |
+| Resource tables | 12 tables, separated into registry, lifecycle, names and history |
 | storages | kind=s3; required S3 fields; no root_path or FS-specific checks |
 | Placement | Client selects one Storage; locations preserves each object's actual location |
 | Physical keys | Object key generation retains the current contract |
@@ -37,6 +37,12 @@ database. Registration, file state, encrypted secrets and pending uploads are
 verified through a same-version backup/restore rehearsal. Importing old resource
 rows or external objects is separate work. See
 [fresh installation](../development/fresh-installation.md).
+
+`uploads.file_id` gives each file one durable completion/cleanup owner. Native
+records ownership at multipart completion; S3 records it when creating an upload.
+Protocol checks keep Native geometry and S3 logical-key/conditional-PUT semantics
+separate. Generic commit and GC skip owned files. Ownership ends after activation
+or confirmed physical cleanup, not by log retention.
 
 ## 등록 관계
 

@@ -55,8 +55,7 @@ pub async fn claim_relay_part(
              expires_at, grove_time.transaction_now() + $3 * interval '1 second') \
          WHERE id = $1 AND file_id = $2 AND kind = 'write' \
          AND state = 'issued' AND expires_at > grove_time.transaction_now() \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $2) \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $2)",
+         AND NOT EXISTS (SELECT 1 FROM uploads WHERE file_id = $2)",
     )
     .bind(lease_id)
     .bind(file_id)
@@ -105,7 +104,7 @@ pub async fn renew_relay_part_lease(
          WHERE le.id = $2 AND le.file_id = $1 AND le.kind = 'write' \
          AND le.state = 'issued' AND lp.lease_id = le.id \
          AND lp.part_no = $3 AND lp.state = 'claimed' \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $1)",
+         AND NOT EXISTS (SELECT 1 FROM uploads WHERE file_id = $1 AND protocol = 'native')",
     )
     .bind(file_id)
     .bind(lease_id)
@@ -242,8 +241,8 @@ pub async fn extend_write_lease(
     let updated = sqlx::query(
         "UPDATE leases SET expires_at = GREATEST(expires_at, grove_time.transaction_now() + $2 * interval '1 second') \
          WHERE id = $1 AND state = 'issued' AND expires_at > grove_time.transaction_now() \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions c \
-                         WHERE c.file_id = leases.file_id)",
+         AND NOT EXISTS (SELECT 1 FROM uploads c \
+                         WHERE c.file_id = leases.file_id AND c.protocol = 'native')",
     )
     .bind(lease_id)
     .bind(ttl_secs)
