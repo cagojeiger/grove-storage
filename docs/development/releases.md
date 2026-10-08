@@ -35,7 +35,7 @@ Native·S3 HTTP 경로와 토큰 형식은 유지한다. 서버 설정과 DB bas
 
 NoteGate CLI의 workspace 버전·GitHub Release 바이너리 패턴을 따른다.
 첫 배포에 수동 업데이트를 포함한다. 프로필·키체인은 후속 범위다.
-현재 `VERSION` 값은 `0.5.0`이다. FileGate의 기존 태그·자산과 Grove의 릴리스 채널은
+릴리스 버전의 정본은 `VERSION`이다. FileGate의 기존 태그·자산과 Grove의 릴리스 채널은
 독립적이다. 아래 설치 명령은 Grove 채널에 해당 버전의 자산이 발행된 뒤 사용한다.
 
 ## 설치
