@@ -78,7 +78,7 @@ History stores Account and System actor snapshots; unauthenticated security
 events use Anonymous. Account-scoped queries match `actor_id` before pagination.
 
 This baseline initializes a new database. It does not upgrade an existing
-FileGate/Grove database or import its rows. A mismatched migration history is
+FileGate/pre-0.5 Grove database or import its rows. A mismatched migration history is
 rejected. Backup restoration is tested against the same Grove schema and binary.
 See [fresh installation](../development/fresh-installation.md).
 

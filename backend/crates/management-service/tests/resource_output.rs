@@ -77,6 +77,7 @@ fn client_and_history_projections_preserve_identity_counts_and_date_format() {
         storage_id: "home".into(),
         active_bytes: 120,
         active_files: 2,
+        observed_at: None,
     });
     assert_eq!(
         serde_json::to_value(snapshot).unwrap(),

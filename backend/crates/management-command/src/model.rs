@@ -94,6 +94,8 @@ pub struct Snapshot {
     pub client_id: String,
     pub active_bytes: i64,
     pub active_files: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]

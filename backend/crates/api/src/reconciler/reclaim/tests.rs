@@ -3,8 +3,11 @@
 use grove_db::{files, registry};
 use sqlx::PgPool;
 
+use super::super::tests::time;
+
 #[sqlx::test(migrations = "../db/migrations")]
 async fn s3_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
+    time::install_clock(&pool).await;
     use axum::{Router, http::StatusCode};
     use std::sync::{
         Arc,
@@ -74,7 +77,7 @@ async fn s3_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
         files::CreateOutcome::Created(file) => file,
         _ => panic!("expected file"),
     };
-    sqlx::query("UPDATE leases SET expires_at = now() - interval '1 second' WHERE id = $1")
+    sqlx::query("UPDATE leases SET expires_at = grove_time.transaction_now() - interval '1 second' WHERE id = $1")
         .bind(file.lease_id)
         .execute(&pool)
         .await
@@ -94,12 +97,15 @@ async fn s3_delete_failure_is_retried_by_the_real_worker(pool: PgPool) {
             .await
             .unwrap()
             .len(),
-        1
+        0
     );
     assert_eq!(files::prune_terminal_leases(&pool, 0, 20).await.unwrap(), 0);
 
-    // Repair the backend, then run the same worker again without changing the DB.
+    // Repair the backend; retry only becomes eligible at the injected deadline.
     failing.store(false, Ordering::SeqCst);
+    super::recover(&pool, &state.crypto, &state.s3_clients).await;
+    assert_eq!(deleted.load(Ordering::SeqCst), 0);
+    time::set_time(&pool, time::base() + chrono::Duration::seconds(30)).await;
     super::recover(&pool, &state.crypto, &state.s3_clients).await;
     assert_eq!(deleted.load(Ordering::SeqCst), 1);
     assert!(

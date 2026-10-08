@@ -123,6 +123,13 @@ export function UsageHistory() {
                   columns={[
                     { field: "day", headerName: "Date (UTC)", width: 140 },
                     {
+                      field: "observed_at",
+                      headerName: "Observed at",
+                      width: 200,
+                      valueFormatter: (value: string | null) =>
+                        value ? new Date(value).toLocaleString() : "Unknown",
+                    },
+                    {
                       field: "storage_id",
                       headerName: "Storage",
                       flex: 1,

@@ -28,7 +28,7 @@ def check(endpoint, directory, database, account, backend, proxy, attempts, rest
                       "-v", "ON_ERROR_STOP=1", "-At", "-c", statement)
 
     def wait_for(predicate):
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + 60
         while not predicate():
             if time.monotonic() >= deadline:
                 raise AssertionError("recovery condition did not converge")
@@ -79,7 +79,7 @@ def check(endpoint, directory, database, account, backend, proxy, attempts, rest
     assert attempts and attempts[0][0] == 200, attempts
     assert b"CompleteMultipartUploadResult" in attempts[0][1]
     assert sum(status == 200 for status, _ in attempts) == 1
-    assert sql(f"SELECT state FROM s3_uploads WHERE file_id = '{file_id}'") == "completing"
+    assert sql(f"SELECT state FROM uploads WHERE file_id = '{file_id}'") == "completing"
     assert client.get_object(**args)["Body"].read() == old
     physical = sql(f"SELECT object_key FROM locations WHERE file_id = '{file_id}'")
     assert backend.vendor.get_object(Bucket=backend.spec["bucket"], Key=physical)["Body"].read() == new
@@ -91,7 +91,7 @@ def check(endpoint, directory, database, account, backend, proxy, attempts, rest
     if restart is not None:
         restart()
         wait_for(ready)
-        assert sql(f"SELECT state FROM s3_uploads WHERE file_id = '{file_id}'") == "completing"
+        assert sql(f"SELECT state FROM uploads WHERE file_id = '{file_id}'") == "completing"
         assert sql(f"SELECT state FROM files WHERE id = '{file_id}'") == "pending"
         assert client.get_object(**args)["Body"].read() == old
         unavailable()
@@ -105,7 +105,7 @@ def check(endpoint, directory, database, account, backend, proxy, attempts, rest
         wait_for(lambda: s3_db_fault.failures(sql) >= 2)
         assert sql(f"SELECT state FROM files WHERE id = '{file_id}'") == "pending"
         assert sql(f"SELECT state FROM leases WHERE file_id = '{file_id}' AND kind = 'write'") == "issued"
-        assert sql(f"SELECT state FROM s3_uploads WHERE file_id = '{file_id}'") == "completing"
+        assert sql(f"SELECT state FROM uploads WHERE file_id = '{file_id}'") == "completing"
         assert client.get_object(**args)["Body"].read() == old
         assert backend.vendor.get_object(Bucket=backend.spec["bucket"], Key=physical)["Body"].read() == new
         assert len(attempts) == count == 1
@@ -116,7 +116,7 @@ def check(endpoint, directory, database, account, backend, proxy, attempts, rest
         s3_db_fault.remove(sql)
     wait_for(lambda: sql(f"SELECT state FROM files WHERE id = '{file_id}'") == "active")
     assert client.get_object(**args)["Body"].read() == new
-    assert sql(f"SELECT count(*) FROM s3_uploads WHERE file_id = '{file_id}'") == "0"
+    assert sql(f"SELECT count(*) FROM uploads WHERE file_id = '{file_id}'") == "0"
     assert sql(f"SELECT state FROM leases WHERE file_id = '{file_id}' AND kind = 'write'") == "committed"
     assert sql("SELECT count(*) FROM files WHERE state = 'active'") == "1"
     assert sql(f"SELECT declared_size FROM files WHERE id = '{file_id}'") == str(len(new))

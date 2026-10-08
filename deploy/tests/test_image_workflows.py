@@ -49,7 +49,18 @@ class ImageWorkflowTests(unittest.TestCase):
             self.assertIn("/tmp/grove-image-sdk/bin/pip install boto3==1.43.99", workflow)
             self.assertIn("/tmp/grove-image-sdk/bin/python -B scripts/e2e-image.py", workflow)
         fixture = (ROOT / "scripts/e2e-image.py").read_text()
-        self.assertIn("check_s3(endpoint, origin, password, name, report_dir)", fixture)
+        self.assertIn("check_s3(endpoint, origin, password, name, report_dir, restart)", fixture)
+
+    def test_packaged_runtime_checks_migrations_and_existing_urls_after_restart(self):
+        fixture = (ROOT / "scripts/e2e-image.py").read_text()
+        self.assertIn("hashlib.sha384(path.read_bytes()).hexdigest()", fixture)
+        self.assertIn("assert migrations == expected", fixture)
+        self.assertIn('docker("start", server)', fixture)
+        contract = (ROOT / "scripts/image_s3_contract.py").read_text()
+        restart = contract.index("        restart()")
+        self.assertLess(restart, contract.index("assert client.head_object", restart))
+        self.assertLess(restart, contract.index("with opener.open(get, timeout=30)", restart))
+        self.assertLess(restart, contract.index("client.delete_object"))
 
     def test_image_database_readiness_requires_tcp(self):
         fixture = (ROOT / "scripts/e2e-image.py").read_text()

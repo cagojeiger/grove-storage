@@ -78,12 +78,11 @@ async fn single_finalize_maps_key_and_detaches_old_file_atomically(pool: PgPool)
     );
     assert_eq!(file_state(&pool, old.file_id).await, "deleted");
     assert_eq!(file_state(&pool, upload.file_id).await, "active");
-    let session_count: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM s3_uploads WHERE file_id = $1")
-            .bind(upload.file_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let session_count: i64 = sqlx::query_scalar("SELECT count(*) FROM uploads WHERE file_id = $1")
+        .bind(upload.file_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(session_count, 0);
 }
 
@@ -137,12 +136,11 @@ async fn wrong_key_finalize_leaves_upload_pending_and_unmapped(pool: PgPool) {
             .await
             .unwrap()
     );
-    let session_count: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM s3_uploads WHERE file_id = $1")
-            .bind(upload.file_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let session_count: i64 = sqlx::query_scalar("SELECT count(*) FROM uploads WHERE file_id = $1")
+        .bind(upload.file_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(session_count, 0);
 }
 
@@ -199,7 +197,7 @@ async fn failed_single_completion_retains_cleanup_material(pool: PgPool) {
     assert_eq!(completions[0].expected_size, 100);
     assert_eq!(completions[0].expected_etag, "etag");
 
-    // 실물이 없거나 불일치한 경우에도 바로 DB 정보를 버리지 않고 aborting
+    // 실물이 없거나 불일치한 경우에도 바로 DB 정보를 버리지 않고 cleaning
     // cleanup 후보로 옮긴다. 물리 Delete 성공 뒤 finalize_abort가 끝낸다.
     assert!(
         s3::mark_completion_aborting(&pool, upload.file_id)

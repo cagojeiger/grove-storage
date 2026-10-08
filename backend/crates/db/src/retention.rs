@@ -1,4 +1,4 @@
-//! Server-owned retention; never an account-authorized deletion endpoint.
+//! Server-owned retention of history and expired authentication proofs.
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 use std::num::NonZeroU16;
@@ -19,6 +19,11 @@ pub enum Stream {
     Audit,
     Security,
     Invocations,
+    Sessions,
+    ApiTokens,
+    PasswordSetup,
+    ObjectAccess,
+    Usage,
 }
 impl Stream {
     pub fn name(self) -> &'static str {
@@ -26,8 +31,53 @@ impl Stream {
             Self::Audit => "audit_events",
             Self::Security => "security_events",
             Self::Invocations => "command_invocations",
+            Self::Sessions => "sessions",
+            Self::ApiTokens => "api_tokens",
+            Self::PasswordSetup => "password_setup_tokens",
+            Self::ObjectAccess => "lease_history",
+            Self::Usage => "usage_snapshots",
         }
     }
+
+    fn target(self) -> (&'static str, &'static str, &'static str, &'static str) {
+        match self {
+            Self::Audit => ("management.audit_events", "created_at", "id", "true"),
+            Self::Security => ("management.security_events", "created_at", "id", "true"),
+            Self::Invocations => ("management.command_invocations", "created_at", "id", "true"),
+            Self::Sessions => (
+                "management.sessions",
+                "LEAST(expires_at, COALESCE(revoked_at, expires_at))",
+                "id",
+                "true",
+            ),
+            Self::ApiTokens => (
+                "management.api_tokens",
+                "LEAST(expires_at, COALESCE(revoked_at, expires_at))",
+                "id",
+                "NOT EXISTS (SELECT 1 FROM management.sessions s WHERE s.credential_id = t.id)",
+            ),
+            Self::PasswordSetup => (
+                "management.password_setup_tokens",
+                "expires_at",
+                "account_id",
+                "true",
+            ),
+            Self::ObjectAccess => ("lease_history", "at", "id", "true"),
+            Self::Usage => ("usage_snapshots", "day", "day,storage_id,client_id", "true"),
+        }
+    }
+
+    fn cutoff_sql(self) -> &'static str {
+        match self {
+            Self::Usage => "($1 AT TIME ZONE 'UTC')::date",
+            _ => "$1",
+        }
+    }
+}
+
+pub struct Batch {
+    pub deleted: u64,
+    pub oldest_remaining_at: Option<DateTime<Utc>>,
 }
 
 pub async fn prune(
@@ -35,7 +85,7 @@ pub async fn prune(
     stream: Stream,
     days: NonZeroU16,
     limit: NonZeroU16,
-) -> Result<u64, sqlx::Error> {
+) -> Result<Batch, sqlx::Error> {
     let mut tx = pool.begin().await?;
     sqlx::query("SET LOCAL statement_timeout = '2s'")
         .execute(&mut *tx)
@@ -49,8 +99,24 @@ pub async fn prune(
             .fetch_one(&mut *tx)
             .await?;
     let deleted = delete_before(&mut tx, stream, cutoff, limit).await?;
+    let (table, time, key, guard) = stream.target();
+    let cutoff_sql = stream.cutoff_sql();
+    let timestamp = match stream {
+        Stream::Usage => "day::timestamp AT TIME ZONE 'UTC'",
+        _ => time,
+    };
+    let oldest_remaining_at = sqlx::query_scalar(&format!(
+        "SELECT {timestamp} FROM {table} t WHERE {time} < {cutoff_sql} AND {guard}
+         ORDER BY {time},{key} LIMIT 1"
+    ))
+    .bind(cutoff)
+    .fetch_optional(&mut *tx)
+    .await?;
     tx.commit().await?;
-    Ok(deleted)
+    Ok(Batch {
+        deleted,
+        oldest_remaining_at,
+    })
 }
 
 async fn delete_before(
@@ -59,24 +125,16 @@ async fn delete_before(
     cutoff: DateTime<Utc>,
     limit: NonZeroU16,
 ) -> Result<u64, sqlx::Error> {
-    let sql = match stream {
-        Stream::Audit => {
-            "DELETE FROM management.audit_events WHERE id IN (
-            SELECT id FROM management.audit_events WHERE created_at < $1
-            ORDER BY created_at,id LIMIT $2)"
-        }
-        Stream::Security => {
-            "DELETE FROM management.security_events WHERE id IN (
-            SELECT id FROM management.security_events WHERE created_at < $1
-            ORDER BY created_at,id LIMIT $2)"
-        }
-        Stream::Invocations => {
-            "DELETE FROM management.command_invocations WHERE id IN (
-            SELECT id FROM management.command_invocations WHERE created_at < $1
-            ORDER BY created_at,id LIMIT $2)"
-        }
-    };
-    Ok(sqlx::query(sql)
+    let (table, time, key, guard) = stream.target();
+    let cutoff_sql = stream.cutoff_sql();
+    // All identifiers come from Stream, never request input. Each batch commits
+    // independently, so cancellation cannot roll back earlier completed batches.
+    let sql = format!(
+        "DELETE FROM {table} WHERE ({key}) IN (
+         SELECT {key} FROM {table} t WHERE {time} < {cutoff_sql} AND {guard}
+         ORDER BY {time},{key} LIMIT $2)"
+    );
+    Ok(sqlx::query(&sql)
         .bind(cutoff)
         .bind(i64::from(limit.get()))
         .execute(&mut **tx)

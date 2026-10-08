@@ -1,12 +1,12 @@
 //! Native multipart completion recovery.
 
 use grove_core::Crypto;
-use grove_db::{PgPool, files, registry};
+use grove_db::{PgPool, files, registry, upload_recovery::Job};
 use grove_infra::S3ClientCache;
 use grove_object_policy::completion::{CompletionAction, completion_action};
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 
-use super::{BATCH_LIMIT, sweep_object};
+use super::{BATCH_LIMIT, begin_recovery, recovery_io, sweep_object};
 use crate::lease::WRITE_LEASE_TTL;
 
 pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
@@ -18,6 +18,9 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
         }
     };
     for candidate in candidates {
+        if !begin_recovery(pool, candidate.file_id, Job::NativeComplete).await {
+            continue;
+        }
         let row = match registry::get_storage(pool, &candidate.storage_id).await {
             Ok(Some(row)) => row,
             Ok(None) => {
@@ -40,12 +43,12 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                 continue;
             }
         };
-        let observation = grove_infra::s3_io::observe_backend_object(
+        let observation = recovery_io(grove_infra::s3_io::observe_backend_object(
             s3_clients,
             &backend,
             &candidate.storage_id,
             &candidate.object_key,
-        )
+        ))
         .await;
         let action = match completion_action(
             candidate.expected_size,
@@ -110,7 +113,9 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
             }
         }
     }
+}
 
+pub(super) async fn cleanup(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
     let cleanup = match files::completion_cleanup_candidates(pool, BATCH_LIMIT).await {
         Ok(candidates) => candidates,
         Err(error) => {
@@ -119,8 +124,11 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
         }
     };
     for candidate in cleanup {
+        if !begin_recovery(pool, candidate.file_id, Job::NativeCleanup).await {
+            continue;
+        }
         match cleanup_then_finalize(
-            || sweep_object(pool, crypto, s3_clients, &candidate),
+            || recovery_io(sweep_object(pool, crypto, s3_clients, &candidate)),
             || files::finalize_completion_cleanup(pool, candidate.file_id),
         )
         .await

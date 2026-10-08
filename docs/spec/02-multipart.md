@@ -53,7 +53,7 @@ stateDiagram-v2
 
 | 경계 | 조건 |
 |---|---|
-| 완료 선점 | part 검증 후 native_multipart_completions 기록·lease 연장 |
+| 완료 선점 | part 검증 후 `uploads(protocol=native)` 기록·lease 연장 |
 | 물리 작업 | heartbeat로 완료 소유권 유지 |
 | 새 part·generic 회수 | 완료 소유 행으로 직렬화 |
 | 직결 UploadPart | vendor Complete가 검증한 part 번호·ETag 목록으로 직렬화 |
@@ -78,5 +78,6 @@ part 허용·heartbeat·최종 확정은 잠금 대기 후의 현재 상태로 �
 | 완료·회수 경합, 새 part 차단, 재개·정리, GC | db/tests/native_multipart_completion.rs |
 | 잠금 대기 중 소유권 변경 | db/tests/native_multipart_completion/ |
 | S3 중계 part·완료 직렬화 | db/tests의 S3 multipart 테스트 |
+| 파일당 단일 소유권·프로토콜 격리·DB 전환 | db/tests/upload_ownership.rs |
 | S3 직결·중계 바이트 동등성 | scripts/e2e-relay-upload.py, scripts/native_multipart_cases.py |
 | part 내부 오프셋 재개·전체 CRC 합성 | 후속 범위 |

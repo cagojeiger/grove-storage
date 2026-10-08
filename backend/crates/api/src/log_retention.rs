@@ -1,6 +1,6 @@
 //! Management retention has its own task and lock, without provider I/O.
 use grove_core::ManagementLogRetention;
-use grove_db::{PgPool, management::retention};
+use grove_db::{PgPool, retention};
 use std::{future::Future, time::Duration};
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;

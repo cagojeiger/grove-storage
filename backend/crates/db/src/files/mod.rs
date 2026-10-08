@@ -8,6 +8,7 @@ mod completion;
 mod create;
 mod multipart;
 mod reclaim_cleanup;
+mod recovery;
 mod relay_upload;
 mod sweep;
 
@@ -29,9 +30,10 @@ pub use multipart::{
     extend_write_lease, finish_relay_part, renew_relay_part_lease, write_lease,
 };
 pub use reclaim_cleanup::{finalize_reclaim_cleanup, reclaim_cleanup_candidates};
+pub use recovery::{RecoveryJob, claim_recovery};
 pub use relay_upload::{RelayUploadClaim, claim_relay_upload};
 pub use sweep::{
     DeleteOutcome, SweepCandidate, expire_read_leases, expired_pending, finalize_purge,
-    finalize_reclaim, mark_deleted, prune_history, prune_terminal_files, prune_terminal_leases,
-    purgeable, reclaim_pending,
+    finalize_reclaim, mark_deleted, prune_terminal_files, prune_terminal_leases, purgeable,
+    reclaim_pending,
 };

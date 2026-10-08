@@ -24,7 +24,7 @@ async fn finalize_rechecks_completion_after_waiting_for_recovery(pool: PgPool) {
         files::finalize_completion(&finalize_pool, file.file_id, &etag).await
     });
     lock_wait::wait_for_blocker(&pool, blocker).await;
-    sqlx::query("DELETE FROM native_multipart_completions WHERE file_id = $1")
+    sqlx::query("DELETE FROM uploads WHERE file_id = $1")
         .bind(file.file_id)
         .execute(&mut *recovery)
         .await
@@ -72,7 +72,7 @@ async fn heartbeat_rechecks_completion_after_waiting_for_recovery(pool: PgPool) 
     lock_wait::wait_for_blocker(&pool, blocker).await;
 
     // Reopening removes ownership without changing the locked file row.
-    sqlx::query("DELETE FROM native_multipart_completions WHERE file_id = $1")
+    sqlx::query("DELETE FROM uploads WHERE file_id = $1")
         .bind(file.file_id)
         .execute(&mut *recovery)
         .await

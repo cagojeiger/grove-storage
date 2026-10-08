@@ -98,7 +98,7 @@ async fn login_window_resets_at_exactly_one_minute(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn retention_uses_injected_database_time_across_connections(pool: PgPool) {
-    use db::retention::{Stream, prune};
+    use grove_db::retention::{Stream, prune};
     use std::num::NonZeroU16;
     install_clock(&pool).await;
     sqlx::query("INSERT INTO management.security_events(actor_kind,request_id,surface,event_type,reason_code) VALUES('anonymous',$1,'console','authentication_failed','unauthenticated')").bind(Uuid::new_v4()).execute(&pool).await.unwrap();
@@ -106,7 +106,10 @@ async fn retention_uses_injected_database_time_across_connections(pool: PgPool) 
     let limit = NonZeroU16::new(10).unwrap();
     set_time(&pool, base() + Duration::days(90)).await;
     assert_eq!(
-        prune(&pool, Stream::Security, days, limit).await.unwrap(),
+        prune(&pool, Stream::Security, days, limit)
+            .await
+            .unwrap()
+            .deleted,
         0
     );
     set_time(
@@ -115,7 +118,10 @@ async fn retention_uses_injected_database_time_across_connections(pool: PgPool) 
     )
     .await;
     assert_eq!(
-        prune(&pool, Stream::Security, days, limit).await.unwrap(),
+        prune(&pool, Stream::Security, days, limit)
+            .await
+            .unwrap()
+            .deleted,
         1
     );
 }

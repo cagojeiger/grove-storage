@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 
 @contextmanager
-def complete_proxy(endpoint, *, drop_response=True):
+def complete_proxy(endpoint, *, drop_response=True, pause=None):
     upstream = urlsplit(endpoint)
     assert upstream.scheme == "http" and upstream.hostname == "127.0.0.1"
     attempts = []
@@ -34,6 +34,12 @@ def complete_proxy(endpoint, *, drop_response=True):
                             "uploadId" in parse_qs(urlsplit(self.path).query))
                 if complete:
                     attempts.append((response.status, payload))
+                if complete and pause:
+                    entered, release = pause
+                    entered.set()
+                    if not release.wait(30):
+                        self.close_connection = True
+                        return
                 if complete and drop_response:
                     self.close_connection = True
                     self.connection.shutdown(socket.SHUT_RDWR)
@@ -48,6 +54,8 @@ def complete_proxy(endpoint, *, drop_response=True):
                 self.end_headers()
                 if self.command != "HEAD":
                     self.wfile.write(payload)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
             finally:
                 connection.close()
 
@@ -59,6 +67,8 @@ def complete_proxy(endpoint, *, drop_response=True):
     try:
         yield f"http://127.0.0.1:{server.server_port}", attempts
     finally:
+        if pause:
+            pause[1].set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)

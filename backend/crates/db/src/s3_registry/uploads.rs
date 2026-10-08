@@ -21,7 +21,8 @@ pub async fn create_upload(
         return Ok(outcome);
     };
     sqlx::query(
-        "INSERT INTO s3_uploads (file_id, key, multipart, if_none_match) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO uploads (file_id, protocol, key, multipart, if_none_match) \
+         VALUES ($1, 's3', $2, $3, $4)",
     )
     .bind(created.file_id)
     .bind(key)
@@ -66,9 +67,9 @@ async fn upload_matches_states(
 ) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(
         "SELECT EXISTS ( \
-         SELECT 1 FROM s3_uploads u \
+         SELECT 1 FROM uploads u \
          JOIN files f ON f.id = u.file_id \
-         WHERE u.file_id = $1 AND f.client_id = $2 AND u.key = $3 \
+         WHERE u.file_id = $1 AND u.protocol = 's3' AND f.client_id = $2 AND u.key = $3 \
          AND u.multipart = $4 AND f.state = 'pending' \
          AND (u.state = 'open' OR ($5 AND u.state = 'completing')) \
          AND (($4 AND f.part_size IS NOT NULL) \
@@ -144,8 +145,8 @@ pub async fn claim_completion(
     }
 
     let session: Option<(String, Option<i64>, Option<String>)> = sqlx::query_as(
-        "SELECT state, expected_size, expected_etag FROM s3_uploads \
-         WHERE file_id = $1 AND key = $2 AND multipart = $3 FOR UPDATE",
+        "SELECT state, expected_size, expected_etag FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND key = $2 AND multipart = $3 FOR UPDATE",
     )
     .bind(spec.file_id)
     .bind(spec.key)
@@ -173,8 +174,10 @@ pub async fn claim_completion(
                 return Ok(CompletionClaim::Unavailable);
             }
             sqlx::query(
-                "UPDATE s3_uploads SET state = 'completing', expected_size = $2, \
-                 expected_etag = $3, updated_at = grove_time.transaction_now() WHERE file_id = $1",
+                "UPDATE uploads SET state = 'completing', expected_size = $2, \
+                 expected_etag = $3, updated_at = grove_time.transaction_now(), \
+                 recovery_after = grove_time.transaction_now() \
+                 WHERE file_id = $1 AND protocol = 's3'",
             )
             .bind(spec.file_id)
             .bind(spec.expected_size)
@@ -224,8 +227,8 @@ pub async fn begin_multipart_completion(
         return Ok(MultipartCompletionStart::Unavailable);
     }
     let session: Option<(String, Option<i64>, Option<String>)> = sqlx::query_as(
-        "SELECT state, expected_size, expected_etag FROM s3_uploads \
-         WHERE file_id = $1 AND key = $2 AND multipart \
+        "SELECT state, expected_size, expected_etag FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND key = $2 AND multipart \
          AND state IN ('open', 'completing') FOR UPDATE",
     )
     .bind(file_id)
@@ -301,9 +304,10 @@ impl MultipartCompletion {
             return Ok(CompletionClaim::Unavailable);
         }
         let changed = sqlx::query(
-            "UPDATE s3_uploads SET state = 'completing', expected_size = $2, \
-             expected_etag = $3, updated_at = grove_time.transaction_now() \
-             WHERE file_id = $1 AND state = 'open'",
+            "UPDATE uploads SET state = 'completing', expected_size = $2, \
+             expected_etag = $3, updated_at = grove_time.transaction_now(), \
+             recovery_after = grove_time.transaction_now() \
+             WHERE file_id = $1 AND protocol = 's3' AND state = 'open'",
         )
         .bind(self.file_id)
         .bind(expected_size)
@@ -349,7 +353,7 @@ pub async fn claim_upload_part(
         return Ok(UploadPartClaim::Unavailable);
     }
     let open: Option<Uuid> = sqlx::query_scalar(
-        "SELECT file_id FROM s3_uploads WHERE file_id = $1 AND key = $2 \
+        "SELECT file_id FROM uploads WHERE file_id = $1 AND protocol = 's3' AND key = $2 \
          AND multipart AND state = 'open' FOR UPDATE",
     )
     .bind(file_id)
@@ -407,10 +411,10 @@ pub async fn renew_upload_part_lease(
         return Ok(false);
     }
     let owned: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM s3_uploads u \
+        "SELECT EXISTS (SELECT 1 FROM uploads u \
          JOIN leases le ON le.file_id = u.file_id AND le.id = $2 AND le.kind = 'write' \
          JOIN lease_parts lp ON lp.lease_id = le.id AND lp.part_no = $3 \
-         WHERE u.file_id = $1 AND u.multipart AND u.state = 'open' \
+         WHERE u.file_id = $1 AND u.protocol = 's3' AND u.multipart AND u.state = 'open' \
          AND lp.state = 'claimed')",
     )
     .bind(file_id)
@@ -455,8 +459,8 @@ pub async fn finish_upload_part(
         return Ok(false);
     }
     let open: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM s3_uploads \
-         WHERE file_id = $1 AND multipart AND state = 'open')",
+        "SELECT EXISTS (SELECT 1 FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND multipart AND state = 'open')",
     )
     .bind(file_id)
     .fetch_one(&mut *tx)
@@ -552,7 +556,7 @@ pub async fn claim_abort(
         return Ok(AbortClaim::Unavailable);
     }
     let open: Option<Uuid> = sqlx::query_scalar(
-        "SELECT file_id FROM s3_uploads WHERE file_id = $1 AND key = $2 \
+        "SELECT file_id FROM uploads WHERE file_id = $1 AND protocol = 's3' AND key = $2 \
          AND multipart AND state = 'open' FOR UPDATE",
     )
     .bind(file_id)
@@ -574,8 +578,9 @@ pub async fn claim_abort(
         return Ok(AbortClaim::Busy);
     }
     let claimed = sqlx::query(
-        "UPDATE s3_uploads SET state = 'aborting', updated_at = grove_time.transaction_now() \
-         WHERE file_id = $1 AND key = $2 AND multipart AND state = 'open'",
+        "UPDATE uploads SET state = 'cleaning', updated_at = grove_time.transaction_now(), \
+         recovery_after = grove_time.transaction_now() \
+         WHERE file_id = $1 AND protocol = 's3' AND key = $2 AND multipart AND state = 'open'",
     )
     .bind(file_id)
     .bind(key)
@@ -616,7 +621,8 @@ pub async fn finalize_multipart_upload(
 }
 
 /// pending→active, write lease 정산, logical key 교체, 옛 file detach를 한
-/// 트랜잭션에서 수행한다. DB 오류면 completing과 복구 재료가 그대로 남는다.
+/// 트랜잭션에서 수행한다. 롤백 시 복구 재료가 남지만 COMMIT 응답 유실은
+/// 이미 확정된 결과와 구분할 수 없다.
 async fn finalize_upload(
     pool: &PgPool,
     client_id: &str,
@@ -640,8 +646,8 @@ async fn finalize_upload(
     }
 
     let completion: Option<(i64, String, bool)> = sqlx::query_as(
-        "SELECT expected_size, expected_etag, if_none_match FROM s3_uploads \
-         WHERE file_id = $1 AND key = $2 AND multipart = $3 \
+        "SELECT expected_size, expected_etag, if_none_match FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND key = $2 AND multipart = $3 \
          AND state = 'completing' FOR UPDATE",
     )
     .bind(file_id)
@@ -657,8 +663,10 @@ async fn finalize_upload(
     // A losing upload retains its location until physical cleanup succeeds.
     if if_none_match && !insert_key_in_tx(&mut tx, client_id, key, file_id).await? {
         sqlx::query(
-            "UPDATE s3_uploads SET state = 'aborting', expected_size = NULL, \
-             expected_etag = NULL, updated_at = grove_time.transaction_now() WHERE file_id = $1",
+            "UPDATE uploads SET state = 'cleaning', expected_size = NULL, \
+             expected_etag = NULL, updated_at = grove_time.transaction_now(), \
+             recovery_after = grove_time.transaction_now() \
+             WHERE file_id = $1 AND protocol = 's3'",
         )
         .bind(file_id)
         .execute(&mut *tx)
@@ -690,7 +698,7 @@ async fn finalize_upload(
     } else {
         upsert_key_in_tx(&mut tx, client_id, key, file_id).await?
     };
-    sqlx::query("DELETE FROM s3_uploads WHERE file_id = $1")
+    sqlx::query("DELETE FROM uploads WHERE file_id = $1 AND protocol = 's3'")
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
@@ -698,14 +706,14 @@ async fn finalize_upload(
     Ok(FinalizeOutcome::Finalized { displaced })
 }
 
-/// 만료된 open S3 세션 후보. 실제 만료 재확인과 aborting 선점은 별도
+/// 만료된 open S3 세션 후보. 실제 만료 재확인과 cleaning 선점은 별도
 /// 트랜잭션에서 수행해 UploadPart의 lease 갱신 경합을 다시 확인한다.
 pub async fn expired_open_uploads(pool: &PgPool, limit: i64) -> Result<Vec<Uuid>, sqlx::Error> {
     sqlx::query_scalar(
-        "SELECT u.file_id FROM s3_uploads u \
+        "SELECT u.file_id FROM uploads u \
          JOIN files f ON f.id = u.file_id \
          JOIN leases le ON le.file_id = f.id AND le.kind = 'write' \
-         WHERE u.state = 'open' AND f.state = 'pending' \
+         WHERE u.protocol = 's3' AND u.state = 'open' AND f.state = 'pending' \
          AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() LIMIT $1",
     )
     .bind(limit)
@@ -713,7 +721,7 @@ pub async fn expired_open_uploads(pool: &PgPool, limit: i64) -> Result<Vec<Uuid>
     .await
 }
 
-/// 만료 재확인이 이기면 open → aborting. session/location은 물리 정리 성공
+/// 만료 재확인이 이기면 open → cleaning. session/location은 물리 정리 성공
 /// 전까지 남고, lease만 더 이상 갱신되지 않도록 expired로 닫는다.
 pub async fn claim_expired_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
@@ -726,7 +734,8 @@ pub async fn claim_expired_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, s
         return Ok(false);
     }
     let open: Option<Uuid> = sqlx::query_scalar(
-        "SELECT file_id FROM s3_uploads WHERE file_id = $1 AND state = 'open' FOR UPDATE",
+        "SELECT file_id FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND state = 'open' FOR UPDATE",
     )
     .bind(file_id)
     .fetch_optional(&mut *tx)
@@ -745,7 +754,7 @@ pub async fn claim_expired_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, s
     if expired.rows_affected() == 0 {
         return Ok(false);
     }
-    sqlx::query("UPDATE s3_uploads SET state = 'aborting', updated_at = grove_time.transaction_now() WHERE file_id = $1")
+    sqlx::query("UPDATE uploads SET state = 'cleaning', updated_at = grove_time.transaction_now(), recovery_after = grove_time.transaction_now() WHERE file_id = $1 AND protocol = 's3'")
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
@@ -755,7 +764,7 @@ pub async fn claim_expired_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, s
 
 /// 물리 Abort/Delete가 끝난 뒤에만 DB 회수를 확정한다.
 pub async fn finalize_abort(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx::Error> {
-    finalize_reclaimed_upload(pool, file_id, "aborting").await
+    finalize_reclaimed_upload(pool, file_id, "cleaning").await
 }
 
 /// 외부 저장소 작업을 시작하지 못한 create만 즉시 되돈다.
@@ -770,9 +779,9 @@ async fn finalize_reclaimed_upload(
 ) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let transitioned = sqlx::query(
-        "UPDATE files f SET state = 'reclaimed' FROM s3_uploads u \
+        "UPDATE files f SET state = 'reclaimed' FROM uploads u \
          WHERE f.id = $1 AND f.state = 'pending' AND u.file_id = f.id \
-         AND u.state = $2",
+         AND u.protocol = 's3' AND u.state = $2",
     )
     .bind(file_id)
     .bind(required_state)
@@ -792,7 +801,7 @@ async fn finalize_reclaimed_upload(
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
-    sqlx::query("DELETE FROM s3_uploads WHERE file_id = $1")
+    sqlx::query("DELETE FROM uploads WHERE file_id = $1 AND protocol = 's3'")
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
@@ -800,16 +809,18 @@ async fn finalize_reclaimed_upload(
     Ok(true)
 }
 
-/// aborting은 물리 정리 성공 전까지 location과 vendor upload_id를 보존한다.
+/// cleaning은 물리 정리 성공 전까지 location과 vendor upload_id를 보존한다.
 pub async fn cleanup_candidates(
     pool: &PgPool,
     limit: i64,
 ) -> Result<Vec<SweepCandidate>, sqlx::Error> {
     let rows: Vec<(Uuid, String, String, Option<String>, Uuid, bool)> = sqlx::query_as(
         "SELECT u.file_id, l.storage_id, l.object_key, le.upload_id, le.id, u.multipart \
-         FROM s3_uploads u JOIN locations l ON l.file_id = u.file_id \
+         FROM uploads u JOIN locations l ON l.file_id = u.file_id \
          JOIN leases le ON le.file_id = u.file_id AND le.kind = 'write' \
-         WHERE u.state = 'aborting' LIMIT $1",
+         WHERE u.protocol = 's3' AND u.state = 'cleaning' \
+         AND u.recovery_after <= grove_time.transaction_now() \
+         ORDER BY u.recovery_after, u.file_id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -842,18 +853,20 @@ pub struct CompletionCandidate {
 }
 
 /// completing 상태에서 write lease가 지난 건은 요청 소유자가 사라졌다고 보고
-/// 실물을 관찰해 DB finalize 또는 open/aborting 복구를 결정한다.
+/// 실물을 관찰해 DB finalize 또는 open/cleaning 복구를 결정한다.
 pub async fn completion_candidates(
     pool: &PgPool,
     limit: i64,
 ) -> Result<Vec<CompletionCandidate>, sqlx::Error> {
     sqlx::query_as::<_, CompletionCandidate>(
         "SELECT u.file_id, f.client_id, u.key, u.multipart, u.expected_size, \
-         u.expected_etag, l.storage_id, l.object_key FROM s3_uploads u \
+         u.expected_etag, l.storage_id, l.object_key FROM uploads u \
          JOIN files f ON f.id = u.file_id JOIN locations l ON l.file_id = u.file_id \
          JOIN leases le ON le.file_id = u.file_id AND le.kind = 'write' \
-         WHERE u.state = 'completing' AND f.state = 'pending' \
-         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() LIMIT $1",
+         WHERE u.protocol = 's3' AND u.state = 'completing' AND f.state = 'pending' \
+         AND le.state = 'issued' AND le.expires_at < grove_time.transaction_now() \
+         AND u.recovery_after <= grove_time.transaction_now() \
+         ORDER BY u.recovery_after, u.file_id LIMIT $1",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -879,7 +892,8 @@ pub async fn renew_completion_lease(
     }
     // Recovery may change the upload while this transaction waits for the file lock.
     let completing: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $1 AND state = 'completing')",
+        "SELECT EXISTS (SELECT 1 FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND state = 'completing')",
     )
     .bind(file_id)
     .fetch_one(&mut *tx)
@@ -915,8 +929,8 @@ async fn lock_expired_completion(
         return Ok(false);
     }
     let session: Option<Uuid> = sqlx::query_scalar(
-        "SELECT file_id FROM s3_uploads \
-         WHERE file_id = $1 AND state = 'completing' FOR UPDATE",
+        "SELECT file_id FROM uploads \
+         WHERE file_id = $1 AND protocol = 's3' AND state = 'completing' FOR UPDATE",
     )
     .bind(file_id)
     .fetch_optional(&mut **tx)
@@ -945,9 +959,10 @@ pub async fn reopen_completion(
         return Ok(false);
     }
     let reopened = sqlx::query(
-        "UPDATE s3_uploads SET state = 'open', expected_size = NULL, \
-         expected_etag = NULL, updated_at = grove_time.transaction_now() \
-         WHERE file_id = $1 AND state = 'completing'",
+        "UPDATE uploads SET state = 'open', expected_size = NULL, \
+         expected_etag = NULL, updated_at = grove_time.transaction_now(), \
+         recovery_after = grove_time.transaction_now() \
+         WHERE file_id = $1 AND protocol = 's3' AND state = 'completing'",
     )
     .bind(file_id)
     .execute(&mut *tx)
@@ -970,7 +985,7 @@ pub async fn reopen_completion(
     Ok(true)
 }
 
-/// 없거나 예상과 다른 단일 PUT/완료 객체는 aborting으로 보내 물리 삭제를
+/// 없거나 예상과 다른 단일 PUT/완료 객체는 cleaning으로 보내 물리 삭제를
 /// 재시도한 뒤 회수한다.
 pub async fn mark_completion_aborting(pool: &PgPool, file_id: Uuid) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
@@ -978,9 +993,10 @@ pub async fn mark_completion_aborting(pool: &PgPool, file_id: Uuid) -> Result<bo
         return Ok(false);
     }
     let changed = sqlx::query(
-        "UPDATE s3_uploads SET state = 'aborting', expected_size = NULL, \
-         expected_etag = NULL, updated_at = grove_time.transaction_now() \
-         WHERE file_id = $1 AND state = 'completing'",
+        "UPDATE uploads SET state = 'cleaning', expected_size = NULL, \
+         expected_etag = NULL, updated_at = grove_time.transaction_now(), \
+         recovery_after = grove_time.transaction_now() \
+         WHERE file_id = $1 AND protocol = 's3' AND state = 'completing'",
     )
     .bind(file_id)
     .execute(&mut *tx)

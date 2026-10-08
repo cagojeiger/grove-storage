@@ -175,7 +175,7 @@ def check_s3_lifecycle(endpoint, directory, backend, account):
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
          reconciler_interval=1, verify_log=None, multipart=False,
-         s3_cors_origins=()):
+         s3_cors_origins=(), database_url_transform=None):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -214,6 +214,8 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                 time.sleep(0.2)
             from cli_management_fixture import initialize_owner
             account = initialize_owner(container)
+            if database_url_transform:
+                env["GROVE_DATABASE_URL"] = database_url_transform(env["GROVE_DATABASE_URL"])
             with tempfile.TemporaryFile() as log:
                 server = subprocess.Popen([str(SERVER)], env=env, cwd=directory, stdout=log, stderr=log)
 

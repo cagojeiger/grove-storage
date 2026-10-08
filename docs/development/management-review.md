@@ -77,7 +77,7 @@ Session의 `account_id`는 필수이며 Root/Master 인증 구조는 생성하�
 | Security | 로그인·인증·권한 검사가 어떻게 끝났나? | best-effort, 각 쓰기 250 ms timeout |
 
 Client 파일 전송 로그와 관리 감사는 별개다. 조회도 command invocation을 기록하며,
-관리 로그는 Audit 365일·Security 90일·Command history 30일을 기본으로 보존한다.
+관리 로그는 Audit 365일·Security 90일·Command history 90일을 기본으로 보존한다.
 서버 환경 설정과 워커의 테이블별 유계 배치 정리를 사용한다. 행 증가량과 운영 조회
 비용은 측정 전이며 기간별 정책은 [운영 설명](../stack/README.md#관리-로그-보존)을 따른다.
 
@@ -163,7 +163,7 @@ Rust audit에는 `spin` 0.9.8·0.10.0의 yanked 경고 2개가 남아 있다. �
 | 계정·토큰·세션·마지막 Admin | `db/tests/management_accounts.rs`, `db/tests/management_credentials.rs`, `db/tests/management_sessions.rs` |
 | 초기화·비밀번호·복구·설정 링크 | `management-service/tests/local_accounts.rs`, `api/src/accounts/tests/password_login`, `db/tests/management_passwords.rs` |
 | 재인증 예산·감사 원자성·기록 timeout | `management-service/tests/admission.rs`, `management-service/tests/logging.rs`, `management-service/tests/resource_writes/failures.rs` |
-| 관리 로그 보존·경계·배치·잠금·재시도·파일 독립성 | `db/src/management/retention.rs`, `management-service/tests/retention.rs` |
+| 관리 로그 보존·경계·배치·잠금·재시도·파일 독립성 | `db/src/retention.rs`, `management-service/tests/retention.rs` |
 | multipart 정리 페이지 오류·유계 순회 | `storage-provider/tests/multipart_cleanup.rs` |
 | 종료 유예시간·SQLx close 순서·실제 SIGTERM | `api/src/shutdown.rs`, `scripts/e2e-shutdown.py` |
 | 자기 이력·타인 필터·cursor | `management-service/tests/history.rs`, `management-service/tests/history_filters.rs`, `api/src/accounts/tests/identity/history.rs` |

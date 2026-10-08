@@ -13,6 +13,7 @@ const snapshot = {
   client_id: "notegate",
   active_files: 1240,
   active_bytes: 1024 ** 3,
+  observed_at: "2026-09-25T00:02:00Z",
 };
 async function mock(page: Page, rows: unknown = [snapshot]) {
   await page.route("**/identity/v1/session", (r) =>
@@ -43,6 +44,7 @@ test("Reader can load usage snapshots, including retired resource IDs, and chang
   ).toHaveCount(2);
   await expect(page.getByRole("row").nth(1)).toContainText("2026-09-25");
   await expect(page.getByRole("row").nth(2)).toContainText("retired-storage");
+  await expect(page.getByRole("columnheader", { name: "Observed at" })).toBeVisible();
   expect(inputs.every((i) => i.days === 90)).toBe(true);
   await page.getByLabel(/^Days\s*\*?$/).fill("7");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
@@ -91,6 +93,8 @@ for (const invalid of [
   { active_files: -1 },
   { active_bytes: 0.5 },
   { active_bytes: Number.MAX_SAFE_INTEGER + 1 },
+  { observed_at: "not-a-date" },
+  { observed_at: 1234 },
 ]) {
   test(`malformed usage is rejected: ${JSON.stringify(invalid)}`, async ({
     page,
@@ -101,6 +105,12 @@ for (const invalid of [
     await expect(page.getByRole("grid")).toHaveCount(0);
   });
 }
+
+test("legacy observations show unknown time instead of an invented timestamp", async ({ page }) => {
+  await mock(page, [{ ...snapshot, observed_at: null }]);
+  await page.goto("/api/admin/console/#usage");
+  await expect(page.getByRole("gridcell", { name: "Unknown", exact: true })).toBeVisible();
+});
 
 test("large histories use bounded local pages without extra API requests", async ({
   page,

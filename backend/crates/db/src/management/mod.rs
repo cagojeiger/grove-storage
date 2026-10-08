@@ -18,7 +18,6 @@ pub mod queries;
 mod resource_metadata;
 mod resource_writes;
 mod resources;
-pub mod retention;
 pub mod sessions;
 mod storage_writes;
 pub mod telemetry;

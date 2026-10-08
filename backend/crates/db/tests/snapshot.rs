@@ -15,6 +15,55 @@ use grove_db::registry::{self, StorageRow};
 use grove_db::usage;
 use sqlx::PgPool;
 
+#[path = "support/time.rs"]
+mod time;
+
+#[sqlx::test(migrations = "./migrations")]
+async fn empty_observation_is_frozen_and_has_the_actual_observation_time(pool: PgPool) {
+    time::install_clock(&pool).await;
+    registry::insert_storage(&pool, &s3_row("s", 1000))
+        .await
+        .unwrap();
+    client_on(&pool, "c", "s").await;
+    let day = time::base().date_naive();
+    assert_eq!(usage::record_snapshot(&pool, day).await.unwrap(), 1);
+    time::set_time(&pool, time::base() + chrono::Duration::hours(1)).await;
+    commit_one(&pool, "c", 100).await;
+    assert_eq!(usage::record_snapshot(&pool, day).await.unwrap(), 0);
+    let rows = usage::snapshot_history(&pool, 7).await.unwrap();
+    let row = rows.first().unwrap();
+    assert_eq!((row.active_bytes, row.active_files), (0, 0));
+    assert_eq!(row.observed_at, Some(time::base()));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn moved_client_keeps_actual_storage_usage_and_current_empty_route(pool: PgPool) {
+    time::install_clock(&pool).await;
+    registry::insert_storage(&pool, &s3_row("old", 1000))
+        .await
+        .unwrap();
+    registry::insert_storage(&pool, &s3_row("new", 1000))
+        .await
+        .unwrap();
+    client_on(&pool, "c", "old").await;
+    commit_one(&pool, "c", 100).await;
+    sqlx::query("UPDATE clients SET storage_id='new' WHERE id='c'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        usage::record_snapshot(&pool, time::base().date_naive())
+            .await
+            .unwrap(),
+        2
+    );
+    let rows = usage::snapshot_history(&pool, 7).await.unwrap();
+    let old = rows.iter().find(|r| r.storage_id == "old").unwrap();
+    let new = rows.iter().find(|r| r.storage_id == "new").unwrap();
+    assert_eq!((old.active_bytes, old.active_files), (100, 1));
+    assert_eq!((new.active_bytes, new.active_files), (0, 0));
+}
+
 // ── 픽스처 ──────────────────────────────────────────────────
 
 fn s3_row(id: &str, capacity: i64) -> StorageRow {
@@ -134,8 +183,10 @@ async fn record_snapshot_excludes_files_created_after_day_end(pool: PgPool) {
 
     // 어제의 종점(오늘 자정)은 오늘 생성분을 모른다 — 빈 스냅샷.
     let yesterday = today() - Days::new(1);
-    assert_eq!(usage::record_snapshot(&pool, yesterday).await.unwrap(), 0);
-    assert!(usage::snapshot_history(&pool, 7).await.unwrap().is_empty());
+    assert_eq!(usage::record_snapshot(&pool, yesterday).await.unwrap(), 1);
+    let rows = usage::snapshot_history(&pool, 7).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!((rows[0].active_bytes, rows[0].active_files), (0, 0));
 }
 
 // ── snapshot_history ────────────────────────────────────────

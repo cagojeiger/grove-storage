@@ -2,35 +2,67 @@
 //!
 //! 모든 파드가 spawn하고, 실행은 tick마다 advisory lock이 하나를 고른다
 //! (docs/stack 멀티 파드 패턴). 관리 로그 정리는 별도 작업과 잠금을 사용한다.
-//! 삭제 대상은 분리하며 tick마다 도는 파일 잡(각 유계 배치, 일부는 전량):
-//!   0. 관찰 확정  — 단일 PUT pending의 실물이 선언과 맞으면 확정 (spec 00)
-//!   1. 만료 회수  — 쓰기 lease가 만료된 pending의 예약 해제 + 실물 정리
-//!   2. purge      — deleted 파일의 물리 삭제 + purge 대기 점유 해제
-//!   3. read lease GC / 5. 종료 lease GC / 6. 이력 보존 정리 / 8. 종착 파일 정리
-//!   7. 일별 사용량 스냅샷 (전량 집계), pod-local request spool sweep
+//! 관찰·완료 복구·정리·lease/file GC·일별 스냅샷을 순환한다. 회차 시간 제한에
+//! 걸리면 다음 작업부터 이어가며, pod-local request spool은 각 pod가 정리한다.
 //!
 //! generic 회수는 pending→reclaimed 선점 후 위치를 보존해 물리 정리를 재시도한다.
-//! S3 호환 회수는 aborting 선점 뒤 session/location을 보존한 채 물리를 먼저
+//! S3 호환 회수는 cleaning 선점 뒤 session/location을 보존한 채 물리를 먼저
 //! 지워 실패를 재시도한다. purge도 물리 삭제 뒤 점유를 해제한다. 재시도 가능한
 //! 경로의 물리 작업은 멱등이다.
 
 mod native_completion;
 mod reclaim;
 mod s3_completion;
+mod schedule;
+
+use schedule::{Job, Schedule, bounded_pass};
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use grove_core::Crypto;
 use grove_db::files::{self, SweepCandidate};
-use grove_db::{PgPool, registry, s3_registry as s3reg, usage};
+use grove_db::{PgPool, registry, s3_registry as s3reg, upload_recovery, usage};
 use grove_infra::{Address, S3ClientCache, s3_head_object, temp_spool};
 use grove_object_service::cleanup::{CleanupError, cleanup_then_finalize};
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod tests;
+
 /// 한 tick에 잡별로 처리하는 최대 건수 (유계 배치, docs/stack).
 const BATCH_LIMIT: i64 = 20;
+const RECOVERY_RETRY: Duration = Duration::from_secs(30);
+const RECOVERY_IO_TIMEOUT: Duration = Duration::from_secs(10);
+
+async fn begin_recovery(pool: &PgPool, file_id: uuid::Uuid, job: upload_recovery::Job) -> bool {
+    match upload_recovery::claim(pool, file_id, job, RECOVERY_RETRY.as_secs() as u32).await {
+        Ok(claimed) => claimed,
+        Err(error) => {
+            tracing::error!(event = "reconciler.claim_failed", file = %file_id, %error);
+            false
+        }
+    }
+}
+
+async fn recovery_io<T>(
+    operation: impl std::future::Future<Output = anyhow::Result<T>>,
+) -> anyhow::Result<T> {
+    tokio::time::timeout(RECOVERY_IO_TIMEOUT, operation)
+        .await
+        .map_err(|_| anyhow::anyhow!("reconciler I/O timed out"))?
+}
+
+async fn begin_file_recovery(pool: &PgPool, file_id: uuid::Uuid, job: files::RecoveryJob) -> bool {
+    match files::claim_recovery(pool, file_id, job, RECOVERY_RETRY.as_secs() as u32).await {
+        Ok(claimed) => claimed,
+        Err(error) => {
+            tracing::error!(event = "reconciler.claim_failed", file = %file_id, %error);
+            false
+        }
+    }
+}
 
 /// 장부 밖 임시 파일(.fg-tmp-*)의 나이 상한 — 이보다 늙으면 크래시 잔여물이다.
 /// 진행 중 업로드의 유휴는 30초에 끊기므로(bytes) 여유가 크다.
@@ -40,13 +72,9 @@ const TEMP_MAX_AGE: Duration = Duration::from_secs(48 * 3600);
 /// CASCADE로 lease_parts가 함께 사라진다. 완료·회수 정리 소유 행은 보호한다.
 const LEASE_RETENTION: Duration = Duration::from_secs(24 * 3600);
 
-/// 대여 이력(lease_history)의 보존 기간 — 관찰·통계용 durable 로그는
-/// 최근 3개월만 유지한다 (설계 결정). lease GC와 독립이다.
-const HISTORY_RETENTION: Duration = Duration::from_secs(90 * 24 * 3600);
-
 /// 종착 파일 행(reclaimed·purge 완료 deleted)의 보존 기간 — stat 계약의
 /// 유계다 (spec 00). 이력과 같은 3개월 — 관찰 보존의 단일 기준.
-const FILE_RETENTION: Duration = HISTORY_RETENTION;
+const FILE_RETENTION: Duration = Duration::from_secs(90 * 24 * 3600);
 
 pub async fn run(
     pool: PgPool,
@@ -60,9 +88,11 @@ pub async fn run(
 
     let mut ticker = interval(tick);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut schedule = Schedule::default();
 
     loop {
         tokio::select! {
+            biased;
             () = shutdown.cancelled() => {
                 tracing::info!(event = "reconciler.stopped");
                 return;
@@ -71,224 +101,258 @@ pub async fn run(
                 // pod 로컬 OS temp의 크래시 스풀은 락 없이 매 pod가 직접
                 // 치운다 — 자기 디스크는 자기 몫이고, 락 승자만 치우면
                 // 락을 못 이긴 pod의 잔여물이 밀린다.
-                sweep_local_temps(clock.now().into()).await;
-                let result = grove_db::with_reconciler_lock(&pool, || async {
-                    run_jobs(&pool, &crypto, &s3_clients).await;
-                })
-                .await;
+                let result = bounded_pass(&shutdown, async {
+                    if tokio::time::timeout(RECOVERY_IO_TIMEOUT, sweep_local_temps(clock.now().into())).await.is_err() {
+                        tracing::warn!(event = "reconciler.temp_sweep_failed", reason = "timeout");
+                    }
+                    grove_db::with_reconciler_lock(&pool, || {
+                        schedule.run(|job| run_job(job, &pool, &crypto, &s3_clients))
+                    }).await
+                }).await;
                 match result {
                     // 주기적 틱 — 잡 유무와 무관하게 debug (로그 정책).
-                    Ok(Some(())) => tracing::debug!(event = "reconciler.job"),
-                    Ok(None) => {
+                    Some(Ok(Ok(Some(())))) => tracing::debug!(event = "reconciler.job"),
+                    Some(Ok(Ok(None))) => {
                         tracing::debug!(event = "reconciler.skipped", reason = "lock_held")
                     }
-                    Err(error) => tracing::error!(event = "reconciler.failed", %error),
+                    Some(Ok(Err(error))) => tracing::error!(event = "reconciler.failed", %error),
+                    Some(Err(_)) => tracing::warn!(event = "reconciler.failed", reason = "pass_timeout"),
+                    None => {
+                        tracing::info!(event = "reconciler.stopped");
+                        return;
+                    }
                 }
             }
         }
     }
 }
 
-async fn run_jobs(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
-    // 잡 0: 관찰 확정 (spec 00) — 단일 PUT pending의 실물이 선언과 맞으면
-    // 서비스의 commit 없이 확정한다. 직결 presigned 패턴("URL 주고 잊기")이
-    // Grove에서도 성립하는 지점이다. commit API는 즉시 확정이 필요한
-    // 서비스의 선택지로 남는다 (멱등 공존). multipart는 후보가 아니다 —
-    // 완료는 벤더도 선언이다 (spec 02).
-    match files::observed_commit_candidates(pool, BATCH_LIMIT).await {
-        Ok(candidates) => {
-            for candidate in candidates {
-                match observe_commit(pool, crypto, s3_clients, &candidate).await {
-                    Ok(true) => tracing::info!(
-                        event = "file.committed",
-                        file = %candidate.file_id,
-                        observed = true,
-                    ),
-                    // 실물 미도착·선언 불일치·전이 패배 — pending에 남는다.
-                    // 도착 전이면 다음 tick이 다시 보고, 끝내 안 맞으면 만료
-                    // 회수가 처리한다 (commit 검증 실패와 같은 결말).
-                    Ok(false) => {}
-                    Err(error) => tracing::warn!(
-                        event = "reconciler.observe_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
-                }
-            }
-        }
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "observe_commit", %error)
-        }
-    }
-
-    native_completion::recover(pool, crypto, s3_clients).await;
-
-    // S3 Complete는 외부 저장소와 DB 사이를 completing 행으로 잇는다. 요청
-    // 소유자의 갱신 lease가 지난 뒤 실물을 관찰해 성공은 finalize하고,
-    // 실물이 없던 multipart는 재시도 가능하게 open으로 되돌린다.
-    s3_completion::recover(pool, crypto, s3_clients).await;
-
-    // S3 open 만료는 generic reclaim에서 제외한다. 먼저 aborting을 선점하고
-    // session/location을 보존해야 외부 Abort/Delete 실패를 다음 tick에 재시도한다.
-    match s3reg::expired_open_uploads(pool, BATCH_LIMIT).await {
-        Ok(files) => {
-            for file_id in files {
-                match s3reg::claim_expired_abort(pool, file_id).await {
-                    Ok(true) => tracing::debug!(event = "s3.upload_expired", file = %file_id),
-                    Ok(false) => {}
-                    Err(error) => tracing::error!(
-                        event = "reconciler.reclaim_failed",
-                        file = %file_id,
-                        %error,
-                    ),
-                }
-            }
-        }
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "s3_expire", %error)
-        }
-    }
-
-    // 명시적 Abort·만료·완료 복구가 만든 aborting을 멱등 정리한다. 물리
-    // 성공 뒤에만 session/location을 제거하므로 실패는 같은 후보로 남는다.
-    match s3reg::cleanup_candidates(pool, BATCH_LIMIT).await {
-        Ok(candidates) => {
-            for candidate in candidates {
-                match cleanup_then_finalize(
-                    || sweep_object(pool, crypto, s3_clients, &candidate),
-                    || s3reg::finalize_abort(pool, candidate.file_id),
-                )
-                .await
-                {
-                    Ok(true) => tracing::info!(
-                        event = "s3.upload_aborted",
-                        file = %candidate.file_id,
-                    ),
-                    Ok(false) => {}
-                    Err(CleanupError::Metadata(error)) => tracing::error!(
-                        event = "reconciler.reclaim_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
-                    Err(CleanupError::Physical(error)) => tracing::warn!(
-                        event = "reconciler.sweep_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
-                }
-            }
-        }
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "s3_cleanup", %error)
-        }
-    }
-
-    // 회수는 쓰기 권한을 종료한다. 위치와 lease는 물리 정리 성공까지 보존한다.
-    match files::expired_pending(pool, BATCH_LIMIT).await {
-        Ok(candidates) => {
-            for candidate in candidates {
-                match files::finalize_reclaim(pool, &candidate).await {
-                    Ok(true) => {
-                        tracing::info!(event = "file.reclaimed", file = %candidate.file_id);
+async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
+    tracing::debug!(event = "reconciler.job_started", ?job);
+    match job {
+        Job::Observe => {
+            // 관찰 확정 (spec 00) — 단일 PUT pending의 실물이 선언과 맞으면
+            // 서비스의 commit 없이 확정한다. 직결 presigned 패턴("URL 주고 잊기")이
+            // Grove에서도 성립하는 지점이다. commit API는 즉시 확정이 필요한
+            // 서비스의 선택지로 남는다 (멱등 공존). multipart는 후보가 아니다 —
+            // 완료는 벤더도 선언이다 (spec 02).
+            match files::observed_commit_candidates(pool, BATCH_LIMIT).await {
+                Ok(candidates) => {
+                    for candidate in candidates {
+                        if !begin_file_recovery(
+                            pool,
+                            candidate.file_id,
+                            files::RecoveryJob::Observe,
+                        )
+                        .await
+                        {
+                            continue;
+                        }
+                        match observe_commit(pool, crypto, s3_clients, &candidate).await {
+                            Ok(true) => tracing::info!(
+                                event = "file.committed",
+                                file = %candidate.file_id,
+                                observed = true,
+                            ),
+                            // 실물 미도착·선언 불일치·전이 패배 — pending에 남는다.
+                            // 도착 전이면 재시도 시각 이후 다시 보고, 끝내 안 맞으면 만료
+                            // 회수가 처리한다 (commit 검증 실패와 같은 결말).
+                            Ok(false) => {}
+                            Err(error) => tracing::warn!(
+                                event = "reconciler.observe_failed",
+                                file = %candidate.file_id,
+                                %error,
+                            ),
+                        }
                     }
-                    // 회수 취소: 늦은 commit이 이겼거나(파일 active) 스냅샷 이후
-                    // lease가 갱신됐다 — 어느 쪽이든 실물을 건드리지 않는다.
-                    Ok(false) => {}
-                    Err(error) => {
-                        tracing::error!(event = "reconciler.reclaim_failed", file = %candidate.file_id, %error)
+                }
+                Err(error) => {
+                    tracing::error!(event = "reconciler.scan_failed", job = "observe_commit", %error)
+                }
+            }
+        }
+        Job::NativeComplete => native_completion::recover(pool, crypto, s3_clients).await,
+        Job::NativeCleanup => native_completion::cleanup(pool, crypto, s3_clients).await,
+
+        // S3 Complete는 외부 저장소와 DB 사이를 completing 행으로 잇는다. 요청
+        // 소유자의 갱신 lease가 지난 뒤 실물을 관찰해 성공은 finalize하고,
+        // 실물이 없던 multipart는 재시도 가능하게 open으로 되돌린다.
+        Job::S3Complete => s3_completion::recover(pool, crypto, s3_clients).await,
+
+        // S3 open 만료는 generic reclaim에서 제외한다. 먼저 cleaning을 선점하고
+        // session/location을 보존해야 외부 Abort/Delete 실패를 다음 tick에 재시도한다.
+        Job::S3Expire => match s3reg::expired_open_uploads(pool, BATCH_LIMIT).await {
+            Ok(files) => {
+                for file_id in files {
+                    match s3reg::claim_expired_abort(pool, file_id).await {
+                        Ok(true) => tracing::debug!(event = "s3.upload_expired", file = %file_id),
+                        Ok(false) => {}
+                        Err(error) => tracing::error!(
+                            event = "reconciler.reclaim_failed",
+                            file = %file_id,
+                            %error,
+                        ),
                     }
                 }
             }
-        }
-        Err(error) => tracing::error!(event = "reconciler.scan_failed", job = "reclaim", %error),
-    }
+            Err(error) => {
+                tracing::error!(event = "reconciler.scan_failed", job = "s3_expire", %error)
+            }
+        },
 
-    reclaim::recover(pool, crypto, s3_clients).await;
+        // 명시적 Abort·만료·완료 복구가 만든 cleaning을 멱등 정리한다. 물리
+        // 성공 뒤에만 session/location을 제거하므로 실패는 같은 후보로 남는다.
+        Job::S3Cleanup => match s3reg::cleanup_candidates(pool, BATCH_LIMIT).await {
+            Ok(candidates) => {
+                for candidate in candidates {
+                    if !begin_recovery(pool, candidate.file_id, upload_recovery::Job::S3Cleanup)
+                        .await
+                    {
+                        continue;
+                    }
+                    match cleanup_then_finalize(
+                        || recovery_io(sweep_object(pool, crypto, s3_clients, &candidate)),
+                        || s3reg::finalize_abort(pool, candidate.file_id),
+                    )
+                    .await
+                    {
+                        Ok(true) => tracing::info!(
+                            event = "s3.upload_aborted",
+                            file = %candidate.file_id,
+                        ),
+                        Ok(false) => {}
+                        Err(CleanupError::Metadata(error)) => tracing::error!(
+                            event = "reconciler.reclaim_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        ),
+                        Err(CleanupError::Physical(error)) => tracing::warn!(
+                            event = "reconciler.sweep_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        ),
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::error!(event = "reconciler.scan_failed", job = "s3_cleanup", %error)
+            }
+        },
 
-    // 잡 2: purge (spec 00 — deleted의 capacity 해제 지점).
-    match files::purgeable(pool, BATCH_LIMIT).await {
-        Ok(candidates) => {
-            for candidate in candidates {
-                match cleanup_then_finalize(
-                    || sweep_object(pool, crypto, s3_clients, &candidate),
-                    || files::finalize_purge(pool, &candidate),
-                )
+        // 회수는 쓰기 권한을 종료한다. 위치와 lease는 물리 정리 성공까지 보존한다.
+        Job::Reclaim => match files::expired_pending(pool, BATCH_LIMIT).await {
+            Ok(candidates) => {
+                for candidate in candidates {
+                    match files::finalize_reclaim(pool, &candidate).await {
+                        Ok(true) => {
+                            tracing::info!(event = "file.reclaimed", file = %candidate.file_id);
+                        }
+                        // 회수 취소: 늦은 commit이 이겼거나(파일 active) 스냅샷 이후
+                        // lease가 갱신됐다 — 어느 쪽이든 실물을 건드리지 않는다.
+                        Ok(false) => {}
+                        Err(error) => {
+                            tracing::error!(event = "reconciler.reclaim_failed", file = %candidate.file_id, %error)
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::error!(event = "reconciler.scan_failed", job = "reclaim", %error)
+            }
+        },
+        Job::ReclaimCleanup => reclaim::recover(pool, crypto, s3_clients).await,
+
+        // purge (spec 00 — deleted의 capacity 해제 지점).
+        Job::Purge => match files::purgeable(pool, BATCH_LIMIT).await {
+            Ok(candidates) => {
+                for candidate in candidates {
+                    if !begin_file_recovery(pool, candidate.file_id, files::RecoveryJob::Purge)
+                        .await
+                    {
+                        continue;
+                    }
+                    match cleanup_then_finalize(
+                        || recovery_io(sweep_object(pool, crypto, s3_clients, &candidate)),
+                        || files::finalize_purge(pool, &candidate),
+                    )
+                    .await
+                    {
+                        Ok(true) => tracing::info!(
+                            event = "file.purged",
+                            file = %candidate.file_id,
+                        ),
+                        Ok(false) => {}
+                        Err(CleanupError::Metadata(error)) => tracing::error!(
+                            event = "reconciler.purge_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        ),
+                        Err(CleanupError::Physical(error)) => tracing::warn!(
+                            event = "reconciler.sweep_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        ),
+                    }
+                }
+            }
+            Err(error) => tracing::error!(event = "reconciler.scan_failed", job = "purge", %error),
+        },
+
+        // 만료된 read lease의 원장 정리 — 회계 무관, issued가 무한히
+        // 쌓여 partial index가 비대해지는 것만 막는다.
+        Job::ReadLeases => match files::expire_read_leases(pool, BATCH_LIMIT).await {
+            Ok(0) => {}
+            Ok(count) => tracing::debug!(event = "reconciler.read_leases_expired", count),
+            Err(error) => {
+                tracing::error!(event = "reconciler.scan_failed", job = "read_leases", %error)
+            }
+        },
+
+        // 종료 lease GC — issued가 아닌 오래된 lease를 삭제해 lease·
+        // lease_parts(CASCADE)의 무한 누적을 막는다 (spec 02). files 행은 보존
+        // 기간 동안 남긴다 (stat 계약). 회계와 무관하다 — 이미
+        // 정산된 lease의 원장 정리일 뿐이다.
+        Job::PruneLeases => {
+            match files::prune_terminal_leases(pool, LEASE_RETENTION.as_secs() as i64, BATCH_LIMIT)
                 .await
-                {
-                    Ok(true) => tracing::info!(
-                        event = "file.purged",
-                        file = %candidate.file_id,
-                    ),
-                    Ok(false) => {}
-                    Err(CleanupError::Metadata(error)) => tracing::error!(
-                        event = "reconciler.purge_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
-                    Err(CleanupError::Physical(error)) => tracing::warn!(
-                        event = "reconciler.sweep_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
+            {
+                Ok(0) => {}
+                Ok(count) => tracing::info!(event = "reconciler.leases_pruned", count),
+                Err(error) => {
+                    tracing::error!(event = "reconciler.scan_failed", job = "prune_leases", %error)
                 }
             }
         }
-        Err(error) => tracing::error!(event = "reconciler.scan_failed", job = "purge", %error),
-    }
 
-    // 잡 3: 만료된 read lease의 원장 정리 — 회계 무관, issued가 무한히
-    // 쌓여 partial index가 비대해지는 것만 막는다.
-    match files::expire_read_leases(pool, BATCH_LIMIT).await {
-        Ok(0) => {}
-        Ok(count) => tracing::debug!(event = "reconciler.read_leases_expired", count),
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "read_leases", %error)
+        // 종착 파일 행 보존 정리 — 보존 기간(90일)을 지난 reclaimed·
+        // purge 완료 deleted 행을 삭제한다 (spec 00: stat 계약은 보존 기간까지).
+        // location·lease가 남은 행은 조건이 걸러낸다. 행이 모두 정리된 client는 등록 해제가
+        // 가능해진다 (RESTRICT FK).
+        Job::PruneFiles => {
+            match files::prune_terminal_files(pool, FILE_RETENTION.as_secs() as i64, BATCH_LIMIT)
+                .await
+            {
+                Ok(0) => {}
+                Ok(count) => tracing::info!(event = "reconciler.files_pruned", count),
+                Err(error) => {
+                    tracing::error!(event = "reconciler.scan_failed", job = "prune_files", %error)
+                }
+            }
         }
-    }
 
-    // 잡 5: 종료 lease GC — issued가 아닌 오래된 lease를 삭제해 lease·
-    // lease_parts(CASCADE)의 무한 누적을 막는다 (spec 02). files 행은 보존
-    // 기간 동안 남긴다 (stat 계약 — 잡 8이 정리). 회계와 무관하다 — 이미
-    // 정산된 lease의 원장 정리일 뿐이다.
-    match files::prune_terminal_leases(pool, LEASE_RETENTION.as_secs() as i64, BATCH_LIMIT).await {
-        Ok(0) => {}
-        Ok(count) => tracing::info!(event = "reconciler.leases_pruned", count),
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "prune_leases", %error)
+        // 일별 사용량 스냅샷 — 어제(UTC)의 종점 점유를 박제한다 (spec 00).
+        // stock의 과거는 소급 계산이 불가하므로 매일 남긴다. 이미 찍힌 날은 0.
+        // 자정에 서버가 없었으면 첫 tick에 늦게 찍히는 근사치고, 그제 이전의
+        // 빈 날은 소급하지 않는다 — 지어낼 수 없는 값이다.
+        Job::Snapshot => {
+            let today = grove_db::time::now(pool).await;
+            match today {
+                Ok(today) => {
+                    record_daily_snapshot(pool, today.date_naive() - chrono::Days::new(1)).await
+                }
+                Err(error) => tracing::error!(event = "reconciler.snapshot_failed", %error),
+            }
         }
-    }
-
-    // 잡 6: 대여 이력 보존 정리 — 3개월 지난 lease_history를 배치 삭제한다.
-    // 회계·운영과 무관한 관찰 로그의 성장 상한이다.
-    match files::prune_history(pool, HISTORY_RETENTION.as_secs() as i64, BATCH_LIMIT).await {
-        Ok(0) => {}
-        Ok(count) => tracing::info!(event = "reconciler.history_pruned", count),
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "prune_history", %error)
-        }
-    }
-
-    // 잡 8: 종착 파일 행 보존 정리 — 보존 기간(90일)을 지난 reclaimed·
-    // purge 완료 deleted 행을 삭제한다 (spec 00: stat 계약은 보존 기간까지).
-    // location·lease가 남은 행은 조건이 걸러낸다 — purge(잡 2)와 lease
-    // GC(잡 5)가 자연히 먼저다. 행이 모두 정리된 client는 등록 해제가
-    // 가능해진다 (RESTRICT FK).
-    match files::prune_terminal_files(pool, FILE_RETENTION.as_secs() as i64, BATCH_LIMIT).await {
-        Ok(0) => {}
-        Ok(count) => tracing::info!(event = "reconciler.files_pruned", count),
-        Err(error) => {
-            tracing::error!(event = "reconciler.scan_failed", job = "prune_files", %error)
-        }
-    }
-
-    // 잡 7: 일별 사용량 스냅샷 — 어제(UTC)의 종점 점유를 박제한다 (spec 00).
-    // stock의 과거는 소급 계산이 불가하므로 매일 남긴다. 이미 찍힌 날은 0.
-    // 자정에 서버가 없었으면 첫 tick에 늦게 찍히는 근사치고, 그제 이전의
-    // 빈 날은 소급하지 않는다 — 지어낼 수 없는 값이다.
-    let today = grove_db::time::now(pool).await;
-    match today {
-        Ok(today) => record_daily_snapshot(pool, today.date_naive() - chrono::Days::new(1)).await,
-        Err(error) => tracing::error!(event = "reconciler.snapshot_failed", %error),
     }
 }
 
@@ -337,7 +401,7 @@ async fn observe_commit(
     } else {
         let spec = &backend.spec;
         let storage = s3_clients.get(&candidate.storage.id, spec, Address::Internal);
-        match s3_head_object(&storage, &candidate.object_key).await? {
+        match recovery_io(s3_head_object(&storage, &candidate.object_key)).await? {
             Some(head) => head,
             None => return Ok(false), // 아직 업로드 전
         }
@@ -375,4 +439,37 @@ async fn sweep_object(
         candidate.multipart,
     )
     .await
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn hung_io_stops_at_the_deadline() {
+        let started = tokio::time::Instant::now();
+        let result = recovery_io(std::future::pending::<anyhow::Result<()>>()).await;
+        assert!(result.is_err());
+        assert_eq!(started.elapsed(), RECOVERY_IO_TIMEOUT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn successful_io_before_the_deadline_is_preserved() {
+        let result = recovery_io(async {
+            tokio::time::sleep(RECOVERY_IO_TIMEOUT - Duration::from_nanos(1)).await;
+            Ok(42)
+        })
+        .await;
+        assert_eq!(result.ok(), Some(42));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn provider_errors_are_preserved() {
+        let result: anyhow::Result<()> =
+            recovery_io(async { anyhow::bail!("provider rejected request") }).await;
+        assert_eq!(
+            result.err().map(|error: anyhow::Error| error.to_string()),
+            Some("provider rejected request".to_owned())
+        );
+    }
 }

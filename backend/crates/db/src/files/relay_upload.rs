@@ -32,8 +32,7 @@ pub async fn claim_relay_upload(
         "SELECT uploaded_size, uploaded_md5 FROM leases \
          WHERE id = $1 AND file_id = $2 AND kind = 'write' AND state = 'issued' \
          AND expires_at > grove_time.wall_now() AND secret_hash IS NOT NULL \
-         AND NOT EXISTS (SELECT 1 FROM s3_uploads WHERE file_id = $2) \
-         AND NOT EXISTS (SELECT 1 FROM native_multipart_completions WHERE file_id = $2) \
+         AND NOT EXISTS (SELECT 1 FROM uploads WHERE file_id = $2) \
          FOR UPDATE",
     )
     .bind(lease_id)

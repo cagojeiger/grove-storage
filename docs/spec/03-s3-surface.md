@@ -64,7 +64,7 @@ multipart의 누락·중복·상충 파라미터는 400 InvalidArgument로 거�
 | checksum 범위 | 요청 무결성 검증; checksum 저장·GET/HEAD 반환·multipart 전체 checksum 계약은 후속 |
 | GET·HEAD If-Match | 현재 읽는 객체의 strong ETag 비교, 불일치 412 PreconditionFailed; wildcard·목록 지원 |
 | PUT If-None-Match: * | 헤더·presigned 인증 모두 지원. DB 확정 시 논리 키가 비어 있으면 생성, 기존 키 또는 동시 생성의 후발 요청은 412 PreconditionFailed |
-| 조건부 PUT 복구 | `s3_uploads.if_none_match`에 조건 보존. 복구도 같은 원자적 키 생성 사용; 실패한 실물은 aborting 정리 경로로 회수 |
+| 조건부 PUT 복구 | `uploads.if_none_match`에 조건 보존. 복구도 같은 원자적 키 생성 사용; 실패한 실물은 cleaning 정리 경로로 회수 |
 | 기타 조건부 요청 | PUT의 다른 조건값·중복 조건, multipart·삭제·미지원 읽기 조건은 501 NotImplemented |
 | 접근 기록 | 내부 lease 원장 사용 |
 
@@ -78,7 +78,7 @@ part별 실측 크기와 완료 목록으로 조립한다.
 | Create | pending + open, (client, key, multipart)에 바인딩 | S3 vendor 세션 개시 |
 | UploadPart | 계측 뒤 claimed 선점·done 기록 | S3 UploadPart |
 | Complete | 목록·ETag·실측 합 검증 → completing | S3 Complete |
-| Abort | open → aborting | vendor 세션·임시·최종 객체 정리 후 DB 회수 |
+| Abort | open → cleaning | vendor 세션·임시·최종 객체 정리 후 DB 회수 |
 
 | 경계 | 결과 |
 |---|---|
@@ -106,27 +106,37 @@ stateDiagram-v2
     open --> completing: 예상 크기·ETag 기록
     completing --> active: 물리 완료·DB 확정
     completing --> open: 만료 관찰·multipart 실물 없음
-    completing --> aborting: 실물 불일치 또는 단일 PUT 실물 없음
-    open --> aborting: Abort·만료 선점
-    aborting --> reclaimed: 물리 정리 성공·DB 회수
-    aborting --> aborting: 정리 실패·재시도
+    completing --> cleaning: 실물 불일치 또는 단일 PUT 실물 없음
+    open --> cleaning: Abort·만료 선점
+    cleaning --> reclaimed: 물리 정리 성공·DB 회수
+    cleaning --> cleaning: 정리 실패·재시도
 ```
 
 | 조건 | 복구 계약 |
 |---|---|
-| 물리 작업과 DB | s3_uploads에 중간 상태를 기록하고 단계별 실행 |
+| 물리 작업과 DB | `uploads(protocol=s3)`에 중간 상태를 기록하고 단계별 실행 |
 | 작업 진행 | 파일 락 획득 후 별도 쿼리로 completing 확인, heartbeat로 write lease 연장 |
 | 복구 후보 | completing의 만료된 write lease |
+| 후보 순환 | 재시도 시각·file ID 순서, 작업별 최대 20건; I/O 전에 다음 시도를 30초 뒤로 기록 |
+| 복구 I/O | 관찰·물리 정리 시도당 10초 제한; 시간 초과·종료 시 복구 재료 보존 |
 | 실제 전이 | 파일 락 아래 만료 재확인 |
 | 예상 실물 일치 | 파일 활성화·lease 확정·key 교체·옛 파일 detach를 한 transaction으로 처리 |
 | 관찰 근거 | 고유 object_key; S3 크기·ETag |
 | 정리 실패 | session·location·lease·vendor upload_id 보존 |
-| generic 회수·관찰·commit | s3_uploads 소유 파일을 제외 |
+| generic 회수·관찰·commit | Native/S3 `uploads` 소유 파일을 제외 |
 | terminal lease GC | 세션이 남은 파일의 복구 재료 보호 |
 | vendor Create 결과 불명확 | 고유 physical object_key로 열린 multipart를 조회·중단 |
 
 파일이 확정되거나 정리가 성공한 뒤 세션을 제거한다. 내부 vendor multipart 조회는
 복구용 권한이며 클라이언트 API 지원과 별개다.
+
+재시도 정책은 Native/S3의 완료·정리 경로에 공통으로 적용한다. 새 상태로 전이하면
+그 단계는 즉시 후보가 된다. 아직 시도하지 않은 후보가 실패 후보의 재시도보다 먼저
+선택된다. 단일 시도의 제한은 전체 worker tick의 실행 시간 상한과 다르다.
+
+COMMIT 응답 유실은 롤백과 구분한다. 클라이언트가 500을 받아도 파일·lease·논리키는
+이미 확정됐을 수 있다. HEAD/GET의 크기·ETag 또는 실제 바이트로 결과를 확인한다.
+`NoSuchUpload`만으로 앞선 Complete의 성공이나 롤백을 판정하지 않는다.
 
 `UNSIGNED-PAYLOAD`는 본문 해시 대조를 생략하는 명시적 모드다. 기본 presigned
 Complete도 이 모드를 사용한다. 서명 검증과 본문 바이트 무결성 검증을 구분한다.
@@ -169,7 +179,9 @@ MinIO 모드는 vendor bucket의 실제 바이트·열린 multipart 세션 0개�
 동일 DB·endpoint 재시작을 추가한다. 재시작 직후 이전 객체·완료 소유권을 유지하고,
 lease 만료 후 새 프로세스가 복구한다. `--db-failure`는 vendor 성공 응답을 전달하고
 DB 커밋을 거부해 요청·Reconciler의 롤백과 장애 제거 후 복구·정산을 검증한다.
-쓰기 진행 도중 종료·DB COMMIT 응답 유실은 별도 검증 범위다.
+`scripts/e2e-recovery-hardening.py`는 실제 COMMIT 성공 응답을 차단한 경우,
+provider Complete 성공 후 응답 대기 중 SIGKILL, 실패 후보 40건 뒤 정상 후보의
+복구를 검증한다. AWS S3/R2·임의의 모든 종료 시점은 별도 검증 범위다.
 
 ## Installation
 

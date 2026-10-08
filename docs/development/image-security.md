@@ -17,7 +17,9 @@ Node and build tools remain in build stages, not in the runtime.
    for hidden-TTY account initialization, readiness, HTTPS console login/logout,
    navigation, Swagger, host isolation and SIGTERM. The same console-enabled image
    also passes standard S3 SDK presigned PUT/GET, Range, signature/expiry rejection,
-   physical MinIO byte verification and delete after browser logout. The fixture
+   physical MinIO byte verification, existing credentials and presigned GET after
+   restart, and delete after browser logout. Installed migration versions and
+   SHA384 checksums match the candidate sources. The fixture
    needs boto3 and builds the existing pinned test-only MinIO image.
    Desktop/mobile screenshots and `s3.json` bind runtime evidence to the inspected
    local image ID. Broader S3/NoteGate integration tests remain separate gates.
@@ -113,6 +115,27 @@ database, account initialization, readiness, HTTPS console login/logout, resourc
 navigation, Swagger, desktop/mobile rendering, host isolation and SIGTERM passed
 under non-root, read-only, capability-dropped execution. This does not establish
 amd64, S3 end-to-end, OIDC signing or registry release evidence.
+
+### Candidate Checkpoint (2026-10-08)
+
+The current working-tree ARM64 image is
+`sha256:a15bc4b2c5e684e994bef6d9bc468dd6a6eb9245938e1a1025b8baa9880a1a81`.
+This is a local Docker image ID, not a registry manifest digest or published release.
+The hardened runtime passed fresh account initialization, all eight migration
+checksums, HTTPS console login/logout, secure cookies, CSP, Swagger, desktop/mobile
+rendering, host isolation and graceful shutdown. Standard S3 credentials, presigned
+PUT/GET, Range, signature/expiry rejection and physical MinIO bytes passed without
+a browser session. Restart preserved the existing credentials, object and already
+issued GET URL.
+
+Trivy 0.74.0 downloaded its database on 2026-10-08 and inspected 14 OS packages,
+282 compiled Rust dependencies and 301 production npm dependencies from that image.
+The combined report passed the repository policy with zero HIGH/CRITICAL findings
+and zero detected secrets. It retained 24 MEDIUM and eight LOW findings without
+suppression. Policy success does not mean a vulnerability-free image.
+
+The local evidence does not establish native amd64 execution, same-commit GitHub
+CI, registry publication, signing, CLI release assets or production deployment.
 
 References: [Docker attestations](https://docs.docker.com/build/ci/github-actions/attestations/),
 [GitHub verification](https://cli.github.com/manual/gh_attestation_verify),

@@ -2,12 +2,14 @@
 """Exercise the packaged console and API in a hardened image with a fresh DB."""
 
 import argparse
+import hashlib
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import runpy
 import secrets
+import socket
 import ssl
 import subprocess
 import tempfile
@@ -101,21 +103,41 @@ def main(image, report_dir):
             print("PASS actual image rejects conflicting console/object origins before account initialization")
             run_tty(["docker", "run", "--rm", "-it", "--network", name, "--env-file", str(env_file),
                      *hardened, image, "account", "init", "owner", "Image test owner"], password)
+            migrations = json.loads(docker("exec", database, "psql", "-U", "grove", "-d", "grove", "-Atc",
+                "SELECT json_agg(json_build_object('version',version,'checksum',encode(checksum,'hex'),'success',success) "
+                "ORDER BY version) FROM _sqlx_migrations"))
+            expected = [{"version": int(path.name.split("_", 1)[0]),
+                         "checksum": hashlib.sha384(path.read_bytes()).hexdigest(), "success": True}
+                        for path in sorted((ROOT / "backend/crates/db/migrations").glob("*.sql"))]
+            assert migrations == expected, "packaged migrations differ from the candidate source"
+            (report_dir / "migrations.json").write_text(json.dumps(migrations, indent=2))
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                backend_port = listener.getsockname()[1]
             docker("run", "-d", "--name", server, "--network", name,
-                   "--env-file", str(env_file), "-p", "127.0.0.1::8080", *hardened, image)
-            backend_port = int(docker("port", server, "8080").rsplit(":", 1)[1])
+                   "--env-file", str(env_file), "-p", f"127.0.0.1:{backend_port}:8080", *hardened, image)
             endpoint = f"http://127.0.0.1:{backend_port}"
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            deadline = time.monotonic() + 30
-            while True:
-                try:
-                    with opener.open(endpoint + "/readyz", timeout=2) as response:
-                        assert json.load(response) == {"status": "ready"}
-                    break
-                except OSError:
-                    if time.monotonic() > deadline:
-                        raise RuntimeError("packaged image readiness timeout")
-                    time.sleep(.2)
+            def wait_ready():
+                deadline = time.monotonic() + 30
+                while True:
+                    try:
+                        with opener.open(endpoint + "/readyz", timeout=2) as response:
+                            assert json.load(response) == {"status": "ready"}
+                        return
+                    except OSError:
+                        if time.monotonic() > deadline:
+                            raise RuntimeError("packaged image readiness timeout")
+                        time.sleep(.2)
+
+            def restart():
+                docker("stop", "--time", "15", server)
+                assert docker("inspect", server, "--format", "{{.State.ExitCode}}") == "0"
+                docker("start", server)
+                assert int(docker("port", server, "8080").rsplit(":", 1)[1]) == backend_port
+                wait_ready()
+
+            wait_ready()
             for path in ["/api/admin/console/", "/api/admin/identity/v1/session"]:
                 try:
                     opener.open(endpoint + path, timeout=5)
@@ -136,10 +158,10 @@ def main(image, report_dir):
                            input=json.dumps({"origin": origin, "password": password,
                                              "reportDir": str(report_dir.resolve())}),
                            text=True, check=True, timeout=150)
-            check_s3(endpoint, origin, password, name, report_dir)
+            check_s3(endpoint, origin, password, name, report_dir, restart)
             docker("stop", "--time", "15", server)
             assert docker("inspect", server, "--format", "{{.State.ExitCode}}") == "0"
-            print("PASS actual image: fresh DB, hidden TTY bootstrap, non-root/read-only runtime, HTTPS console, host isolation, SIGTERM")
+            print("PASS actual image: candidate migrations, hidden TTY bootstrap, non-root/read-only runtime, HTTPS console, host isolation, restart, SIGTERM")
     finally:
         if thread:
             proxy.shutdown()

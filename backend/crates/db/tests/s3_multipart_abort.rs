@@ -22,7 +22,7 @@ async fn abort_keeps_recovery_material_until_cleanup_is_confirmed(pool: PgPool) 
     wire(&pool).await;
     let created = open_multipart(&pool).await;
     upload_part(&pool, &created, 1, 50, "aaaa").await;
-    // Abort는 먼저 aborting만 선점한다. 외부 정리가 실패한 것으로 모사해
+    // Abort는 먼저 cleaning만 선점한다. 외부 정리가 실패한 것으로 모사해
     // finalize하지 않으면 session/location/lease가 다음 재시도 재료로 남는다.
     assert_eq!(
         s3::claim_abort(&pool, "c", KEY, created.file_id)
@@ -67,12 +67,11 @@ async fn abort_keeps_recovery_material_until_cleanup_is_confirmed(pool: PgPool) 
         .unwrap();
     assert_eq!(lease_state, "expired");
     assert!(!s3::finalize_abort(&pool, created.file_id).await.unwrap());
-    let session_count: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM s3_uploads WHERE file_id = $1")
-            .bind(created.file_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let session_count: i64 = sqlx::query_scalar("SELECT count(*) FROM uploads WHERE file_id = $1")
+        .bind(created.file_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(session_count, 0);
 }
 
@@ -188,7 +187,7 @@ async fn expired_multipart_preserves_recovery_material_until_abort_finishes(pool
     assert!(cleanup[0].multipart);
     assert_eq!(cleanup[0].upload_id.as_deref(), Some("vendor-upload"));
     assert_eq!(cleanup[0].write_lease_id, Some(created.lease_id));
-    // aborting의 expired lease는 보존 기간이 지나도 session이 소유한 복구
+    // cleaning의 expired lease는 보존 기간이 지나도 session이 소유한 복구
     // 핸들이므로 GC되지 않는다.
     sqlx::query("UPDATE leases SET created_at = now() - interval '2 days' WHERE id = $1")
         .bind(created.lease_id)

@@ -82,13 +82,19 @@ stateDiagram-v2
 | 작업 | 보존·제거 조건 |
 |---|---|
 | generic 회수 | native/S3 완료 소유 행을 제외하고 pending→reclaimed 선점, location·lease 보존 |
-| 회수 실물 정리 | reclaimed+location을 재조회, 물리 삭제 성공 뒤 location 해제; 실패는 다음 tick에서 재시도 |
+| 회수 실물 정리 | reclaimed+location을 재조회, 물리 삭제 성공 뒤 location 해제; 실패는 재시도 가능 시각 이후 다시 처리 |
 | purge | 물리 삭제 성공 뒤 location 제거 |
 | 완료 복구 | [native multipart](02-multipart.md#완료와-복구)·[S3](03-s3-surface.md#완료와-복구) |
 | read lease 정리 | 만료를 expired로 기록 |
 | terminal lease GC | 24시간 보존, S3 세션·native completion·location이 남은 reclaimed 파일 보호 |
-| terminal file GC | 90일 보존, location·lease 정리가 끝난 reclaimed/deleted 행 |
-| lease_history | 90일 보존 |
+| terminal file GC | 90일 보존, location·lease·업로드 복구 행이 없는 reclaimed/deleted 행 |
+| lease_history | 90일 보존, provider I/O와 독립적인 retention 작업 |
+
+일반 관찰·회수 실물 정리·purge는 `files.recovery_after`, file ID 순서로 20건을
+조회한다. 파일 잠금 뒤 상태·업로드 소유권·관찰 lease를 재확인하고, I/O 전에
+재시도 시각을 30초 뒤로 기록한다. 정리 단계 전이는 이전 관찰 지연을 이어받지 않는다.
+시도당 I/O 제한은 10초, object 워커 회차 예산은 20초다. 회차가 중단되면 다음
+작업 종류부터 이어간다. 세부 실행·취소 경계는 [워커](../stack/README.md#워커)에 있다.
 
 ## 사용량
 
@@ -108,14 +114,18 @@ stateDiagram-v2
 같은 선언 크기를 purge_pending에 포함하므로 실패 시 remaining이 조기에 증가하지 않는다.
 물리 바이트의 실측값이 아니라 보수적인 선언 크기 기준이다.
 
-이 동작은 기존 스키마를 사용한다. 배포 시 이전 reconciler들을 중지하고 새 버전으로
-전환한다. 이전 버전은 reclaimed 정리 재시도·lease 보호를 지원하지 않는다.
+`0008_file_recovery.sql`은 기존 파일 상태·위치·lease를 유지하며 재시도 시각을 추가한다.
+배포 시 이전 reconciler들을 중지하고 새 버전으로 전환한다. 이전 버전은 새로운
+재시도 시각을 읽지 않는다.
 이미 구버전이 location을 제거한 고아 객체는 이 변경만으로 복원되지 않는다.
 
 capacity는 등록 기준선이고 외부 S3의 실제 여유 공간 조회값과 구분한다.
 점유는 files·locations에서 조회 시 집계한다. 일별 스냅샷은 UTC 자정 이후 첫 tick의
 관찰을 전날 값으로 기록하며, 늦게 실행된 값은 근사치다. 빠진 날은 비어 있고
-이미 기록한 날은 유지한다.
+이미 기록한 날은 유지한다. 등록된 Client 경로는 활성 파일이 없어도 0을 기록한다.
+Client가 다른 Storage로 이동한 뒤에도 기존 파일의 실제 location별 점유를 남긴다.
+`observed_at`은 실제 DB 관찰 시각이다. 이전 기록의 관찰 시각은 알 수 없으므로
+`NULL`로 유지한다. 스냅샷은 UTC 날짜 기준 365일 보존한다.
 
 ## 물리 이름과 복구
 

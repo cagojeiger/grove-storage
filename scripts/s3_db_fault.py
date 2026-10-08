@@ -10,7 +10,7 @@ def install(sql, file_id):
         CREATE SEQUENCE recovery_commit_failures;
         CREATE FUNCTION reject_recovery_commit() RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN
-            IF OLD.file_id = '{file_id}'::uuid THEN
+            IF OLD.protocol = 's3' AND OLD.file_id = '{file_id}'::uuid THEN
                 PERFORM nextval('recovery_commit_failures');
                 RAISE EXCEPTION 'injected recovery commit failure';
             END IF;
@@ -18,7 +18,7 @@ def install(sql, file_id):
         END;
         $$;
         CREATE CONSTRAINT TRIGGER recovery_commit_failure
-        AFTER DELETE ON s3_uploads DEFERRABLE INITIALLY DEFERRED
+        AFTER DELETE ON uploads DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW EXECUTE FUNCTION reject_recovery_commit();
     """)
 
@@ -28,5 +28,5 @@ def failures(sql):
 
 
 def remove(sql):
-    sql("DROP TRIGGER recovery_commit_failure ON s3_uploads; "
+    sql("DROP TRIGGER recovery_commit_failure ON uploads; "
         "DROP FUNCTION reject_recovery_commit(); DROP SEQUENCE recovery_commit_failures;")

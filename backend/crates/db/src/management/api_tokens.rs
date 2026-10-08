@@ -70,14 +70,7 @@ pub(super) async fn issue_in(
     key: &NewCredential<'_>,
 ) -> Result<Credential, Error> {
     let credential = insert(&mut tx, account, key).await?;
-    audit::record(
-        &mut tx,
-        context,
-        "credential.issue",
-        "credential",
-        credential.id,
-    )
-    .await?;
+    record_audit(&mut tx, context, "credential.issue", credential.id).await?;
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(credential)
 }
@@ -100,8 +93,28 @@ pub(super) async fn revoke_in(
     if changed {
         sqlx::query("UPDATE management.sessions SET revoked_at=grove_time.wall_now() WHERE credential_id=$1 AND revoked_at IS NULL")
             .bind(id).execute(&mut *tx).await?;
-        audit::record(&mut tx, context, "credential.revoke", "credential", id).await?;
+        record_audit(&mut tx, context, "credential.revoke", id).await?;
     }
     tx.commit().await.map_err(|_| Error::CommitUnknown)?;
     Ok(changed)
+}
+
+pub(super) async fn record_audit(
+    tx: &mut Transaction<'_, Postgres>,
+    context: &AuditContext,
+    action: &str,
+    credential: Uuid,
+) -> Result<(), Error> {
+    let event = audit::record(tx, context, action, "credential", credential).await?;
+    sqlx::query(
+        "UPDATE management.audit_events e SET metadata = jsonb_build_object(
+            'account_id', t.account_id, 'label', t.label,
+            'expires_at', t.expires_at)
+         FROM management.api_tokens t WHERE e.id=$1 AND t.id=$2",
+    )
+    .bind(event)
+    .bind(credential)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
