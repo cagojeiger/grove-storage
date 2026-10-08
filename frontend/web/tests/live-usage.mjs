@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { expect } from "@playwright/test";
 
 export async function usageChecks(page, { database, origin }) {
-  // Seed observations in the disposable DB; snapshot production is tested separately.
+  // The reconciler may already have recorded this Client's zero-usage snapshot.
   execFileSync(
     "docker",
     [
@@ -16,7 +16,15 @@ export async function usageChecks(page, { database, origin }) {
       "-v",
       "ON_ERROR_STOP=1",
       "-c",
-      "INSERT INTO usage_snapshots(day,storage_id,client_id,active_bytes,active_files) VALUES(current_date-1,'console-live','console-client',1073741824,1240),(current_date-180,'retired-storage','retired-client',1024,2)",
+      `INSERT INTO usage_snapshots(day,storage_id,client_id,active_bytes,active_files)
+       VALUES(current_date-1,'console-live','console-client',0,0)
+       ON CONFLICT DO NOTHING;
+       INSERT INTO usage_snapshots(day,storage_id,client_id,active_bytes,active_files)
+       VALUES(current_date-1,'console-live','console-client',1073741824,1240),
+             (current_date-180,'retired-storage','retired-client',1024,2)
+       ON CONFLICT(day,storage_id,client_id) DO UPDATE
+       SET active_bytes=EXCLUDED.active_bytes, active_files=EXCLUDED.active_files,
+           observed_at=EXCLUDED.observed_at`,
     ],
     { timeout: 10000, stdio: "pipe" },
   );
