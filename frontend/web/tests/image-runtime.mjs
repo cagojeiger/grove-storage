@@ -12,7 +12,14 @@ try {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => {
-    if (message.type() === "error" && /Content Security Policy|Refused to (apply|load)/.test(message.text())) errors.push(message.text());
+    if (message.type() !== "error") return;
+    console.error("Packaged console browser error:", message.text());
+    if (/Content Security Policy|Refused to (apply|load)/.test(message.text())) errors.push(message.text());
+  });
+  page.on("requestfailed", request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/admin/console/assets/"))
+      console.error("Packaged console asset failure:", path, request.failure()?.errorText);
   });
   const root = `${origin}/api/admin/console/`;
   const first = await page.goto(`${origin}/`);
