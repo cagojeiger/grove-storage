@@ -120,6 +120,72 @@ async fn text(response: Response) -> String {
 }
 
 #[tokio::test]
+async fn console_root_redirects_get_and_head_to_the_console() {
+    let fixture = Fixture::new().await;
+    let app = fixture.app().await;
+    for host in ["console.test", "CONSOLE.TEST:443"] {
+        for method in ["GET", "HEAD"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri("/")
+                        .header("host", host)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+            assert_eq!(response.headers()["location"], "/api/admin/console/");
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            assert!(text(response).await.is_empty());
+        }
+    }
+    let post = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("host", "console.test")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(post.status(), StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[tokio::test]
+async fn object_root_keeps_service_information_despite_forwarded_host() {
+    let fixture = Fixture::new().await;
+    let app = fixture.app().await;
+    for host in ["objects.test", "console.test:444", "console.test.evil"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .header("host", host)
+                    .header("x-forwarded-host", "console.test")
+                    .header("forwarded", "host=console.test;proto=https")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!response.headers().contains_key("location"));
+        let body: serde_json::Value = serde_json::from_str(&text(response).await).unwrap();
+        assert_eq!(
+            body,
+            serde_json::json!({"name": "grove-storage", "version": env!("CARGO_PKG_VERSION")})
+        );
+    }
+}
+
+#[tokio::test]
 async fn index_has_fresh_nonce_restrictive_headers_and_head_support() {
     let fixture = Fixture::new().await;
     let app = fixture.app().await;
@@ -267,7 +333,13 @@ async fn management_host_cannot_serve_objects_and_object_host_cannot_serve_conso
 
 #[tokio::test]
 async fn disabled_console_and_incomplete_build_fail_closed() {
-    let app = crate::routes::app(crate::routes::tests::test_state(), &[]);
+    let mut state = crate::routes::tests::test_state();
+    state.console_origin = Some("https://console.test".into());
+    let app = crate::routes::app(state, &[]);
+    assert_eq!(
+        get(&app, "/", "console.test").await.status(),
+        StatusCode::OK
+    );
     assert_eq!(
         get(&app, "/api/admin/console/", "console.test")
             .await
