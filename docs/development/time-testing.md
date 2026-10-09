@@ -47,7 +47,7 @@ deriving calendar dates; usage snapshot creation uses the UTC date.
 - Heartbeat: first tick, ownership loss, completed operations and no catch-up burst
   after a delayed renewal.
 - Stream spool: idle expiry, sustained minimum progress, size-derived total deadline,
-  blocked-writer expiry, and admission released on cancellation.
+  blocked-writer and final buffered-flush expiry, and admission released on cancellation.
 - Management HTTP admission: concurrency exhaustion and exact one-second reset.
 - Anonymous security logging: concurrent sampling, independent surface/reason buckets,
   exact minute reset with injected database time, and unsampled authenticated events.

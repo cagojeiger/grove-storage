@@ -23,7 +23,6 @@ use grove_db::files::{self, ByteLease};
 use grove_infra::{Address, rfc5987_encode, s3_open_read, temp_spool};
 use grove_object_policy::multipart::{part_count, part_expected_size, part_number_ok};
 use serde::Deserialize;
-use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -177,11 +176,6 @@ async fn upload(
         return Ok(ok_with_etag(&md5_hex));
     }
 
-    // Flush buffered bytes before uploading the spool to S3.
-    if let Err(error) = writer.flush().await {
-        temp_spool::abort_write(&temp_path).await;
-        return Err(internal(error));
-    }
     let file = writer.into_inner();
 
     // Upload the spool to S3; the helper owns temporary-file cleanup.
@@ -254,10 +248,6 @@ async fn upload_part(
     let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
     let (written, md5_hex) = spool_measured(body, &mut writer, &temp_path, expected).await?;
-    if let Err(error) = writer.flush().await {
-        temp_spool::abort_write(&temp_path).await;
-        return Err(internal(error));
-    }
     drop(writer.into_inner());
 
     let spec = &backend.spec;

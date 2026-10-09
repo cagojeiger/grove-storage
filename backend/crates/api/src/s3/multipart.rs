@@ -237,11 +237,6 @@ pub(super) async fn upload_part(
     }
     let md5_hex = measured.md5_hex;
 
-    use tokio::io::AsyncWriteExt as _;
-    if let Err(error) = writer.flush().await {
-        temp_spool::abort_write(&temp_path).await;
-        return Err(xml_internal("spool flush", error));
-    }
     drop(writer.into_inner());
 
     match s3reg::claim_upload_part(

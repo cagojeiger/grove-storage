@@ -7,7 +7,7 @@ use std::{
 
 use axum::{
     extract::{Request, State},
-    http::{StatusCode, header},
+    http::{HeaderValue, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -62,15 +62,28 @@ pub(super) async fn guard(
     next: Next,
 ) -> Response {
     let Some(_permit) = admission.try_acquire() else {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [
-                (header::CACHE_CONTROL, "no-store"),
-                (header::RETRY_AFTER, "1"),
-            ],
-            axum::Json(serde_json::json!({"error": "rate_limited"})),
-        )
-            .into_response();
+        let mut response = if matches!(
+            request.uri().path(),
+            "/api/admin/commands/v1" | "/api/admin/console-commands/v1"
+        ) {
+            crate::commands::failure(
+                grove_management_command::CommandError::rejected(
+                    grove_management_command::ErrorCode::RateLimited,
+                ),
+                uuid::Uuid::new_v4(),
+            )
+        } else {
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(header::CACHE_CONTROL, "no-store")],
+                axum::Json(serde_json::json!({"error": "rate_limited"})),
+            )
+                .into_response()
+        };
+        response
+            .headers_mut()
+            .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        return response;
     };
     next.run(request).await
 }
@@ -138,5 +151,62 @@ mod tests {
         assert_eq!(response.headers()[header::RETRY_AFTER], "1");
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
         assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn command_rejection_preserves_the_wire_contract_before_execution() {
+        use axum::{
+            Router,
+            body::{Body, to_bytes},
+            routing::post,
+        };
+        use tower::ServiceExt;
+
+        for path in ["/api/admin/commands/v1", "/api/admin/console-commands/v1"] {
+            let admission = Arc::new(Admission::new());
+            let _permits: Vec<_> = (0..CONCURRENT_REQUESTS)
+                .map(|_| admission.try_acquire())
+                .collect();
+            let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let handler_calls = calls.clone();
+            let app = Router::new()
+                .route(
+                    path,
+                    post(move || async move {
+                        handler_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        StatusCode::OK
+                    }),
+                )
+                .layer(axum::middleware::from_fn_with_state(admission, guard));
+            let response = app
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method("POST")
+                        .uri(path)
+                        .body(Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+            assert_eq!(response.headers()[header::RETRY_AFTER], "1");
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let request_id = response.headers()["x-request-id"]
+                .to_str()
+                .expect("request ID")
+                .to_owned();
+            assert!(!uuid::Uuid::parse_str(&request_id).expect("UUID").is_nil());
+            let body = to_bytes(response.into_body(), 1024).await.expect("body");
+            let body: serde_json::Value = serde_json::from_slice(&body).expect("JSON");
+            assert_eq!(
+                body,
+                serde_json::json!({
+                    "protocol": 1,
+                    "request_id": request_id,
+                    "error": {"code": "rate_limited", "outcome": "not_applied"},
+                })
+            );
+            assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+        }
     }
 }

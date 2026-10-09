@@ -125,11 +125,6 @@ pub(super) async fn put_object(
     }
     let md5_hex = measured.md5_hex;
 
-    use tokio::io::AsyncWriteExt as _;
-    if let Err(error) = writer.flush().await {
-        temp_spool::abort_write(&temp_path).await;
-        return Err(xml_internal("spool flush", error));
-    }
     let file = writer.into_inner();
 
     // 외부 저장소 쓰기 전에 completing을 선점하고 관찰값을 내구화한다.

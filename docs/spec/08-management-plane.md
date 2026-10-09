@@ -38,6 +38,8 @@ Resources 화면은 Management에 속한다. 자원 삭제와 주소 변경은 �
 
 관리 HTTP 표면은 인증·DB 접근 전에 프로세스당 동시 요청 16개와 초당 100개를
 제한한다. 초과 요청은 대기하지 않고 `429`와 `Retry-After: 1`을 반환한다.
+명령 API는 protocol 1 오류 envelope의 `rate_limited`·`not_applied`로 실행 전 거절을
+전달한다. CLI와 콘솔은 변경 명령을 자동 재시도하지 않는다.
 이 제한은 Account 비밀번호 시도 예산과 별개이며 Object API에는 적용되지 않는다.
 
 ## 권한

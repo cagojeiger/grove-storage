@@ -194,6 +194,17 @@ async fn spool_to_temp_with_limits(
             }
         }
     }
+    match tokio::time::timeout_at(deadline, writer.flush()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            abort_spool(temp_path).await;
+            return Err(SpoolError::Io(error));
+        }
+        Err(_) => {
+            abort_spool(temp_path).await;
+            return Err(SpoolError::Deadline);
+        }
+    }
     Ok(Measured {
         written,
         md5_hex: hex::encode(md5.finalize()),

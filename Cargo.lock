@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "grove-api"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "grove-core"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "aes-gcm",
  "chrono",
@@ -1235,7 +1235,7 @@ dependencies = [
 
 [[package]]
 name = "grove-db"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "chrono",
  "grove-management-policy",
@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "grove-infra"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "grove-management-command"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "grove-management-policy",
  "schemars",
@@ -1270,11 +1270,11 @@ dependencies = [
 
 [[package]]
 name = "grove-management-policy"
-version = "0.5.1"
+version = "0.5.2"
 
 [[package]]
 name = "grove-management-service"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "argon2",
  "chrono",
@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "grove-object-policy"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "hex",
  "md-5 0.10.6",
@@ -1300,14 +1300,14 @@ dependencies = [
 
 [[package]]
 name = "grove-object-service"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "grove-s3-protocol"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "hex",
@@ -1318,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "grove-storage-provider"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
@@ -1333,7 +1333,7 @@ dependencies = [
 
 [[package]]
 name = "gscli"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "axum",
  "clap",

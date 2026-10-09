@@ -11,6 +11,7 @@ pub enum ErrorCode {
     Forbidden,
     NotFound,
     Conflict,
+    RateLimited,
     RequestRejected,
     InvalidResponse,
     Unavailable,

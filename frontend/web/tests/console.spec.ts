@@ -452,7 +452,7 @@ test("429 clears input and honors Retry-After", async ({ page }) => {
   await page.getByLabel("Password").fill("do-not-persist");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "Too many sign-in attempts",
+    "Too many requests",
   );
   await expect(page.getByLabel("Password")).toHaveValue("");
   await expect(page.getByRole("button", { name: /Retry in/ })).toBeDisabled();

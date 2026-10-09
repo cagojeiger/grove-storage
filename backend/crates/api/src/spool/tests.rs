@@ -185,6 +185,52 @@ async fn a_stalled_writer_cannot_outlive_the_absolute_deadline() {
     assert_eq!(start.elapsed(), Duration::from_secs(32));
 }
 
+#[tokio::test(start_paused = true)]
+async fn final_buffer_flush_cannot_outlive_the_absolute_deadline() {
+    let (writer, _reader) = tokio::io::duplex(1);
+    let mut buffered = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, writer);
+    let start = tokio::time::Instant::now();
+    let result = spool_to_temp_with_limits(
+        Body::from("xx"),
+        &mut buffered,
+        Path::new("unused-flush-path"),
+        2,
+        false,
+        StreamLimits {
+            idle: Duration::from_secs(30),
+            window: Duration::from_secs(30),
+            min_bytes_per_second: 1,
+        },
+    )
+    .await;
+    assert!(matches!(result, Err(SpoolError::Deadline)));
+    assert_eq!(start.elapsed(), Duration::from_secs(32));
+}
+
+#[tokio::test(start_paused = true)]
+async fn buffered_bytes_are_flushed_before_measurements_return() {
+    use tokio::io::AsyncReadExt as _;
+    let (writer, mut reader) = tokio::io::duplex(8);
+    let mut buffered = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, writer);
+    assert!(
+        spool_to_temp(
+            Body::from("xx"),
+            &mut buffered,
+            Path::new("unused-flush-success"),
+            2,
+            false
+        )
+        .await
+        .is_ok()
+    );
+    let mut bytes = [0; 2];
+    tokio::time::timeout(Duration::from_secs(1), reader.read_exact(&mut bytes))
+        .await
+        .expect("spool has flushed")
+        .expect("read bytes");
+    assert_eq!(&bytes, b"xx");
+}
+
 #[tokio::test]
 async fn cancellation_releases_spool_admission() {
     let budget = Arc::new(SpoolBudget::new(BUDGET_UNIT));
