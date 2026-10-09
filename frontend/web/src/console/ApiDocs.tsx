@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Alert, Box, Link, Paper, Tab, Tabs, useTheme } from "@mui/material";
+import { Box, Link, Paper, Tab, Tabs, useTheme } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import SwaggerUI from "swagger-ui-react";
 import swaggerCss from "swagger-ui-react/swagger-ui.css?inline";
 import { cspNonce } from "../app/csp";
-import { ApiError } from "../api/http";
+import { ApiError, send } from "../api/http";
 import { Page, QueryState } from "./ui";
 
 const surfaces = [
@@ -21,7 +21,7 @@ export function ApiDocs() {
   const query = useQuery({
     queryKey: ["openapi", selected],
     queryFn: async ({ signal }) => {
-      const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]), credentials: "omit", cache: "no-store", redirect: "error" });
+      const response = await send(url, { signal });
       if (!response.ok) throw new ApiError(response.status);
       const spec: unknown = await response.json();
       if (!spec || typeof spec !== "object" || !("openapi" in spec) || !("paths" in spec))
@@ -36,7 +36,6 @@ export function ApiDocs() {
       </Tabs>
       <QueryState pending={query.isPending} error={query.error} retry={() => void query.refetch()} />
       {query.data && <SwaggerDocument key={selected} spec={query.data} />}
-      {query.isError && <Alert severity="info">The API documentation must be served by the matching Grove backend.</Alert>}
     </Page>
   );
 }
