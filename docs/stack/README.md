@@ -20,7 +20,7 @@
 
 | 설정 | 공급·관리 |
 |---|---|
-| bind·로그·DB URL·pool 크기·multipart·CORS | env, 로컬 예시는 [.env.example](../../.env.example) |
+| bind·로그·DB URL·pool 크기·multipart·스풀 예산·CORS | env, 로컬 예시는 [.env.example](../../.env.example) |
 | 관리 로그 보존 기간 | env, Audit 365일·Security 90일·Command history 90일; 변경 후 재시작 |
 | 마스터 키·key id·이전 키 쌍 | env, [키 회전](../spec/01-registry.md#키와-비밀) |
 | 관리자 인증 | 로컬 비밀번호·DB 관리 토큰·콘솔 세션; [spec 11](../spec/11-local-management-auth.md). 이전 REST는 [spec 05](../spec/05-admin-auth.md) |
@@ -77,11 +77,11 @@ docker run --rm -p 8080:8080 --env-file .env \
 | `GROVE_CONSOLE_ORIGIN` | 별도 HTTPS 관리 origin. 미설정이면 콘솔 정적 파일과 브라우저 인증이 비활성 |
 
 TLS는 ingress에서 종료하고 원래 `Host`를 보존한다. `X-Forwarded-Host`는 관리 호스트
-판정에 사용하지 않는다. 콘솔을 활성화한 이미지에서 관리 호스트는 콘솔·브라우저
+판정에 사용하지 않는다. 관리 origin이 설정되면 UI 파일 존재 여부와 무관하게 관리 호스트는 콘솔·브라우저
 관리 API·OpenAPI 문서·probe만 제공하며, S3·Native·relay 객체 경로는 404다.
 다른 호스트에서는 콘솔·브라우저 관리 API가 404이고, 기존 객체·기계용 API 경로를 사용한다.
 관리 origin과 객체 origin은 서로 다른 호스트로 구성한다.
-콘솔 활성화 시 `GROVE_PUBLIC_URL`이 관리 호스트로 연결되면 DB 연결 전에 부팅을 거부한다.
+관리 origin 설정 시 `GROVE_PUBLIC_URL`이 관리 호스트로 연결되면 DB 연결 전에 부팅을 거부한다.
 콘솔 HTML은 응답별 CSP nonce와 `no-store`를 사용한다. 설정한 콘솔 디렉터리의
 index·assets가 없거나 nonce 자리표시자가 잘못되면 서버 기동이 실패한다.
 
@@ -101,6 +101,29 @@ Docker·Node·boto3·`frontend/web`의 npm 의존성·Playwright Chromium이 필
 Linux의 기존 Compose loopback 공개 주소는
 `docker run --rm --network host --env-file .env grove-storage:dev`로 접근한다.
 전송 임시 스풀에는 쓰기 가능한 로컬 임시 공간을 제공한다. 영구 객체는 외부 S3에 저장한다.
+
+### 전송 자원 제한
+
+Native relay와 S3 PUT·UploadPart는 같은 프로세스의 스풀 예산을 공유한다.
+
+| 제한 | 동작 |
+|---|---|
+| 동시 스풀 | 최대 16개; 슬롯이 없으면 대기하지 않고 재시도 오류 |
+| 총 예약 용량 | `GROVE_SPOOL_BUDGET_BYTES`, 기본 6GiB; 요청 크기는 MiB 단위로 올림, 예산은 내림 |
+| 유휴 시간 | 마지막 비어 있지 않은 청크 이후 30초 |
+| 최소 진행량 | 진행 중 전송은 30초 구간마다 평균 64KiB/s 이상 |
+| 전체 수신·쓰기 시간 | 30초 + 선언 크기 / 64KiB/s, 초 단위 올림 |
+| 임시 파일 | `$TMPDIR/grove-storage-spool` 또는 OS 임시 디렉터리 아래 전용 영역; Unix 0700/0600, 배타적 생성 |
+
+스풀 슬롯과 용량은 전송 종료·실패·취소 시 반환된다. 정상 종료와 요청 취소는 임시 파일도
+제거하며, 프로세스 강제 종료로 남은 파일은 reconciler가 정리한다. Native 단일 relay의
+DB claim 슬롯도 대기하지 않는다. S3 용량 부족은 `503 SlowDown`과 `Retry-After`로,
+유휴·저속·전체 시간 초과는 `408 RequestTimeout` XML로 반환한다.
+
+예산은 임시 볼륨보다 작게 설정해 잔여 파일과 다른 임시 사용량의 여유를 남긴다.
+8GiB 임시 볼륨의 기본 예산은 6GiB다. 이는 프로세스 내 진행 중 전송의 예약 상한이며
+파일시스템의 여유 공간 보장은 아니다. 여러 프로세스는 각각의 임시 볼륨을 사용한다.
+다운로드 수신 제한과 외부 S3 직결 presigned 전송은 이 스풀 정책에 포함되지 않는다.
 
 ## 워커
 

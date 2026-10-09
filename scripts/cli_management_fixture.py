@@ -7,6 +7,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import uuid
 
 ORIGIN = "https://console.test"
@@ -66,7 +67,8 @@ class Management:
         return output["result"]
 
     def request(self, method, path, body=None, expected=200):
-        headers = {"Origin": ORIGIN, "X-Grove-CSRF": "1", "Content-Type": "application/json"}
+        headers = {"Host": urlsplit(ORIGIN).netloc, "Origin": ORIGIN,
+                   "X-Grove-CSRF": "1", "Content-Type": "application/json"}
         if self.cookie:
             headers["Cookie"] = self.cookie
         request = urllib.request.Request(self.endpoint + IDENTITY + path, method=method,
@@ -83,7 +85,8 @@ class Management:
         run(["status"], self.user_token, 0)
         for path in ["/accounts", "/history/audit"]:
             request = urllib.request.Request(self.endpoint + IDENTITY + path,
-                                             headers={"Authorization": "Bearer " + self.token})
+                                             headers={"Host": urlsplit(ORIGIN).netloc,
+                                                      "Authorization": "Bearer " + self.token})
             try:
                 self.opener.open(request, timeout=5)
             except urllib.error.HTTPError as error:

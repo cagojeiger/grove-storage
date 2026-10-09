@@ -9,6 +9,8 @@ use axum::{
 
 use super::AppState;
 
+mod admission;
+
 pub(super) fn routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/api/admin/v1", any(legacy_removed))
@@ -19,6 +21,10 @@ pub(super) fn routes(state: AppState) -> Router<AppState> {
         .route("/api/admin/commands/v1", post(crate::commands::execute))
         .merge(crate::accounts::resources::routes(state.clone()))
         .nest("/api/admin/identity/v1", crate::accounts::routes(state))
+        .layer(axum::middleware::from_fn_with_state(
+            std::sync::Arc::new(admission::Admission::new()),
+            admission::guard,
+        ))
 }
 
 async fn legacy_removed() -> impl IntoResponse {

@@ -58,6 +58,12 @@ async fn request(
     for (key, value) in headers {
         builder = builder.header(*key, *value);
     }
+    if !headers
+        .iter()
+        .any(|(key, _)| key.eq_ignore_ascii_case("host"))
+    {
+        builder = builder.header(header::HOST, crate::routes::tests::request_host(path));
+    }
     crate::routes::app(state, &[])
         .oneshot(builder.body(Body::from(body.to_string())).unwrap())
         .await

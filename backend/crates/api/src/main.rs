@@ -76,14 +76,15 @@ fn print_usage() {
 async fn serve() -> anyhow::Result<()> {
     let config = grove_core::Config::load()?;
     let console_origin = console_web::parse_origin(std::env::var("GROVE_CONSOLE_ORIGIN").ok())?;
+    if let Some(origin) = &console_origin {
+        console_web::validate_object_host(origin, config.server.public_url.as_deref())?;
+    }
     let console_web = match (&console_origin, std::env::var_os("GROVE_CONSOLE_DIST_DIR")) {
-        (Some(origin), Some(directory)) => {
-            console_web::validate_object_host(origin, config.server.public_url.as_deref())?;
-            Some(console_web::ConsoleWeb::load(directory.into()).await?)
-        }
+        (Some(_), Some(directory)) => Some(console_web::ConsoleWeb::load(directory.into()).await?),
         _ => None,
     };
     init_tracing(config.server.log_format);
+    grove_infra::temp_spool::prepare_root(&spool::spool_root()).await?;
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.
     let crypto = Arc::new(config.security.crypto()?);
@@ -155,9 +156,7 @@ async fn serve() -> anyhow::Result<()> {
         single_upload_claims: std::sync::Arc::new(tokio::sync::Semaphore::new(
             lease_relay::SINGLE_UPLOAD_CLAIM_LIMIT,
         )),
-        spool_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(
-            spool::SPOOL_CONCURRENCY_LIMIT,
-        )),
+        spool_budget: Arc::new(spool::SpoolBudget::new(config.server.spool_budget_bytes)),
     };
 
     let http_shutdown = shutdown.clone().cancelled_owned();

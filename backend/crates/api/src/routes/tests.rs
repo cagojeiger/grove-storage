@@ -15,6 +15,16 @@ mod legacy_retirement;
 
 const LAZY_DATABASE_URL: &str = "postgres://unused:unused@localhost/unused";
 
+pub(crate) fn request_host(path: &str) -> &'static str {
+    if path.starts_with("/api/admin/identity/v1")
+        || path.starts_with("/api/admin/console-commands/v1")
+    {
+        "console.test"
+    } else {
+        "grove.test"
+    }
+}
+
 pub(crate) fn test_state() -> AppState {
     let security = SecurityConfig {
         enc_root_secret: "test-root-secret-that-is-at-least-32-bytes"
@@ -39,7 +49,7 @@ pub(crate) fn test_state() -> AppState {
         part_size: 5 * 1024 * 1024,
         s3_clients: Arc::new(grove_infra::S3ClientCache::default()),
         single_upload_claims: Arc::new(tokio::sync::Semaphore::new(1)),
-        spool_slots: Arc::new(tokio::sync::Semaphore::new(1)),
+        spool_budget: Arc::new(crate::spool::SpoolBudget::new(6 * 1024 * 1024 * 1024)),
     }
 }
 

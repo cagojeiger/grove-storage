@@ -9,7 +9,13 @@ struct Scratch(std::path::PathBuf);
 impl Scratch {
     fn new() -> Self {
         let path = std::env::temp_dir().join(format!("grove-spool-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir(&path).unwrap();
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(&path).unwrap();
         Self(path)
     }
 }
@@ -31,6 +37,63 @@ async fn request_spool_preserves_bytes_and_abort_is_idempotent() {
     assert_eq!(tokio::fs::read(&path).await.unwrap(), b"payload");
     temp_spool::abort_write(&path).await;
     temp_spool::abort_write(&path).await;
+    assert!(!path.exists());
+}
+
+#[tokio::test]
+async fn request_spool_never_truncates_an_existing_file() {
+    let dir = Scratch::new();
+    let (path, file) = temp_spool::begin_write(&dir.0, "exclusive").await.unwrap();
+    drop(file);
+    std::fs::write(&path, b"keep").unwrap();
+    assert!(temp_spool::begin_write(&dir.0, "exclusive").await.is_err());
+    assert_eq!(std::fs::read(path).unwrap(), b"keep");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn private_permissions_and_symlink_rejection() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let dir = Scratch::new();
+    let root = dir.0.join("private");
+    let (path, file) = temp_spool::begin_write(&root, "file").await.unwrap();
+    drop(file);
+    assert_eq!(
+        std::fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    let target = dir.0.join("target");
+    std::fs::write(&target, b"keep").unwrap();
+    symlink(&target, root.join(".fg-tmp-link")).unwrap();
+    assert!(temp_spool::begin_write(&root, "link").await.is_err());
+    assert_eq!(std::fs::read(target).unwrap(), b"keep");
+    let linked_root = dir.0.join("linked-root");
+    symlink(&root, &linked_root).unwrap();
+    assert!(temp_spool::begin_write(&linked_root, "new").await.is_err());
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(temp_spool::begin_write(&root, "new").await.is_err());
+}
+
+#[tokio::test]
+async fn cancelled_request_unlinks_its_private_spool() {
+    let dir = Scratch::new();
+    let root = dir.0.clone();
+    let (ready, started) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        let (path, file) = temp_spool::begin_write(&root, "cancel").await.unwrap();
+        let _cleanup = temp_spool::Cleanup(path.clone());
+        let _file = file;
+        ready.send(path).unwrap();
+        std::future::pending::<()>().await;
+    });
+    let path = started.await.unwrap();
+    assert!(path.exists());
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
     assert!(!path.exists());
 }
 

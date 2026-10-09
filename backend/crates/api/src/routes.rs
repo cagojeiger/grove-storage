@@ -45,9 +45,7 @@ pub struct AppState {
     pub s3_clients: Arc<grove_infra::S3ClientCache>,
     /// Bound the DB connections held by Native single-upload relay claims.
     pub single_upload_claims: Arc<tokio::sync::Semaphore>,
-    /// S3 중계 스풀 동시성 상한 — 공유 임시 볼륨(temp_dir)을 채우는 자원
-    /// 고갈(DoS)을 막는다. relay 진입 시 슬롯을 잡는다(spool 모듈).
-    pub spool_slots: Arc<tokio::sync::Semaphore>,
+    pub spool_budget: Arc<crate::spool::SpoolBudget>,
 }
 
 pub(crate) fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
@@ -60,8 +58,8 @@ pub(crate) fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
 
 pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     // 표면이 둘이다: 컨트롤(JSON, 본문 상한·타임아웃)과 바이트(/blobs, 스트리밍 —
-    // 요청 전체 타임아웃 없음: 크기는 스트림 차단이, 진행 중 연결의 수명은
-    // blobs의 청크 유휴 타임아웃이 다스린다. lease 만료는 진입 시에만 검사된다.
+    // 업로드는 스풀의 용량·유휴·진행량·크기별 전체 시간 제한을 적용한다.
+    // lease 만료는 진입 시에만 검사된다.
     // GET의 저속 수신은 여기서 다스리지 않는다 — 앞단 프록시의 몫).
     // Router::layer는 나중에 추가한 레이어가 바깥이다. 요청 기준 실행 순서가
     // SetRequestId → Trace → (컨트롤만: Timeout → BodyLimit)이다.
@@ -80,7 +78,7 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     // 컨트롤 표면과 한 리스너를 공유하되, control의 본문 상한·타임아웃(스트리밍
     // 업로드를 자른다)은 피한다. api·blobs·probes 이름의 버킷은 예약된다
     // (admin::clients가 client id로 거부한다).
-    let boundary = state.console_web.as_ref().and(state.console_origin.clone());
+    let boundary = state.console_origin.clone();
     let app = Router::new()
         .merge(control)
         .merge(objects::streaming(s3_cors_allowed_origins))

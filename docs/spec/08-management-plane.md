@@ -36,6 +36,10 @@ Resources 화면은 Management에 속한다. 자원 삭제와 주소 변경은 �
 권한은 소속 Account의 현재 역할에서 결정된다. User-Agent·도구 이름·proxy 사용자
 헤더는 신원이나 권한의 근거가 아니다.
 
+관리 HTTP 표면은 인증·DB 접근 전에 프로세스당 동시 요청 16개와 초당 100개를
+제한한다. 초과 요청은 대기하지 않고 `429`와 `Retry-After: 1`을 반환한다.
+이 제한은 Account 비밀번호 시도 예산과 별개이며 Object API에는 적용되지 않는다.
+
 ## 권한
 
 | 작업 | Reader | Writer | Admin | 진입점 |
@@ -91,6 +95,12 @@ request_id=R: MCP token -> storage.replace
 서버는 request_id와 surface를 지정한다. 인증 후 권한 거부는 호출·보안 이력에
 기록되고 변경 감사는 생성되지 않는다. 요청 형식 오류와 서버 도달 전 실패는
 관리 명령 실행 이력의 범위 밖이다.
+
+미인증 보안 이벤트는 같은 surface·reason별로 1분에 한 건을 기록한다. 다른 로거가
+같은 기록 잠금을 점유하면 기다리지 않고 생략한다. 이 제한은 DB에서 여러 API
+프로세스에 걸쳐 적용되며 인증된 계정의 보안 이벤트·명령 이력·변경 감사는 제한하지 않는다.
+샘플링된 행 수는 실제 실패 횟수가 아니다. HTTP 진입 제한으로 거부된 요청은
+DB 이력을 생성하지 않으며 Runtime tracing의 요청 결과로 관찰한다.
 
 로그는 operation별 허용 필드와 안정된 오류 코드를 사용한다. 비밀번호·토큰·S3 secret·
 Cookie·암호문·presigned URL·metadata 원문은 관리 이력에 저장되지 않는다.

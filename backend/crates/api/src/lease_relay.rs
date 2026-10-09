@@ -120,16 +120,21 @@ async fn upload(
 
     // Relay transfers use disposable local request spools.
     let temp_root = spool_root();
-    // S3 중계는 공유 임시 볼륨에 스풀한다 — 동시 스풀 볼륨 고갈(DoS)을 막는
-    // 슬롯을 잡는다(스코프 종료 시 자동 반납).
-    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
-    // Bound the DB-claim budget for single uploads. Waiting requests
-    // hold no DB connection and must claim again after admission.
-    let _promotion = state
-        .single_upload_claims
-        .acquire()
-        .await
-        .map_err(|error| internal(format!("promotion semaphore closed: {error}")))?;
+    let _spool_permit = state
+        .spool_budget
+        .try_acquire(content_length)
+        .ok_or_else(|| {
+            status(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "transfer spool capacity is busy; retry",
+            )
+        })?;
+    let _promotion = state.single_upload_claims.try_acquire().map_err(|_| {
+        status(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "upload claim capacity is busy; retry",
+        )
+    })?;
     let claim = files::claim_relay_upload(&state.pool, lease.file_id, lease_id)
         .await?
         .ok_or_else(|| status(StatusCode::CONFLICT, "upload is busy or no longer writable"))?;
@@ -139,6 +144,7 @@ async fn upload(
     let (temp_path, file) = temp_spool::begin_write(&temp_root, &temp_name)
         .await
         .map_err(internal)?;
+    let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
 
     let (written, md5_hex) =
@@ -235,13 +241,17 @@ async fn upload_part(
     }
 
     let temp_root = spool_root();
-    // S3 중계 part도 공유 임시 볼륨에 스풀한다 — 동시 스풀 슬롯을 잡는다
-    // (스코프 종료 시 자동 반납).
-    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
+    let _spool_permit = state.spool_budget.try_acquire(expected).ok_or_else(|| {
+        status(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "transfer spool capacity is busy; retry",
+        )
+    })?;
     let temp_name = format!("{lease_id}-p{part_no}-{}", Uuid::new_v4());
     let (temp_path, file) = temp_spool::begin_write(&temp_root, &temp_name)
         .await
         .map_err(internal)?;
+    let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
     let (written, md5_hex) = spool_measured(body, &mut writer, &temp_path, expected).await?;
     if let Err(error) = writer.flush().await {
@@ -362,6 +372,10 @@ async fn spool_measured(
             spool::SpoolError::Idle => status(
                 StatusCode::REQUEST_TIMEOUT,
                 "upload stream idle for too long",
+            ),
+            spool::SpoolError::TooSlow | spool::SpoolError::Deadline => status(
+                StatusCode::REQUEST_TIMEOUT,
+                "upload stream exceeded its transfer time budget",
             ),
             spool::SpoolError::Aborted => status(StatusCode::BAD_REQUEST, "upload stream aborted"),
             spool::SpoolError::TooLarge => status(

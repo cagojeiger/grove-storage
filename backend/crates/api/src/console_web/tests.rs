@@ -338,8 +338,23 @@ async fn disabled_console_and_incomplete_build_fail_closed() {
     let app = crate::routes::app(state, &[]);
     assert_eq!(
         get(&app, "/", "console.test").await.status(),
-        StatusCode::OK
+        StatusCode::TEMPORARY_REDIRECT
     );
+    for path in ["/test-client/object.html", "/api/v1/files", "/blobs/lease"] {
+        assert_eq!(
+            get(&app, path, "console.test").await.status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+    for path in [
+        "/api/admin/identity/v1/session",
+        "/api/admin/console-commands/v1",
+    ] {
+        assert_eq!(
+            get(&app, path, "objects.test").await.status(),
+            StatusCode::NOT_FOUND
+        );
+    }
     assert_eq!(
         get(&app, "/api/admin/console/", "console.test")
             .await
