@@ -94,12 +94,13 @@ pub(crate) fn token(headers: &HeaderMap) -> Option<&str> {
         .then_some(raw)
 }
 
-fn failure(error: CommandError, request_id: Uuid) -> Response {
+pub(crate) fn failure(error: CommandError, request_id: Uuid) -> Response {
     let status = match error.code {
         ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden => StatusCode::FORBIDDEN,
         ErrorCode::NotFound => StatusCode::NOT_FOUND,
         ErrorCode::Conflict => StatusCode::CONFLICT,
+        ErrorCode::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         ErrorCode::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::Internal | ErrorCode::InvalidResponse => StatusCode::INTERNAL_SERVER_ERROR,
         _ => StatusCode::BAD_REQUEST,

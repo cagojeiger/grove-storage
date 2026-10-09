@@ -22,7 +22,7 @@ use grove_object_policy::multipart::{MAX_PARTS, composite_etag, part_number_ok};
 use uuid::Uuid;
 
 use super::S3Result;
-use super::handlers::spool_error_to_xml;
+use super::handlers::{spool_busy_to_xml, spool_error_to_xml};
 use super::header_str;
 use super::xml::{
     complete_result, initiate_result, no_such_upload, parse_complete_multipart, xml_error,
@@ -186,6 +186,10 @@ pub(super) async fn upload_part(
             )
         })?;
 
+    let _spool_permit = state
+        .spool_budget
+        .try_acquire(content_length)
+        .ok_or_else(spool_busy_to_xml)?;
     // 갱신 (ADR 002, spec 02의 재개): 살아 있는 lease에만 성립 — 회수 뒤라면
     // 세션이 없다 (NoSuchUpload). part 접근이 이어지는 한 회수되지 않는다.
     if !files::extend_write_lease(
@@ -201,8 +205,6 @@ pub(super) async fn upload_part(
 
     let backend =
         backend_from_row(&state.crypto, &file.storage).map_err(|e| xml_internal("backend", e))?;
-    // s3 중계는 공유 임시 볼륨에 스풀한다 — 슬롯으로 볼륨 고갈(DoS)을 막는다.
-    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
     let temp_root = spool_root();
     let temp_name = format!(
         "s3mp-{}-p{}-{}",
@@ -213,6 +215,7 @@ pub(super) async fn upload_part(
     let (temp_path, file_handle) = temp_spool::begin_write(&temp_root, &temp_name)
         .await
         .map_err(|e| xml_internal("spool", e))?;
+    let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file_handle);
 
     let measured =
@@ -234,11 +237,6 @@ pub(super) async fn upload_part(
     }
     let md5_hex = measured.md5_hex;
 
-    use tokio::io::AsyncWriteExt as _;
-    if let Err(error) = writer.flush().await {
-        temp_spool::abort_write(&temp_path).await;
-        return Err(xml_internal("spool flush", error));
-    }
     drop(writer.into_inner());
 
     match s3reg::claim_upload_part(

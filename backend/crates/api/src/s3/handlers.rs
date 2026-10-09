@@ -65,6 +65,10 @@ pub(super) async fn put_object(
         ));
     }
 
+    let _spool_permit = state
+        .spool_budget
+        .try_acquire(content_length)
+        .ok_or_else(spool_busy_to_xml)?;
     let spec = CreateSpec {
         client_id,
         declared_size: content_length,
@@ -95,16 +99,12 @@ pub(super) async fn put_object(
 
     let backend = backend_from_row(&state.crypto, &created.storage)
         .map_err(|e| xml_internal("backend", e))?;
-    // S3 중계는 공유 임시 볼륨에 스풀한다 — 슬롯이 없으면 대기(백프레셔)해
-    // 동시 스풀 볼륨 고갈을 막는다. 스코프 종료 시 자동 반납된다.
-    let _spool_slot = spool::acquire_spool_slot(&state.spool_slots).await;
     let temp_name = format!("s3-{}", created.file_id);
     let (temp_path, file) = temp_spool::begin_write(&spool_root(), &temp_name)
         .await
         .map_err(|e| xml_internal("spool", e))?;
+    let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
-    // 공유 스풀 프리미티브 — 네이티브 중계와 같은 유휴 타임아웃이 여기서도
-    // slow-loris를 끊는다. sha256은 x-amz-content-sha256 대조용으로 요청한다.
     let measured =
         match spool::spool_to_temp(body, &mut writer, &temp_path, content_length, true).await {
             Ok(measured) => measured,
@@ -125,11 +125,6 @@ pub(super) async fn put_object(
     }
     let md5_hex = measured.md5_hex;
 
-    use tokio::io::AsyncWriteExt as _;
-    if let Err(error) = writer.flush().await {
-        temp_spool::abort_write(&temp_path).await;
-        return Err(xml_internal("spool flush", error));
-    }
     let file = writer.into_inner();
 
     // 외부 저장소 쓰기 전에 completing을 선점하고 관찰값을 내구화한다.
@@ -234,15 +229,30 @@ pub(super) async fn put_object(
     Ok(response)
 }
 
-/// 공유 스풀 프리미티브의 실패를 S3 XML 에러로 번역한다. 스풀이 이미
-/// 임시 파일을 지웠으므로 여기서는 응답만 만든다. 단일 PUT·multipart part
-/// 표면이 공유한다 (같은 스풀 프리미티브를 쓰므로 번역도 하나다).
+pub(super) fn spool_busy_to_xml() -> Response {
+    let mut response = xml_error(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "SlowDown",
+        "transfer spool capacity is busy; retry",
+    );
+    response
+        .headers_mut()
+        .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+    response
+}
+
+/// Translate shared transfer failures for both PUT and multipart UploadPart.
 pub(super) fn spool_error_to_xml(error: spool::SpoolError) -> Response {
     match error {
         spool::SpoolError::Idle => xml_error(
             StatusCode::REQUEST_TIMEOUT,
             "RequestTimeout",
             "the upload stream was idle for too long",
+        ),
+        spool::SpoolError::TooSlow | spool::SpoolError::Deadline => xml_error(
+            StatusCode::REQUEST_TIMEOUT,
+            "RequestTimeout",
+            "the upload stream exceeded its transfer time budget",
         ),
         spool::SpoolError::Aborted => xml_error(
             StatusCode::BAD_REQUEST,
@@ -395,4 +405,51 @@ pub(super) async fn delete_object(
         tracing::info!(event = "s3.delete", client = %client_id, bucket, key, file = %file_id);
     }
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::expect_used)]
+    use super::*;
+
+    #[tokio::test]
+    async fn exhausted_spool_rejects_put_before_creating_database_state() {
+        let mut state = crate::routes::tests::test_state();
+        state.spool_budget = std::sync::Arc::new(spool::SpoolBudget::new(1024 * 1024));
+        let _permit = state
+            .spool_budget
+            .try_acquire(1024 * 1024)
+            .expect("capacity");
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CONTENT_LENGTH, HeaderValue::from_static("1"));
+        let response = put_object(
+            &state,
+            "test-client",
+            "test-client",
+            "key",
+            &headers,
+            Body::from("x"),
+        )
+        .await
+        .expect_err("busy");
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::RETRY_AFTER], "1");
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("body");
+        assert!(
+            std::str::from_utf8(&body)
+                .expect("XML")
+                .contains("<Code>SlowDown</Code>")
+        );
+    }
+
+    #[test]
+    fn slow_upload_errors_keep_the_s3_xml_contract() {
+        for error in [spool::SpoolError::TooSlow, spool::SpoolError::Deadline] {
+            let response = spool_error_to_xml(error);
+            assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+            assert_eq!(response.headers()[header::CONTENT_TYPE], "application/xml");
+        }
+    }
 }

@@ -69,7 +69,7 @@ pub async fn security(
 ) -> Result<(), Error> {
     let f = audit::columns(context.map(|c| c.actor));
     let (event, code) = reason.fields();
-    sqlx::query(
+    let write = sqlx::query(
         "INSERT INTO management.security_events
         (actor_kind,actor_id,credential_id,session_id,request_id,surface,event_type,reason_code)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
@@ -81,8 +81,34 @@ pub async fn security(
     .bind(request_id)
     .bind(audit::surface_name(surface))
     .bind(event)
+    .bind(code);
+    if context.is_some() {
+        write.execute(pool).await?;
+        return Ok(());
+    }
+
+    // Anonymous failures are sampled across replicas; no waiting on another logger.
+    let mut tx = pool.begin().await?;
+    let locked: bool =
+        sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(4674380, hashtext($1))")
+            .bind(format!("{}:{code}", audit::surface_name(surface)))
+            .fetch_one(&mut *tx)
+            .await?;
+    if !locked {
+        return Ok(());
+    }
+    let recent: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM management.security_events
+         WHERE created_at > grove_time.wall_now() - interval '1 minute'
+           AND actor_kind='anonymous' AND surface=$1 AND reason_code=$2)",
+    )
+    .bind(audit::surface_name(surface))
     .bind(code)
-    .execute(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    if !recent {
+        write.execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
     Ok(())
 }

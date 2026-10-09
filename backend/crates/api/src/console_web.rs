@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use axum::{
     Router,
     extract::{OriginalUri, Request, State},
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderValue, Method, StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
@@ -184,6 +184,13 @@ pub(crate) async fn host_boundary(
         .get::<OriginalUri>()
         .map(|uri| uri.0.path())
         .unwrap_or_else(|| request.uri().path());
+    if console_host && path == "/" && matches!(request.method(), &Method::GET | &Method::HEAD) {
+        return (
+            [(header::CACHE_CONTROL, "no-store")],
+            Redirect::temporary("/api/admin/console/"),
+        )
+            .into_response();
+    }
     let console_path = [
         "/api/admin/console",
         "/api/admin/identity/v1",

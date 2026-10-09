@@ -55,6 +55,8 @@ pub struct ServerConfig {
     /// multipart part 크기 (균일, 마지막만 나머지). 업로드별로 동결된다 —
     /// 설정 변경은 새 업로드부터다 (spec 02). 벤더 규칙상 5MiB..=5GiB.
     pub part_size_bytes: i64,
+    /// Aggregate in-flight transfer spools; keep below the temporary volume size.
+    pub spool_budget_bytes: u64,
     /// S3 표면 CORS 허용 origin (GROVE_S3_CORS_ALLOWED_ORIGINS, 콤마구분).
     /// 비면 CORS 미적용 — 브라우저 직접 업로드는 이 목록의 origin에만 열린다.
     pub s3_cors_allowed_origins: Vec<String>,
@@ -143,6 +145,11 @@ impl Config {
                 .transpose()
                 .map_err(|e| Error::config(format!("GROVE_PART_SIZE_BYTES: {e}")))?
                 .unwrap_or(64 * 1024 * 1024),
+            spool_budget_bytes: env("GROVE_SPOOL_BUDGET_BYTES")
+                .map(|v| v.parse())
+                .transpose()
+                .map_err(|e| Error::config(format!("GROVE_SPOOL_BUDGET_BYTES: {e}")))?
+                .unwrap_or(6 * 1024 * 1024 * 1024),
             s3_cors_allowed_origins: env("GROVE_S3_CORS_ALLOWED_ORIGINS")
                 .map(|v| {
                     v.split(',')
@@ -162,6 +169,11 @@ impl Config {
         if server.multipart_threshold_bytes < 1 {
             return Err(Error::config(
                 "GROVE_MULTIPART_THRESHOLD_BYTES must be positive",
+            ));
+        }
+        if !(1024 * 1024..=u64::from(u32::MAX) * 1024 * 1024).contains(&server.spool_budget_bytes) {
+            return Err(Error::config(
+                "GROVE_SPOOL_BUDGET_BYTES is outside the supported range",
             ));
         }
         // 0은 tokio::time::interval을 패닉시킨다 — 다른 숫자 설정처럼 도메인
@@ -235,6 +247,7 @@ mod tests {
         assert_eq!(config.security.enc_key_id, "v1");
         assert_eq!(config.server.multipart_threshold_bytes, 256 * 1024 * 1024);
         assert_eq!(config.server.part_size_bytes, 64 * 1024 * 1024);
+        assert_eq!(config.server.spool_budget_bytes, 6 * 1024 * 1024 * 1024);
         let retention = config.server.management_log_retention;
         assert_eq!(retention.audit_days.get(), 365);
         assert_eq!(retention.security_days.get(), 90);
@@ -248,6 +261,25 @@ mod tests {
             other => base_env(other),
         };
         assert!(Config::load_from(&too_small).is_err());
+    }
+
+    #[test]
+    fn spool_budget_requires_a_bounded_positive_size() {
+        for value in ["0", "1048575", "-1", "invalid", "18446744073709551615"] {
+            assert!(
+                Config::load_from(&|key| match key {
+                    "GROVE_SPOOL_BUDGET_BYTES" => Some(value.into()),
+                    other => base_env(other),
+                })
+                .is_err()
+            );
+        }
+        let config = Config::load_from(&|key| match key {
+            "GROVE_SPOOL_BUDGET_BYTES" => Some("8388608".into()),
+            other => base_env(other),
+        })
+        .unwrap();
+        assert_eq!(config.server.spool_budget_bytes, 8 * 1024 * 1024);
     }
 
     #[test]

@@ -35,6 +35,8 @@ test('transport exposes retry delay but never echoes response secrets', async ()
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).retryAfter).toBe(60);
       expect((error as Error).message).not.toContain('secret-from-server');
+      expect((error as Error).message).toContain('Too many requests');
+      expect((error as Error).message).not.toContain('sign-in');
     }
   } finally { globalThis.fetch = original; }
 });

@@ -1,10 +1,4 @@
-//! 업로드 스트림을 로컬 스풀에 통과-계측하는 단일 프리미티브 (ADR 002).
-//!
-//! 네이티브 중계(blobs)와 S3 표면(s3)이 공유한다 — 둘 다 "body를
-//! 임시 파일에 쓰며 크기·해시를 실측하고 선언 크기를 넘는 순간 끊는" 같은
-//! 일을 한다. lease/인증은 진입 시 한 번만 검사되므로 진행 중 연결의 수명은
-//! 이 유휴 타임아웃이 다스린다 — 바이트를 극소량씩 흘리며 연결·임시 파일을
-//! 점유하는 것을 두 표면 모두에서 끊는다.
+//! Shared Native/S3 transfer admission, bounded stream receive, and measurement.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -17,19 +11,41 @@ use sha2::Sha256;
 use tokio::io::AsyncWriteExt as _;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-/// 청크 사이 유휴 상한 — 두 표면 공통.
 pub const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+const MIN_BYTES_PER_SECOND: u64 = 64 * 1024;
+const PROGRESS_WINDOW: Duration = Duration::from_secs(30);
+const BUDGET_UNIT: u64 = 1024 * 1024;
 
-/// S3 중계 스풀 동시성 상한. 중계는 body를 공유 임시 볼륨(temp_dir)에
-/// 통과-스풀하므로, 동시 스풀 수를 묶지 않으면 인증된 다수 업로드가 볼륨을
-/// 채워 같은 파드의 다른 전송까지 무너뜨린다(자원 고갈 DoS).
 pub const SPOOL_CONCURRENCY_LIMIT: usize = 16;
 
-/// 스풀 슬롯을 잡는다 — permit이 살아있는 동안 스풀+중계가
-/// 진행되고, 스코프를 벗어나면(정상·에러 무관) 자동 반납된다. 세마포어는
-/// close하지 않지만, 만약 close됐다면 스로틀을 건너뛴다(기능 보존).
-pub async fn acquire_spool_slot(slots: &Arc<Semaphore>) -> Option<OwnedSemaphorePermit> {
-    slots.clone().acquire_owned().await.ok()
+pub struct SpoolBudget {
+    slots: Arc<Semaphore>,
+    bytes: Arc<Semaphore>,
+}
+
+pub struct SpoolPermit {
+    _slot: OwnedSemaphorePermit,
+    _bytes: OwnedSemaphorePermit,
+}
+
+impl SpoolBudget {
+    pub fn new(max_bytes: u64) -> Self {
+        Self {
+            slots: Arc::new(Semaphore::new(SPOOL_CONCURRENCY_LIMIT)),
+            bytes: Arc::new(Semaphore::new((max_bytes / BUDGET_UNIT) as usize)),
+        }
+    }
+
+    /// Round reservations up, capacity down; never queue requests with partial claims.
+    pub fn try_acquire(&self, declared_size: i64) -> Option<SpoolPermit> {
+        let units = u32::try_from(u64::try_from(declared_size).ok()?.div_ceil(BUDGET_UNIT)).ok()?;
+        let slot = self.slots.clone().try_acquire_owned().ok()?;
+        let bytes = self.bytes.clone().try_acquire_many_owned(units).ok()?;
+        Some(SpoolPermit {
+            _slot: slot,
+            _bytes: bytes,
+        })
+    }
 }
 /// 스트림 버퍼 크기 — 다운로드 재청크와 업로드 스풀 쓰기가 공유한다.
 /// 기본 4KiB로 두면 GiB급 전송이 수십만 번의 블로킹 풀 왕복이 된다.
@@ -37,7 +53,7 @@ pub const STREAM_BUF_SIZE: usize = 256 * 1024;
 
 /// Request spools are local disposable buffers, independent of storage placement.
 pub fn spool_root() -> std::path::PathBuf {
-    std::env::temp_dir()
+    std::env::temp_dir().join("grove-storage-spool")
 }
 
 /// 스풀 실측 결과. S3 요청은 SHA256·CRC32도 실측하며 네이티브 중계는 MD5를 쓴다.
@@ -54,6 +70,8 @@ pub struct Measured {
 /// 호출자 몫이다 — 표면마다 에러 코드가 다르므로.
 pub enum SpoolError {
     Idle,
+    TooSlow,
+    Deadline,
     Aborted,
     TooLarge,
     Io(std::io::Error),
@@ -68,43 +86,89 @@ pub async fn spool_to_temp(
     declared_size: i64,
     want_s3_checksums: bool,
 ) -> Result<Measured, SpoolError> {
-    spool_to_temp_with_idle_timeout(
+    spool_to_temp_with_limits(
         body,
         writer,
         temp_path,
         declared_size,
         want_s3_checksums,
-        STREAM_IDLE_TIMEOUT,
+        StreamLimits {
+            idle: STREAM_IDLE_TIMEOUT,
+            window: PROGRESS_WINDOW,
+            min_bytes_per_second: MIN_BYTES_PER_SECOND,
+        },
     )
     .await
 }
 
-async fn spool_to_temp_with_idle_timeout(
+struct StreamLimits {
+    idle: Duration,
+    window: Duration,
+    min_bytes_per_second: u64,
+}
+
+async fn spool_to_temp_with_limits(
     body: Body,
     writer: &mut (impl tokio::io::AsyncWrite + Unpin),
     temp_path: &Path,
     declared_size: i64,
     want_s3_checksums: bool,
-    idle_timeout: Duration,
+    limits: StreamLimits,
 ) -> Result<Measured, SpoolError> {
     let mut md5 = Md5::new();
     let mut sha256 = want_s3_checksums.then(Sha256::new);
     let mut crc32 = want_s3_checksums.then(crc32fast::Hasher::new);
     let mut written: i64 = 0;
     let mut stream = body.into_data_stream();
+    let start = tokio::time::Instant::now();
+    let deadline = start
+        + limits.window
+        + Duration::from_secs(
+            declared_size
+                .max(0)
+                .cast_unsigned()
+                .div_ceil(limits.min_bytes_per_second),
+        );
+    let mut idle_deadline = start + limits.idle;
+    let mut progress = tokio::time::interval_at(start + limits.window, limits.window);
+    progress.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut window_start = start;
+    let mut window_written = 0;
     loop {
-        let chunk = match tokio::time::timeout(idle_timeout, stream.next()).await {
-            Err(_) => {
+        let chunk = tokio::select! {
+            biased;
+            _ = tokio::time::sleep_until(deadline) => {
+                abort_spool(temp_path).await;
+                return Err(SpoolError::Deadline);
+            }
+            _ = tokio::time::sleep_until(idle_deadline) => {
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Idle);
             }
-            Ok(None) => break,
-            Ok(Some(Err(_))) => {
-                abort_spool(temp_path).await;
-                return Err(SpoolError::Aborted);
+            _ = progress.tick() => {
+                let now = tokio::time::Instant::now();
+                let required = u128::from(limits.min_bytes_per_second) * (now - window_start).as_nanos();
+                let received = u128::from((written - window_written).cast_unsigned()) * 1_000_000_000;
+                if received < required {
+                    abort_spool(temp_path).await;
+                    return Err(SpoolError::TooSlow);
+                }
+                window_start = now;
+                window_written = written;
+                continue;
             }
-            Ok(Some(Ok(chunk))) => chunk,
+            chunk = stream.next() => match chunk {
+                None => break,
+                Some(Err(_)) => {
+                    abort_spool(temp_path).await;
+                    return Err(SpoolError::Aborted);
+                }
+                Some(Ok(chunk)) => chunk,
+            },
         };
+        if !chunk.is_empty() {
+            idle_deadline = tokio::time::Instant::now() + limits.idle;
+        }
         written += chunk.len() as i64;
         if written > declared_size {
             abort_spool(temp_path).await;
@@ -118,9 +182,27 @@ async fn spool_to_temp_with_idle_timeout(
             use sha2::Digest as _;
             sha.update(&chunk);
         }
-        if let Err(error) = writer.write_all(&chunk).await {
+        match tokio::time::timeout_at(deadline, writer.write_all(&chunk)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                abort_spool(temp_path).await;
+                return Err(SpoolError::Io(error));
+            }
+            Err(_) => {
+                abort_spool(temp_path).await;
+                return Err(SpoolError::Deadline);
+            }
+        }
+    }
+    match tokio::time::timeout_at(deadline, writer.flush()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
             abort_spool(temp_path).await;
             return Err(SpoolError::Io(error));
+        }
+        Err(_) => {
+            abort_spool(temp_path).await;
+            return Err(SpoolError::Deadline);
         }
     }
     Ok(Measured {

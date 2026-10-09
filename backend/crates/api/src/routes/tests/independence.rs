@@ -87,6 +87,7 @@ async fn native(
             Request::builder()
                 .method(method)
                 .uri(path)
+                .header("host", "grove.test")
                 .header("authorization", format!("Bearer {key}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_owned()))

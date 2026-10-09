@@ -44,3 +44,27 @@ test("explicit outcomes and untrusted replies keep mutation uncertainty", async 
     }
   } finally { globalThis.fetch = original; }
 });
+
+test("structured admission rejection preserves retry delay and never retries a mutation", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  try {
+    globalThis.fetch = () => {
+      calls++;
+      return Promise.resolve(Response.json(
+        { ...failure(503), error: { code: "rate_limited", outcome: "not_applied" } },
+        { status: 429, headers: { "Retry-After": "1" } },
+      ));
+    };
+    let caught: unknown;
+    try { await command("storage.delete", { id: "test" }); }
+    catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(429);
+    expect((caught as ApiError).outcome).toBe("not_applied");
+    expect((caught as ApiError).retryAfter).toBe(1);
+    expect(uncertain(caught)).toBe(false);
+    expect((caught as Error).message).not.toContain("sign-in");
+    expect(calls).toBe(1);
+  } finally { globalThis.fetch = original; }
+});

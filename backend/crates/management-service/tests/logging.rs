@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used)]
+#[path = "../../db/tests/support/time.rs"]
+mod clock;
 mod support;
 use grove_db::{
     PgPool,
@@ -73,6 +75,143 @@ async fn invalid_proof_logs_anonymous_security_without_payload(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(count, 0);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn anonymous_security_log_growth_is_bounded_across_concurrent_callers(pool: PgPool) {
+    use db::telemetry::{self, SecurityReason};
+    clock::install_clock(&pool).await;
+    let mut tasks = tokio::task::JoinSet::new();
+    for _ in 0..80 {
+        let pool = pool.clone();
+        tasks.spawn(async move {
+            telemetry::security(
+                &pool,
+                None,
+                uuid::Uuid::new_v4(),
+                Surface::Mcp,
+                SecurityReason::Unauthenticated,
+            )
+            .await
+            .unwrap();
+        });
+    }
+    while let Some(result) = tasks.join_next().await {
+        result.unwrap();
+    }
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.security_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    for (surface, reason) in [
+        (Surface::Cli, SecurityReason::Unauthenticated),
+        (Surface::Mcp, SecurityReason::Forbidden),
+    ] {
+        telemetry::security(&pool, None, uuid::Uuid::new_v4(), surface, reason)
+            .await
+            .unwrap();
+    }
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.security_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 3);
+    clock::set_time(
+        &pool,
+        clock::base() + chrono::Duration::seconds(60) - chrono::Duration::nanoseconds(1),
+    )
+    .await;
+    telemetry::security(
+        &pool,
+        None,
+        uuid::Uuid::new_v4(),
+        Surface::Mcp,
+        SecurityReason::Unauthenticated,
+    )
+    .await
+    .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.security_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 3);
+    clock::set_time(&pool, clock::base() + chrono::Duration::seconds(60)).await;
+    telemetry::security(
+        &pool,
+        None,
+        uuid::Uuid::new_v4(),
+        Surface::Mcp,
+        SecurityReason::Unauthenticated,
+    )
+    .await
+    .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.security_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 4);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn authenticated_security_events_are_not_sampled(pool: PgPool) {
+    use db::telemetry::{self, SecurityReason};
+    let admin = owner(&pool).await;
+    for _ in 0..5 {
+        let context = db::AuditContext {
+            actor: db::AuditActor::Account {
+                id: admin.account,
+                credential_id: Some(admin.credential),
+                session_id: Some(admin.session_id),
+            },
+            request_id: uuid::Uuid::new_v4(),
+            surface: Surface::Console,
+        };
+        telemetry::security(
+            &pool,
+            Some(&context),
+            context.request_id,
+            Surface::Console,
+            SecurityReason::Forbidden,
+        )
+        .await
+        .unwrap();
+    }
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.security_events WHERE actor_kind='account'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 5);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn anonymous_logger_does_not_wait_on_another_logger(pool: PgPool) {
+    let mut lock = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(4674380, hashtext('mcp:unauthenticated'))")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        db::telemetry::security(
+            &pool,
+            None,
+            uuid::Uuid::new_v4(),
+            Surface::Mcp,
+            db::telemetry::SecurityReason::Unauthenticated,
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.security_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    lock.rollback().await.unwrap();
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

@@ -10,7 +10,7 @@ export class ApiError extends Error {
         : status === 403
           ? "You do not have permission to perform this action."
           : status === 429
-            ? "Too many sign-in attempts. Please try again later."
+            ? "Too many requests. Please try again later."
             : "The request could not be completed. Please try again.",
     );
   }

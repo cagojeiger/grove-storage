@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import urllib.request
+from urllib.parse import urlsplit
 
 import boto3
 from botocore.config import Config
@@ -91,12 +92,14 @@ def verify_schema(fixture, database="grove"):
 def verify_login(fixture, owner):
     request = urllib.request.Request(fixture.endpoint + "/api/admin/identity/v1/session",
         data=json.dumps({"username": "owner", "password": owner["password"]}).encode(),
-        headers={"Content-Type": "application/json", "Origin": CONSOLE_ORIGIN, "X-Grove-CSRF": "1"})
+        headers={"Host": urlsplit(CONSOLE_ORIGIN).netloc, "Content-Type": "application/json",
+                 "Origin": CONSOLE_ORIGIN, "X-Grove-CSRF": "1"})
     with fixture.opener.open(request, timeout=10) as response:
         assert json.load(response)["user_id"] == owner["account_id"]
         cookie = response.headers["Set-Cookie"].split(";", 1)[0]
     request = urllib.request.Request(fixture.endpoint + "/api/admin/identity/v1/session",
-                                     headers={"Cookie": cookie, "Origin": CONSOLE_ORIGIN})
+                                     headers={"Host": urlsplit(CONSOLE_ORIGIN).netloc,
+                                              "Cookie": cookie, "Origin": CONSOLE_ORIGIN})
     with fixture.opener.open(request, timeout=10) as response:
         assert json.load(response)["role"] == "admin"
 

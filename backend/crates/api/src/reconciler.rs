@@ -371,7 +371,7 @@ async fn record_daily_snapshot(pool: &PgPool, yesterday: chrono::NaiveDate) {
 /// pod 로컬 스풀 정리 — OS temp의 `.fg-tmp-*` 중 늙은 것. DB·락과 무관하게
 /// 매 tick, 모든 pod에서 돈다 (s3 중계 스풀은 pod 로컬 디스크에 살므로).
 async fn sweep_local_temps(now: std::time::SystemTime) {
-    let dir = std::env::temp_dir();
+    let dir = crate::spool::spool_root();
     match temp_spool::sweep_stale_temps_at(&dir, TEMP_MAX_AGE, now).await {
         Ok(0) => {}
         Ok(count) => tracing::info!(event = "reconciler.local_temps_swept", count),

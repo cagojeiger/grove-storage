@@ -133,6 +133,10 @@ fn management() -> Value {
         ("403", "Role does not permit this command"),
         ("404", "Resource not found"),
         ("409", "Conflict"),
+        (
+            "429",
+            "Request limit reached before command execution; retry after the response delay",
+        ),
         ("500", "Internal failure"),
         ("503", "Dependency unavailable"),
     ] {

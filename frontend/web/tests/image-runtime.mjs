@@ -12,10 +12,18 @@ try {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => {
-    if (message.type() === "error" && /Content Security Policy|Refused to (apply|load)/.test(message.text())) errors.push(message.text());
+    if (message.type() !== "error") return;
+    console.error("Packaged console browser error:", message.text());
+    if (/Content Security Policy|Refused to (apply|load)/.test(message.text())) errors.push(message.text());
+  });
+  page.on("requestfailed", request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/admin/console/assets/"))
+      console.error("Packaged console asset failure:", path, request.failure()?.errorText);
   });
   const root = `${origin}/api/admin/console/`;
-  const first = await page.goto(root);
+  const first = await page.goto(`${origin}/`);
+  await expect(page).toHaveURL(root);
   const csp = first.headers()["content-security-policy"];
   assert(!csp.includes("unsafe-inline"));
   assert.equal(first.headers()["cache-control"], "no-store");
@@ -48,7 +56,7 @@ try {
   assert.notEqual(second.headers()["content-security-policy"], csp);
   assert.equal((await context.request.get(`${origin}/test-client/object.html`)).status(), 404);
   assert.deepEqual(errors, []);
-  console.log("PASS packaged MUI console: CSP nonce, login/logout, secure cookie, all sections, Swagger, desktop/mobile");
+  console.log("PASS packaged MUI console: root redirect, CSP nonce, login/logout, secure cookie, all sections, Swagger, desktop/mobile");
 } finally {
   await browser.close();
 }

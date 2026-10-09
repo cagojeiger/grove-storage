@@ -34,6 +34,10 @@ fn mutation_outcome_is_preserved_independently_of_the_error_code() {
 #[test]
 fn errors_have_closed_fields_and_stable_codes() {
     assert_eq!(
+        serde_json::to_value(CommandError::rejected(ErrorCode::RateLimited)).unwrap(),
+        json!({"code":"rate_limited", "outcome":"not_applied"})
+    );
+    assert_eq!(
         serde_json::to_value(CommandError::rejected(ErrorCode::Forbidden)).unwrap(),
         json!({"code":"forbidden", "outcome":"not_applied"})
     );

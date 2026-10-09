@@ -225,7 +225,13 @@ try {
     const identityDenied = await fetch(`${endpoint}/api/admin/identity/v1/accounts`, {
       headers: { Authorization: `Bearer ${readerToken}` },
     });
-    assert.equal(identityDenied.status, 401);
+    assert.equal(identityDenied.status, 404);
+    const consoleIdentityDenied = await recipient.evaluate(async (token) =>
+      (await fetch("/api/admin/identity/v1/accounts", {
+        credentials: "omit",
+        headers: { Authorization: `Bearer ${token}` },
+      })).status, readerToken);
+    assert.equal(consoleIdentityDenied, 401);
     await recipient.getByRole("button", { name: "Revoke Reader CLI" }).click();
     await recipient.getByLabel("Confirmation").fill("Reader CLI");
     await recipient.getByRole("button", { name: "Confirm", exact: true }).click();

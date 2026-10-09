@@ -23,8 +23,15 @@ test.describe("Rust-generated Swagger documents", () => {
   test.skip(!documents, "Set GROVE_TEST_OPENAPI to the grove-storage openapi export");
 
   for (const built of [false, true]) {
-    test(`all API surfaces render read-only without leaking styles or credentials (${built ? "production CSP" : "development"})`, async ({ page }) => {
+    test(`all API surfaces render read-only behind same-origin access authentication (${built ? "production CSP" : "development"})`, async ({ page }) => {
       await identity(page);
+      await page.context().addCookies([{
+        name: "CF_Authorization",
+        value: "fixture-access",
+        url: "http://127.0.0.1:5179/",
+        httpOnly: true,
+        sameSite: "Lax",
+      }]);
       const violations: string[] = [];
       const externalRequests: string[] = [];
       const writes: string[] = [];
@@ -35,8 +42,12 @@ test.describe("Rust-generated Swagger documents", () => {
         if (request.method() !== "GET") writes.push(url.href);
       });
       await page.route("**/api/docs/*.json", async route => {
-        expect(route.request().headers().authorization).toBeUndefined();
-        expect(route.request().headers().cookie).toBeUndefined();
+        const headers = await route.request().allHeaders();
+        expect(headers.authorization).toBeUndefined();
+        if (!headers.cookie?.includes("CF_Authorization=fixture-access")) {
+          await route.fulfill({ status: 302, headers: { location: "https://access.invalid/login" } });
+          return;
+        }
         const surface = new URL(route.request().url()).pathname.split("/").at(-1)?.split(".")[0] ?? "";
         await route.fulfill({ json: documents?.[surface] });
       });

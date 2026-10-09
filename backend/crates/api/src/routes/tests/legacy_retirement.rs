@@ -17,6 +17,12 @@ async fn request(
     for (name, value) in headers {
         builder = builder.header(*name, *value);
     }
+    if !headers
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("host"))
+    {
+        builder = builder.header(header::HOST, request_host(path));
+    }
     app(state.clone(), &[])
         .oneshot(builder.body(Body::from(body.to_owned())).unwrap())
         .await

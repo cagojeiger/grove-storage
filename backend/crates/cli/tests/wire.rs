@@ -56,6 +56,51 @@ fn structured_failure_preserves_outcome_independently_of_http_status() {
 }
 
 #[test]
+fn admission_rejection_is_not_applied_and_never_retries_a_mutation() {
+    let server = Server::new(vec![(
+        "client.create",
+        Reply::rejected(429, "rate_limited", "not_applied"),
+    )]);
+    let result = envelope(
+        &server.run(&["client", "create", "app", "--storage", "local"]),
+        7,
+    );
+    assert_eq!(result["error"]["code"], "rate_limited");
+    assert_eq!(result["error"]["outcome"], "not_applied");
+    assert_eq!(server.seen().len(), 1);
+
+    let server = Server::new(vec![(
+        "client.create",
+        Reply::status(429, json!({"error":"rate_limited"})),
+    )]);
+    let result = envelope(
+        &server.run(&["client", "create", "app", "--storage", "local"]),
+        8,
+    );
+    assert_eq!(result["error"]["outcome"], "unknown");
+    assert_eq!(server.seen().len(), 1);
+}
+
+#[test]
+fn rate_limited_issuance_discards_the_secret_marker() {
+    let server = Server::new(vec![(
+        "credential.create",
+        Reply::rejected(429, "rate_limited", "not_applied"),
+    )]);
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("secret.json");
+    let output = server
+        .command()
+        .args(["credential", "create", "--client", "app", "--secret-out"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    let result = envelope(&output, 7);
+    assert_eq!(result["error"]["outcome"], "not_applied");
+    assert!(!path.exists());
+}
+
+#[test]
 fn delete_result_is_correlated_to_resource_client_and_id() {
     for reply in [
         json!({"resource":"storage","id":"app","client_id":null}),

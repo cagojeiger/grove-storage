@@ -7,6 +7,7 @@ const statuses: Record<string, number> = {
   forbidden: 403,
   not_found: 404,
   conflict: 409,
+  rate_limited: 429,
   unavailable: 503,
   internal: 500,
   invalid_response: 500,
@@ -200,8 +201,10 @@ export async function command<T>(
       (error.outcome === "not_applied" ||
         error.outcome === "applied" ||
         error.outcome === "unknown")
-    )
-      throw new ApiError(response.status, null, error.outcome);
+    ) {
+      const seconds = Number(response.headers.get("Retry-After"));
+      throw new ApiError(response.status, seconds > 0 ? seconds : null, error.outcome);
+    }
     throw new ApiError(502, null, "unknown");
   }
   if (
