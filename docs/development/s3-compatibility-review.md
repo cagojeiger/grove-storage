@@ -5,7 +5,7 @@
 | 대상 | 이번 검증 |
 |---|---|
 | 서버 | S3-only Grove Storage 로컬 바이너리, 격리 PostgreSQL 17·MinIO 컨테이너 |
-| SDK | boto3/botocore 1.43.99, path-style, HTTP |
+| SDK | boto3 1.43.99, path-style, HTTP·fixture HTTPS; botocore 버전은 비교 report에 기록 |
 | 외부 S3 backend | MinIO RELEASE.2025-09-07T16-13-09Z 경유 검증; AWS S3·R2·운영 endpoint는 별도 |
 | 운영 | 배포·데이터 이관 없음 |
 | 호환성 의미 | spec 03의 지원 subset, AWS 전체 API 동등성을 뜻하지 않음 |
@@ -16,6 +16,70 @@ Go 빌더 이미지도 digest로 고정하며, 첫 실행에는 소스·의존�
 이후 실행은 Docker 빌드 캐시를 사용한다. 이 이미지는 loopback 테스트 전용이며
 Grove 릴리스 이미지에 포함하거나 운영용으로 배포하지 않는다.
 기존 Quay/Docker Hub MinIO 이미지 다운로드는 2026-09-29에 인증 오류로 실패했다.
+
+## Presigned 비교
+
+`e2e-s3-parity.py`는 하나의 SDK 소비자 함수를 MinIO 직접 연결과 Grove 연결에
+각각 실행한다. 교체되는 값은 endpoint·bucket·자격증명이다.
+
+```text
+동일 boto3 presigner + HTTP 요청
+    +-> MinIO 직접 연결
+    +-> Grove -> MinIO
+
+Chromium fetch
+    +-> HTTPS fixture proxy -> MinIO
+    +-> HTTPS fixture proxy -> Grove -> MinIO
+```
+
+| 검사 | 비교 대상 |
+|---|---|
+| 단일 객체 | PUT·GET·HEAD·DELETE, 빈 파일, 본문·크기·ETag |
+| 키 인코딩 | 한글·공백·`+`·`%20`·`%2F`; 전체 저장 후 읽어 키 충돌 확인 |
+| presigned 조건 | 서명된 Content-Type·Content-Length·If-None-Match, 중복 생성 412, 기존 본문 보존 |
+| 읽기 | 닫힌·열린·끝이 넘치는 Range, 마지막 바이트, 416 InvalidRange, 응답 헤더 override |
+| 인증 | 서명·메서드·경로·query 변조, 실제 과거 시각으로 서명한 만료 URL |
+| multipart | presigned Create·UploadPart·Complete·Abort, part 재전송, 잘못된 ETag 후 정상 완료 |
+| 오류 | HTTP 상태와 S3 XML Code; HEAD 오류는 상태로 확인 |
+| HTTPS | 서명된 Host·원본 path·query와 HEAD Content-Length 보존, redirect 거부 |
+| 브라우저 | 실제 fetch 업로드·다운로드·multipart·ETag 노출·오류 XML 읽기, 다른 Origin의 쓰기 차단 |
+| Grove 자격증명 | 8개 동작의 다른 Client 접근 거부, 폐기 전 발급 URL의 새 요청 거부, 대체 키 정상 접근 |
+
+응답 비교 항목은 상태·오류 코드·본문 SHA-256·동작별 읽기 헤더다.
+Date와 요청 ID는 서버별 관측값이다. 결과 JSON에는 자격증명과 presigned URL을 저장하지 않는다.
+브라우저의 self-signed 인증서 허용은 loopback fixture에 적용된다. Python HTTPS 요청은
+fixture 인증서를 신뢰 저장소에 넣어 검증한다. 운영 Ingress·Cloudflare·인증서 체인은 별도 경계다.
+
+### 관측된 차이
+
+공통 계약과 다음 관측값을 분리해 기록한다. 아래 차이도 assertion으로 고정하므로
+지원 계약이나 provider가 바뀌면 비교 결과에 드러난다.
+
+| 요청 | MinIO | Grove |
+|---|---|---|
+| suffix Range `bytes=-5` | 206, 마지막 5바이트 | 200, 전체 객체 |
+| 다른 key의 multipart Abort | 204, 원 세션 유지 | 404 NoSuchUpload, 원 세션 유지 |
+| 연속 슬래시 key `a//b` | 400 XMinioInvalidObjectName | 200, 별도 논리키 저장 |
+| 범위 초과·빈 객체의 Range | 416 InvalidRange, Content-Range 없음 | 416 InvalidRange, `bytes */크기` 헤더 |
+
+### 실행과 근거
+
+```sh
+cargo build --bin grove-storage --bin gscli --locked
+npm --prefix frontend/web ci
+cd frontend/web && npx playwright install chromium && cd ../..
+python3 -m venv /tmp/grove-s3-sdk
+/tmp/grove-s3-sdk/bin/pip install boto3==1.43.99
+/tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-parity.py --browser
+```
+
+`reports/s3-parity/contract.json`에 SDK 버전·Grove revision·provider revision·
+HTTP/HTTPS 비교·자격증명 결과를 기록한다. `browser.json`은 브라우저 전송 결과다.
+CI의 Rust job에서 같은 명령을 실행하고 결과를 30일 보존한다.
+
+2026-10-11 로컬 검증에서 HTTP·HTTPS 각각 공통 케이스 66개가 일치했다.
+Chromium 전송·CORS 쓰기 차단과 8개 동작의 Client 격리·키 폐기가 통과했다.
+검증 대상은 격리 PostgreSQL·MinIO와 소스 빌드 바이너리다. 운영 데이터 변경은 없었다.
 
 ## 결과
 

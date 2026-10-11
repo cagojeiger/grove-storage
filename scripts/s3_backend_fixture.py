@@ -99,7 +99,7 @@ class MinioBackend:
 
 
 @contextmanager
-def minio_backend():
+def minio_backend(*, cors_origin=None):
     build_minio_image()
     name = "grove-contract-minio-" + uuid.uuid4().hex[:12]
     secret = uuid.uuid4().hex
@@ -109,7 +109,8 @@ def minio_backend():
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     try:
-        docker("run", "-d", "--name", name, "-p", f"127.0.0.1:{port}:9000",
+        cors = ["-e", "MINIO_API_CORS_ALLOW_ORIGIN=" + cors_origin] if cors_origin else []
+        docker("run", "-d", "--name", name, "-p", f"127.0.0.1:{port}:9000", *cors,
                "-e", "MINIO_ROOT_USER=grove-contract", "-e", "MINIO_ROOT_PASSWORD=" + secret,
                IMAGE, "server", "/data")
         backend = MinioBackend(name, f"http://127.0.0.1:{port}", secret)
