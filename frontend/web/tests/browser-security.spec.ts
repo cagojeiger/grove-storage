@@ -4,6 +4,23 @@ import { maintenanceMock } from "./maintenance-fixture";
 
 const root = "http://127.0.0.1:5180/api/admin/console/";
 
+test("built console serves its same-origin PNG favicon", async ({ page, request }) => {
+  await page.goto(root);
+  const icon = page.locator('link[rel="icon"]');
+  await expect(icon).toHaveAttribute("type", "image/png");
+  await expect(icon).toHaveAttribute(
+    "href",
+    "/api/admin/console/grove-storage-logo.png",
+  );
+  const href = await icon.getAttribute("href");
+  const response = await request.get(new URL(href!, root).href);
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("image/png");
+  expect((await response.body()).subarray(0, 8).toString("hex")).toBe(
+    "89504e470d0a1a0a",
+  );
+});
+
 test("a missing page chunk offers explicit reload instead of a blank console", async ({
   page,
 }) => {
