@@ -207,6 +207,18 @@ jobs:
           npm run build
           GROVE_TEST_OPENAPI=/tmp/grove-openapi.json npx playwright test tests/api-docs.spec.ts
 
+      - name: Presigned parity and browser HTTPS contract
+        run: |
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-parity.py --browser --report-dir reports/s3-parity
+
+      - name: Preserve presigned comparison evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: s3-presigned-parity
+          path: reports/s3-parity/
+          retention-days: 30
+
   notegate:
     name: NoteGate file transfer contract
     runs-on: ubuntu-latest
