@@ -1,6 +1,7 @@
 //! Physical provider operations with resolved settings, never database state or identities.
 //! Both control I/O and byte I/O live here; lifecycle decisions belong to callers.
 
+mod metrics;
 mod s3;
 
 pub use s3::{

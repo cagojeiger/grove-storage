@@ -21,6 +21,7 @@ pub const SPOOL_CONCURRENCY_LIMIT: usize = 16;
 pub struct SpoolBudget {
     slots: Arc<Semaphore>,
     bytes: Arc<Semaphore>,
+    capacity_units: usize,
 }
 
 pub struct SpoolPermit {
@@ -33,18 +34,45 @@ impl SpoolBudget {
         Self {
             slots: Arc::new(Semaphore::new(SPOOL_CONCURRENCY_LIMIT)),
             bytes: Arc::new(Semaphore::new((max_bytes / BUDGET_UNIT) as usize)),
+            capacity_units: (max_bytes / BUDGET_UNIT) as usize,
         }
     }
 
     /// Round reservations up, capacity down; never queue requests with partial claims.
     pub fn try_acquire(&self, declared_size: i64) -> Option<SpoolPermit> {
         let units = u32::try_from(u64::try_from(declared_size).ok()?.div_ceil(BUDGET_UNIT)).ok()?;
-        let slot = self.slots.clone().try_acquire_owned().ok()?;
-        let bytes = self.bytes.clone().try_acquire_many_owned(units).ok()?;
+        let slot = self
+            .slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| {
+                metrics::counter!("grove_spool_rejections_total", "reason" => "slots").increment(1);
+            })
+            .ok()?;
+        let bytes = self
+            .bytes
+            .clone()
+            .try_acquire_many_owned(units)
+            .map_err(|_| {
+                metrics::counter!("grove_spool_rejections_total", "reason" => "bytes").increment(1);
+            })
+            .ok()?;
         Some(SpoolPermit {
             _slot: slot,
             _bytes: bytes,
         })
+    }
+
+    pub fn observe(&self) {
+        metrics::gauge!("grove_spool_slots", "state" => "limit")
+            .set(SPOOL_CONCURRENCY_LIMIT as f64);
+        metrics::gauge!("grove_spool_slots", "state" => "used")
+            .set((SPOOL_CONCURRENCY_LIMIT - self.slots.available_permits()) as f64);
+        metrics::gauge!("grove_spool_budget_bytes")
+            .set((self.capacity_units as u64 * BUDGET_UNIT) as f64);
+        metrics::gauge!("grove_spool_reserved_bytes").set(
+            ((self.capacity_units - self.bytes.available_permits()) as u64 * BUDGET_UNIT) as f64,
+        );
     }
 }
 /// 스트림 버퍼 크기 — 다운로드 재청크와 업로드 스풀 쓰기가 공유한다.
@@ -115,6 +143,7 @@ async fn spool_to_temp_with_limits(
     want_s3_checksums: bool,
     limits: StreamLimits,
 ) -> Result<Measured, SpoolError> {
+    let mut transfer = crate::metrics::Transfer::new("receive");
     let mut md5 = Md5::new();
     let mut sha256 = want_s3_checksums.then(Sha256::new);
     let mut crc32 = want_s3_checksums.then(crc32fast::Hasher::new);
@@ -138,10 +167,12 @@ async fn spool_to_temp_with_limits(
         let chunk = tokio::select! {
             biased;
             _ = tokio::time::sleep_until(deadline) => {
+                transfer.finish("timeout");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Deadline);
             }
             _ = tokio::time::sleep_until(idle_deadline) => {
+                transfer.finish("timeout");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Idle);
             }
@@ -150,6 +181,7 @@ async fn spool_to_temp_with_limits(
                 let required = u128::from(limits.min_bytes_per_second) * (now - window_start).as_nanos();
                 let received = u128::from((written - window_written).cast_unsigned()) * 1_000_000_000;
                 if received < required {
+                    transfer.finish("too_slow");
                     abort_spool(temp_path).await;
                     return Err(SpoolError::TooSlow);
                 }
@@ -160,17 +192,20 @@ async fn spool_to_temp_with_limits(
             chunk = stream.next() => match chunk {
                 None => break,
                 Some(Err(_)) => {
+                    transfer.finish("error");
                     abort_spool(temp_path).await;
                     return Err(SpoolError::Aborted);
                 }
                 Some(Ok(chunk)) => chunk,
             },
         };
+        transfer.bytes(chunk.len());
         if !chunk.is_empty() {
             idle_deadline = tokio::time::Instant::now() + limits.idle;
         }
         written += chunk.len() as i64;
         if written > declared_size {
+            transfer.finish("too_large");
             abort_spool(temp_path).await;
             return Err(SpoolError::TooLarge);
         }
@@ -185,10 +220,12 @@ async fn spool_to_temp_with_limits(
         match tokio::time::timeout_at(deadline, writer.write_all(&chunk)).await {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
+                transfer.finish("error");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Io(error));
             }
             Err(_) => {
+                transfer.finish("timeout");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Deadline);
             }
@@ -197,14 +234,21 @@ async fn spool_to_temp_with_limits(
     match tokio::time::timeout_at(deadline, writer.flush()).await {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
+            transfer.finish("error");
             abort_spool(temp_path).await;
             return Err(SpoolError::Io(error));
         }
         Err(_) => {
+            transfer.finish("timeout");
             abort_spool(temp_path).await;
             return Err(SpoolError::Deadline);
         }
     }
+    transfer.finish(if written == declared_size {
+        "success"
+    } else {
+        "incomplete"
+    });
     Ok(Measured {
         written,
         md5_hex: hex::encode(md5.finalize()),

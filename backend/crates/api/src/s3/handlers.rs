@@ -341,8 +341,11 @@ pub(super) async fn get_object(
     .await;
 
     tracing::info!(event = "s3.get", client = %client_id, bucket, key, file = %file_id);
-    let mut response =
-        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)).into_response();
+    let mut response = crate::metrics::download_body(
+        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
+        len,
+    )
+    .into_response();
     if let Some((start, end)) = span {
         *response.status_mut() = StatusCode::PARTIAL_CONTENT;
         if let Ok(value) = HeaderValue::from_str(&format!("bytes {start}-{end}/{total}")) {

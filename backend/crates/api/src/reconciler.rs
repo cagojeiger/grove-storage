@@ -20,6 +20,7 @@ use schedule::{Job, Schedule, bounded_pass};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::metrics::{JobObservation, JobReport};
 use grove_core::Crypto;
 use grove_db::files::{self, SweepCandidate};
 use grove_db::{PgPool, registry, s3_registry as s3reg, upload_recovery, usage};
@@ -36,10 +37,21 @@ const BATCH_LIMIT: i64 = 20;
 const RECOVERY_RETRY: Duration = Duration::from_secs(30);
 const RECOVERY_IO_TIMEOUT: Duration = Duration::from_secs(10);
 
-async fn begin_recovery(pool: &PgPool, file_id: uuid::Uuid, job: upload_recovery::Job) -> bool {
+async fn begin_recovery(
+    pool: &PgPool,
+    file_id: uuid::Uuid,
+    job: upload_recovery::Job,
+    report: &mut JobReport,
+) -> bool {
     match upload_recovery::claim(pool, file_id, job, RECOVERY_RETRY.as_secs() as u32).await {
-        Ok(claimed) => claimed,
+        Ok(claimed) => {
+            if !claimed {
+                report.skipped += 1;
+            }
+            claimed
+        }
         Err(error) => {
+            report.failed += 1;
             tracing::error!(event = "reconciler.claim_failed", file = %file_id, %error);
             false
         }
@@ -54,10 +66,21 @@ async fn recovery_io<T>(
         .map_err(|_| anyhow::anyhow!("reconciler I/O timed out"))?
 }
 
-async fn begin_file_recovery(pool: &PgPool, file_id: uuid::Uuid, job: files::RecoveryJob) -> bool {
+async fn begin_file_recovery(
+    pool: &PgPool,
+    file_id: uuid::Uuid,
+    job: files::RecoveryJob,
+    report: &mut JobReport,
+) -> bool {
     match files::claim_recovery(pool, file_id, job, RECOVERY_RETRY.as_secs() as u32).await {
-        Ok(claimed) => claimed,
+        Ok(claimed) => {
+            if !claimed {
+                report.skipped += 1;
+            }
+            claimed
+        }
         Err(error) => {
+            report.failed += 1;
             tracing::error!(event = "reconciler.claim_failed", file = %file_id, %error);
             false
         }
@@ -75,6 +98,17 @@ const LEASE_RETENTION: Duration = Duration::from_secs(24 * 3600);
 /// 종착 파일 행(reclaimed·purge 완료 deleted)의 보존 기간 — stat 계약의
 /// 유계다 (spec 00). 이력과 같은 3개월 — 관찰 보존의 단일 기준.
 const FILE_RETENTION: Duration = Duration::from_secs(90 * 24 * 3600);
+
+pub(crate) fn initialize_metrics() {
+    for job in schedule::JOBS
+        .iter()
+        .map(|job| job.name())
+        .chain(["local_spool"])
+    {
+        metrics::gauge!("grove_job_last_success_timestamp_seconds", "worker" => "object", "task" => job).set(0.0);
+        metrics::gauge!("grove_job_last_completed_timestamp_seconds", "worker" => "object", "task" => job).set(0.0);
+    }
+}
 
 pub async fn run(
     pool: PgPool,
@@ -102,11 +136,20 @@ pub async fn run(
                 // 치운다 — 자기 디스크는 자기 몫이고, 락 승자만 치우면
                 // 락을 못 이긴 pod의 잔여물이 밀린다.
                 let result = bounded_pass(&shutdown, async {
-                    if tokio::time::timeout(RECOVERY_IO_TIMEOUT, sweep_local_temps(clock.now().into())).await.is_err() {
-                        tracing::warn!(event = "reconciler.temp_sweep_failed", reason = "timeout");
+                    let mut local = JobObservation::new("object", "local_spool");
+                    match tokio::time::timeout(RECOVERY_IO_TIMEOUT, sweep_local_temps(clock.now().into())).await {
+                        Ok(report) => local.finish(&report, clock.now().timestamp() as f64),
+                        Err(_) => tracing::warn!(event = "reconciler.temp_sweep_failed", reason = "timeout"),
                     }
                     grove_db::with_reconciler_lock(&pool, || {
-                        schedule.run(|job| run_job(job, &pool, &crypto, &s3_clients))
+                        schedule.run(|job| {
+                            let (pool, crypto, s3_clients, clock) = (&pool, &crypto, &s3_clients, &clock);
+                            async move {
+                                let mut observation = JobObservation::new("object", job.name());
+                                let report = run_job(job, pool, crypto, s3_clients).await;
+                                observation.finish(&report, clock.now().timestamp() as f64);
+                            }
+                        })
                     }).await
                 }).await;
                 match result {
@@ -116,7 +159,10 @@ pub async fn run(
                         tracing::debug!(event = "reconciler.skipped", reason = "lock_held")
                     }
                     Some(Ok(Err(error))) => tracing::error!(event = "reconciler.failed", %error),
-                    Some(Err(_)) => tracing::warn!(event = "reconciler.failed", reason = "pass_timeout"),
+                    Some(Err(_)) => {
+                        metrics::counter!("grove_worker_timeouts_total", "worker" => "object").increment(1);
+                        tracing::warn!(event = "reconciler.failed", reason = "pass_timeout");
+                    }
                     None => {
                         tracing::info!(event = "reconciler.stopped");
                         return;
@@ -127,7 +173,13 @@ pub async fn run(
     }
 }
 
-async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
+async fn run_job(
+    job: Job,
+    pool: &PgPool,
+    crypto: &Crypto,
+    s3_clients: &S3ClientCache,
+) -> JobReport {
+    let mut report = JobReport::default();
     tracing::debug!(event = "reconciler.job_started", ?job);
     match job {
         Job::Observe => {
@@ -143,41 +195,49 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
                             pool,
                             candidate.file_id,
                             files::RecoveryJob::Observe,
+                            &mut report,
                         )
                         .await
                         {
                             continue;
                         }
                         match observe_commit(pool, crypto, s3_clients, &candidate).await {
-                            Ok(true) => tracing::info!(
-                                event = "file.committed",
-                                file = %candidate.file_id,
-                                observed = true,
-                            ),
+                            Ok(true) => {
+                                report.processed += 1;
+                                tracing::info!(
+                                    event = "file.committed",
+                                    file = %candidate.file_id,
+                                    observed = true,
+                                )
+                            }
                             // 실물 미도착·선언 불일치·전이 패배 — pending에 남는다.
                             // 도착 전이면 재시도 시각 이후 다시 보고, 끝내 안 맞으면 만료
                             // 회수가 처리한다 (commit 검증 실패와 같은 결말).
                             Ok(false) => {}
-                            Err(error) => tracing::warn!(
-                                event = "reconciler.observe_failed",
-                                file = %candidate.file_id,
-                                %error,
-                            ),
+                            Err(error) => {
+                                report.failed += 1;
+                                tracing::warn!(
+                                    event = "reconciler.observe_failed",
+                                    file = %candidate.file_id,
+                                    %error,
+                                )
+                            }
                         }
                     }
                 }
                 Err(error) => {
+                    report.failed += 1;
                     tracing::error!(event = "reconciler.scan_failed", job = "observe_commit", %error)
                 }
             }
         }
-        Job::NativeComplete => native_completion::recover(pool, crypto, s3_clients).await,
-        Job::NativeCleanup => native_completion::cleanup(pool, crypto, s3_clients).await,
+        Job::NativeComplete => return native_completion::recover(pool, crypto, s3_clients).await,
+        Job::NativeCleanup => return native_completion::cleanup(pool, crypto, s3_clients).await,
 
         // S3 Complete는 외부 저장소와 DB 사이를 completing 행으로 잇는다. 요청
         // 소유자의 갱신 lease가 지난 뒤 실물을 관찰해 성공은 finalize하고,
         // 실물이 없던 multipart는 재시도 가능하게 open으로 되돌린다.
-        Job::S3Complete => s3_completion::recover(pool, crypto, s3_clients).await,
+        Job::S3Complete => return s3_completion::recover(pool, crypto, s3_clients).await,
 
         // S3 open 만료는 generic reclaim에서 제외한다. 먼저 cleaning을 선점하고
         // session/location을 보존해야 외부 Abort/Delete 실패를 다음 tick에 재시도한다.
@@ -185,17 +245,24 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
             Ok(files) => {
                 for file_id in files {
                     match s3reg::claim_expired_abort(pool, file_id).await {
-                        Ok(true) => tracing::debug!(event = "s3.upload_expired", file = %file_id),
+                        Ok(true) => {
+                            report.processed += 1;
+                            tracing::debug!(event = "s3.upload_expired", file = %file_id)
+                        }
                         Ok(false) => {}
-                        Err(error) => tracing::error!(
-                            event = "reconciler.reclaim_failed",
-                            file = %file_id,
-                            %error,
-                        ),
+                        Err(error) => {
+                            report.failed += 1;
+                            tracing::error!(
+                                event = "reconciler.reclaim_failed",
+                                file = %file_id,
+                                %error,
+                            )
+                        }
                     }
                 }
             }
             Err(error) => {
+                report.failed += 1;
                 tracing::error!(event = "reconciler.scan_failed", job = "s3_expire", %error)
             }
         },
@@ -205,8 +272,13 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
         Job::S3Cleanup => match s3reg::cleanup_candidates(pool, BATCH_LIMIT).await {
             Ok(candidates) => {
                 for candidate in candidates {
-                    if !begin_recovery(pool, candidate.file_id, upload_recovery::Job::S3Cleanup)
-                        .await
+                    if !begin_recovery(
+                        pool,
+                        candidate.file_id,
+                        upload_recovery::Job::S3Cleanup,
+                        &mut report,
+                    )
+                    .await
                     {
                         continue;
                     }
@@ -216,25 +288,35 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
                     )
                     .await
                     {
-                        Ok(true) => tracing::info!(
-                            event = "s3.upload_aborted",
-                            file = %candidate.file_id,
-                        ),
+                        Ok(true) => {
+                            report.processed += 1;
+                            tracing::info!(
+                                event = "s3.upload_aborted",
+                                file = %candidate.file_id,
+                            )
+                        }
                         Ok(false) => {}
-                        Err(CleanupError::Metadata(error)) => tracing::error!(
-                            event = "reconciler.reclaim_failed",
-                            file = %candidate.file_id,
-                            %error,
-                        ),
-                        Err(CleanupError::Physical(error)) => tracing::warn!(
-                            event = "reconciler.sweep_failed",
-                            file = %candidate.file_id,
-                            %error,
-                        ),
+                        Err(CleanupError::Metadata(error)) => {
+                            report.failed += 1;
+                            tracing::error!(
+                                event = "reconciler.reclaim_failed",
+                                file = %candidate.file_id,
+                                %error,
+                            )
+                        }
+                        Err(CleanupError::Physical(error)) => {
+                            report.failed += 1;
+                            tracing::warn!(
+                                event = "reconciler.sweep_failed",
+                                file = %candidate.file_id,
+                                %error,
+                            )
+                        }
                     }
                 }
             }
             Err(error) => {
+                report.failed += 1;
                 tracing::error!(event = "reconciler.scan_failed", job = "s3_cleanup", %error)
             }
         },
@@ -245,29 +327,37 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
                 for candidate in candidates {
                     match files::finalize_reclaim(pool, &candidate).await {
                         Ok(true) => {
+                            report.processed += 1;
                             tracing::info!(event = "file.reclaimed", file = %candidate.file_id);
                         }
                         // 회수 취소: 늦은 commit이 이겼거나(파일 active) 스냅샷 이후
                         // lease가 갱신됐다 — 어느 쪽이든 실물을 건드리지 않는다.
                         Ok(false) => {}
                         Err(error) => {
+                            report.failed += 1;
                             tracing::error!(event = "reconciler.reclaim_failed", file = %candidate.file_id, %error)
                         }
                     }
                 }
             }
             Err(error) => {
+                report.failed += 1;
                 tracing::error!(event = "reconciler.scan_failed", job = "reclaim", %error)
             }
         },
-        Job::ReclaimCleanup => reclaim::recover(pool, crypto, s3_clients).await,
+        Job::ReclaimCleanup => return reclaim::recover(pool, crypto, s3_clients).await,
 
         // purge (spec 00 — deleted의 capacity 해제 지점).
         Job::Purge => match files::purgeable(pool, BATCH_LIMIT).await {
             Ok(candidates) => {
                 for candidate in candidates {
-                    if !begin_file_recovery(pool, candidate.file_id, files::RecoveryJob::Purge)
-                        .await
+                    if !begin_file_recovery(
+                        pool,
+                        candidate.file_id,
+                        files::RecoveryJob::Purge,
+                        &mut report,
+                    )
+                    .await
                     {
                         continue;
                     }
@@ -277,33 +367,49 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
                     )
                     .await
                     {
-                        Ok(true) => tracing::info!(
-                            event = "file.purged",
-                            file = %candidate.file_id,
-                        ),
+                        Ok(true) => {
+                            report.processed += 1;
+                            tracing::info!(
+                                event = "file.purged",
+                                file = %candidate.file_id,
+                            )
+                        }
                         Ok(false) => {}
-                        Err(CleanupError::Metadata(error)) => tracing::error!(
-                            event = "reconciler.purge_failed",
-                            file = %candidate.file_id,
-                            %error,
-                        ),
-                        Err(CleanupError::Physical(error)) => tracing::warn!(
-                            event = "reconciler.sweep_failed",
-                            file = %candidate.file_id,
-                            %error,
-                        ),
+                        Err(CleanupError::Metadata(error)) => {
+                            report.failed += 1;
+                            tracing::error!(
+                                event = "reconciler.purge_failed",
+                                file = %candidate.file_id,
+                                %error,
+                            )
+                        }
+                        Err(CleanupError::Physical(error)) => {
+                            report.failed += 1;
+                            tracing::warn!(
+                                event = "reconciler.sweep_failed",
+                                file = %candidate.file_id,
+                                %error,
+                            )
+                        }
                     }
                 }
             }
-            Err(error) => tracing::error!(event = "reconciler.scan_failed", job = "purge", %error),
+            Err(error) => {
+                report.failed += 1;
+                tracing::error!(event = "reconciler.scan_failed", job = "purge", %error)
+            }
         },
 
         // 만료된 read lease의 원장 정리 — 회계 무관, issued가 무한히
         // 쌓여 partial index가 비대해지는 것만 막는다.
         Job::ReadLeases => match files::expire_read_leases(pool, BATCH_LIMIT).await {
             Ok(0) => {}
-            Ok(count) => tracing::debug!(event = "reconciler.read_leases_expired", count),
+            Ok(count) => {
+                report.processed += count;
+                tracing::debug!(event = "reconciler.read_leases_expired", count)
+            }
             Err(error) => {
+                report.failed += 1;
                 tracing::error!(event = "reconciler.scan_failed", job = "read_leases", %error)
             }
         },
@@ -317,8 +423,12 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
                 .await
             {
                 Ok(0) => {}
-                Ok(count) => tracing::info!(event = "reconciler.leases_pruned", count),
+                Ok(count) => {
+                    report.processed += count;
+                    tracing::info!(event = "reconciler.leases_pruned", count)
+                }
                 Err(error) => {
+                    report.failed += 1;
                     tracing::error!(event = "reconciler.scan_failed", job = "prune_leases", %error)
                 }
             }
@@ -333,8 +443,12 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
                 .await
             {
                 Ok(0) => {}
-                Ok(count) => tracing::info!(event = "reconciler.files_pruned", count),
+                Ok(count) => {
+                    report.processed += count;
+                    tracing::info!(event = "reconciler.files_pruned", count)
+                }
                 Err(error) => {
+                    report.failed += 1;
                     tracing::error!(event = "reconciler.scan_failed", job = "prune_files", %error)
                 }
             }
@@ -348,39 +462,56 @@ async fn run_job(job: Job, pool: &PgPool, crypto: &Crypto, s3_clients: &S3Client
             let today = grove_db::time::now(pool).await;
             match today {
                 Ok(today) => {
-                    record_daily_snapshot(pool, today.date_naive() - chrono::Days::new(1)).await
+                    return record_daily_snapshot(pool, today.date_naive() - chrono::Days::new(1))
+                        .await;
                 }
-                Err(error) => tracing::error!(event = "reconciler.snapshot_failed", %error),
+                Err(error) => {
+                    report.failed += 1;
+                    tracing::error!(event = "reconciler.snapshot_failed", %error)
+                }
             }
         }
     }
+    report
 }
 
-async fn record_daily_snapshot(pool: &PgPool, yesterday: chrono::NaiveDate) {
+async fn record_daily_snapshot(pool: &PgPool, yesterday: chrono::NaiveDate) -> JobReport {
+    let mut report = JobReport::default();
     match usage::record_snapshot(pool, yesterday).await {
         Ok(0) => {}
         Ok(rows) => {
+            report.processed += rows;
             tracing::info!(event = "reconciler.usage_snapshots", day = %yesterday, rows)
         }
         Err(error) => {
+            report.failed += 1;
             tracing::error!(event = "reconciler.scan_failed", job = "usage_snapshots", %error)
         }
     }
+    report
 }
 
 /// pod 로컬 스풀 정리 — OS temp의 `.fg-tmp-*` 중 늙은 것. DB·락과 무관하게
 /// 매 tick, 모든 pod에서 돈다 (s3 중계 스풀은 pod 로컬 디스크에 살므로).
-async fn sweep_local_temps(now: std::time::SystemTime) {
+async fn sweep_local_temps(now: std::time::SystemTime) -> JobReport {
+    let mut report = JobReport::default();
     let dir = crate::spool::spool_root();
     match temp_spool::sweep_stale_temps_at(&dir, TEMP_MAX_AGE, now).await {
         Ok(0) => {}
-        Ok(count) => tracing::info!(event = "reconciler.local_temps_swept", count),
-        Err(error) => tracing::warn!(
-            event = "reconciler.temp_sweep_failed",
-            dir = %dir.display(),
-            %error,
-        ),
+        Ok(count) => {
+            report.processed = count as u64;
+            tracing::info!(event = "reconciler.local_temps_swept", count)
+        }
+        Err(error) => {
+            report.failed = 1;
+            tracing::warn!(
+                event = "reconciler.temp_sweep_failed",
+                dir = %dir.display(),
+                %error,
+            )
+        }
     }
+    report
 }
 
 /// 실물 관찰 → 선언 대조 → 확정. commit 핸들러와 같은 게이트다 (spec 00):
@@ -444,6 +575,30 @@ async fn sweep_object(
 #[cfg(test)]
 mod recovery_tests {
     use super::*;
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn database_scan_failures_cannot_return_successful_job_reports() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@127.0.0.1:1/unused")
+            .unwrap();
+        pool.close().await;
+        let crypto = Crypto::new(
+            "test",
+            &grove_core::SecretString::from("metrics-test-encryption-root-at-least-32-bytes"),
+        )
+        .unwrap();
+        let cache = S3ClientCache::new(Arc::new(grove_core::time::SystemClock));
+        for job in schedule::JOBS {
+            let report = run_job(job, &pool, &crypto, &cache).await;
+            assert!(
+                report.failed > 0,
+                "{} must report its failed DB scan",
+                job.name()
+            );
+            assert_eq!(report.processed, 0);
+        }
+    }
 
     #[tokio::test(start_paused = true)]
     async fn hung_io_stops_at_the_deadline() {

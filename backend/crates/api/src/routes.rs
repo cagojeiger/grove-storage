@@ -99,6 +99,7 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
 /// 실행 순서는 SetRequestId → Trace → 핸들러다.
 fn with_telemetry(router: Router) -> Router {
     router
+        .layer(axum::middleware::from_fn(crate::metrics::observe_request))
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(
             TraceLayer::new_for_http()

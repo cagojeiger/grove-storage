@@ -43,6 +43,7 @@ impl SecurityConfig {
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub bind_addr: SocketAddr,
+    pub metrics_bind_addr: Option<SocketAddr>,
     pub log_format: LogFormat,
     /// 중계 바이트 엔드포인트의 공개 베이스 URL (예: https://objects.grove.example.com).
     /// force_relay storage 등록에 필요하다.
@@ -101,6 +102,10 @@ impl Config {
                 .unwrap_or_else(|| "127.0.0.1:8080".to_owned())
                 .parse()
                 .map_err(|e| Error::config(format!("GROVE_BIND: {e}")))?,
+            metrics_bind_addr: env("GROVE_METRICS_BIND")
+                .map(|value| value.parse())
+                .transpose()
+                .map_err(|e| Error::config(format!("GROVE_METRICS_BIND: {e}")))?,
             log_format: match env("GROVE_LOG_FORMAT").as_deref() {
                 None | Some("pretty") => LogFormat::Pretty,
                 Some("json") => LogFormat::Json,
@@ -176,6 +181,12 @@ impl Config {
                 "GROVE_SPOOL_BUDGET_BYTES is outside the supported range",
             ));
         }
+        if server
+            .metrics_bind_addr
+            .is_some_and(|addr| addr.port() != 0 && addr.port() == server.bind_addr.port())
+        {
+            return Err(Error::config("GROVE_METRICS_BIND requires a separate port"));
+        }
         // 0은 tokio::time::interval을 패닉시킨다 — 다른 숫자 설정처럼 도메인
         // 검사로 부팅에서 거부한다 (0을 받으면 정리 잡이 조용히 죽는다).
         if server.reconciler_interval_secs < 1 {
@@ -239,9 +250,34 @@ mod tests {
     }
 
     #[test]
+    fn metrics_listener_requires_a_valid_separate_port() {
+        for address in ["invalid-bind", "127.0.0.1:8080", "0.0.0.0:8080"] {
+            assert!(
+                Config::load_from(&|key| match key {
+                    "GROVE_METRICS_BIND" => Some(address.to_owned()),
+                    _ => base_env(key),
+                })
+                .is_err()
+            );
+        }
+        for address in ["127.0.0.1:9091", "0.0.0.0:9091", "127.0.0.1:0"] {
+            let config = Config::load_from(&|key| match key {
+                "GROVE_METRICS_BIND" => Some(address.to_owned()),
+                _ => base_env(key),
+            })
+            .unwrap();
+            assert_eq!(
+                config.server.metrics_bind_addr,
+                Some(address.parse().unwrap())
+            );
+        }
+    }
+
+    #[test]
     fn defaults_apply_with_required_env() {
         let config = Config::load_from(&base_env).unwrap();
         assert_eq!(config.server.bind_addr.port(), 8080);
+        assert_eq!(config.server.metrics_bind_addr, None);
         assert_eq!(config.server.log_format, LogFormat::Pretty);
         assert_eq!(config.database.max_connections, 20);
         assert_eq!(config.security.enc_key_id, "v1");

@@ -409,8 +409,11 @@ async fn download(
     };
 
     tracing::info!(event = "blobs.downloaded", lease = %lease_id, file = %lease.file_id);
-    let mut response =
-        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)).into_response();
+    let mut response = crate::metrics::download_body(
+        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
+        size,
+    )
+    .into_response();
     let headers = response.headers_mut();
     if let Ok(value) = HeaderValue::from_str(&size.to_string()) {
         headers.insert(header::CONTENT_LENGTH, value);

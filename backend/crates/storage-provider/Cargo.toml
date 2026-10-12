@@ -11,8 +11,11 @@ aws-smithy-http-client.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 secrecy.workspace = true
+metrics.workspace = true
 
 [dev-dependencies]
+metrics-exporter-prometheus.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 chrono.workspace = true
 axum.workspace = true
 

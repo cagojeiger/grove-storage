@@ -1,0 +1,97 @@
+groups:
+  - name: grove-storage
+    interval: 30s
+    rules:
+      - alert: GroveMetricsMissing
+        expr: absent(up{namespace="grove-storage",service="grove-storage-metrics",endpoint="metrics"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove metrics discovery is missing
+      - alert: GroveMetricsTargetDown
+        expr: up{namespace="grove-storage",service="grove-storage-metrics",endpoint="metrics"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove metrics target cannot be scraped
+      - alert: GroveS3Errors
+        expr: |
+          (sum by (namespace) (increase(grove_http_requests_total{namespace="grove-storage",surface="s3",operation!="unsupported",outcome="5xx"}[10m])) >= 3)
+          and
+          (sum by (namespace) (increase(grove_http_requests_total{namespace="grove-storage",surface="s3",operation!="unsupported",outcome="5xx"}[10m]))
+          / clamp_min(sum by (namespace) (increase(grove_http_requests_total{namespace="grove-storage",surface="s3",operation!="unsupported",outcome=~"[245]xx"}[10m])), 1) > 0.05)
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove S3 requests repeatedly fail
+      - alert: GroveSpoolRejected
+        expr: sum by (namespace) (increase(grove_spool_rejections_total{namespace="grove-storage"}[10m])) >= 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove transfer admission repeatedly rejects requests
+      - alert: GroveSnapshotStale
+        expr: |
+          (time() - grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage"} > 180)
+          and on (namespace, instance)
+          (time() - grove_process_started_timestamp_seconds{namespace="grove-storage"} > 180)
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove cached operational state is stale
+      - alert: GroveObjectWorkerStalled
+        expr: |
+          (time() - max by (namespace, worker, task) (grove_job_last_success_timestamp_seconds{namespace="grove-storage",worker="object",task!="local_spool"}) > 1200)
+          and on (namespace)
+          (time() - min by (namespace) (grove_process_started_timestamp_seconds{namespace="grove-storage"}) > 1200)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove object maintenance has no recent successful pass
+      - alert: GroveLocalCleanupStalled
+        expr: |
+          (time() - grove_job_last_success_timestamp_seconds{namespace="grove-storage",worker="object",task="local_spool"} > 600)
+          and on (namespace, instance)
+          (time() - grove_process_started_timestamp_seconds{namespace="grove-storage"} > 600)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove local spool cleanup has no recent successful pass
+      - alert: GroveRecoveryBacklogOld
+        expr: |
+          (time() - max by (namespace, task) (grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage"}) > 1800)
+          and (max by (namespace, task) (grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage"}) > 0)
+          and (max by (namespace, task) (grove_recovery_queue_objects{namespace="grove-storage"}) > 0)
+          and on (namespace) (time() - max by (namespace) (grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"}) < 180)
+          and on (namespace) (max by (namespace) (grove_snapshot_available{namespace="grove-storage",source="db"}) == 1)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove recovery work has remained queued for over 30 minutes
+      - alert: GroveRecoveryAgeUnknown
+        expr: |
+          (max by (namespace, task) (grove_recovery_queue_unknown_age_objects{namespace="grove-storage"}) > 0)
+          and on (namespace) (time() - max by (namespace) (grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"}) < 180)
+          and on (namespace) (max by (namespace) (grove_snapshot_available{namespace="grove-storage",source="db"}) == 1)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove recovery work has no durable age timestamp
+      - alert: GroveRetentionStalled
+        expr: |
+          (time() - max by (namespace, stream) (grove_retention_last_success_timestamp_seconds{namespace="grove-storage"}) > 1200)
+          and on (namespace) (time() - min by (namespace) (grove_process_started_timestamp_seconds{namespace="grove-storage"}) > 1200)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Grove retention has no recent successful stream pass

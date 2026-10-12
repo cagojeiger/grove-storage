@@ -7,17 +7,24 @@ use grove_object_policy::completion::{CompletionAction, completion_action};
 
 use super::{BATCH_LIMIT, begin_recovery, recovery_io};
 use crate::lease::WRITE_LEASE_TTL;
+use crate::metrics::JobReport;
 
-pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3ClientCache) {
+pub(super) async fn recover(
+    pool: &PgPool,
+    crypto: &Crypto,
+    s3_clients: &S3ClientCache,
+) -> JobReport {
+    let mut report = JobReport::default();
     let candidates = match s3reg::completion_candidates(pool, BATCH_LIMIT).await {
         Ok(candidates) => candidates,
         Err(error) => {
             tracing::error!(event = "reconciler.scan_failed", job = "s3_complete", %error);
-            return;
+            report.failed += 1;
+            return report;
         }
     };
     for candidate in candidates {
-        if !begin_recovery(pool, candidate.file_id, Job::S3Complete).await {
+        if !begin_recovery(pool, candidate.file_id, Job::S3Complete, &mut report).await {
             continue;
         }
         let observation =
@@ -30,6 +37,7 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
         ) {
             Ok(action) => action,
             Err(error) => {
+                report.failed += 1;
                 tracing::warn!(
                     event = "reconciler.observe_failed",
                     file = %candidate.file_id,
@@ -58,20 +66,29 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                     .await
                 };
                 match finalized {
-                    Ok(s3reg::FinalizeOutcome::Finalized { .. }) => tracing::info!(
-                        event = "s3.upload_recovered",
-                        file = %candidate.file_id,
-                    ),
+                    Ok(s3reg::FinalizeOutcome::Finalized { .. }) => {
+                        report.processed += 1;
+                        tracing::info!(
+                            event = "s3.upload_recovered",
+                            file = %candidate.file_id,
+                        )
+                    }
                     Ok(s3reg::FinalizeOutcome::NotPending) => {}
-                    Ok(s3reg::FinalizeOutcome::PreconditionFailed) => tracing::info!(
-                        event = "s3.precondition_failed",
-                        file = %candidate.file_id,
-                    ),
-                    Err(error) => tracing::error!(
-                        event = "reconciler.commit_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
+                    Ok(s3reg::FinalizeOutcome::PreconditionFailed) => {
+                        report.processed += 1;
+                        tracing::info!(
+                            event = "s3.precondition_failed",
+                            file = %candidate.file_id,
+                        )
+                    }
+                    Err(error) => {
+                        report.failed += 1;
+                        tracing::error!(
+                            event = "reconciler.commit_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        )
+                    }
                 }
             }
             CompletionAction::Reopen => {
@@ -82,34 +99,47 @@ pub(super) async fn recover(pool: &PgPool, crypto: &Crypto, s3_clients: &S3Clien
                 )
                 .await
                 {
-                    Ok(true) => tracing::info!(
-                        event = "s3.completion_reopened",
-                        file = %candidate.file_id,
-                    ),
+                    Ok(true) => {
+                        report.processed += 1;
+                        tracing::info!(
+                            event = "s3.completion_reopened",
+                            file = %candidate.file_id,
+                        )
+                    }
                     Ok(false) => {}
-                    Err(error) => tracing::error!(
-                        event = "reconciler.commit_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
+                    Err(error) => {
+                        report.failed += 1;
+                        tracing::error!(
+                            event = "reconciler.commit_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        )
+                    }
                 }
             }
             CompletionAction::Cleanup => {
                 match s3reg::mark_completion_aborting(pool, candidate.file_id).await {
-                    Ok(true) => tracing::warn!(
-                        event = "s3.completion_invalid",
-                        file = %candidate.file_id,
-                    ),
+                    Ok(true) => {
+                        report.processed += 1;
+                        tracing::warn!(
+                            event = "s3.completion_invalid",
+                            file = %candidate.file_id,
+                        )
+                    }
                     Ok(false) => {}
-                    Err(error) => tracing::error!(
-                        event = "reconciler.reclaim_failed",
-                        file = %candidate.file_id,
-                        %error,
-                    ),
+                    Err(error) => {
+                        report.failed += 1;
+                        tracing::error!(
+                            event = "reconciler.reclaim_failed",
+                            file = %candidate.file_id,
+                            %error,
+                        )
+                    }
                 }
             }
         }
     }
+    report
 }
 
 async fn observe_s3_completion(
