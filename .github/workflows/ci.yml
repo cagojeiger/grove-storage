@@ -165,7 +165,9 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Test
-        run: cargo test --workspace --locked
+        run: |
+          cargo test --workspace --locked
+          cargo test -p grove-api --example filegate_migration --locked
 
       - name: CLI API contract
         run: |

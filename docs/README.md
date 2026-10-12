@@ -23,6 +23,7 @@
 | 리소스 구조 마감·검증 경계 | [리소스 체크포인트](development/refactor-checkpoint.md) · [S3/NoteGate 검증](development/s3-compatibility-review.md) |
 | Management 완성도·운영 준비 우선순위·테스트 지도 | [완성도 점검](development/management-review.md) |
 | 새 DB 초기화·백업 복원 | [새 설치 검증](development/fresh-installation.md) |
+| FileGate 운영 데이터 이관·중단·롤백 | [이관 절차](guide/filegate-migration.md) |
 | main 반영·이미지·릴리스 게이트 | [운영 전환 준비](development/production-readiness.md) |
 | 실행·설정·검증 | [기술·운영](stack/README.md) |
 | 외부 저장소 조사 기록 | [벤더 노트](vendors/README.md) |

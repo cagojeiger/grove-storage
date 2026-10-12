@@ -48,6 +48,8 @@ File-request authentication remains independent of management Accounts.
 An old encrypted secret does not become compatible with the new DB by renaming
 its table. Importing old rows, preserving credentials and moving external objects
 are separate from fresh installation and are not implemented by this baseline.
+The [offline FileGate importer](../guide/filegate-migration.md) performs a separate,
+drained-source resource import into this baseline and reencrypts credentials.
 
 ## Rehearsal
 
