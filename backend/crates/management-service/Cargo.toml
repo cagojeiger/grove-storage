@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+metrics.workspace = true
 grove-db.workspace = true
 grove-core.workspace = true
 grove-management-policy.workspace = true
@@ -13,12 +14,13 @@ tokio.workspace = true
 tracing.workspace = true
 argon2.workspace = true
 unicode-normalization.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
+metrics-exporter-prometheus.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 serde_json.workspace = true
 sqlx.workspace = true
-chrono.workspace = true
 
 [lints]
 workspace = true

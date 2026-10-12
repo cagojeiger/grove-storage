@@ -129,6 +129,20 @@ jobs:
           python3 deploy/ci/check-version.py
           python3 -B -m unittest discover -s deploy/tests -v
 
+  observability:
+    name: Observability contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Verify and install the Prometheus rule checker
+        working-directory: /tmp
+        run: |
+          curl --fail --location --retry 3 -O https://github.com/prometheus/prometheus/releases/download/v3.15.0/prometheus-3.15.0.linux-amd64.tar.gz
+          curl --fail --location --retry 3 -O https://github.com/prometheus/prometheus/releases/download/v3.15.0/sha256sums.txt
+          sha256sum --check --ignore-missing sha256sums.txt
+          tar -xzf prometheus-3.15.0.linux-amd64.tar.gz prometheus-3.15.0.linux-amd64/promtool
+      - run: python3 -B scripts/check-observability.py --promtool /tmp/prometheus-3.15.0.linux-amd64/promtool
+
   rust:
     name: Rust
     runs-on: ubuntu-latest
@@ -180,7 +194,9 @@ jobs:
 
       - name: S3 SDK contract
         run: |
+          /tmp/grove-s3-sdk/bin/pip install prometheus-client==0.23.1
           /tmp/grove-s3-sdk/bin/python -B -m unittest discover -s scripts/tests -v
+          /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-metrics.py
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-relay-upload.py --backend minio
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3.py --backend minio
           /tmp/grove-s3-sdk/bin/python -B -u scripts/e2e-s3-recovery.py

@@ -1,7 +1,7 @@
 //! Management retention has its own task and lock, without provider I/O.
 use grove_core::ManagementLogRetention;
 use grove_db::{PgPool, retention};
-use std::{future::Future, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
 
@@ -14,8 +14,10 @@ pub async fn run(
     policy: ManagementLogRetention,
     tick: Duration,
     shutdown: CancellationToken,
+    clock: Arc<dyn grove_core::time::Clock>,
 ) {
     run_periodic(tick, shutdown, || async {
+        let mut observation = crate::metrics::JobObservation::new("management", "retention");
         match tokio::time::timeout(
             PASS_TIMEOUT,
             retention::with_lock(&pool, || {
@@ -24,11 +26,34 @@ pub async fn run(
         )
         .await
         {
-            Ok(Ok(_)) => {}
+            Ok(Ok(Some(reports))) => {
+                let mut total = crate::metrics::JobReport::default();
+                let now = clock.now().timestamp() as f64;
+                for report in reports {
+                    let stream = report.stream.name();
+                    let outcome = if report.failed { "error" } else { "success" };
+                    total.processed += report.deleted;
+                    total.failed += u64::from(report.failed);
+                    metrics::counter!("grove_retention_passes_total", "stream" => stream, "outcome" => outcome).increment(1);
+                    metrics::counter!("grove_retention_rows_deleted_total", "stream" => stream).increment(report.deleted);
+                    metrics::histogram!("grove_retention_duration_seconds", "stream" => stream).record(report.duration.as_secs_f64());
+                    if !report.failed {
+                        metrics::gauge!("grove_retention_last_success_timestamp_seconds", "stream" => stream).set(now);
+                    }
+                    if report.observed {
+                        metrics::gauge!("grove_retention_oldest_remaining_timestamp_seconds", "stream" => stream)
+                            .set(report.oldest_remaining_at.map_or(0.0, |time| time.timestamp() as f64));
+                    }
+                }
+                observation.finish(&total, now);
+            }
+            Ok(Ok(None)) => observation.skipped(),
             Ok(Err(error)) => {
+                observation.finish(&crate::metrics::JobReport { failed: 1, ..Default::default() }, clock.now().timestamp() as f64);
                 tracing::warn!(event = "management.maintenance_failed", %error);
             }
             Err(_) => {
+                metrics::counter!("grove_worker_timeouts_total", "worker" => "management").increment(1);
                 tracing::warn!(event = "management.maintenance_failed", reason = "timeout");
             }
         }

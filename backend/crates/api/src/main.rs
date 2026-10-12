@@ -12,6 +12,7 @@ mod local_accounts;
 mod log_retention;
 mod logging;
 mod mcp;
+mod metrics;
 mod native;
 mod openapi;
 mod reconciler;
@@ -126,7 +127,31 @@ async fn serve() -> anyhow::Result<()> {
     // 요청 경로와 reconciler가 같은 캐시를 공유한다 — 같은 storage의 웜 풀.
     let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
     let s3_clients = Arc::new(grove_infra::S3ClientCache::new(clock.clone()));
+    let spool_budget = Arc::new(spool::SpoolBudget::new(config.server.spool_budget_bytes));
     let mut workers = tokio::task::JoinSet::new();
+    if let Some(bind) = config.server.metrics_bind_addr {
+        let metrics_listener = tokio::net::TcpListener::bind(bind).await?;
+        let handle = metrics::install()?;
+        ::metrics::gauge!("grove_process_started_timestamp_seconds")
+            .set(clock.now().timestamp() as f64);
+        let metrics_shutdown = shutdown.clone().cancelled_owned();
+        workers.spawn(async move {
+            if let Err(error) = axum::serve(metrics_listener, metrics::router(handle))
+                .with_graceful_shutdown(metrics_shutdown)
+                .await
+            {
+                tracing::error!(event = "metrics.listener_failed", %error);
+            }
+        });
+        workers.spawn(metrics::sample(
+            pool.clone(),
+            maintenance_pool.clone(),
+            spool_budget.clone(),
+            clock.clone(),
+            shutdown.clone(),
+        ));
+        info!(event = "metrics.listening", addr = %bind);
+    }
     let tick = std::time::Duration::from_secs(config.server.reconciler_interval_secs);
     workers.spawn(reconciler::run(
         pool.clone(),
@@ -141,6 +166,7 @@ async fn serve() -> anyhow::Result<()> {
         config.server.management_log_retention,
         tick,
         shutdown.clone(),
+        clock.clone(),
     ));
 
     let state = routes::AppState {
@@ -156,7 +182,7 @@ async fn serve() -> anyhow::Result<()> {
         single_upload_claims: std::sync::Arc::new(tokio::sync::Semaphore::new(
             lease_relay::SINGLE_UPLOAD_CLAIM_LIMIT,
         )),
-        spool_budget: Arc::new(spool::SpoolBudget::new(config.server.spool_budget_bytes)),
+        spool_budget,
     };
 
     let http_shutdown = shutdown.clone().cancelled_owned();

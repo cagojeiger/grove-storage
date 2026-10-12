@@ -26,6 +26,7 @@
 | FileGate 운영 데이터 이관·중단·롤백 | [이관 절차](guide/filegate-migration.md) |
 | main 반영·이미지·릴리스 게이트 | [운영 전환 준비](development/production-readiness.md) |
 | 실행·설정·검증 | [기술·운영](stack/README.md) |
+| 지표 의미·라벨·수집·알림 경계 | [메트릭 계약](spec/12-metrics.md) |
 | 외부 저장소 조사 기록 | [벤더 노트](vendors/README.md) |
 | 과거 코드 이관·단계별 검증 기록 | [이관 분석](development/import-review.md) |
 | 과거 로컬 인증 단계별 검증 기록 | [인증 검증 기록](development/local-auth-verification.md) |

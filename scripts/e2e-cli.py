@@ -175,9 +175,11 @@ def check_s3_lifecycle(endpoint, directory, backend, account):
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
          reconciler_interval=1, verify_log=None, multipart=False,
-         s3_cors_origins=(), database_url_transform=None):
+         s3_cors_origins=(), database_url_transform=None, with_metrics=False):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
+    if with_metrics and (not with_database or with_restart):
+        raise ValueError("metrics checks require a database fixture without restart")
     if not SERVER.is_file() or not CLI.is_file():
         raise RuntimeError("Run cargo build --bin grove-storage --bin gscli --locked first")
     container = "grove-cli-e2e-" + uuid.uuid4().hex[:12]
@@ -191,6 +193,14 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]
             endpoint = f"http://127.0.0.1:{port}"
+            metrics_endpoint = None
+            if with_metrics:
+                metrics_port = port
+                while metrics_port == port:
+                    with socket.socket() as listener:
+                        listener.bind(("127.0.0.1", 0))
+                        metrics_port = listener.getsockname()[1]
+                metrics_endpoint = f"http://127.0.0.1:{metrics_port}"
             env = {k: v for k, v in os.environ.items() if not k.startswith("GROVE_")}
             env.update(
                 GROVE_DATABASE_URL=f"postgres://grove:grove@127.0.0.1:{db_port}/grove",
@@ -201,6 +211,8 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             )
             if with_database:
                 env["GROVE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
+            if with_metrics:
+                env["GROVE_METRICS_BIND"] = f"127.0.0.1:{metrics_port}"
             if multipart:
                 env.update(GROVE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
                            GROVE_PART_SIZE_BYTES=str(5 * 1024 * 1024))
@@ -233,6 +245,8 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
                     verify_modern_startup(endpoint)
                     if with_restart:
                         check(endpoint, directory, container, account, crash_and_restart)
+                    elif with_metrics:
+                        check(endpoint, directory, container, account, metrics_endpoint)
                     elif with_database:
                         check(endpoint, directory, container, account)
                     else:

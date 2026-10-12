@@ -160,33 +160,35 @@ pub async fn connect_with_clock(
     clock: Arc<dyn Clock>,
 ) -> anyhow::Result<S3Storage> {
     let storage = client(spec, Address::Internal, clock);
-    storage
-        .client
-        .head_bucket()
-        .bucket(&storage.bucket)
-        .send()
-        .await
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "bucket '{}' not accessible at {} — provision it and grant access: {err}",
-                spec.bucket,
-                spec.endpoint
-            )
-        })?;
-    storage
-        .client
-        .list_multipart_uploads()
-        .bucket(&storage.bucket)
-        .max_uploads(1)
-        .send()
-        .await
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "bucket '{}' cannot list multipart uploads at {} — grant recovery access: {err}",
-                spec.bucket,
-                spec.endpoint
-            )
-        })?;
+    super::metrics::observe(
+        "head_bucket",
+        storage.client.head_bucket().bucket(&storage.bucket).send(),
+    )
+    .await
+    .map_err(|err| {
+        anyhow::anyhow!(
+            "bucket '{}' not accessible at {} — provision it and grant access: {err}",
+            spec.bucket,
+            spec.endpoint
+        )
+    })?;
+    super::metrics::observe(
+        "multipart_list_uploads",
+        storage
+            .client
+            .list_multipart_uploads()
+            .bucket(&storage.bucket)
+            .max_uploads(1)
+            .send(),
+    )
+    .await
+    .map_err(|err| {
+        anyhow::anyhow!(
+            "bucket '{}' cannot list multipart uploads at {} — grant recovery access: {err}",
+            spec.bucket,
+            spec.endpoint
+        )
+    })?;
     Ok(storage)
 }
 
@@ -281,7 +283,7 @@ pub async fn put_object_from_path(
     if let Some(content_type) = content_type {
         request = request.content_type(content_type);
     }
-    request.send().await?;
+    super::metrics::observe("put", request.send()).await?;
     Ok(())
 }
 
@@ -290,13 +292,16 @@ pub async fn open_read(
     storage: &S3Storage,
     object_key: &str,
 ) -> anyhow::Result<Option<(impl tokio::io::AsyncRead + Send + Unpin + use<>, i64)>> {
-    let result = storage
-        .client
-        .get_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .send()
-        .await;
+    let result = super::metrics::observe(
+        "get",
+        storage
+            .client
+            .get_object()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .send(),
+    )
+    .await;
     match result {
         Ok(output) => {
             // 크기 누락은 하드 에러다 (head_object와 같은 규칙) — 0으로 폴백하면
@@ -333,14 +338,17 @@ pub async fn open_read_range(
     start: i64,
     end: i64,
 ) -> anyhow::Result<Option<(impl tokio::io::AsyncRead + Send + Unpin + use<>, i64)>> {
-    let result = storage
-        .client
-        .get_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .range(format!("bytes={start}-{end}"))
-        .send()
-        .await;
+    let result = super::metrics::observe(
+        "get_range",
+        storage
+            .client
+            .get_object()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .range(format!("bytes={start}-{end}"))
+            .send(),
+    )
+    .await;
     match result {
         Ok(output) => {
             let len = output.content_length().unwrap_or(end - start + 1);
@@ -368,13 +376,16 @@ pub async fn open_read_range(
 /// 물리 삭제 (reconciler의 purge·회수). S3 DeleteObject는 없는 키에도
 /// 성공한다 — purge는 멱등하다 (spec 00, 실측).
 pub async fn delete_object(storage: &S3Storage, object_key: &str) -> anyhow::Result<()> {
-    storage
-        .client
-        .delete_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .send()
-        .await?;
+    super::metrics::observe(
+        "delete",
+        storage
+            .client
+            .delete_object()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .send(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -384,13 +395,16 @@ pub async fn head_object(
     storage: &S3Storage,
     object_key: &str,
 ) -> anyhow::Result<Option<(i64, String)>> {
-    let result = storage
-        .client
-        .head_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .send()
-        .await;
+    let result = super::metrics::observe(
+        "head",
+        storage
+            .client
+            .head_object()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .send(),
+    )
+    .await;
     match result {
         Ok(head) => {
             let size = head
@@ -430,7 +444,7 @@ pub async fn create_multipart(
     if let Some(content_type) = content_type {
         request = request.content_type(content_type);
     }
-    let output = request.send().await?;
+    let output = super::metrics::observe("multipart_create", request.send()).await?;
     output
         .upload_id()
         .map(str::to_owned)
@@ -468,16 +482,19 @@ pub async fn upload_part_from_path(
     path: &std::path::Path,
 ) -> anyhow::Result<String> {
     let body = aws_sdk_s3::primitives::ByteStream::from_path(path).await?;
-    let output = storage
-        .client
-        .upload_part()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .upload_id(upload_id)
-        .part_number(part_number)
-        .body(body)
-        .send()
-        .await?;
+    let output = super::metrics::observe(
+        "multipart_part",
+        storage
+            .client
+            .upload_part()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .upload_id(upload_id)
+            .part_number(part_number)
+            .body(body)
+            .send(),
+    )
+    .await?;
     strip_etag(output.e_tag(), "upload_part")
 }
 
@@ -500,7 +517,7 @@ pub async fn list_parts(
         if let Some(marker) = &marker {
             request = request.part_number_marker(marker);
         }
-        let output = request.send().await?;
+        let output = super::metrics::observe("multipart_list_parts", request.send()).await?;
         for part in output.parts() {
             let number = part
                 .part_number()
@@ -553,15 +570,18 @@ pub async fn complete_multipart(
                 .collect(),
         ))
         .build();
-    let output = storage
-        .client
-        .complete_multipart_upload()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .upload_id(upload_id)
-        .multipart_upload(completed)
-        .send()
-        .await?;
+    let output = super::metrics::observe(
+        "multipart_complete",
+        storage
+            .client
+            .complete_multipart_upload()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .upload_id(upload_id)
+            .multipart_upload(completed)
+            .send(),
+    )
+    .await?;
     strip_etag(output.e_tag(), "complete_multipart")
 }
 
@@ -572,14 +592,17 @@ pub async fn abort_multipart(
     object_key: &str,
     upload_id: &str,
 ) -> anyhow::Result<()> {
-    let result = storage
-        .client
-        .abort_multipart_upload()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .upload_id(upload_id)
-        .send()
-        .await;
+    let result = super::metrics::observe(
+        "multipart_abort",
+        storage
+            .client
+            .abort_multipart_upload()
+            .bucket(&storage.bucket)
+            .key(object_key)
+            .upload_id(upload_id)
+            .send(),
+    )
+    .await;
     match result {
         Ok(_) => Ok(()),
         Err(error) => {
@@ -611,15 +634,18 @@ pub async fn abort_multipart_by_key(storage: &S3Storage, object_key: &str) -> an
             seen.insert((key_marker.clone(), upload_id_marker.clone())),
             "list_multipart_uploads repeated a pagination marker"
         );
-        let output = storage
-            .client
-            .list_multipart_uploads()
-            .bucket(&storage.bucket)
-            .prefix(object_key)
-            .set_key_marker(key_marker)
-            .set_upload_id_marker(upload_id_marker)
-            .send()
-            .await?;
+        let output = super::metrics::observe(
+            "multipart_list_uploads",
+            storage
+                .client
+                .list_multipart_uploads()
+                .bucket(&storage.bucket)
+                .prefix(object_key)
+                .set_key_marker(key_marker)
+                .set_upload_id_marker(upload_id_marker)
+                .send(),
+        )
+        .await?;
         let upload_ids: Vec<String> = output
             .uploads()
             .iter()
