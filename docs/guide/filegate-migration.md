@@ -58,20 +58,28 @@ before another import attempt.
 ## Cutover
 
 ```text
-NoteGate and other writers stop
+NoteGate and other writers suspend file operations
   -> FileGate drains uploads and outstanding leases
   -> FileGate and Grove stop
   -> final DB backups + frozen source export
   -> import into Grove + exact verification
+  -> Grove starts + internal S3 SDK/presigned verification
   -> object hostname routes to Grove
-  -> Grove starts + S3 SDK/presigned verification
-  -> NoteGate starts + upload/download verification
+  -> public S3 SDK/presigned verification
+  -> NoteGate resumes file operations + upload/download verification
 ```
 
-GitOps maintenance values keep the affected Deployment replicas at zero during
-the frozen phase. A direct scale operation alone can be undone by Argo self-heal.
-The stopped FileGate process also stops its reconciler. Previously issued vendor
-URLs can outlive the application; the drain includes their lease expiry.
+Writer quiescence can be enforced by stopping consumers or by an operator who
+controls every user and background writer. Keeping NoteGate running does not make
+the file API available while the object servers are stopped.
+
+With quick-deploy 0.1.19, GitOps maintenance sets each object application to
+`enabled: false`. Its Deployment template defaults a zero `replicaCount` to one.
+Pod absence and zero application DB connections confirm the frozen phase;
+namespaces, ExternalSecrets and databases remain. A direct scale operation alone
+can be undone by Argo self-heal. The stopped FileGate process also stops its
+reconciler. Previously issued vendor URLs can outlive the application; the drain
+includes their lease expiry. Only Grove is enabled after the import.
 
 The current NoteGate endpoint is `https://filegate.project-jelly.io`, bucket
 `notegate-prd`, region `us-east-1`, with path-style SigV4. Routing that hostname to
@@ -107,7 +115,7 @@ physical locations and the S3 interface; it is not a full-body checksum scan.
 
 ## Rollback
 
-Before NoteGate resumes writes, rollback restores the object-host route to
+Before new Grove writes, rollback restores the object-host route to
 FileGate and restarts its frozen deployment. Source DB and S3 bytes are unchanged
 by the importer. New Grove writes end that simple rollback window: the two DBs
 then describe different object lifecycles. Recovery after new writes includes
