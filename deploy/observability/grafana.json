@@ -634,7 +634,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (state) (grove_objects_bytes{namespace=\"grove-storage\",cluster=~\"$cluster\"})",
+          "expr": "max by (state) ((grove_objects_bytes{namespace=\"grove-storage\",cluster=~\"$cluster\"} and on (cluster, namespace, instance) (grove_snapshot_available{namespace=\"grove-storage\",cluster=~\"$cluster\",source=\"db\"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace=\"grove-storage\",cluster=~\"$cluster\",source=\"db\"} < 180))))",
           "legendFormat": "{{state}}",
           "range": true,
           "instant": false
@@ -677,14 +677,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (task) (grove_recovery_queue_objects{namespace=\"grove-storage\",cluster=~\"$cluster\"})",
+          "expr": "max by (task) ((grove_recovery_queue_objects{namespace=\"grove-storage\",cluster=~\"$cluster\"} and on (cluster, namespace, instance) (grove_snapshot_available{namespace=\"grove-storage\",cluster=~\"$cluster\",source=\"db\"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace=\"grove-storage\",cluster=~\"$cluster\",source=\"db\"} < 180))))",
           "legendFormat": "{{task}} queued",
           "range": true,
           "instant": false
         },
         {
           "refId": "B",
-          "expr": "max by (task) (grove_recovery_queue_unknown_age_objects{namespace=\"grove-storage\",cluster=~\"$cluster\"})",
+          "expr": "max by (task) ((grove_recovery_queue_unknown_age_objects{namespace=\"grove-storage\",cluster=~\"$cluster\"} and on (cluster, namespace, instance) (grove_snapshot_available{namespace=\"grove-storage\",cluster=~\"$cluster\",source=\"db\"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace=\"grove-storage\",cluster=~\"$cluster\",source=\"db\"} < 180))))",
           "legendFormat": "{{task}} unknown age",
           "range": true,
           "instant": false

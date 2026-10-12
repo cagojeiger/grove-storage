@@ -91,11 +91,15 @@ tests:
         values: '2x60'
       - series: 'grove_recovery_queue_objects{namespace="grove-storage",instance="two",task="cleanup"}'
         values: '2x60'
-      - series: 'grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage",task="cleanup"}'
+      - series: 'grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage",instance="one",task="cleanup"}'
         values: '1x60'
-      - series: 'grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"}'
+      - series: 'grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",instance="one",source="db"}'
         values: '0+60x60'
-      - series: 'grove_snapshot_available{namespace="grove-storage",source="db"}'
+      - series: 'grove_snapshot_available{namespace="grove-storage",instance="one",source="db"}'
+        values: '1x60'
+      - series: 'grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",instance="two",source="db"}'
+        values: '0+60x60'
+      - series: 'grove_snapshot_available{namespace="grove-storage",instance="two",source="db"}'
         values: '1x60'
     promql_expr_test:
       - expr: 'max by (namespace, task) (grove_recovery_queue_objects{namespace="grove-storage"})'
@@ -114,7 +118,7 @@ tests:
     input_series:
       - series: 'grove_recovery_queue_objects{namespace="grove-storage",task="cleanup"}'
         values: '2x60'
-      - series: 'grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage",task="cleanup"}'
+      - series: 'grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage",instance="one",task="cleanup"}'
         values: '1x60'
       - series: 'grove_recovery_queue_unknown_age_objects{namespace="grove-storage",task="cleanup"}'
         values: '2x60'
@@ -191,3 +195,39 @@ tests:
       - eval_time: 10m
         alertname: GroveS3Errors
         exp_alerts: []
+  - name: Stale replica cannot borrow healthy replica freshness
+    interval: 1m
+    input_series:
+      - series: 'grove_recovery_queue_objects{namespace="grove-storage",instance="stale",task="cleanup"}'
+        values: '100x60'
+      - series: 'grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage",instance="stale",task="cleanup"}'
+        values: '1x60'
+      - series: 'grove_recovery_queue_unknown_age_objects{namespace="grove-storage",instance="stale",task="cleanup"}'
+        values: '100x60'
+      - series: 'grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",instance="stale",source="db"}'
+        values: '0x60'
+      - series: 'grove_snapshot_available{namespace="grove-storage",instance="stale",source="db"}'
+        values: '0x60'
+      - series: 'grove_recovery_queue_objects{namespace="grove-storage",instance="fresh",task="cleanup"}'
+        values: '0x60'
+      - series: 'grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage",instance="fresh",task="cleanup"}'
+        values: '0x60'
+      - series: 'grove_recovery_queue_unknown_age_objects{namespace="grove-storage",instance="fresh",task="cleanup"}'
+        values: '0x60'
+      - series: 'grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",instance="fresh",source="db"}'
+        values: '0+60x60'
+      - series: 'grove_snapshot_available{namespace="grove-storage",instance="fresh",source="db"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: GroveRecoveryBacklogOld
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: GroveRecoveryAgeUnknown
+        exp_alerts: []
+    promql_expr_test:
+      - expr: 'max by (namespace, task) (grove_recovery_queue_objects{namespace="grove-storage"} and on (namespace, instance) (grove_snapshot_available{namespace="grove-storage",source="db"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"} < 180)))'
+        eval_time: 45m
+        exp_samples:
+          - labels: '{namespace="grove-storage",task="cleanup"}'
+            value: 0

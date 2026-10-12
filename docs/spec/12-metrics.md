@@ -114,7 +114,9 @@ timestamps, so retries cannot keep old failed work looking new. Deleted files us
 anchors are counted separately instead of using file creation time as a guess.
 
 Database gauges are shared state exported per Pod. Dashboards use `max`, not
-`sum`, across replicas for inventory/queues. Pool/spool gauges and counters are
+`sum`, across replicas for inventory/queues. Database series are filtered by that
+same target's successful, fresh snapshot before aggregation, so one replica's
+stale cache cannot borrow another replica's healthy timestamp. Pool/spool gauges and counters are
 process-local. The disk sample sums regular file logical lengths; it is not
 allocated filesystem blocks or free node space. Node filesystem monitoring remains
 separate. SQL pool occupancy does not measure acquisition or individual query time.

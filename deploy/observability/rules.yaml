@@ -66,9 +66,9 @@ groups:
           summary: Grove local spool cleanup has no recent successful pass
       - alert: GroveRecoveryBacklogOld
         expr: |
-          (time() - max by (namespace, task) (grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage"}) > 1800)
-          and (max by (namespace, task) (grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage"}) > 0)
-          and (max by (namespace, task) (grove_recovery_queue_objects{namespace="grove-storage"}) > 0)
+          (time() - max by (namespace, task) ((grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage"} and on (namespace, instance) (grove_snapshot_available{namespace="grove-storage",source="db"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"} < 180)))) > 1800)
+          and (max by (namespace, task) ((grove_recovery_queue_oldest_timestamp_seconds{namespace="grove-storage"} and on (namespace, instance) (grove_snapshot_available{namespace="grove-storage",source="db"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"} < 180)))) > 0)
+          and (max by (namespace, task) ((grove_recovery_queue_objects{namespace="grove-storage"} and on (namespace, instance) (grove_snapshot_available{namespace="grove-storage",source="db"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"} < 180)))) > 0)
           and on (namespace) (time() - max by (namespace) (grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"}) < 180)
           and on (namespace) (max by (namespace) (grove_snapshot_available{namespace="grove-storage",source="db"}) == 1)
         for: 10m
@@ -78,7 +78,7 @@ groups:
           summary: Grove recovery work has remained queued for over 30 minutes
       - alert: GroveRecoveryAgeUnknown
         expr: |
-          (max by (namespace, task) (grove_recovery_queue_unknown_age_objects{namespace="grove-storage"}) > 0)
+          (max by (namespace, task) ((grove_recovery_queue_unknown_age_objects{namespace="grove-storage"} and on (namespace, instance) (grove_snapshot_available{namespace="grove-storage",source="db"} == 1 and (time() - grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"} < 180)))) > 0)
           and on (namespace) (time() - max by (namespace) (grove_snapshot_last_success_timestamp_seconds{namespace="grove-storage",source="db"}) < 180)
           and on (namespace) (max by (namespace) (grove_snapshot_available{namespace="grove-storage",source="db"}) == 1)
         for: 30m
