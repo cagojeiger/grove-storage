@@ -30,6 +30,7 @@ backend/crates/
 │   └── src/multipart_commit.rs Native multipart 완료 조율
 ├── api/src/
 │   ├── routes.rs              표면 조립·요청 제한·공통 telemetry
+│   ├── logging/               안전한 JSON 출력·요청/전송/작업 관찰
 │   ├── routes/management.rs   계정·등록부 관리 HTTP/MCP 경로
 │   ├── routes/objects.rs      Client/lease 인증 파일 경로
 │   ├── accounts/              browser 인증·계정·토큰·세션·이력 adapter
@@ -184,6 +185,7 @@ DB 서버·CPU·메모리는 공유한다. Provider 전체 작업의 시간 제�
 | 관리 DB와 파일 요청 독립성 | `api/src/routes/tests/independence.rs`: 격리 DB의 관리 스키마 제거 후 Native·S3 요청·소유 범위·서비스 키 폐기 검증 |
 | Provider signing·multipart 조회 | `storage-provider/tests/time.rs`, `storage-provider/tests/multipart_cleanup.rs` |
 | 임시 파일·계측 | `infra/src/temp_spool.rs`, `api/src/spool/tests.rs` |
+| 로그 스키마·비밀 제외·서명 헤더·전송/작업 종료 | `api/src/logging/tests.rs` |
 | 의존성·독립 작업·종료 | `scripts/tests/test_crate_boundaries.py`, `management-service/tests/retention.rs`, `api/src/log_retention.rs`, `api/src/shutdown.rs` |
 | CLI 출력·변경·업데이트 | `cli/tests`, `cli/src/update`, `scripts/e2e-cli.py` |
 | UI | `frontend/web/tests`; fixture 화면과 실서버 검증을 구분 |

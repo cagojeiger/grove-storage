@@ -52,7 +52,7 @@ pub(super) async fn commit(
     .await;
     match completed {
         Ok(Some(etag)) => {
-            tracing::info!(event = "file.committed", file = %file_id, client = %client.0, multipart = true);
+            tracing::info!(event = "object.operation_finished", operation = "complete_multipart", outcome = "success", stage = "commit", file_id = %file_id, multipart = true);
             Ok(committed_response(file_id, etag))
         }
         Ok(None) => committed_or_conflict(state, client, file_id).await,
@@ -363,7 +363,7 @@ pub(super) async fn parts(
             }
         }
     }
-    tracing::info!(event = "file.parts_issued", file = %file_id, client = %client.0, count = out.len());
+    tracing::debug!(event = "object.operation_finished", operation = "part_urls", outcome = "success", file_id = %file_id, count = out.len());
     Ok(Json(serde_json::json!({ "parts": out })).into_response())
 }
 

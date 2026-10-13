@@ -29,7 +29,7 @@ use grove_object_policy::validation::{MAX_SINGLE_PUT_BYTES, content_type_ok};
 pub(super) async fn put_object(
     state: &AppState,
     client_id: &str,
-    bucket: &str,
+    _bucket: &str,
     key: &str,
     headers: &HeaderMap,
     body: Body,
@@ -215,12 +215,12 @@ pub(super) async fn put_object(
             }
         };
     if let Some(old) = displaced {
-        tracing::info!(event = "s3.overwrite", client = %client_id, bucket, key, displaced = %old);
+        tracing::info!(event = "object.operation_finished", operation="overwrite", outcome="success", displaced = %old);
     }
 
     tracing::info!(
-        event = "s3.put", client = %client_id, bucket, key,
-        file = %created.file_id, size = written,
+        event = "object.operation_finished", operation="put", outcome="success", stage="commit",
+        file_id = %created.file_id, size = written,
     );
     let mut response = StatusCode::OK.into_response();
     if let Ok(value) = HeaderValue::from_str(&format!("\"{md5_hex}\"")) {
@@ -291,7 +291,7 @@ async fn resolve(
 pub(super) async fn get_object(
     state: &AppState,
     client_id: &str,
-    bucket: &str,
+    _bucket: &str,
     key: &str,
     headers: &HeaderMap,
     query: &str,
@@ -340,9 +340,11 @@ pub(super) async fn get_object(
     )
     .await;
 
-    tracing::info!(event = "s3.get", client = %client_id, bucket, key, file = %file_id);
-    let mut response =
-        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)).into_response();
+    let mut response = crate::logging::transfer::download(
+        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
+        len,
+    )
+    .into_response();
     if let Some((start, end)) = span {
         *response.status_mut() = StatusCode::PARTIAL_CONTENT;
         if let Ok(value) = HeaderValue::from_str(&format!("bytes {start}-{end}/{total}")) {
@@ -395,14 +397,14 @@ fn object_headers(headers: &mut HeaderMap, file: &files::FileAccess, content_len
 pub(super) async fn delete_object(
     state: &AppState,
     client_id: &str,
-    bucket: &str,
+    _bucket: &str,
     key: &str,
 ) -> S3Result {
     let removed = s3reg::delete_key(&state.pool, client_id, key)
         .await
         .map_err(|e| xml_internal("key remove", e))?;
     if let Some(file_id) = removed {
-        tracing::info!(event = "s3.delete", client = %client_id, bucket, key, file = %file_id);
+        tracing::info!(event = "object.operation_finished", operation="delete", outcome="success", stage="logical_delete", file_id = %file_id);
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }

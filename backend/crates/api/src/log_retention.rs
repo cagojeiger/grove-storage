@@ -1,9 +1,11 @@
 //! Management retention has its own task and lock, without provider I/O.
+use crate::logging::worker::{Report, Run};
 use grove_core::ManagementLogRetention;
 use grove_db::{PgPool, retention};
 use std::{future::Future, time::Duration};
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 const PASS_TIMEOUT: Duration = Duration::from_secs(20);
 // One connection holds the lock, one executes bounded pruning transactions.
@@ -16,20 +18,23 @@ pub async fn run(
     shutdown: CancellationToken,
 ) {
     run_periodic(tick, shutdown, || async {
+        let mut observation = Run::new("management", "retention");
         match tokio::time::timeout(
             PASS_TIMEOUT,
             retention::with_lock(&pool, || {
                 grove_management_service::retention::run(&pool, policy)
             }),
         )
-        .await
+        .instrument(observation.span.clone()).await
         {
-            Ok(Ok(_)) => {}
+            Ok(Ok(Some(report))) => observation.finish(&Report { processed: report.deleted, failed: report.failed, skipped: 0 }),
+            Ok(Ok(None)) => observation.finish(&Report { skipped: 1, ..Report::default() }),
             Ok(Err(error)) => {
-                tracing::warn!(event = "management.maintenance_failed", %error);
+                tracing::warn!(parent: &observation.span, event = "management.maintenance_failed", error_code = "lock_failed", %error);
+                observation.finish(&Report { failed: 1, ..Report::default() });
             }
             Err(_) => {
-                tracing::warn!(event = "management.maintenance_failed", reason = "timeout");
+                observation.timed_out();
             }
         }
     })

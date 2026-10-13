@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{MatchedPath, Request, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -12,8 +12,6 @@ use grove_db::PgPool;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::timeout::TimeoutLayer;
-use tower_http::trace::TraceLayer;
-use tracing::{Span, info, info_span};
 
 mod management;
 mod objects;
@@ -94,17 +92,11 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     with_telemetry(app)
 }
 
-/// 요청 telemetry — request-id 생성/전파 + trace 스팬. 컨트롤·바이트·S3 표면이
-/// 한 리스너에서 공유한다: 모든 표면이 request-id와 request.end를 갖도록.
-/// 실행 순서는 SetRequestId → Trace → 핸들러다.
+/// Keep signed request headers intact; observe handler IDs before propagation.
 fn with_telemetry(router: Router) -> Router {
     router
+        .layer(axum::middleware::from_fn(crate::logging::http::observe))
         .layer(PropagateRequestIdLayer::x_request_id())
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(make_request_span)
-                .on_response(log_request_end),
-        )
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }
 
@@ -147,37 +139,6 @@ async fn ready(State(state): State<AppState>) -> impl IntoResponse {
             )
         }
     }
-}
-
-/// 프로브·스크레이프는 "health-check" 스팬으로 만들어 성공 시 로그를 뺀다.
-fn make_request_span(req: &Request) -> Span {
-    let route = req
-        .extensions()
-        .get::<MatchedPath>()
-        .map(MatchedPath::as_str)
-        .unwrap_or("");
-    let path = req.uri().path();
-    if is_system_path(path) {
-        info_span!("health-check", method = %req.method(), route)
-    } else {
-        info_span!("request", method = %req.method(), route)
-    }
-}
-
-/// 성공한 프로브·스크레이프는 로그를 남기지 않는다. 나머지는 request.end로 기록.
-fn log_request_end(response: &axum::response::Response, latency: Duration, span: &Span) {
-    let is_probe = span
-        .metadata()
-        .map(|m| m.name() == "health-check")
-        .unwrap_or(false);
-    if is_probe && response.status().is_success() {
-        return;
-    }
-    info!(
-        event = "request.end",
-        status = response.status().as_u16(),
-        latency_ms = latency.as_millis() as u64,
-    );
 }
 
 #[cfg(test)]

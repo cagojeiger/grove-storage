@@ -79,16 +79,16 @@ impl IntoResponse for ApiError {
                     "invalid field (id slug, capacity_bytes >= 0, key hash format)",
                 ),
                 None => {
-                    tracing::error!(event = "api.db_error", %error);
+                    tracing::error!(event = "api.failed", stage="database", outcome="error", error_code="database_error", %error);
                     payload(StatusCode::INTERNAL_SERVER_ERROR, "database error")
                 }
             },
             Self::Internal(error) => {
-                tracing::error!(event = "api.internal", %error);
+                tracing::error!(event = "api.failed", stage="internal", outcome="error", error_code="internal_error", %error);
                 payload(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
             }
             Self::Storage(error) => {
-                tracing::error!(event = "api.storage_error", %error);
+                tracing::error!(event = "provider.failed", operation="native", stage="provider", outcome="error", error_code="provider_unavailable", %error);
                 payload(StatusCode::BAD_GATEWAY, "storage unavailable")
             }
         }

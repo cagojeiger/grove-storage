@@ -49,7 +49,9 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
         .unwrap();
     let audit_before = support::audit_count(&pool).await;
     seed(&pool).await;
-    retention::run(&pool, policy()).await;
+    let report = retention::run(&pool, policy()).await;
+    assert_eq!(report.deleted, 5);
+    assert_eq!(report.failed, 0);
     assert_eq!(counts(&pool).await, (audit_before + 2, 1, 1));
     assert!(
         db::session_actor(&pool, &admin.session)
@@ -75,7 +77,9 @@ async fn periods_are_independent_and_identity_files_and_keys_are_untouched(pool:
         .unwrap()
     );
     // Maintenance must not record its own invocations or audit events.
-    retention::run(&pool, policy()).await;
+    let report = retention::run(&pool, policy()).await;
+    assert_eq!(report.deleted, 0);
+    assert_eq!(report.failed, 0);
     assert_eq!(counts(&pool).await, (audit_before + 2, 1, 1));
 }
 
@@ -86,7 +90,9 @@ async fn multiple_bounded_batches_drain_backlog_within_one_pass(pool: PgPool) {
         INSERT INTO management.command_invocations(actor_kind,request_id,surface,operation,outcome,duration_ms)
         VALUES('system',gen_random_uuid(),'cli','storage.list','succeeded',1);")
         .execute(&pool).await.unwrap();
-    retention::run(&pool, policy()).await;
+    let report = retention::run(&pool, policy()).await;
+    assert_eq!(report.deleted, 2001);
+    assert_eq!(report.failed, 0);
     assert_eq!(counts(&pool).await, (0, 0, 1));
 }
 
@@ -98,9 +104,11 @@ async fn locked_stream_is_bounded_other_streams_continue_and_retry_succeeds(pool
         .execute(&mut *fence)
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(3), retention::run(&pool, policy()))
+    let report = tokio::time::timeout(Duration::from_secs(3), retention::run(&pool, policy()))
         .await
         .unwrap();
+    assert_eq!(report.failed, 1);
+    assert_eq!(report.deleted, 4);
     fence.rollback().await.unwrap();
     assert_eq!(counts(&pool).await, (3, 1, 1));
     retention::run(&pool, policy()).await;

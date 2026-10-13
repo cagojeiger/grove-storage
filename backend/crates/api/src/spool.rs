@@ -115,6 +115,7 @@ async fn spool_to_temp_with_limits(
     want_s3_checksums: bool,
     limits: StreamLimits,
 ) -> Result<Measured, SpoolError> {
+    let mut transfer = crate::logging::transfer::Transfer::new("receive", declared_size);
     let mut md5 = Md5::new();
     let mut sha256 = want_s3_checksums.then(Sha256::new);
     let mut crc32 = want_s3_checksums.then(crc32fast::Hasher::new);
@@ -138,10 +139,12 @@ async fn spool_to_temp_with_limits(
         let chunk = tokio::select! {
             biased;
             _ = tokio::time::sleep_until(deadline) => {
+                transfer.finish("timeout", "receive_deadline");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Deadline);
             }
             _ = tokio::time::sleep_until(idle_deadline) => {
+                transfer.finish("timeout", "receive_idle");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Idle);
             }
@@ -150,6 +153,7 @@ async fn spool_to_temp_with_limits(
                 let required = u128::from(limits.min_bytes_per_second) * (now - window_start).as_nanos();
                 let received = u128::from((written - window_written).cast_unsigned()) * 1_000_000_000;
                 if received < required {
+                    transfer.finish("too_slow", "receive_progress");
                     abort_spool(temp_path).await;
                     return Err(SpoolError::TooSlow);
                 }
@@ -160,17 +164,20 @@ async fn spool_to_temp_with_limits(
             chunk = stream.next() => match chunk {
                 None => break,
                 Some(Err(_)) => {
+                    transfer.finish("error", "receive_aborted");
                     abort_spool(temp_path).await;
                     return Err(SpoolError::Aborted);
                 }
                 Some(Ok(chunk)) => chunk,
             },
         };
+        transfer.bytes(chunk.len());
         if !chunk.is_empty() {
             idle_deadline = tokio::time::Instant::now() + limits.idle;
         }
         written += chunk.len() as i64;
         if written > declared_size {
+            transfer.finish("rejected", "declared_size_exceeded");
             abort_spool(temp_path).await;
             return Err(SpoolError::TooLarge);
         }
@@ -185,10 +192,12 @@ async fn spool_to_temp_with_limits(
         match tokio::time::timeout_at(deadline, writer.write_all(&chunk)).await {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
+                transfer.finish("error", "spool_write_failed");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Io(error));
             }
             Err(_) => {
+                transfer.finish("timeout", "spool_write_deadline");
                 abort_spool(temp_path).await;
                 return Err(SpoolError::Deadline);
             }
@@ -197,14 +206,24 @@ async fn spool_to_temp_with_limits(
     match tokio::time::timeout_at(deadline, writer.flush()).await {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
+            transfer.finish("error", "spool_flush_failed");
             abort_spool(temp_path).await;
             return Err(SpoolError::Io(error));
         }
         Err(_) => {
+            transfer.finish("timeout", "spool_flush_deadline");
             abort_spool(temp_path).await;
             return Err(SpoolError::Deadline);
         }
     }
+    transfer.finish(
+        if written == declared_size {
+            "success"
+        } else {
+            "incomplete"
+        },
+        "length_mismatch",
+    );
     Ok(Measured {
         written,
         md5_hex: hex::encode(md5.finalize()),

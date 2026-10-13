@@ -14,8 +14,15 @@ const MONTH: NonZeroU16 = NonZeroU16::new(30).expect("positive retention");
 const QUARTER: NonZeroU16 = NonZeroU16::new(90).expect("positive retention");
 const YEAR: NonZeroU16 = NonZeroU16::new(365).expect("positive retention");
 
+#[derive(Default)]
+pub struct Report {
+    pub deleted: u64,
+    pub failed: u64,
+}
+
 /// The worker holds the management retention lock, not object or identity locks.
-pub async fn run(pool: &PgPool, retention: ManagementLogRetention) {
+pub async fn run(pool: &PgPool, retention: ManagementLogRetention) -> Report {
+    let mut report = Report::default();
     for (stream, days) in [
         (Stream::Audit, retention.audit_days),
         (Stream::Security, retention.security_days),
@@ -41,19 +48,23 @@ pub async fn run(pool: &PgPool, retention: ManagementLogRetention) {
                     }
                 }
                 Ok(Err(error)) => {
-                    tracing::warn!(event = "management.retention_failed", stream = stream.name(), %error);
+                    report.failed += 1;
+                    tracing::warn!(event = "management.retention_failed", stream = stream.name(), error_code = "db_prune_failed", %error);
                     break;
                 }
                 Err(_) => {
+                    report.failed += 1;
                     tracing::warn!(
                         event = "management.retention_failed",
                         stream = stream.name(),
+                        error_code = "stream_timeout",
                         reason = "timeout"
                     );
                     break;
                 }
             }
         }
+        report.deleted += count;
         if count == 0 && oldest_remaining_at.is_none() {
             tracing::debug!(
                 event = "management.retention_pass",
@@ -66,9 +77,12 @@ pub async fn run(pool: &PgPool, retention: ManagementLogRetention) {
                 stream = stream.name(),
                 count,
                 retention_days = days.get(),
-                ?oldest_remaining_at,
+                oldest_remaining_at = oldest_remaining_at
+                    .map(|time| time.to_rfc3339())
+                    .unwrap_or_default(),
                 duration_ms = started.elapsed().as_millis() as u64,
             );
         }
     }
+    report
 }

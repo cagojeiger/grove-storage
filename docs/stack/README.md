@@ -169,6 +169,16 @@ Object reconciler 한 회차는 로컬 스풀·DB 풀·잠금 획득을 포함�
 marker 또는 1,000페이지 초과 시 실패한다. 정리 장부를 확정하지 않고 다음 tick에서
 재시도하여 다른 파일 작업이 계속 실행되게 한다.
 
+### 운영 로그
+
+`GROVE_LOG_FORMAT=json`은 [로그 계약](../spec/12-logging.md)의 flat JSON을 출력한다.
+기본 Pretty 형식도 같은 필드 정책을 사용하고 level 접두어를 붙인다.
+기본 `RUST_LOG`는 `info`이며 정상 조회·성공 probe·빈 정리 작업은 debug다.
+허용된 Grove 필드만 출력하므로 dependency 로그와 자유로운 오류 본문은 제외된다.
+1,024줄 유계 비동기 큐가 가득 차면 운영 로그를 버리고 요청 처리는 계속한다.
+`log_dropped_lines_total`은 프로세스 내 큐 유실 누적값이며 저장·수집 성공의 보장은 아니다.
+관리 DB 감사의 트랜잭션 보장과 stdout의 best-effort 출력은 별개다.
+
 ### 관리 로그 보존
 
 | 환경 변수 | 기본값 |

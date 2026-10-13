@@ -128,8 +128,8 @@ pub(super) async fn create_multipart(
     }
 
     tracing::info!(
-        event = "s3.create_multipart", client = %client_id, bucket, key,
-        file = %created.file_id,
+        event = "object.operation_finished", operation = "create_multipart", outcome = "success",
+        stage = "reserve", file_id = %created.file_id,
     );
     Ok(initiate_result(bucket, key, &created.file_id.to_string()))
 }
@@ -350,8 +350,8 @@ pub(super) async fn upload_part(
     }
 
     tracing::info!(
-        event = "s3.upload_part", client = %client_id,
-        file = %file.object_key, part = part_number, size = measured.written,
+        event = "object.operation_finished", operation = "upload_part", outcome = "success",
+        stage = "record_part", file_id = %file_id, part = part_number, size = measured.written,
     );
     let mut response = StatusCode::OK.into_response();
     if let Ok(value) = HeaderValue::from_str(&format!("\"{md5_hex}\"")) {
@@ -534,12 +534,12 @@ pub(super) async fn complete_multipart(
         }
     };
     if let Some(old) = displaced {
-        tracing::info!(event = "s3.overwrite", client = %client_id, bucket, key, displaced = %old);
+        tracing::info!(event = "object.operation_finished", operation = "overwrite", outcome = "success", displaced = %old);
     }
 
     tracing::info!(
-        event = "s3.complete_multipart", client = %client_id, bucket, key,
-        file = %file_id, size = total,
+        event = "object.operation_finished", operation = "complete_multipart", outcome = "success",
+        stage = "commit", file_id = %file_id, size = total,
     );
     Ok(complete_result(bucket, key, &etag))
 }
@@ -586,7 +586,7 @@ pub(super) async fn abort_multipart(
         .await
         .map_err(|e| xml_internal("finalize abort", e))?;
 
-    tracing::info!(event = "s3.abort_multipart", client = %client_id, key, file = %file_id);
+    tracing::info!(event = "object.operation_finished", operation = "abort_multipart", outcome = "success", stage = "cleanup", file_id = %file_id);
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
