@@ -170,6 +170,7 @@ fn complete_empty_partial_error_and_dropped_streams_finish_once() {
     record(LogFormat::Json, "trace", |capture| {
         runtime().block_on(async {
             let id = uuid::Uuid::new_v4();
+            let file_id = uuid::Uuid::new_v4();
             let span = tracing::error_span!("request", request_id=%id);
             async {
                 for (body, size) in [
@@ -177,17 +178,22 @@ fn complete_empty_partial_error_and_dropped_streams_finish_once() {
                     (Body::from("done"), 4),
                     (Body::from("short"), 9),
                 ] {
-                    let _ = to_bytes(transfer::download(body, size), 32).await.unwrap();
+                    let _ = to_bytes(transfer::download(body, size, file_id), 32)
+                        .await
+                        .unwrap();
                 }
                 let broken = futures_util::stream::iter([Err::<Bytes, _>(std::io::Error::other(
                     "sentinel-error",
                 ))]);
                 assert!(
-                    to_bytes(transfer::download(Body::from_stream(broken), 10), 32)
-                        .await
-                        .is_err()
+                    to_bytes(
+                        transfer::download(Body::from_stream(broken), 10, file_id),
+                        32
+                    )
+                    .await
+                    .is_err()
                 );
-                drop(transfer::download(Body::empty(), 10));
+                drop(transfer::download(Body::empty(), 10, file_id));
             }
             .instrument(span)
             .await;
@@ -200,8 +206,35 @@ fn complete_empty_partial_error_and_dropped_streams_finish_once() {
                 assert_eq!(row["event"], "transfer.finished");
                 assert_eq!(row["outcome"], expected);
                 assert_eq!(row["request_id"], id.to_string());
+                assert_eq!(row["file_id"], file_id.to_string());
             }
             assert!(!rows.iter().any(|r| r.to_string().contains("sentinel")));
+        })
+    });
+}
+
+#[test]
+fn download_identity_survives_request_context_and_an_error_only_filter() {
+    record(LogFormat::Json, "error", |capture| {
+        runtime().block_on(async {
+            let request_id = uuid::Uuid::new_v4();
+            let file_id = uuid::Uuid::new_v4();
+            let body = {
+                let request = tracing::error_span!("request", %request_id, key = "private-key");
+                let _entered = request.enter();
+                let broken = futures_util::stream::iter([Err::<Bytes, _>(std::io::Error::other(
+                    "private-provider-error",
+                ))]);
+                transfer::download(Body::from_stream(broken), 10, file_id)
+            };
+            assert!(to_bytes(body, 32).await.is_err());
+            let rows = capture.records();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0]["event"], "transfer.finished");
+            assert_eq!(rows[0]["request_id"], request_id.to_string());
+            assert_eq!(rows[0]["file_id"], file_id.to_string());
+            assert_eq!(rows[0]["outcome"], "error");
+            assert!(!rows[0].to_string().contains("private"));
         })
     });
 }
@@ -214,7 +247,7 @@ fn content_length_completion_does_not_require_a_final_poll() {
             let stream =
                 futures_util::stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(b"done"))])
                     .chain(futures_util::stream::pending());
-            let mut body = transfer::download(Body::from_stream(stream), 4);
+            let mut body = transfer::download(Body::from_stream(stream), 4, uuid::Uuid::new_v4());
             let frame =
                 std::future::poll_fn(|cx| std::pin::Pin::new(&mut body).poll_frame(cx)).await;
             assert!(frame.is_some());

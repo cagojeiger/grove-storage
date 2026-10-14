@@ -68,8 +68,9 @@ struct Download {
     transfer: Transfer,
 }
 
-pub(crate) fn download(body: Body, expected: i64) -> Body {
+pub(crate) fn download(body: Body, expected: i64, file_id: uuid::Uuid) -> Body {
     let mut transfer = Transfer::new("send", expected);
+    transfer.span = tracing::error_span!("transfer", %file_id);
     if expected == 0 {
         transfer.finish("success", "");
     }

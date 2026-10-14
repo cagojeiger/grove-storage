@@ -5,12 +5,14 @@ import hashlib
 import argparse
 import http.client
 import json
+import os
 from pathlib import Path
 import runpy
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
@@ -136,12 +138,40 @@ def check(endpoint, directory, database, account, backend):
     check_multipart(request, put, opener, endpoint, backend, management.command)
 
 
+def verify_logs(output):
+    text = output.decode()
+    records = [json.loads(line) for line in text.splitlines() if line.startswith("{")]
+    assert records and all(row["schema_version"] == 1 for row in records)
+    operations = [row for row in records if row["event"] == "object.operation_finished"]
+    for operation, stage in [("put", "record_upload"), ("upload_part", "record_part")]:
+        found = [row for row in operations if row.get("operation") == operation
+                 and row.get("stage") == stage]
+        assert found, (operation, stage)
+        for row in found:
+            uuid.UUID(row["file_id"])
+            assert row["outcome"] == "success"
+    downloads = [row for row in records if row["event"] == "transfer.finished"
+                 and row["direction"] == "send"]
+    assert downloads
+    for row in downloads:
+        uuid.UUID(row["file_id"])
+        uuid.UUID(row["request_id"])
+        assert row["outcome"] == "success"
+        assert row["observed_bytes"] == row["expected_bytes"]
+    assert not any(row["event"].startswith("blobs.") for row in records)
+    for private in ["relay-regression-key", "injected relay measurement commit failure"]:
+        assert private not in text
+    print("PASS relay log contract: lifecycle stages, download identities and private-field exclusion")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend", choices=["minio"], default="minio")
     parser.parse_args()
+    os.environ["RUST_LOG"] = "debug"
     from s3_backend_fixture import minio_backend
     with minio_backend() as backend:
         HARNESS["main"](lambda endpoint, directory, database, account:
             check(endpoint, directory, database, account, backend),
-                        with_database=True, reconciler_interval=3600, multipart=True)
+                        with_database=True, reconciler_interval=3600, multipart=True,
+                        verify_log=verify_logs)

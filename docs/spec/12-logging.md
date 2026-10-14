@@ -49,13 +49,16 @@ request_id다. UUID를 Loki stream label로 승격하지 않고 JSON에서 조�
 |---|---|---|
 | `http.response` | 핸들러 응답 생성 | status·surface·method·route·duration_ms |
 | `http.interrupted` | 응답 생성 전 future 종료 | interrupted·duration_ms |
-| `transfer.finished` | 관찰한 receive/send 스트림 종료 | direction·expected_bytes·observed_bytes·duration_ms·outcome·error_code |
+| `transfer.finished` | 관찰한 receive/send 스트림 종료 | direction·expected_bytes·observed_bytes·duration_ms·outcome·error_code; send는 file_id 포함 |
 | `object.operation_finished` | 예약·파트 기록·완료 확정·논리 삭제 등 명시된 단계 | operation·stage·file_id·outcome |
 | `management.operation_finished` | 관리 실행 결과 | operation·operation_id·surface·outcome·error_code |
 | `worker.run_finished` | object/retention 작업 호출 종료 | worker·task·run_id·outcome·processed·failed·skipped |
 | `history.write_failed` | 호출/보안/파일 접근 이력 저장 실패 또는 시간 초과 | stream·operation_id 또는 file_id·error_code |
 
 복구·보존의 상세 이벤트는 파일 UUID·stream과 고정 error_code를 제공한다.
+릴레이 업로드도 `object.operation_finished`의 put/record_upload 또는 upload_part/record_part로
+기록한다. record_upload는 lease의 실측 저장이며 파일 활성화 commit과 다르다.
+send 로그는 요청 핸들러 종료 뒤에도 request_id와 file_id를 유지한다.
 `provider.failed`는 요청 경로의 provider 실패를 나타낸다. provider SDK 응답 본문은
 출력하지 않는다. 별도 이벤트가 없는 시작·종료 진단도 같은 안전한 필드 정책을 따른다.
 
@@ -111,6 +114,7 @@ Loki의 기존 workload selector 뒤에서 JSON 필드를 조회한다. 실제 l
 
 管理 이력 보존은 [운영 설정](../stack/README.md#관리-로그-보존)을 따른다.
 stdout/Loki 보존은 수집 인프라의 정책이며 관리 DB 보존과 독립이다.
+수집기는 JSON의 level을 읽는다. error_code나 message에서 수준을 추측하지 않는다.
 
 ## 검증
 

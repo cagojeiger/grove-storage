@@ -343,6 +343,7 @@ pub(super) async fn get_object(
     let mut response = crate::logging::transfer::download(
         Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
         len,
+        file_id,
     )
     .into_response();
     if let Some((start, end)) = span {
