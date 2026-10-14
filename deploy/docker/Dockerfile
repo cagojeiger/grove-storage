@@ -31,7 +31,7 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY backend ./backend
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 AS web-builder
+FROM node:26.11.1-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS web-builder
 
 WORKDIR /app/frontend/web
 COPY frontend/web/package.json frontend/web/package-lock.json ./
