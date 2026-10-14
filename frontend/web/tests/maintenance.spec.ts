@@ -31,7 +31,7 @@ test("activity tabs, bigint cursor and details preserve actor and token attribut
   await page.goto("/api/admin/console/#activity");
   await page.getByRole("button", { name: /storage.create/ }).click();
   await expect(page.getByRole("dialog")).toContainText("Token ID");
-  await expect(page.getByRole("dialog")).toContainText(context.request_id);
+  await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(context.request_id);
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Go to next page", exact: true }).click();
   await expect(
@@ -41,7 +41,7 @@ test("activity tabs, bigint cursor and details preserve actor and token attribut
   expect(cursors[0]).toBeNull();
   await page.getByRole("tab", { name: "Command history", exact: true }).click();
   await page.getByRole("button", { name: /storage.test/ }).click();
-  await expect(page.getByRole("dialog")).toContainText("Duration (ms)");
+  await expect(page.getByRole("dialog")).toContainText("12 ms");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("tab", { name: "Security events", exact: true }).click();
   await expect(

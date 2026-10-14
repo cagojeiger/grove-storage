@@ -1,5 +1,11 @@
 export const time = (value: string) => new Date(value).toLocaleString("en-US");
 
+export function duration(milliseconds: number) {
+  return milliseconds < 1000
+    ? `${milliseconds.toLocaleString("en-US")} ms`
+    : `${(milliseconds / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 })} s`;
+}
+
 export function bytes(value: number) {
   const absolute = Math.abs(value);
   const unit =

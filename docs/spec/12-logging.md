@@ -62,6 +62,13 @@ send 로그는 요청 핸들러 종료 뒤에도 request_id와 file_id를 유지
 `provider.failed`는 요청 경로의 provider 실패를 나타낸다. provider SDK 응답 본문은
 출력하지 않는다. 별도 이벤트가 없는 시작·종료 진단도 같은 안전한 필드 정책을 따른다.
 
+## 콘솔 조회
+
+Activity는 PostgreSQL의 감사·명령 호출·보안 이력을 읽는다. 명령 호출은 결과와
+소요 시간을 목록에 표시하며 unknown을 성공이나 실패로 바꾸지 않는다. 상세의
+Operation ID는 관리 이력의 request_id이며 운영 로그의 operation_id와 연결된다.
+전송·worker 로그는 Activity에 복제하지 않고 Loki에서 조회한다.
+
 ## 결과와 한계
 
 HTTP 2xx는 응답 생성의 성공이며 다운로드 완료가 아니다. send의 observed_bytes는

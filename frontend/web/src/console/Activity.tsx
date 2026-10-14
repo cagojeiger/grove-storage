@@ -1,19 +1,19 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import TextField from "../template/shared-theme/Field";
 import {
   Alert,
   Box,
   Button,
+  Chip,
   Collapse,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Drawer,
   Link,
   Stack,
   Tab,
   Tabs,
+  Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
@@ -24,14 +24,19 @@ import {
   actor,
   eventName,
   eventResult,
+  invocationStatus,
+  sourceName,
   validator,
   type Event,
   type Stream,
 } from "../features/activity/model";
-import { time } from "../design/format";
-import { Page, Properties, QueryState, Refresh } from "./ui";
+import { duration, time } from "../design/format";
+import { Filter } from "lucide-react";
+import { Page, QueryState, Refresh } from "./ui";
+import { ActivityDetails } from "./ActivityDetails";
 
 export function Activity({ route, admin }: { route: string; admin: boolean }) {
+  const mobile = useMediaQuery(useTheme().breakpoints.down("sm"));
   const path = route.split("?")[0];
   const stream: Stream = path.endsWith("/security")
     ? "security"
@@ -59,7 +64,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
   });
   const suffix = params.size ? `?${params}` : "";
   const rows = query.data?.items ?? [];
-  const columns: GridColDef<Event>[] = [
+  const columns = useMemo<GridColDef<Event>[]>(() => [
     {
       field: "time",
       headerName: "Time",
@@ -68,13 +73,19 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
     },
     {
       field: "event",
-      headerName: "Event",
+      headerName: stream === "invocations" ? "Operation" : stream === "audit" ? "Action" : "Event",
       flex: 1,
-      minWidth: 190,
-      renderCell: ({ row }) => (
-        <Link component="button" onClick={() => setSelected(row)}>
-          {eventName(row)}
-        </Link>
+      minWidth: mobile ? 140 : 190,
+      renderCell: ({ row, tabIndex }) => (
+        <Stack spacing={0.25} sx={{ minWidth: 0, height: "100%", justifyContent: "center" }}>
+          <Tooltip title={eventName(row)}>
+            <Link component="button" variant="body2" tabIndex={tabIndex} noWrap underline="hover" sx={{ maxWidth: "100%" }}
+              onClick={(event) => { event.stopPropagation(); setSelected(row); }}>
+              {eventName(row)}
+            </Link>
+          </Tooltip>
+          {mobile && <Typography variant="caption" color="text.secondary" noWrap>{time(row.context.created_at)}</Typography>}
+        </Stack>
       ),
     },
     {
@@ -84,10 +95,15 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           ? "Resource"
           : stream === "security"
             ? "Reason"
-            : "Result",
+            : "Outcome",
       flex: 1,
-      minWidth: 180,
+      minWidth: mobile ? 110 : 180,
       valueGetter: (_, row) => eventResult(row),
+      renderCell: stream === "invocations" ? ({ row }) => {
+        if (!("outcome" in row)) return null;
+        const outcome = invocationStatus(row.outcome);
+        return <Chip label={outcome.label} color={outcome.color} variant="outlined" size="small" />;
+      } : undefined,
     },
     {
       field: "actor",
@@ -99,9 +115,13 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       field: "source",
       headerName: "Source",
       width: 110,
-      valueGetter: (_, row) => row.context.surface,
+      valueGetter: (_, row) => sourceName(row.context.surface),
     },
-  ];
+    ...(stream === "invocations" ? [{
+      field: "duration", headerName: "Duration", width: 110,
+      valueGetter: (_: unknown, row: Event) => "duration_ms" in row ? duration(row.duration_ms) : "",
+    }] : []),
+  ], [mobile, stream]);
   return (
     <Page
       fill
@@ -148,6 +168,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         <>
           <Stack direction="row" spacing={2}>
             <Button
+              startIcon={<Filter size={18} />}
               aria-expanded={filters}
               onClick={() => setFilters(!filters)}
             >
@@ -157,7 +178,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
               <Button href={`#${path}`}>Clear filters</Button>
             )}
           </Stack>
-          <Collapse in={filters}>
+          <Collapse in={filters} unmountOnExit>
             <Stack
               component="form"
               direction={{ xs: "column", sm: "row" }}
@@ -217,16 +238,19 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                   minWidth: 0,
                 }}
               >
-                <DataGrid
+                <DataGrid<Event>
                   nonce={cspNonce}
                   aria-label="Activity"
                   rows={rows}
                   getRowId={(row) => row.context.id}
                   columns={columns}
+                  density={mobile ? "standard" : "compact"}
+                  columnVisibilityModel={{ time: !mobile, actor: !mobile, source: !mobile, duration: !mobile }}
                   loading={query.isPending}
                   disableColumnFilter
                   disableColumnSorting
                   disableRowSelectionOnClick
+                  onRowClick={({ id }) => setSelected(rows.find((row) => row.context.id === id) ?? null)}
                   paginationMode="server"
                   paginationModel={{ page, pageSize: 50 }}
                   pageSizeOptions={[50]}
@@ -262,58 +286,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         </>
       )}
       {!denied && !query.isError && selected && (
-        <Drawer
-          anchor="right"
-          open
-          onClose={() => setSelected(null)}
-          slotProps={{
-            paper: {
-              role: "dialog",
-              "aria-labelledby": "event-title",
-              sx: { width: { xs: "100%", sm: 480 } },
-            },
-          }}
-        >
-          <DialogTitle id="event-title">Event details</DialogTitle>
-          <DialogContent dividers>
-            <Stack spacing={3}>
-              <Properties
-                values={{
-                  "Event ID": selected.context.id,
-                  Event: eventName(selected),
-                  Result: eventResult(selected),
-                  Time: time(selected.context.created_at),
-                  Actor: actor(selected.context),
-                  Source: selected.context.surface,
-                  "Request ID": selected.context.request_id,
-                  "Token ID": selected.context.credential_id,
-                  "Session ID": selected.context.session_id,
-                  ...("duration_ms" in selected
-                    ? {
-                        "Duration (ms)": selected.duration_ms,
-                        "Error code": selected.error_code,
-                      }
-                    : {}),
-                }}
-              />
-              {"metadata" in selected && (
-                <>
-                  <Typography variant="subtitle2">Metadata</Typography>
-                  <Typography
-                    component="pre"
-                    variant="body2"
-                    sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-                  >
-                    {JSON.stringify(selected.metadata, null, 2)}
-                  </Typography>
-                </>
-              )}
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setSelected(null)}>Close</Button>
-          </DialogActions>
-        </Drawer>
+        <ActivityDetails key={selected.context.id} event={selected} onClose={() => setSelected(null)} />
       )}
     </Page>
   );

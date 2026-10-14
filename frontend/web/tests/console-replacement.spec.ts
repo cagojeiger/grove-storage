@@ -52,9 +52,7 @@ for (const width of [320, 768, 1440]) {
     const event = page.getByRole("button", { name: /storage.create/ });
     await event.click();
     const details = page.getByRole("dialog", { name: "Event details" });
-    await expect(details.locator("dl")).toContainText(
-      "storage.create",
-    );
+    await expect(details.getByText("storage.create", { exact: true })).toBeVisible();
     await expect(
       details.getByRole("button", { name: "Close", exact: true }),
     ).toBeInViewport();

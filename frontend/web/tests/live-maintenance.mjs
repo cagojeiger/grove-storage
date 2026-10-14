@@ -15,16 +15,23 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     .first()
     .click();
   await expect(page.getByRole("dialog")).toContainText("Token ID");
-  await expect(page.getByRole("dialog")).toContainText("Request ID");
+  await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(
+    /^[0-9a-f-]{36}$/,
+  );
+  const operationId = await page.getByLabel("Operation ID", { exact: true }).inputValue();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("tab", { name: "Command history", exact: true })
     .click();
+  await page.getByRole("button", { name: "storage.create", exact: true }).first().click();
+  await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(operationId);
+  await expect(page.getByRole("dialog")).toContainText("Succeeded");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("button", { name: /storage.test/ })
     .first()
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Duration (ms)");
+  await expect(page.getByRole("dialog")).toContainText("Duration");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("tab", { name: "Security events", exact: true })
