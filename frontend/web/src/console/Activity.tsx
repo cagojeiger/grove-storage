@@ -15,7 +15,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { DataGrid, type GridColDef, type GridColumnVisibilityModel } from "@mui/x-data-grid";
+import { DataGrid, gridClasses, type GridColDef, type GridColumnVisibilityModel } from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
 import { field, identityPage } from "../api/identity";
 import { cspNonce } from "../app/csp";
@@ -254,6 +254,8 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                   onColumnVisibilityModelChange={model => setColumnVisibility(current => ({ ...current, [layout]: model }))}
                   // Each cursor page has at most 50 rows; mounted cells support native focus scrolling.
                   disableVirtualization
+                  // Hidden header menu buttons must not create a horizontal scroll range.
+                  sx={{ [`& .${gridClasses["columnHeader--last"]}`]: { overflow: "hidden" } }}
                   slotProps={{ cell: { onFocus: event => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" }) } }}
                   loading={query.isPending}
                   disableColumnFilter
