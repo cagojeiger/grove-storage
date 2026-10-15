@@ -19,12 +19,6 @@ export async function openInvocation(page, operationId) {
     const { items, next_before } = await response.json();
     const index = items.findIndex(row => row.context.request_id === operationId);
     if (index >= 0) {
-      const first = grid.locator(`[role="row"][data-id="${items[0].context.id}"]`);
-      await expect(first).toBeVisible();
-      const bounds = await first.boundingBox();
-      assert(bounds);
-      await grid.locator(".MuiDataGrid-virtualScroller").hover();
-      await page.mouse.wheel(0, index * bounds.height);
       await grid.locator(`[role="row"][data-id="${items[index].context.id}"]`)
         .getByRole("button", { name: items[index].operation, exact: true }).click();
       await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(operationId);

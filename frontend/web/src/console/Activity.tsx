@@ -15,7 +15,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { DataGrid, type GridColDef } from "@mui/x-data-grid";
+import { DataGrid, type GridColDef, type GridColumnVisibilityModel } from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
 import { field, identityPage } from "../api/identity";
 import { cspNonce } from "../app/csp";
@@ -49,6 +49,11 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
   const [selected, setSelected] = useState<Event | null>(null);
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [columnVisibility, setColumnVisibility] = useState<Record<"mobile" | "desktop", GridColumnVisibilityModel>>({
+    desktop: {},
+    mobile: { time: false, actor: false, source: false, duration: false },
+  });
+  const layout = mobile ? "mobile" : "desktop";
   const query = useQuery({
     queryKey: ["activity", stream, admin, params.toString(), cursors[page]],
     enabled: valid && !denied,
@@ -245,7 +250,11 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                   getRowId={(row) => row.context.id}
                   columns={columns}
                   density={mobile ? "standard" : "compact"}
-                  columnVisibilityModel={{ time: !mobile, actor: !mobile, source: !mobile, duration: !mobile }}
+                  columnVisibilityModel={columnVisibility[layout]}
+                  onColumnVisibilityModelChange={model => setColumnVisibility(current => ({ ...current, [layout]: model }))}
+                  // Each cursor page has at most 50 rows; mounted cells support native focus scrolling.
+                  disableVirtualization
+                  slotProps={{ cell: { onFocus: event => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" }) } }}
                   loading={query.isPending}
                   disableColumnFilter
                   disableColumnSorting

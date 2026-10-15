@@ -115,7 +115,7 @@ test("inspection preserves resized columns and keyboard focus", async ({ page })
   await expect.poll(async () => (await header.boundingBox())!.width).toBe(width);
 });
 
-test("audit correlation follows cursor pages and reveals a virtualized invocation", async ({ page }) => {
+test("audit correlation follows cursor pages beyond the initial viewport", async ({ page }) => {
   await maintenanceMock(page);
   const cursors: (string | null)[] = [];
   await page.route("**/identity/v1/history/invocations?*", route => {
