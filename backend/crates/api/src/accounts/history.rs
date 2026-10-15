@@ -21,6 +21,7 @@ pub(super) struct HistoryParams {
     limit: u16,
     account_id: Option<Uuid>,
     credential_id: Option<Uuid>,
+    operation_id: Option<Uuid>,
 }
 fn history_limit() -> u16 {
     50
@@ -103,6 +104,7 @@ async fn list(
         page,
         account_id: query.account_id,
         credential_id: query.credential_id,
+        operation_id: query.operation_id,
     };
     let command = match stream {
         Stream::Audit => Command::Audit(history),

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { duration } from "../src/design/format";
-import { actor, authMethodName, eventName, invocationStatus, recordingStatus, sourceName, stageName, targetName, validator, type Invocation } from "../src/features/activity/model";
+import { actor, activityName, authMethodName, eventLabel, eventName, invocationStatus, recordingStatus, sourceName, stageName, targetName, validator, type Invocation } from "../src/features/activity/model";
 import { audit, context, invocation, maintenanceMock, security } from "./maintenance-fixture";
 import { openInvocation } from "./activity-history.mjs";
 
@@ -42,6 +42,16 @@ test("history labels preserve missing context and recording uncertainty", () => 
   expect(recordingStatus(undefined).label).toBe("Unknown");
 });
 
+test("activity labels leave raw codes and unknown operations unchanged", () => {
+  expect(eventLabel(audit)).toBe("Create storage");
+  expect(eventLabel(security)).toBe("Permission denied");
+  expect(eventName(security)).toBe("permission_denied");
+  expect(activityName("identity.credential.issue")).toBe("Issue API token");
+  expect(activityName("credential.create")).toBe("Create S3 credential");
+  expect(activityName("future.operation")).toBe("future.operation");
+  expect(activityName("constructor")).toBe("constructor");
+});
+
 test("security operation context does not change the event discriminator", () => {
   for (const operation of ["identity.session.login", null]) {
     const row = { ...security, operation, stage: "authentication", auth_method: "password", is_sampled: true };
@@ -58,7 +68,7 @@ test("security records with operation context remain selectable", async ({ page 
     json: { items: [{ ...security, operation: "identity.session.login", stage: "authentication", auth_method: "password", is_sampled: true }], next_before: null },
   }));
   await page.goto("/api/admin/console/#activity/security");
-  await page.getByRole("button", { name: "permission_denied", exact: true }).click();
+  await page.getByRole("button", { name: "Permission denied", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Event details" })).toContainText("permission_denied");
 });
 
@@ -76,7 +86,7 @@ test("command outcomes, source and elapsed time are visible without opening deta
   for (const label of ["Succeeded", "Denied", "Unknown", "Failed", "12 ms", "1.2 s", "CLI", "MCP"])
     await expect(grid.getByText(label, { exact: true })).toBeVisible();
   await expect(grid.getByRole("columnheader", { name: "Duration", exact: true })).toBeVisible();
-  await grid.getByRole("row").filter({ hasText: "storage.delete" }).getByText("Unknown", { exact: true }).click();
+  await grid.getByRole("row").filter({ hasText: "Delete storage" }).getByText("Unknown", { exact: true }).click();
   const details = page.getByRole("dialog", { name: "Event details" });
   await expect(details.getByText("Unknown", { exact: true })).toBeVisible();
   await expect(details).toContainText("outcome_unknown");
@@ -95,7 +105,7 @@ test("command targets and stages are visible and absent legacy fields are not in
   await expect(grid).toContainText("Authorization");
   await page.route("**/identity/v1/history/invocations?*", route => route.fulfill({ json: { items: [invocation], next_before: null } }));
   await page.getByRole("button", { name: "Refresh activity", exact: true }).click();
-  await grid.getByRole("button", { name: "storage.test", exact: true }).click();
+  await grid.getByRole("button", { name: "Test storage", exact: true }).click();
   const details = page.getByRole("dialog", { name: "Event details" });
   await expect(details.getByText("Not recorded", { exact: true })).toHaveCount(4);
   await expect(details.getByText("Password", { exact: true })).toHaveCount(0);
@@ -119,16 +129,16 @@ test("security recording modes preserve representative and unknown context", asy
   const grid = page.getByRole("grid", { name: "Activity", exact: true });
   for (const label of ["Representative", "Individual", "Unknown", "Authentication", "Authorization"])
     await expect(grid.getByText(label, { exact: true })).toBeVisible();
-  await grid.getByRole("button", { name: "authentication_failed", exact: true }).click();
+  await grid.getByRole("button", { name: "Authentication failed", exact: true }).click();
   const details = page.getByRole("dialog", { name: "Event details" });
   await expect(details).toContainText("identity.session.login");
   await expect(details).toContainText("Password");
   await expect(details.getByRole("alert")).toContainText("Other anonymous attempts may not be stored");
   await expect(details).toContainText("Anonymous");
   await page.keyboard.press("Escape");
-  await grid.getByRole("row").filter({ hasText: "Unknown" }).getByRole("button", { name: "permission_denied", exact: true }).click();
+  await grid.getByRole("row").filter({ hasText: "Unknown" }).getByRole("button", { name: "Permission denied", exact: true }).click();
   await expect(details.getByText("Unknown", { exact: true })).toBeVisible();
-  await expect(details.getByText("Not recorded", { exact: true })).toHaveCount(3);
+  await expect(details.getByText("Not recorded", { exact: true }).filter({ visible: true })).toHaveCount(3);
   await expect(details.getByRole("alert")).toHaveCount(0);
 });
 
@@ -142,7 +152,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await expect(grid.getByText("Representative", { exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/security-context-${width}-${theme}.png`, animations: "disabled" });
-    await grid.getByRole("button", { name: "authentication_failed", exact: true }).click();
+    await grid.getByRole("button", { name: "Authentication failed", exact: true }).click();
     const details = page.getByRole("dialog", { name: "Event details" });
     await expect(details).toContainText("Password");
     expect(await details.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -154,7 +164,7 @@ test("operation ID matches the backend history value and can be copied", async (
   await maintenanceMock(page);
   await browserContext.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/api/admin/console/#activity");
-  await page.getByRole("button", { name: "storage.create", exact: true }).click();
+  await page.getByRole("button", { name: "Create storage", exact: true }).click();
   const id = page.getByLabel("Operation ID", { exact: true });
   await expect(id).toHaveValue(context.request_id);
   await expect(id).toHaveAttribute("readonly", "");
@@ -171,7 +181,7 @@ test("clipboard rejection does not report a successful copy", async ({ page }) =
     Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) } });
   });
   await page.goto("/api/admin/console/#activity");
-  await page.getByRole("button", { name: "storage.create", exact: true }).click();
+  await page.getByRole("button", { name: "Create storage", exact: true }).click();
   await page.getByRole("button", { name: "Copy operation ID", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Copy failed.");
   await expect(page.getByRole("status")).not.toContainText("copied");
@@ -180,12 +190,36 @@ test("clipboard rejection does not report a successful copy", async ({ page }) =
 test("audit shows its resource without inventing command duration or outcome", async ({ page }) => {
   await maintenanceMock(page);
   await page.goto("/api/admin/console/#activity");
-  await page.getByRole("button", { name: "storage.create", exact: true }).click();
+  await page.getByRole("button", { name: "Create storage", exact: true }).click();
   const details = page.getByRole("dialog", { name: "Event details" });
   await expect(details).toContainText(audit.resource_id);
   await expect(details.locator("dt").filter({ hasText: /^Duration$/ })).toHaveCount(0);
   await expect(details.locator("dt").filter({ hasText: /^Outcome$/ })).toHaveCount(0);
   await expect(details.getByText("Metadata", { exact: true })).toBeVisible();
+});
+
+test("technical identifiers stay collapsed while the summary and correlation remain visible", async ({ page }) => {
+  await commandHistory(page);
+  await page.getByRole("button", { name: "Test storage", exact: true }).click();
+  const details = page.getByRole("dialog", { name: "Event details" });
+  await expect(details.getByText("12 ms", { exact: true })).toBeVisible();
+  await expect(details.getByText("Session ID", { exact: true })).toBeHidden();
+  await expect(details.getByText("Event code", { exact: true })).toBeHidden();
+  await expect(details.getByLabel("Operation ID", { exact: true })).toBeVisible();
+  await expect(details.getByRole("link", { name: "View related history", exact: true })).toBeVisible();
+  await details.getByRole("button", { name: "Technical details", exact: true }).click();
+  await expect(details.getByText("Session ID", { exact: true })).toBeVisible();
+  await expect(details.getByText("storage.test", { exact: true })).toBeVisible();
+});
+
+for (const width of [320, 390]) test(`mobile command outcomes include elapsed time at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await commandHistory(page);
+  const grid = page.getByRole("grid", { name: "Activity", exact: true });
+  await expect(grid.getByText("1.2 s", { exact: true })).toBeInViewport();
+  await expect(grid.getByText("Unknown", { exact: true })).toBeInViewport();
+  await expect(grid.getByText("750 ms", { exact: true })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("inspection preserves resized columns and keyboard focus", async ({ page }) => {
@@ -202,7 +236,7 @@ test("inspection preserves resized columns and keyboard focus", async ({ page })
   await page.mouse.up();
   const width = (await header.boundingBox())!.width;
   expect(width).toBeGreaterThan(originalWidth);
-  const operation = grid.getByRole("button", { name: "storage.test", exact: true });
+  const operation = grid.getByRole("button", { name: "Test storage", exact: true });
   // MUI briefly suppresses clicks after resizing; inspect the tooltip before activating.
   await operation.hover();
   await expect(page.getByRole("tooltip", { name: "storage.test", exact: true })).toBeVisible();
@@ -248,7 +282,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await expect(grid.getByText("Unknown", { exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/activity-view-${width}-${theme}.png`, animations: "disabled" });
-    await grid.getByRole("button", { name: "storage.delete", exact: true }).click();
+    await grid.getByRole("button", { name: "Delete storage", exact: true }).click();
     const details = page.getByRole("dialog", { name: "Event details" });
     await expect(details.getByLabel("Operation ID", { exact: true })).toHaveValue(context.request_id);
     await expect(details.getByText("Unknown", { exact: true })).toBeVisible();

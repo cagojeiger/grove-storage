@@ -49,10 +49,11 @@ for (const width of [320, 768, 1440]) {
     await maintenanceMock(page);
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/api/admin/console/#activity");
-    const event = page.getByRole("button", { name: /storage.create/ });
+    const event = page.getByRole("button", { name: /Create storage/ });
     await event.click();
     const details = page.getByRole("dialog", { name: "Event details" });
-    await expect(details.getByText("storage.create", { exact: true })).toBeVisible();
+    await expect(details.getByText("Create storage", { exact: true })).toBeVisible();
+    await expect(details.getByText("storage.create", { exact: true })).toBeHidden();
     await expect(
       details.getByRole("button", { name: "Close", exact: true }),
     ).toBeInViewport();

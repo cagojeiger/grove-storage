@@ -26,6 +26,7 @@ export function previewHistory() {
         (session.role === "admin" || c.actor_id === session.user_id) &&
         (!params.get("account_id") || c.actor_id === params.get("account_id")) &&
         (!params.get("credential_id") || c.credential_id === params.get("credential_id")) &&
+        (!params.get("operation_id") || c.request_id === params.get("operation_id")) &&
         (!params.get("before") || Number(c.id) < Number(params.get("before"))));
       const limit = Math.max(1, Math.min(100, Number(params.get("limit")) || 50));
       const items = rows.slice(0, limit);

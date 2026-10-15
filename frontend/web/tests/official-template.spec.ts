@@ -73,7 +73,7 @@ for (const width of [320, 768, 1440]) {
           );
         } else if (kind === "activity") {
           await page
-            .getByRole("button", { name: "storage.create", exact: true })
+            .getByRole("button", { name: "Create storage", exact: true })
             .click();
           await expect(
             page.getByRole("dialog", { name: "Event details" }),

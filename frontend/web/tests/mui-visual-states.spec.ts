@@ -44,6 +44,8 @@ for (const theme of ["light", "dark"]) {
       await event.click();
       const dialog = page.getByRole("dialog", { name: "Event details" });
       await expect(dialog.getByLabel("Operation ID", { exact: true })).toHaveValue(context.request_id);
+      await expect(dialog.getByText(context.credential_id, { exact: true })).toBeHidden();
+      await dialog.getByRole("button", { name: "Technical details", exact: true }).click();
       await expect(dialog.getByText(context.credential_id, { exact: true })).toBeVisible();
       await expect(dialog.getByText(context.actor_id, { exact: true }).first()).toBeVisible();
       const actorLabel = dialog.locator("dt").filter({ hasText: /^Actor$/ });

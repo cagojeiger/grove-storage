@@ -53,7 +53,7 @@ test("activity uses one cursor pagination control and keeps filters", async ({
   const initialRequests = requests.length;
   await next.click();
   await expect(
-    page.getByRole("button", { name: "client.create", exact: true }),
+    page.getByRole("button", { name: "Create client", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "storage.create.0", exact: true }),
@@ -107,11 +107,11 @@ test("activity next-page failure retries the same cursor", async ({ page }) => {
   await page.getByRole("button", { name: "Go to next page" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "storage.create", exact: true }),
+    page.getByRole("button", { name: "Create storage", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "client.create", exact: true }),
+    page.getByRole("button", { name: "Create client", exact: true }),
   ).toBeVisible();
   expect(cursors[0]).toBeNull();
   expect(cursors.filter((cursor) => cursor !== null)).toEqual([

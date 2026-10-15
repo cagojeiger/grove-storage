@@ -29,23 +29,24 @@ test("activity tabs, bigint cursor and details preserve actor and token attribut
     });
   });
   await page.goto("/api/admin/console/#activity");
-  await page.getByRole("button", { name: /storage.create/ }).click();
-  await expect(page.getByRole("dialog")).toContainText("Token ID");
+  await page.getByRole("button", { name: /Create storage/ }).click();
+  await page.getByRole("button", { name: "Technical details", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText("Token ID", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(context.request_id);
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Go to next page", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: /client.create/ }),
+    page.getByRole("button", { name: /Create client/ }),
   ).toBeVisible();
   expect(cursors.filter((cursor) => cursor !== null)).toEqual([context.id]);
   expect(cursors[0]).toBeNull();
   await page.getByRole("tab", { name: "Command history", exact: true }).click();
-  await page.getByRole("button", { name: /storage.test/ }).click();
+  await page.getByRole("button", { name: /Test storage/ }).click();
   await expect(page.getByRole("dialog")).toContainText("12 ms");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("tab", { name: "Security events", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: /permission_denied/ }),
+    page.getByRole("button", { name: /Permission denied/ }),
   ).toBeVisible();
 });
 
@@ -75,7 +76,7 @@ test("demotion and forbidden history responses remove installation event details
 }) => {
   await maintenanceMock(page);
   await page.goto("/api/admin/console/#activity/security");
-  await page.getByRole("button", { name: /permission_denied/ }).click();
+  await page.getByRole("button", { name: /Permission denied/ }).click();
   await page.route("**/identity/v1/session", (r) =>
     r.fulfill({ json: { ...session, role: "reader" } }),
   );
@@ -88,7 +89,7 @@ test("demotion and forbidden history responses remove installation event details
     page.getByRole("complementary", { name: "Workspace sidebar" }),
   ).toContainText("reader");
   await expect(
-    page.getByRole("button", { name: /permission_denied/ }),
+    page.getByRole("button", { name: /Permission denied/ }),
   ).toHaveCount(0);
 });
 

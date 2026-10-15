@@ -10,10 +10,10 @@ for (const width of [320, 390, 768, 1440])
       await page.getByRole("button", { name: "Theme", exact: true }).click();
       await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
       await expect(
-        page.getByRole("button", { name: /storage.create/ }),
+        page.getByRole("button", { name: /Create storage/ }),
       ).toBeVisible();
       await screenshot("activity");
-      await page.getByRole("button", { name: /storage.create/ }).click();
+      await page.getByRole("button", { name: /Create storage/ }).click();
       await screenshot("event");
       expect(
         await page
