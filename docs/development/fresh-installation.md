@@ -16,6 +16,7 @@ migration history; there are no old-name views or table aliases.
 | `0006_upload_ownership.sql` | One durable Native/S3 upload owner per file; protocol-specific shape checks |
 | `0007_upload_recovery.sql` | Durable retry eligibility and ordered completion/cleanup candidates |
 | `0008_file_recovery.sql` | Retry eligibility for generic observation, reclaim cleanup and purge |
+| `0009_management_history_context.sql` | Command targets, execution stages, authentication methods and security sampling markers |
 
 The current schema creates 22 application tables.
 S3-only storage and Account session ownership are defined directly, without
@@ -26,6 +27,8 @@ The released 0.5.0 migrations remain unchanged. Migration 0005 also applies to
 that baseline; invalid ownership or duplicate issued writes reject the upgrade
 atomically, without silently dropping rows. Existing observation times remain
 unknown. Retention and file recovery have separate execution locks.
+Migration 0009 leaves new fields NULL on existing history. It preserves recorded
+timestamps, object state and retention periods.
 Migration 0006 preserves pending upload keys, conditional flags, completion values
 and timestamps in `uploads`. Native/S3 owners of the same file reject the migration
 atomically. Leases, part measurements and vendor upload IDs stay unchanged.

@@ -25,7 +25,10 @@ import {
   eventName,
   eventResult,
   invocationStatus,
+  recordingStatus,
   sourceName,
+  stageName,
+  targetName,
   validator,
   type Event,
   type Stream,
@@ -51,7 +54,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [columnVisibility, setColumnVisibility] = useState<Record<"mobile" | "desktop", GridColumnVisibilityModel>>({
     desktop: {},
-    mobile: { time: false, actor: false, source: false, duration: false },
+    mobile: { time: false, actor: false, source: false, duration: false, target: false, stage: false, recording: false },
   });
   const layout = mobile ? "mobile" : "desktop";
   const query = useQuery({
@@ -89,6 +92,10 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
               {eventName(row)}
             </Link>
           </Tooltip>
+          {"outcome" in row && <Typography variant="caption" color="text.secondary" noWrap>{stageName(row.stage)}</Typography>}
+          {"event_type" in row && <Tooltip title={row.operation ?? "Operation not recorded"}>
+            <Typography variant="caption" color="text.secondary" noWrap>{row.operation ?? "Operation not recorded"}</Typography>
+          </Tooltip>}
           {mobile && <Typography variant="caption" color="text.secondary" noWrap>{time(row.context.created_at)}</Typography>}
         </Stack>
       ),
@@ -101,15 +108,43 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           : stream === "security"
             ? "Reason"
             : "Outcome",
-      flex: 1,
-      minWidth: mobile ? 110 : 180,
+      flex: stream === "invocations" ? undefined : 1,
+      width: stream === "invocations" ? 125 : undefined,
+      minWidth: mobile ? 110 : stream === "invocations" ? 125 : 180,
       valueGetter: (_, row) => eventResult(row),
       renderCell: stream === "invocations" ? ({ row }) => {
         if (!("outcome" in row)) return null;
         const outcome = invocationStatus(row.outcome);
         return <Chip label={outcome.label} color={outcome.color} variant="outlined" size="small" />;
+      } : stream === "security" && mobile ? ({ row }) => {
+        if (!("event_type" in row)) return null;
+        const recording = recordingStatus(row.is_sampled);
+        return <Stack spacing={0.5} sx={{ height: "100%", justifyContent: "center", minWidth: 0 }}>
+          <Typography variant="body2" noWrap>{row.reason_code}</Typography>
+          <Tooltip title={recording.description}>
+            <Chip label={recording.label} color={recording.color} variant="outlined" size="small" sx={{ maxWidth: "100%" }} />
+          </Tooltip>
+        </Stack>;
       } : undefined,
     },
+    ...(stream === "invocations" ? [{
+      field: "target", headerName: "Target", flex: 1, minWidth: 180,
+      valueGetter: (_: unknown, row: Event) => "outcome" in row ? targetName(row) : "",
+    }] : []),
+    ...(stream === "security" ? [{
+      field: "stage", headerName: "Stage", width: 140,
+      valueGetter: (_: unknown, row: Event) => "event_type" in row ? stageName(row.stage) : "",
+    }, {
+      field: "recording", headerName: "Recording", width: 150,
+      valueGetter: (_: unknown, row: Event) => "event_type" in row ? recordingStatus(row.is_sampled).label : "",
+      renderCell: ({ row }: { row: Event }) => {
+        if (!("event_type" in row)) return null;
+        const recording = recordingStatus(row.is_sampled);
+        return <Tooltip title={recording.description}>
+          <Chip label={recording.label} color={recording.color} variant="outlined" size="small" />
+        </Tooltip>;
+      },
+    }] : []),
     {
       field: "actor",
       headerName: "Actor",
@@ -250,6 +285,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                   getRowId={(row) => row.context.id}
                   columns={columns}
                   density={mobile ? "standard" : "compact"}
+                  rowHeight={stream === "audit" ? undefined : mobile ? 80 : 64}
                   columnVisibilityModel={columnVisibility[layout]}
                   onColumnVisibilityModelChange={model => setColumnVisibility(current => ({ ...current, [layout]: model }))}
                   // Each cursor page has at most 50 rows; mounted cells support native focus scrolling.

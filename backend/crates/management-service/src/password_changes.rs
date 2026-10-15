@@ -23,8 +23,18 @@ pub async fn change(
         pool,
         request_id,
         session_hash,
-        "account.password_change",
-        run(pool, request_id, session_hash, current, replacement),
+        logging::Details::new("account.password_change", logging::Stage::Authentication),
+        async |details| {
+            run(
+                pool,
+                request_id,
+                session_hash,
+                current,
+                replacement,
+                details,
+            )
+            .await
+        },
     )
     .await;
     Change { request_id, result }
@@ -36,11 +46,15 @@ async fn run(
     session_hash: &str,
     current: SecretString,
     replacement: SecretString,
+    details: &mut logging::Details,
 ) -> Result<(), Error> {
+    details.stage = logging::Stage::Authentication;
     let identity = db::session_actor(pool, session_hash)
         .await
         .map_err(Error::from)?
         .ok_or(Error::Unauthenticated)?;
+    details.stage = logging::Stage::Reauthentication;
+    details.auth_method = Some(logging::AuthMethod::Password);
     if !admission::account_allowed(
         pool,
         identity.account_id,
@@ -62,6 +76,8 @@ async fn run(
     {
         return Err(Error::Unauthenticated);
     }
+    logging::reauthenticated(pool, request_id, &identity, details).await;
+    details.stage = logging::Stage::Validation;
     if passwords::verify(replacement.clone(), original_hash)
         .await
         .map_err(password_error)?
@@ -71,6 +87,7 @@ async fn run(
     let new_hash = passwords::hash(&credential.login_name, replacement)
         .await
         .map_err(password_error)?;
+    details.stage = logging::Stage::Execution;
     grove_db::management::passwords::change(
         pool,
         request_id,

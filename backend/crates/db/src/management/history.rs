@@ -60,6 +60,10 @@ pub struct Invocation {
     pub outcome: String,
     pub error_code: Option<String>,
     pub duration_ms: i64,
+    pub target_type: Option<String>,
+    pub target_id: Option<String>,
+    pub stage: Option<String>,
+    pub auth_method: Option<String>,
 }
 #[derive(Debug, sqlx::FromRow)]
 pub struct SecurityEvent {
@@ -67,6 +71,10 @@ pub struct SecurityEvent {
     pub context: EventContext,
     pub event_type: String,
     pub reason_code: String,
+    pub operation: Option<String>,
+    pub stage: Option<String>,
+    pub auth_method: Option<String>,
+    pub is_sampled: Option<bool>,
 }
 
 impl IdentityTransaction<'_> {

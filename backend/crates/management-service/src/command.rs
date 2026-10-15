@@ -35,6 +35,19 @@ pub enum Command<'a> {
 }
 
 impl Command<'_> {
+    pub(crate) fn target(&self) -> Option<crate::logging::Target> {
+        use crate::logging::Target;
+        match self {
+            Self::ChangeAccount { id, .. } | Self::Account(id) => Some(Target::account(*id)),
+            Self::IssueCredential { account, .. } | Self::Credentials { account, .. } => {
+                Some(Target::account(*account))
+            }
+            Self::RevokeCredential(id) => Some(Target::credential(*id)),
+            Self::RevokeOwnSession(id) => Some(Target::session(*id)),
+            _ => None,
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Self::CreateAccount(_) => "identity.account.create",

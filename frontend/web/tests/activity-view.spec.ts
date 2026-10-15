@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { duration } from "../src/design/format";
-import { actor, invocationStatus, sourceName, validator, type Invocation } from "../src/features/activity/model";
-import { audit, context, invocation, maintenanceMock } from "./maintenance-fixture";
+import { actor, authMethodName, eventName, invocationStatus, recordingStatus, sourceName, stageName, targetName, validator, type Invocation } from "../src/features/activity/model";
+import { audit, context, invocation, maintenanceMock, security } from "./maintenance-fixture";
 import { openInvocation } from "./activity-history.mjs";
 
 const commands = ([
-  { ...invocation, operation: "storage.test", outcome: "succeeded", duration_ms: 12 },
-  { ...invocation, operation: "client.create", outcome: "denied", error_code: "forbidden", duration_ms: 8 },
-  { ...invocation, operation: "storage.delete", outcome: "unknown", error_code: "outcome_unknown", duration_ms: 1240, context: { ...context, surface: "cli" } },
-  { ...invocation, operation: "storage.replace", outcome: "failed", error_code: "unavailable", duration_ms: 750, context: { ...context, surface: "mcp" } },
+  { ...invocation, operation: "storage.test", outcome: "succeeded", duration_ms: 12, target_type: "storage", target_id: "backup-s3", stage: "commit", auth_method: "session" },
+  { ...invocation, operation: "client.create", outcome: "denied", error_code: "forbidden", duration_ms: 8, target_type: "client", target_id: "notegate", stage: "authorization", auth_method: "session" },
+  { ...invocation, operation: "storage.delete", outcome: "unknown", error_code: "outcome_unknown", duration_ms: 1240, target_type: "storage", target_id: "home-archive", stage: "commit", auth_method: "api_token", context: { ...context, surface: "cli" } },
+  { ...invocation, operation: "storage.replace", outcome: "failed", error_code: "unavailable", duration_ms: 750, target_type: "storage", target_id: "backup-s3", stage: "execution", auth_method: "api_token", context: { ...context, surface: "mcp" } },
 ] satisfies Invocation[]).map((row, index) => ({ ...row, context: { ...row.context, id: String(BigInt(context.id) + BigInt(index)) } }));
 
 test("activity models preserve outcome uncertainty and validate elapsed time", () => {
@@ -27,6 +27,39 @@ test("activity models preserve outcome uncertainty and validate elapsed time", (
   expect(duration(0)).toBe("0 ms");
   expect(duration(999)).toBe("999 ms");
   expect(duration(1240)).toBe("1.2 s");
+});
+
+test("history labels preserve missing context and recording uncertainty", () => {
+  expect(stageName(null)).toBe("Not recorded");
+  expect(authMethodName(undefined)).toBe("Not recorded");
+  expect(stageName("browser_admission")).toBe("Browser admission");
+  expect(stageName("future_stage")).toBe("future_stage");
+  expect(authMethodName("constructor")).toBe("constructor");
+  expect(targetName(invocation as Invocation)).toBe("Not recorded");
+  expect(recordingStatus(true).label).toBe("Representative");
+  expect(recordingStatus(false).label).toBe("Individual");
+  expect(recordingStatus(null).label).toBe("Unknown");
+  expect(recordingStatus(undefined).label).toBe("Unknown");
+});
+
+test("security operation context does not change the event discriminator", () => {
+  for (const operation of ["identity.session.login", null]) {
+    const row = { ...security, operation, stage: "authentication", auth_method: "password", is_sampled: true };
+    expect(validator("security")(row)).toBe(true);
+    expect(eventName(row)).toBe("permission_denied");
+  }
+  expect(validator("security")({ ...security, is_sampled: "true" })).toBe(false);
+  expect(validator("invocations")({ ...invocation, target_id: {} })).toBe(false);
+});
+
+test("security records with operation context remain selectable", async ({ page }) => {
+  await maintenanceMock(page);
+  await page.route("**/identity/v1/history/security?*", route => route.fulfill({
+    json: { items: [{ ...security, operation: "identity.session.login", stage: "authentication", auth_method: "password", is_sampled: true }], next_before: null },
+  }));
+  await page.goto("/api/admin/console/#activity/security");
+  await page.getByRole("button", { name: "permission_denied", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Event details" })).toContainText("permission_denied");
 });
 
 async function commandHistory(page: Parameters<typeof maintenanceMock>[0]) {
@@ -48,8 +81,74 @@ test("command outcomes, source and elapsed time are visible without opening deta
   await expect(details.getByText("Unknown", { exact: true })).toBeVisible();
   await expect(details).toContainText("outcome_unknown");
   await expect(details).toContainText("1.2 s");
+  await expect(details).toContainText("home-archive");
+  await expect(details).toContainText("Commit confirmation");
+  await expect(details).toContainText("API token");
   await expect(details.getByText("Succeeded", { exact: true })).toHaveCount(0);
 });
+
+test("command targets and stages are visible and absent legacy fields are not inferred", async ({ page }) => {
+  await commandHistory(page);
+  const grid = page.getByRole("grid", { name: "Activity", exact: true });
+  await expect(grid.getByRole("columnheader", { name: "Target", exact: true })).toBeVisible();
+  await expect(grid).toContainText("storage: home-archive");
+  await expect(grid).toContainText("Authorization");
+  await page.route("**/identity/v1/history/invocations?*", route => route.fulfill({ json: { items: [invocation], next_before: null } }));
+  await page.getByRole("button", { name: "Refresh activity", exact: true }).click();
+  await grid.getByRole("button", { name: "storage.test", exact: true }).click();
+  const details = page.getByRole("dialog", { name: "Event details" });
+  await expect(details.getByText("Not recorded", { exact: true })).toHaveCount(4);
+  await expect(details.getByText("Password", { exact: true })).toHaveCount(0);
+});
+
+const securityRows = [
+  { ...security, event_type: "authentication_failed", reason_code: "unauthenticated", operation: "identity.session.login", stage: "authentication", auth_method: "password", is_sampled: true,
+    context: { ...context, id: "101", actor_kind: "anonymous", actor_id: null } },
+  { ...security, operation: "identity.account.role", stage: "authorization", auth_method: "session", is_sampled: false, context: { ...context, id: "102" } },
+  { ...security, operation: null, stage: null, auth_method: null, is_sampled: null, context: { ...context, id: "103" } },
+];
+
+async function securityHistory(page: Parameters<typeof maintenanceMock>[0]) {
+  await maintenanceMock(page);
+  await page.route("**/identity/v1/history/security?*", route => route.fulfill({ json: { items: securityRows, next_before: null } }));
+  await page.goto("/api/admin/console/#activity/security");
+}
+
+test("security recording modes preserve representative and unknown context", async ({ page }) => {
+  await securityHistory(page);
+  const grid = page.getByRole("grid", { name: "Activity", exact: true });
+  for (const label of ["Representative", "Individual", "Unknown", "Authentication", "Authorization"])
+    await expect(grid.getByText(label, { exact: true })).toBeVisible();
+  await grid.getByRole("button", { name: "authentication_failed", exact: true }).click();
+  const details = page.getByRole("dialog", { name: "Event details" });
+  await expect(details).toContainText("identity.session.login");
+  await expect(details).toContainText("Password");
+  await expect(details.getByRole("alert")).toContainText("Other anonymous attempts may not be stored");
+  await expect(details).toContainText("Anonymous");
+  await page.keyboard.press("Escape");
+  await grid.getByRole("row").filter({ hasText: "Unknown" }).getByRole("button", { name: "permission_denied", exact: true }).click();
+  await expect(details.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(details.getByText("Not recorded", { exact: true })).toHaveCount(3);
+  await expect(details.getByRole("alert")).toHaveCount(0);
+});
+
+for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
+  test(`security context view and detail ${width}px ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 960 });
+    await securityHistory(page);
+    await page.getByRole("button", { name: "Theme", exact: true }).click();
+    await page.getByRole("menuitem", { name: new RegExp(`^${theme}$`, "i") }).click();
+    const grid = page.getByRole("grid", { name: "Activity", exact: true });
+    await expect(grid.getByText("Representative", { exact: true })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/security-context-${width}-${theme}.png`, animations: "disabled" });
+    await grid.getByRole("button", { name: "authentication_failed", exact: true }).click();
+    const details = page.getByRole("dialog", { name: "Event details" });
+    await expect(details).toContainText("Password");
+    expect(await details.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await details.screenshot({ path: `test-results/security-context-detail-${width}-${theme}.png`, animations: "disabled" });
+  });
+}
 
 test("operation ID matches the backend history value and can be copied", async ({ page, context: browserContext }) => {
   await maintenanceMock(page);

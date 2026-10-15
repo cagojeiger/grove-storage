@@ -39,7 +39,7 @@ async fn history_scope_uses_actor_snapshots_and_filters_before_pagination(pool: 
     telemetry::invocation(
         &pool,
         &ctx,
-        "storage.list",
+        &telemetry::Details::new("storage.list", telemetry::Stage::Execution),
         telemetry::Outcome::Succeeded,
         None,
         1,

@@ -95,6 +95,17 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
+      - name: Preserve Activity UI evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: activity-ui
+          path: |
+            frontend/web/test-results/activity-view-*.png
+            frontend/web/test-results/activity-detail-*.png
+            frontend/web/test-results/security-context-*.png
+          retention-days: 14
+          if-no-files-found: warn
 
   object-policy:
     name: Object contracts (no services)

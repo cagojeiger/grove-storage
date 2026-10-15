@@ -119,8 +119,7 @@ async fn own_profile_is_password_session_scoped_and_audited(pool: PgPool) {
     let metadata: serde_json::Value = sqlx::query_scalar(
         "SELECT metadata FROM management.audit_events WHERE action='account.name' AND resource_id=$1",
     ).bind(owner.to_string()).fetch_one(&pool).await.unwrap();
-    assert_eq!(metadata["before_name"], "Original");
-    assert_eq!(metadata["after_name"], "Updated owner");
+    assert_eq!(metadata, serde_json::json!({"name_changed": true}));
 
     let (_, raw) = credential(&pool, owner).await;
     assert_eq!(

@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import {
+  Alert,
   Chip,
   DialogContent,
   DialogTitle,
@@ -15,9 +16,12 @@ import { Copy, X } from "lucide-react";
 import TextField from "../template/shared-theme/Field";
 import {
   actor,
+  authMethodName,
   eventName,
   invocationStatus,
+  recordingStatus,
   sourceName,
+  stageName,
   type Event,
 } from "../features/activity/model";
 import { duration, time } from "../design/format";
@@ -32,6 +36,7 @@ export function ActivityDetails({ event, onClose }: {
   const outcome = "outcome" in event ? invocationStatus(event.outcome) : null;
   // Management history request_id is operation_id in operational logs.
   const operationId = event.context.request_id;
+  const recording = "event_type" in event ? recordingStatus(event.is_sampled) : null;
   return (
     <Drawer
       anchor="right"
@@ -72,14 +77,31 @@ export function ActivityDetails({ event, onClose }: {
               Resource: event.resource_id,
               "Resource type": event.resource_type,
             } : {}),
-            ...("reason_code" in event ? { Reason: event.reason_code } : {}),
-            Time: time(event.context.created_at),
+            ...("outcome" in event ? {
+              "Target type": event.target_type ?? "Not recorded",
+              "Target ID": event.target_id ?? "Not recorded",
+            } : {}),
+            ...("event_type" in event ? {
+              Operation: event.operation ?? "Not recorded",
+              Reason: event.reason_code,
+              Recording: recording && <Tooltip title={recording.description}>
+                <Chip label={recording.label} color={recording.color} variant="outlined" size="small" />
+              </Tooltip>,
+            } : {}),
+            ...(!("action" in event) ? {
+              Stage: stageName(event.stage),
+              "Authentication method": authMethodName(event.auth_method),
+            } : {}),
+            "Recorded at": time(event.context.created_at),
             Source: sourceName(event.context.surface),
             ...("duration_ms" in event ? {
               Duration: duration(event.duration_ms),
               "Error code": event.error_code,
             } : {}),
           }} />
+          {"event_type" in event && event.is_sampled === true && (
+            <Alert severity="warning">Representative record. Other anonymous attempts may not be stored.</Alert>
+          )}
           <Divider />
           <TextField
             fullWidth

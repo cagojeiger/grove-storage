@@ -12,8 +12,8 @@ pub async fn get(
         pool,
         request_id,
         session_hash,
-        "identity.account.get",
-        async {
+        logging::Details::new("identity.account.get", logging::Stage::Authentication),
+        async |_| {
             db::profile::get(pool, session_hash)
                 .await
                 .map_err(Error::from)
@@ -32,8 +32,8 @@ pub async fn rename(
         pool,
         request_id,
         session_hash,
-        "identity.account.name",
-        async {
+        logging::Details::new("identity.account.name", logging::Stage::Authentication),
+        async |_| {
             db::profile::rename(pool, request_id, session_hash, display_name)
                 .await
                 .map_err(Error::from)

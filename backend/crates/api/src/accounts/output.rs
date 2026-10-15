@@ -47,12 +47,16 @@ pub(super) fn respond(execution: Execution, limit: u16) -> Response {
             (r.context.id.to_string(), json!({
                 "context": context(r.context), "operation": r.operation,
                 "outcome": r.outcome, "error_code": r.error_code, "duration_ms": r.duration_ms,
+                "target_type": r.target_type, "target_id": r.target_id,
+                "stage": r.stage, "auth_method": r.auth_method,
             }))
         }), limit),
         Output::Security(rows) => page(rows.into_iter().map(|r| {
             (r.context.id.to_string(), json!({
                 "context": context(r.context), "event_type": r.event_type,
                 "reason_code": r.reason_code,
+                "operation": r.operation, "stage": r.stage,
+                "auth_method": r.auth_method, "is_sampled": r.is_sampled,
             }))
         }), limit),
         _ => return failure(Error::Unavailable, execution.request_id),

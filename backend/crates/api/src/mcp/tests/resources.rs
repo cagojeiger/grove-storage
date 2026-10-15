@@ -1,7 +1,7 @@
 use super::*;
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn ten_reads_equal_command_http_and_record_one_mcp_invocation(pool: PgPool) {
+async fn reads_match_http_and_only_sensitive_reads_enter_history(pool: PgPool) {
     let token = owner(&pool).await;
     seed(&pool).await;
     for (name, input) in [
@@ -29,7 +29,12 @@ async fn ten_reads_equal_command_http_and_record_one_mcp_invocation(pool: PgPool
         .fetch_all(&pool)
         .await
         .unwrap();
-        assert_eq!(records, vec![("mcp".into(), name.into())]);
+        let expected = if matches!(name, "client-key.list" | "credential.list") {
+            vec![("mcp".into(), name.into())]
+        } else {
+            vec![]
+        };
+        assert_eq!(records, expected);
         let mut state = crate::routes::tests::test_state();
         state.pool = pool.clone();
         let rest = crate::routes::app(state, &[])

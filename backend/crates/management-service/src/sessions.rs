@@ -23,7 +23,9 @@ pub async fn reject_browser(pool: &PgPool, error: Error) -> Uuid {
     } else {
         telemetry::SecurityReason::Unauthenticated
     };
-    logging::security(pool, None, request_id, Surface::Console, reason).await;
+    let mut details = logging::Details::new("console.request", logging::Stage::BrowserAdmission);
+    details.auth_method = Some(logging::AuthMethod::Session);
+    logging::security(pool, None, request_id, Surface::Console, reason, &details).await;
     request_id
 }
 
@@ -31,7 +33,14 @@ pub async fn login(pool: &PgPool, token_hash: Option<&str>, session_hash: &str) 
     let request_id = Uuid::new_v4();
     let started = tokio::time::Instant::now();
     let result = exchange(pool, request_id, token_hash, session_hash).await;
-    record_login(pool, request_id, started, result).await
+    record_login(
+        pool,
+        request_id,
+        started,
+        logging::AuthMethod::ApiToken,
+        result,
+    )
+    .await
 }
 
 pub async fn login_password(
@@ -43,15 +52,31 @@ pub async fn login_password(
     let request_id = Uuid::new_v4();
     let started = tokio::time::Instant::now();
     let result = password_exchange(pool, request_id, username, password, session_hash).await;
-    record_login(pool, request_id, started, result).await
+    record_login(
+        pool,
+        request_id,
+        started,
+        logging::AuthMethod::Password,
+        result,
+    )
+    .await
 }
 
 async fn record_login(
     pool: &PgPool,
     request_id: Uuid,
     started: tokio::time::Instant,
+    method: logging::AuthMethod,
     result: Result<db::Session, Error>,
 ) -> Login {
+    let mut details =
+        logging::Details::new("identity.session.login", logging::Stage::Authentication);
+    details.auth_method = Some(method);
+    if let Ok(session) = &result {
+        details.target = Some(logging::Target::session(session.id));
+    } else if matches!(result, Err(Error::OutcomeUnknown)) {
+        details.stage = logging::Stage::Commit;
+    }
     let context = result.as_ref().ok().map(|session| AuditContext {
         actor: AuditActor::Account {
             id: session.account_id,
@@ -66,7 +91,7 @@ async fn record_login(
         context.as_ref(),
         request_id,
         Surface::Console,
-        "identity.session.login",
+        &details,
         started.elapsed(),
         &result,
     )
@@ -78,6 +103,7 @@ async fn record_login(
             request_id,
             Surface::Console,
             telemetry::SecurityReason::Authenticated,
+            &details,
         )
         .await;
     }

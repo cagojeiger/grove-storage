@@ -6,6 +6,7 @@ pub async fn admit_mcp(pool: &PgPool, token_hash: &str) -> Result<(), (Uuid, Com
     let request_id = Uuid::new_v4();
     let started = tokio::time::Instant::now();
     let mut context = None;
+    let mut details = logging::details("mcp.connect", Proof::Token(token_hash));
     let result = async {
         let mut tx = IdentityTransaction::begin(pool).await?;
         current(
@@ -15,6 +16,7 @@ pub async fn admit_mcp(pool: &PgPool, token_hash: &str) -> Result<(), (Uuid, Com
             grove_management_command::CommandName::Status,
             request_id,
             &mut context,
+            &mut details,
         )
         .await?;
         tx.finish().await.map_err(|_| Error::Unavailable)
@@ -26,7 +28,7 @@ pub async fn admit_mcp(pool: &PgPool, token_hash: &str) -> Result<(), (Uuid, Com
             context.as_ref(),
             request_id,
             Surface::Mcp,
-            "mcp.connect",
+            &details,
             started.elapsed(),
             &result,
         )
