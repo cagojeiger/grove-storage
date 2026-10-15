@@ -59,6 +59,7 @@ pub(crate) struct Metrics(Arc<Inner>);
 
 struct Inner {
     registry: Registry,
+    provider: grove_infra::S3Metrics,
     database: database::Cache,
     clock: Arc<dyn Clock>,
     http_requests: Family<HttpResult, Counter>,
@@ -100,6 +101,7 @@ impl Metrics {
     pub fn new(clock: Arc<dyn Clock>, log_errors: Option<ErrorCounter>) -> Self {
         let mut inner = Inner {
             registry: Registry::with_prefix("grove"),
+            provider: grove_infra::S3Metrics::default(),
             database: database::Cache::default(),
             clock,
             http_requests: Family::default(),
@@ -124,6 +126,7 @@ impl Metrics {
             spool_active: Gauge::default(),
         };
         let r = &mut inner.registry;
+        inner.provider.register(r);
         r.register(
             "http_requests",
             "Requests ending in response creation or interruption",
@@ -256,6 +259,10 @@ impl Metrics {
             }
         }
         Self(Arc::new(inner))
+    }
+
+    pub fn provider(&self) -> grove_infra::S3Metrics {
+        self.0.provider.clone()
     }
 
     pub fn http_started(&self, labels: &HttpLabels) {

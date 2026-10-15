@@ -26,6 +26,9 @@
 | `transfer_observed_bytes` | counter | direction; 청크 관찰마다 갱신하는 바이트 |
 | `transfer_duration_seconds` | histogram | direction·outcome; 스트림 관찰 종료까지의 시간 |
 | `transfers_in_flight` | gauge | direction; 아직 종료를 관찰하지 않은 스트림 |
+| `provider_calls` | counter | operation·status_class·outcome; 외부 S3 SDK send의 종료 결과 |
+| `provider_call_duration_seconds` | histogram | operation; SDK send 반환·중단까지의 시간 |
+| `provider_calls_in_flight` | gauge | operation; SDK send 반환 전 호출 |
 | `worker_runs` | counter | worker·task·outcome; 실행·오류·timeout·skip·중단 |
 | `worker_duration_seconds` | histogram | worker·task; 호출 종료까지의 시간 |
 | `worker_runs_in_flight` | gauge | worker·task; 실행 중 호출 |
@@ -51,6 +54,23 @@ HTTP 2xx는 파일 전송 완료가 아니다. `send` 바이트는 HTTP 런타�
 수신자의 저장이나 TCP ACK를 보장하지 않는다. `receive` 성공은 스풀 쓰기·flush
 완료다. 공급자 저장과 DB commit 성공은 아니다. 직접 Client↔외부 S3 전송은
 Grove가 관찰하지 않는다.
+
+provider 호출은 SDK 내부 재시도를 포함한 논리적 send 1회다. multipart 목록의
+페이지별 send와 개별 abort는 각각 집계한다. GET은 응답 헤더 수신까지이며 Range도
+get_object로 집계한다. 본문 수신·클라이언트 전달 완료는 뜻하지 않는다. presign은
+로컬 서명이므로 provider 네트워크 호출 수에 포함하지 않는다. SDK 성공 뒤의
+ETag·크기 검증이나 DB commit도 별개다. 기존 재시도·타임아웃 정책은 유지한다.
+소요 시간에는 SDK 대기·재시도와 업로드 본문 읽기가 포함되며 공급자 서버만의 처리 시간은 아니다.
+
+operation은 head_bucket·list_multipart_uploads·put_object·get_object·delete_object·
+head_object·create_multipart_upload·upload_part·list_parts·complete_multipart_upload·
+abort_multipart_upload의 11개다. 부팅·등록·연결 확인과 요청·복구 작업이 같은
+프로세스 지표를 공유한다. outcome은 success/not_found/error/timeout/interrupted다.
+SDK가 정상 반환하면 2xx/success, HTTP 404는 4xx/not_found, 나머지 오류는 error다.
+자격증명·권한 오류 401/403도 error다. 404·NoSuchUpload를 호출자가 정상 처리해도
+provider 응답은 4xx/not_found로 보존한다.
+SDK 자체 timeout과 호출자 취소는 각각 timeout·interrupted이며 status_class=none이다.
+네트워크 응답 없는 오류도 none이다. 버킷·키·주소·자격증명·오류 원문은 라벨이 아니다.
 
 HTTP outcome은 success/rejected/error/interrupted다. S3 미지원 501은 rejected이며
 status_class=5xx를 유지한다. 서비스 오류 집계는 outcome=error를 사용한다.
@@ -111,7 +131,7 @@ rate를 적용하지 않는다. 정확한 적체/overdue 집계는 데이터량�
 DB snapshot은 Pod당 최대 128개 시계열과 수집 worker 계열을 추가한다.
 
 기존 Kubernetes/CNPG 수집은 CPU·메모리·재시작·DB 전체 크기를 담당한다.
-provider 개별 호출 계측은 후속 범위다. Grafana 대시보드·알림은 실제 수집된
+Grafana 대시보드·알림은 실제 수집된
 시계열을 확인한 뒤 추가한다.
 
 `metrics/tests.rs`는 가상 시간, 응답/전송 경계, 취소·EOF·오류, worker 결과,
@@ -125,3 +145,6 @@ worker 시각, SIGTERM 리스너 종료를 검증한다.
 대기 중이며 10초 제한이 Tokio의 1ms 해상도 안에서 발동함을 확인한다.
 timeout·SQL 실패 후 기존 값·성공 시각 유지, inflight 해제,
 다음 성공 시 snapshot과 성공 시각 갱신까지 같은 실행 경로로 검증한다.
+provider 테스트는 가상 시간의 소요 시간·취소, SDK·연결 timeout 분류와 실제 SDK의 404·5xx·내부 재시도,
+GET 본문 대기 중 호출 완료, 로컬 presign 제외와 라벨 격리를 검증한다.
+메트릭 E2E는 실제 MinIO의 연결 probe·PUT·GET이 같은 레지스트리에 기록됨도 확인한다.

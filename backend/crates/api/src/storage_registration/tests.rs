@@ -35,6 +35,7 @@ async fn filesystem_submission_is_rejected_before_probe() {
         verified_row(
             &state.crypto,
             state.clock.clone(),
+            state.metrics.provider(),
             true,
             "fs-test",
             fs_body(false)
@@ -105,7 +106,14 @@ async fn status_collects_all_checks_while_startup_rejects_failure(pool: PgPool) 
         registry::insert_storage(&pool, &row).await.unwrap();
     }
 
-    let checks = check_registered(&pool, &state.crypto).await.unwrap();
+    let checks = check_registered(
+        &pool,
+        &state.crypto,
+        state.clock.clone(),
+        state.metrics.provider(),
+    )
+    .await
+    .unwrap();
     assert_eq!(checks.len(), 2);
     assert!(
         checks
@@ -121,8 +129,26 @@ async fn status_collects_all_checks_while_startup_rejects_failure(pool: PgPool) 
             .unwrap()
             .ok()
     );
-    assert!(verify_registered(&pool, &state.crypto).await.is_err());
+    assert!(
+        verify_registered(
+            &pool,
+            &state.crypto,
+            state.clock.clone(),
+            state.metrics.provider()
+        )
+        .await
+        .is_err()
+    );
     registry::delete_storage(&pool, "missing").await.unwrap();
-    assert!(verify_registered(&pool, &state.crypto).await.is_ok());
+    assert!(
+        verify_registered(
+            &pool,
+            &state.crypto,
+            state.clock.clone(),
+            state.metrics.provider()
+        )
+        .await
+        .is_ok()
+    );
     task.abort();
 }

@@ -65,6 +65,7 @@ impl ServerHandler for Server {
                 crate::storage_registration::verify_command(
                     &self.state.crypto,
                     self.state.clock.clone(),
+                    self.state.metrics.provider(),
                     self.state.public_url.is_some(),
                     input,
                 )

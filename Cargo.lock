@@ -1345,8 +1345,10 @@ dependencies = [
  "axum",
  "chrono",
  "grove-core",
+ "prometheus-client",
  "secrecy",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

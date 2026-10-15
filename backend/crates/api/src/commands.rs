@@ -57,6 +57,7 @@ pub(crate) async fn execute_with(
             crate::storage_registration::verify_command(
                 &state.crypto,
                 state.clock.clone(),
+                state.metrics.provider(),
                 state.public_url.is_some(),
                 input,
             )

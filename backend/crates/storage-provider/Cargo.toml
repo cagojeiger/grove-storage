@@ -11,10 +11,13 @@ aws-smithy-http-client.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 secrecy.workspace = true
+prometheus-client = "0.25.1"
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 chrono.workspace = true
 axum.workspace = true
+tokio-util.workspace = true
 
 [lints]
 workspace = true

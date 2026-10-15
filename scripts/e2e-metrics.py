@@ -62,6 +62,11 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
         assert "grove_db_pool_connections" in text
         assert "grove_spool_reserved_bytes 0" in text
         assert "grove_log_dropped_lines_total 0" in text
+        provider_operations = ["head_bucket", "list_multipart_uploads", "put_object", "get_object"]
+        for operation in provider_operations:
+            prefix = f'grove_provider_calls_total{{operation="{operation}",status_class="2xx",outcome="success"}} '
+            assert int(next(line for line in text.splitlines() if line.startswith(prefix)).removeprefix(prefix)) > 0
+            assert f'grove_provider_calls_in_flight{{operation="{operation}"}} 0' in text
 
         deadline = time.monotonic() + 10
         while True:
@@ -105,6 +110,7 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
         print("METRICS", json.dumps({"observed_bytes": observed_bytes,
             "spool_reserved_bytes": 0, "log_dropped_lines_total": 0,
             "maintenance_completed": True, "database_snapshot_completed": True,
+            "provider_operations": provider_operations,
             "observed_tables": 22, "account_table_data_bytes": table_bytes}, sort_keys=True))
     print("PASS real presigned PUT/GET, live counters, worker timestamp and metrics privacy/isolation")
 

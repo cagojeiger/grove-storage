@@ -19,7 +19,13 @@ pub async fn run() -> anyhow::Result<ExitCode> {
     .await?;
 
     // 부팅과 같은 재검증을 storage별로(abort 없이) 돌린다.
-    let checks = crate::storage_registration::check_registered(&pool, &crypto).await?;
+    let checks = crate::storage_registration::check_registered(
+        &pool,
+        &crypto,
+        std::sync::Arc::new(grove_core::time::SystemClock),
+        grove_infra::S3Metrics::default(),
+    )
+    .await?;
     let usage = grove_db::usage::by_storage(&pool).await?;
     let clients = grove_db::registry::list_clients(&pool).await?;
     pool.close().await;
