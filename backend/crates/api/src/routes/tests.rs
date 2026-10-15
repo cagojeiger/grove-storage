@@ -40,6 +40,7 @@ pub(crate) fn test_state() -> AppState {
         .unwrap();
     AppState {
         clock: Arc::new(grove_core::time::SystemClock),
+        metrics: crate::metrics::Metrics::default(),
         pool,
         crypto,
         public_url: Some("http://grove.test".to_owned()),

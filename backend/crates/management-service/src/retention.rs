@@ -9,10 +9,22 @@ use tokio::time::{Instant, timeout_at};
 
 const BATCH_LIMIT: NonZeroU16 = NonZeroU16::new(1000).expect("positive batch limit");
 const JOB_TIMEOUT: Duration = Duration::from_secs(2);
-const DAY: NonZeroU16 = NonZeroU16::new(1).expect("positive retention");
-const MONTH: NonZeroU16 = NonZeroU16::new(30).expect("positive retention");
-const QUARTER: NonZeroU16 = NonZeroU16::new(90).expect("positive retention");
-const YEAR: NonZeroU16 = NonZeroU16::new(365).expect("positive retention");
+
+pub fn plan(retention: ManagementLogRetention) -> [(Stream, NonZeroU16); 8] {
+    const MONTH: NonZeroU16 = NonZeroU16::new(30).expect("positive retention");
+    const QUARTER: NonZeroU16 = NonZeroU16::new(90).expect("positive retention");
+    const YEAR: NonZeroU16 = NonZeroU16::new(365).expect("positive retention");
+    [
+        (Stream::Audit, retention.audit_days),
+        (Stream::Security, retention.security_days),
+        (Stream::Invocations, retention.invocation_days),
+        (Stream::Sessions, NonZeroU16::MIN),
+        (Stream::PasswordSetup, NonZeroU16::MIN),
+        (Stream::ApiTokens, MONTH),
+        (Stream::ObjectAccess, QUARTER),
+        (Stream::Usage, YEAR),
+    ]
+}
 
 #[derive(Default)]
 pub struct Report {
@@ -23,16 +35,7 @@ pub struct Report {
 /// The worker holds the management retention lock, not object or identity locks.
 pub async fn run(pool: &PgPool, retention: ManagementLogRetention) -> Report {
     let mut report = Report::default();
-    for (stream, days) in [
-        (Stream::Audit, retention.audit_days),
-        (Stream::Security, retention.security_days),
-        (Stream::Invocations, retention.invocation_days),
-        (Stream::Sessions, DAY),
-        (Stream::PasswordSetup, DAY),
-        (Stream::ApiTokens, MONTH),
-        (Stream::ObjectAccess, QUARTER),
-        (Stream::Usage, YEAR),
-    ] {
+    for (stream, days) in plan(retention) {
         let started = Instant::now();
         let deadline = started + JOB_TIMEOUT;
         let mut count = 0;

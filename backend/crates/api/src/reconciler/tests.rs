@@ -131,6 +131,7 @@ async fn real_worker_advances_past_forty_denials_in_each_generic_job(pool: PgPoo
         Duration::from_millis(10),
         shutdown.clone(),
         Arc::new(grove_core::time::FixedClock(time::base())),
+        state.metrics.clone(),
     ));
     let progress = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -197,6 +198,7 @@ async fn real_worker_advances_past_forty_denials_in_each_generic_job(pool: PgPoo
         Duration::from_millis(10),
         shutdown.clone(),
         Arc::new(grove_core::time::FixedClock(time::base())),
+        state.metrics.clone(),
     ));
     let recovery = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -258,6 +260,7 @@ async fn shutdown_during_cleanup_preserves_intent_and_releases_the_worker_lock(p
         Duration::from_secs(60),
         shutdown.clone(),
         Arc::new(grove_core::time::FixedClock(time::base())),
+        state.metrics.clone(),
     ));
     let observed = tokio::time::timeout(Duration::from_secs(5), entered.notified()).await;
     shutdown.cancel();

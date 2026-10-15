@@ -18,6 +18,7 @@ mod schedule;
 use schedule::{Job, Schedule, bounded_pass};
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::logging::worker::{Report as JobReport, Run};
@@ -107,8 +108,18 @@ pub async fn run(
     tick: Duration,
     shutdown: CancellationToken,
     clock: Arc<dyn grove_core::time::Clock>,
+    metrics: crate::metrics::Metrics,
 ) {
     tracing::info!(event = "reconciler.started", tick_secs = tick.as_secs());
+    for task in ["pass", "local_spool"]
+        .into_iter()
+        .chain(schedule::JOBS.map(Job::name))
+    {
+        metrics.register_worker(&crate::metrics::WorkerLabels {
+            worker: "object",
+            task,
+        });
+    }
 
     let mut ticker = interval(tick);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -122,21 +133,34 @@ pub async fn run(
                 return;
             }
             _ = ticker.tick() => {
+                let mut pass = Run::new("object", "pass", metrics.clone());
+                let failed = AtomicBool::new(false);
                 // pod 로컬 OS temp의 크래시 스풀은 락 없이 매 pod가 직접
                 // 치운다 — 자기 디스크는 자기 몫이고, 락 승자만 치우면
                 // 락을 못 이긴 pod의 잔여물이 밀린다.
                 let result = bounded_pass(&shutdown, async {
-                    let mut local = Run::new("object", "local_spool");
+                    let mut local = Run::new("object", "local_spool", metrics.clone());
                     match tokio::time::timeout(RECOVERY_IO_TIMEOUT, sweep_local_temps(clock.now().into()).instrument(local.span.clone())).await {
-                        Ok(report) => local.finish(&report),
-                        Err(_) => local.timed_out(),
+                        Ok(report) => {
+                            failed.store(report.failed > 0, Ordering::Relaxed);
+                            local.finish(&report);
+                        }
+                        Err(_) => {
+                            failed.store(true, Ordering::Relaxed);
+                            local.timed_out();
+                        }
                     }
                     grove_db::with_reconciler_lock(&pool, || {
                         schedule.run(|job| {
                             let (pool, crypto, s3_clients) = (&pool, &crypto, &s3_clients);
+                            let metrics = metrics.clone();
+                            let failed = &failed;
                             async move {
-                                let mut observation = Run::new("object", job.name());
+                                let mut observation = Run::new("object", job.name(), metrics);
                                 let report = run_job(job, pool, crypto, s3_clients).instrument(observation.span.clone()).await;
+                                if report.failed > 0 {
+                                    failed.store(true, Ordering::Relaxed);
+                                }
                                 observation.finish(&report);
                             }
                         })
@@ -144,12 +168,24 @@ pub async fn run(
                 }).await;
                 match result {
                     // 주기적 틱 — 잡 유무와 무관하게 debug (로그 정책).
-                    Some(Ok(Ok(Some(())))) => tracing::debug!(event = "reconciler.job"),
+                    Some(Ok(Ok(Some(())))) => {
+                        pass.finish(&JobReport { failed: u64::from(failed.load(Ordering::Relaxed)), ..JobReport::default() });
+                        tracing::debug!(event = "reconciler.job");
+                    }
                     Some(Ok(Ok(None))) => {
+                        if failed.load(Ordering::Relaxed) {
+                            pass.finish(&JobReport { failed: 1, ..JobReport::default() });
+                        } else {
+                            pass.skipped();
+                        }
                         tracing::debug!(event = "reconciler.skipped", reason = "lock_held")
                     }
-                    Some(Ok(Err(error))) => tracing::error!(event = "reconciler.failed", error_code = "lock_failed", %error),
+                    Some(Ok(Err(error))) => {
+                        pass.finish(&JobReport { failed: 1, ..JobReport::default() });
+                        tracing::error!(event = "reconciler.failed", error_code = "lock_failed", %error);
+                    }
                     Some(Err(_)) => {
+                        pass.timed_out();
                         tracing::warn!(event = "reconciler.failed", error_code = "pass_timeout", reason = "pass_timeout");
                     }
                     None => {

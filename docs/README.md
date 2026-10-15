@@ -10,6 +10,7 @@
 | 현행 관리자 로그인·초기화·복구 | [로컬 관리 인증](spec/11-local-management-auth.md) |
 | 관리 책임·권한·이력 | [관리 경계](spec/08-management-plane.md) |
 | 운영 로그·실행 ID·전송 종료·개인정보 제외 | [로그 계약](spec/12-logging.md) |
+| 직접 계측·지표 단위·수집 리스너 | [메트릭 계약](spec/13-metrics.md) |
 | 이전 운영자 REST 인증 | [spec 05](spec/05-admin-auth.md) |
 | 관리 MCP 연결·CLI 대응·비밀 전달 | [spec 10](spec/10-management-mcp.md) |
 | CLI/MCP 공통 명령·입출력·오류·권한 계약 | [명령 계약](spec/09-management-commands.md) |

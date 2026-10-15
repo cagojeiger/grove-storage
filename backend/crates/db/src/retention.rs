@@ -75,6 +75,41 @@ impl Stream {
     }
 }
 
+#[derive(Debug)]
+pub struct Backlog {
+    pub stream: &'static str,
+    pub retention_days: u16,
+    pub rows: i64,
+    pub oldest_at: Option<DateTime<Utc>>,
+}
+
+pub(crate) async fn backlog(
+    tx: &mut Transaction<'_, Postgres>,
+    stream: Stream,
+    days: NonZeroU16,
+    now: DateTime<Utc>,
+) -> Result<Backlog, sqlx::Error> {
+    let (table, time, _, guard) = stream.target();
+    let cutoff = stream.cutoff_sql();
+    let timestamp = match stream {
+        Stream::Usage => "day::timestamp AT TIME ZONE 'UTC'",
+        _ => time,
+    };
+    let (rows, oldest_at) = sqlx::query_as(&format!(
+        "SELECT count(*), min({timestamp}) FROM {table} t \
+         WHERE {time} < {cutoff} AND {guard}"
+    ))
+    .bind(now - chrono::Duration::days(i64::from(days.get())))
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(Backlog {
+        stream: stream.name(),
+        retention_days: days.get(),
+        rows,
+        oldest_at,
+    })
+}
+
 pub struct Batch {
     pub deleted: u64,
     pub oldest_remaining_at: Option<DateTime<Utc>>,

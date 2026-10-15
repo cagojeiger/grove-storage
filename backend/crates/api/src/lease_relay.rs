@@ -146,8 +146,14 @@ async fn upload(
     let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
 
-    let (written, md5_hex) =
-        spool_measured(body, &mut writer, &temp_path, lease.declared_size).await?;
+    let (written, md5_hex) = spool_measured(
+        body,
+        &mut writer,
+        &temp_path,
+        lease.declared_size,
+        state.metrics.clone(),
+    )
+    .await?;
 
     if claim
         .declared_md5
@@ -248,7 +254,14 @@ async fn upload_part(
         .map_err(internal)?;
     let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
-    let (written, md5_hex) = spool_measured(body, &mut writer, &temp_path, expected).await?;
+    let (written, md5_hex) = spool_measured(
+        body,
+        &mut writer,
+        &temp_path,
+        expected,
+        state.metrics.clone(),
+    )
+    .await?;
     drop(writer.into_inner());
 
     let spec = &backend.spec;
@@ -357,8 +370,9 @@ async fn spool_measured(
     writer: &mut (impl tokio::io::AsyncWrite + Unpin),
     temp_path: &std::path::Path,
     declared_size: i64,
+    metrics: crate::metrics::Metrics,
 ) -> Result<(i64, String), ApiError> {
-    let measured = spool::spool_to_temp(body, writer, temp_path, declared_size, false)
+    let measured = spool::spool_to_temp(body, writer, temp_path, declared_size, false, metrics)
         .await
         .map_err(|error| match error {
             spool::SpoolError::Idle => status(
@@ -414,6 +428,7 @@ async fn download(
         Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
         size,
         lease.file_id,
+        state.metrics.clone(),
     )
     .into_response();
     let headers = response.headers_mut();

@@ -19,7 +19,8 @@ Background task -> run_id -> processed/failed/skipped
 
 운영 로그와 후속 Prometheus 지표는 같은 처리 경계와 결과 의미를 사용한다.
 지표는 유실 가능한 stdout을 집계한 정본이 아니라 처리 지점에서 직접 관찰한다.
-이 변경은 로그 단계이며 메트릭 exporter·수집 설정·알림은 포함하지 않는다.
+직접 계측과 exporter는 [메트릭 계약](13-metrics.md)을 따른다. 수집 설정·알림·
+Grafana 대시보드는 별도 배포 단계다.
 
 ## 형식과 ID
 
@@ -54,6 +55,7 @@ request_id다. UUID를 Loki stream label로 승격하지 않고 JSON에서 조�
 | `management.operation_finished` | 관리 실행 결과 | operation·operation_id·surface·outcome·error_code·duration_ms |
 | `worker.run_finished` | object/retention 작업 호출 종료 | worker·task·run_id·outcome·processed·failed·skipped·duration_ms |
 | `history.write_failed` | 호출/보안/파일 접근 이력 저장 실패 또는 시간 초과 | stream·operation_id 또는 file_id·error_code |
+| `database.snapshot_failed` | DB 메트릭 수집 실패 또는 회차 제한 | run_id·worker·task·stage·stream·reason·error_code |
 
 복구·보존의 상세 이벤트는 파일 UUID·stream과 고정 error_code를 제공한다.
 릴레이 업로드도 `object.operation_finished`의 put/record_upload 또는 upload_part/record_part로

@@ -19,6 +19,7 @@ async fn idle_stream_stops_at_the_injected_deadline() {
             window: PROGRESS_WINDOW,
             min_bytes_per_second: MIN_BYTES_PER_SECOND,
         },
+        crate::metrics::Metrics::default(),
     )
     .await;
     assert!(matches!(result, Err(SpoolError::Idle)));
@@ -49,6 +50,7 @@ async fn healthy_stream_progress_resets_the_idle_budget() {
             window: PROGRESS_WINDOW,
             min_bytes_per_second: MIN_BYTES_PER_SECOND,
         },
+        crate::metrics::Metrics::default(),
     )
     .await;
     assert!(result.is_ok());
@@ -108,6 +110,7 @@ async fn tiny_trickle_is_rejected_even_when_it_is_not_idle() {
         Path::new("unused-trickle-path"),
         1024 * 1024,
         false,
+        crate::metrics::Metrics::default(),
     )
     .await;
     assert!(matches!(result, Err(SpoolError::TooSlow)));
@@ -135,6 +138,7 @@ async fn progress_accepts_the_exact_minimum_and_rejects_one_byte_less() {
             Path::new("unused-rate-boundary-path"),
             size as i64,
             false,
+            crate::metrics::Metrics::default(),
         )
         .await;
         if size == minimum {
@@ -158,6 +162,7 @@ async fn empty_chunks_do_not_extend_the_idle_deadline() {
         Path::new("unused-empty-chunk-path"),
         1024 * 1024,
         false,
+        crate::metrics::Metrics::default(),
     )
     .await;
     assert!(matches!(result, Err(SpoolError::Idle)));
@@ -179,6 +184,7 @@ async fn a_stalled_writer_cannot_outlive_the_absolute_deadline() {
             window: Duration::from_secs(30),
             min_bytes_per_second: 1,
         },
+        crate::metrics::Metrics::default(),
     )
     .await;
     assert!(matches!(result, Err(SpoolError::Deadline)));
@@ -201,6 +207,7 @@ async fn final_buffer_flush_cannot_outlive_the_absolute_deadline() {
             window: Duration::from_secs(30),
             min_bytes_per_second: 1,
         },
+        crate::metrics::Metrics::default(),
     )
     .await;
     assert!(matches!(result, Err(SpoolError::Deadline)));
@@ -218,7 +225,8 @@ async fn buffered_bytes_are_flushed_before_measurements_return() {
             &mut buffered,
             Path::new("unused-flush-success"),
             2,
-            false
+            false,
+            crate::metrics::Metrics::default()
         )
         .await
         .is_ok()
@@ -260,6 +268,7 @@ async fn checksums_cover_all_stream_chunks() {
         Path::new("unused-success-path"),
         9,
         true,
+        crate::metrics::Metrics::default(),
     )
     .await
     .ok()
@@ -281,6 +290,7 @@ async fn native_measurement_keeps_only_md5() {
         Path::new("unused-success-path"),
         9,
         false,
+        crate::metrics::Metrics::default(),
     )
     .await
     .ok()

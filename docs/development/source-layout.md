@@ -31,6 +31,9 @@ backend/crates/
 ├── api/src/
 │   ├── routes.rs              표면 조립·요청 제한·공통 telemetry
 │   ├── logging/               안전한 JSON 출력·요청/전송/작업 관찰
+│   ├── metrics.rs             직접 계측·프로세스 레지스트리
+│   ├── metrics/endpoint.rs    SQL 없는 snapshot·독립 수집 HTTP router
+│   ├── metrics/database.rs    DB 주기 수집·원자적 snapshot 캐시·신선도
 │   ├── routes/management.rs   계정·등록부 관리 HTTP/MCP 경로
 │   ├── routes/objects.rs      Client/lease 인증 파일 경로
 │   ├── accounts/              browser 인증·계정·토큰·세션·이력 adapter
@@ -51,6 +54,7 @@ backend/crates/
 │   ├── src/management/        신원·설정 변경·감사 트랜잭션
 │   │   └── api_tokens.rs      Account 관리 API 토큰
 │   ├── src/retention.rs       이력·만료 인증 정보의 DB 배치 정리
+│   ├── src/observations.rs    적체·보존 잔량·테이블 크기의 읽기 전용 관찰
 │   ├── src/registry.rs        Storage·Client·서비스 키 등록 정보
 │   ├── src/files/             파일·위치·lease 상태 전이
 │   │   └── recovery.rs        일반 관찰·회수·purge 재시도 시각
@@ -131,6 +135,7 @@ api (composition)
 Background tasks (same process and database)
   +-- Object reconciliation -> main pool -> object advisory lock -> provider I/O
   +-- Retention maintenance -> dedicated pool (2) -> retention lock -> history/auth GC
+  +-- Optional DB observations -> dedicated pool (1) -> read-only snapshot -> metrics cache
 ```
 
 S3 SDK를 `storage-provider`에 한정한다. `infra`의 재노출은 기존 내부 adapter import를
@@ -186,6 +191,7 @@ DB 서버·CPU·메모리는 공유한다. Provider 전체 작업의 시간 제�
 | Provider signing·multipart 조회 | `storage-provider/tests/time.rs`, `storage-provider/tests/multipart_cleanup.rs` |
 | 임시 파일·계측 | `infra/src/temp_spool.rs`, `api/src/spool/tests.rs` |
 | 로그 스키마·비밀 제외·서명 헤더·전송/작업 종료 | `api/src/logging/tests.rs` |
+| 직접 계측·시간·중단·SQL 없는 scrape·실제 S3 전송 | `api/src/metrics/tests.rs`, `scripts/e2e-metrics.py` |
 | 의존성·독립 작업·종료 | `scripts/tests/test_crate_boundaries.py`, `management-service/tests/retention.rs`, `api/src/log_retention.rs`, `api/src/shutdown.rs` |
 | CLI 출력·변경·업데이트 | `cli/tests`, `cli/src/update`, `scripts/e2e-cli.py` |
 | UI | `frontend/web/tests`; fixture 화면과 실서버 검증을 구분 |

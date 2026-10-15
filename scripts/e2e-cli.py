@@ -175,7 +175,7 @@ def check_s3_lifecycle(endpoint, directory, backend, account):
 
 def main(check=check_lifecycle, *, with_database=False, with_restart=False, console_origin=None,
          reconciler_interval=1, verify_log=None, multipart=False,
-         s3_cors_origins=(), database_url_transform=None):
+         s3_cors_origins=(), database_url_transform=None, metrics_bind=None):
     if with_restart and not with_database:
         raise ValueError("restart checks require the isolated database fixture")
     if not SERVER.is_file() or not CLI.is_file():
@@ -201,6 +201,8 @@ def main(check=check_lifecycle, *, with_database=False, with_restart=False, cons
             )
             if with_database:
                 env["GROVE_RECONCILER_INTERVAL_SECS"] = str(reconciler_interval)
+            if metrics_bind:
+                env["GROVE_METRICS_BIND"] = metrics_bind
             if multipart:
                 env.update(GROVE_MULTIPART_THRESHOLD_BYTES=str(6 * 1024 * 1024),
                            GROVE_PART_SIZE_BYTES=str(5 * 1024 * 1024))

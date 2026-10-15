@@ -16,9 +16,14 @@ pub async fn run(
     policy: ManagementLogRetention,
     tick: Duration,
     shutdown: CancellationToken,
+    metrics: crate::metrics::Metrics,
 ) {
+    metrics.register_worker(&crate::metrics::WorkerLabels {
+        worker: "management",
+        task: "retention",
+    });
     run_periodic(tick, shutdown, || async {
-        let mut observation = Run::new("management", "retention");
+        let mut observation = Run::new("management", "retention", metrics.clone());
         match tokio::time::timeout(
             PASS_TIMEOUT,
             retention::with_lock(&pool, || {
@@ -28,7 +33,7 @@ pub async fn run(
         .instrument(observation.span.clone()).await
         {
             Ok(Ok(Some(report))) => observation.finish(&Report { processed: report.deleted, failed: report.failed, skipped: 0 }),
-            Ok(Ok(None)) => observation.finish(&Report { skipped: 1, ..Report::default() }),
+            Ok(Ok(None)) => observation.skipped(),
             Ok(Err(error)) => {
                 tracing::warn!(parent: &observation.span, event = "management.maintenance_failed", error_code = "lock_failed", %error);
                 observation.finish(&Report { failed: 1, ..Report::default() });

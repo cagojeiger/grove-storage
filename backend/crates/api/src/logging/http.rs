@@ -1,5 +1,6 @@
+use crate::metrics::{HttpLabels, Metrics};
 use axum::{
-    extract::{MatchedPath, Request},
+    extract::{MatchedPath, Request, State},
     middleware::Next,
     response::Response,
 };
@@ -10,18 +11,30 @@ struct Observation {
     started: Instant,
     span: Span,
     finished: bool,
+    metrics: Metrics,
+    labels: HttpLabels,
 }
 
 impl Drop for Observation {
     fn drop(&mut self) {
         if !self.finished {
+            self.metrics.http_finished(
+                &self.labels,
+                None,
+                "interrupted",
+                self.started.elapsed().as_secs_f64(),
+            );
             tracing::info!(parent: &self.span, event = "http.interrupted", outcome = "interrupted",
                 duration_ms = self.started.elapsed().as_millis() as u64);
         }
     }
 }
 
-pub(crate) async fn observe(request: Request, next: Next) -> Response {
+pub(crate) async fn observe(
+    State(metrics): State<Metrics>,
+    request: Request,
+    next: Next,
+) -> Response {
     let method = method(request.method());
     let path = request.uri().path();
     let probe = crate::routes::is_system_path(path);
@@ -49,10 +62,18 @@ pub(crate) async fn observe(request: Request, next: Next) -> Response {
     // A context-only ERROR span keeps correlation when the event filter is ERROR.
     // Request headers are untouched: a caller can include x-request-id in SigV4.
     let span = tracing::error_span!("request", %request_id, method, surface, route);
+    let labels = HttpLabels {
+        surface,
+        method,
+        route: route.to_owned(),
+    };
+    metrics.http_started(&labels);
     let mut observation = Observation {
         started: Instant::now(),
         span: span.clone(),
         finished: false,
+        metrics,
+        labels,
     };
     let response = next.run(request).instrument(span.clone()).await;
     observation.finished = true;
@@ -73,6 +94,12 @@ pub(crate) async fn observe(request: Request, next: Next) -> Response {
     } else {
         "success"
     };
+    observation.metrics.http_finished(
+        &observation.labels,
+        Some(status),
+        outcome,
+        observation.started.elapsed().as_secs_f64(),
+    );
     if status >= 500 && !unsupported {
         tracing::error!(parent: &span, event = "http.response", status, duration_ms, operation_id, outcome);
     } else if expected_rejection {

@@ -18,7 +18,10 @@ pub(crate) fn payload_safe(metadata: &tracing::Metadata<'_>) -> bool {
 pub(crate) fn init(
     mode: LogFormat,
     clock: Arc<dyn Clock>,
-) -> tracing_appender::non_blocking::WorkerGuard {
+) -> (
+    tracing_appender::non_blocking::WorkerGuard,
+    tracing_appender::non_blocking::ErrorCounter,
+) {
     let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
         .buffered_lines_limit(1024)
         .lossy(true)
@@ -33,10 +36,10 @@ pub(crate) fn init(
                 .event_format(format::SafeEvent {
                     mode,
                     clock,
-                    errors: Some(errors),
+                    errors: Some(errors.clone()),
                 })
                 .with_writer(writer),
         )
         .init();
-    guard
+    (guard, errors)
 }
