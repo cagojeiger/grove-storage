@@ -63,6 +63,27 @@ class ManagementCommandTests(unittest.TestCase):
         self.assertIs(raised.exception, error)
         self.management.opener.open.assert_called_once()
 
+    def test_token_history_uses_a_retained_sensitive_read(self):
+        management = self.management
+        management.user_id = "fixture-user"
+        management.user_token = "fixture-personal-token"
+        management.credential_id = "automation-id"
+        management.personal_credential_id = "personal-id"
+        management.opener.open.side_effect = urllib.error.HTTPError(
+            management.endpoint, 401, "Unauthorized", {}, io.BytesIO(b"{}"))
+        management.request = MagicMock(side_effect=[
+            {"items": [{"action": "storage.create", "context": {
+                "actor_id": management.user_id, "credential_id": management.credential_id,
+                "surface": "resource_api"}}]},
+            {"items": [{"context": {"actor_id": management.user_id, "credential_id": credential}}
+                       for credential in [management.personal_credential_id, management.credential_id]]},
+            None, None,
+        ])
+        run = MagicMock()
+        management.verify(run)
+        run.assert_any_call(["status"], management.user_token, 0)
+        run.assert_any_call(["credential", "list", "--client", "cli-test"], management.user_token, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

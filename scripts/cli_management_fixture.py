@@ -83,6 +83,7 @@ class Management:
 
     def verify(self, run):
         run(["status"], self.user_token, 0)
+        run(["credential", "list", "--client", "cli-test"], self.user_token, 0)
         for path in ["/accounts", "/history/audit"]:
             request = urllib.request.Request(self.endpoint + IDENTITY + path,
                                              headers={"Host": urlsplit(ORIGIN).netloc,
