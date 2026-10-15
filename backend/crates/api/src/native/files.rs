@@ -110,10 +110,9 @@ pub(super) async fn create(
         })
         .await?;
         tracing::info!(
-            event = "file.created",
-            file = %created.file_id,
-            client = %client.0,
-            storage = %created.storage.id,
+            event = "object.operation_finished", operation = "create", outcome = "success", stage = "reserve",
+            file_id = %created.file_id,
+            storage_id = %created.storage.id,
             multipart = true,
         );
         return Ok((
@@ -156,10 +155,9 @@ pub(super) async fn create(
     };
 
     tracing::info!(
-        event = "file.created",
-        file = %created.file_id,
-        client = %client.0,
-        storage = %created.storage.id,
+        event = "object.operation_finished", operation = "create", outcome = "success", stage = "reserve",
+        file_id = %created.file_id,
+        storage_id = %created.storage.id,
     );
     Ok((
         StatusCode::CREATED,
@@ -210,7 +208,7 @@ pub(super) async fn commit(
     .await
     .map_err(super::single_commit::error)?;
     if committed.transitioned {
-        tracing::info!(event = "file.committed", file = %file_id, client = %client.0);
+        tracing::info!(event = "object.operation_finished", operation = "commit", outcome = "success", stage = "commit", file_id = %file_id);
     }
     Ok(committed_response(file_id, committed.etag))
 }
@@ -303,7 +301,7 @@ pub(super) async fn read(
         }
     };
 
-    tracing::info!(event = "file.read", file = %file_id, client = %client.0);
+    tracing::debug!(event = "object.operation_finished", operation = "read_url", outcome = "success", file_id = %file_id);
     Ok(Json(ReadOut { file_id, get_url }).into_response())
 }
 
@@ -344,7 +342,7 @@ pub(super) async fn delete(
 ) -> Result<Response, ApiError> {
     match files::mark_deleted(&state.pool, &client.0, file_id).await? {
         DeleteOutcome::Deleted => {
-            tracing::info!(event = "file.deleted", file = %file_id, client = %client.0);
+            tracing::info!(event = "object.operation_finished", operation = "delete", outcome = "success", stage = "logical_delete", file_id = %file_id);
             Ok(deleted_response(file_id))
         }
         // 멱등 — 재삭제는 같은 답.

@@ -20,7 +20,27 @@ pub(super) enum Job {
     Snapshot,
 }
 
-const JOBS: [Job; 13] = [
+impl Job {
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            Self::Observe => "observe",
+            Self::NativeComplete => "native_complete",
+            Self::NativeCleanup => "native_cleanup",
+            Self::S3Complete => "s3_complete",
+            Self::S3Expire => "s3_expire",
+            Self::S3Cleanup => "s3_cleanup",
+            Self::Reclaim => "reclaim",
+            Self::ReclaimCleanup => "reclaim_cleanup",
+            Self::Purge => "purge",
+            Self::ReadLeases => "read_leases",
+            Self::PruneLeases => "prune_leases",
+            Self::PruneFiles => "prune_files",
+            Self::Snapshot => "usage_snapshot",
+        }
+    }
+}
+
+pub(super) const JOBS: [Job; 13] = [
     Job::Observe,
     Job::NativeComplete,
     Job::NativeCleanup,

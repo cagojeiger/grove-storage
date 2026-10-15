@@ -196,7 +196,8 @@ async fn upload(
     claim
         .done(written, &md5_hex, WRITE_LEASE_TTL.as_secs() as i64)
         .await?;
-    tracing::info!(event = "blobs.uploaded", lease = %lease_id, file = %lease.file_id, size = written);
+    tracing::info!(event = "object.operation_finished", operation = "put", stage = "record_upload",
+        outcome = "success", lease = %lease_id, file_id = %lease.file_id, size = written);
 
     Ok(ok_with_etag(&md5_hex))
 }
@@ -343,7 +344,8 @@ async fn upload_part(
             "part upload ownership was lost; retry the multipart upload",
         ));
     }
-    tracing::info!(event = "blobs.part_uploaded", lease = %lease_id, file = %lease.file_id, part = part_no, size = written);
+    tracing::info!(event = "object.operation_finished", operation = "upload_part", stage = "record_part",
+        outcome = "success", lease = %lease_id, file_id = %lease.file_id, part = part_no, size = written);
     Ok(ok_with_etag(&md5_hex))
 }
 
@@ -408,9 +410,12 @@ async fn download(
         }
     };
 
-    tracing::info!(event = "blobs.downloaded", lease = %lease_id, file = %lease.file_id);
-    let mut response =
-        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)).into_response();
+    let mut response = crate::logging::transfer::download(
+        Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
+        size,
+        lease.file_id,
+    )
+    .into_response();
     let headers = response.headers_mut();
     if let Ok(value) = HeaderValue::from_str(&size.to_string()) {
         headers.insert(header::CONTENT_LENGTH, value);

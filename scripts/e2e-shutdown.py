@@ -9,7 +9,7 @@ HARNESS = runpy.run_path(str(Path(__file__).with_name("e2e-cli.py")))
 
 
 def verify(log):
-    events = [json.loads(line).get("fields", {}).get("event") for line in log.splitlines()]
+    events = [json.loads(line).get("event") for line in log.splitlines()]
     assert events.count("server.shutting_down") == 1, events
     assert events.count("shutdown.complete") == 1, events
     assert "shutdown.timed_out" not in events, events

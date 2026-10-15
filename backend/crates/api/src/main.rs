@@ -29,7 +29,7 @@ mod test_management;
 use std::io;
 use std::sync::Arc;
 
-use grove_core::{ExposeSecret, LogFormat};
+use grove_core::ExposeSecret;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -83,7 +83,8 @@ async fn serve() -> anyhow::Result<()> {
         (Some(_), Some(directory)) => Some(console_web::ConsoleWeb::load(directory.into()).await?),
         _ => None,
     };
-    init_tracing(config.server.log_format);
+    let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
+    let _log_writer = logging::init(config.server.log_format, clock.clone());
     grove_infra::temp_spool::prepare_root(&spool::spool_root()).await?;
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.
@@ -124,7 +125,6 @@ async fn serve() -> anyhow::Result<()> {
 
     let shutdown = CancellationToken::new();
     // 요청 경로와 reconciler가 같은 캐시를 공유한다 — 같은 storage의 웜 풀.
-    let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
     let s3_clients = Arc::new(grove_infra::S3ClientCache::new(clock.clone()));
     let mut workers = tokio::task::JoinSet::new();
     let tick = std::time::Duration::from_secs(config.server.reconciler_interval_secs);
@@ -228,8 +228,4 @@ impl ShutdownSignals {
             let _ = tokio::signal::ctrl_c().await;
         }
     }
-}
-
-fn init_tracing(format: LogFormat) {
-    logging::init(format);
 }

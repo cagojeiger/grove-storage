@@ -81,6 +81,8 @@ test("filters survive pagination, tabs, reload and reset without stale rows", as
   await expect.poll(() => requests.at(-1)?.searchParams.get("account_id")).toBe(otherUser.id);
   expect(requests.at(-1)?.searchParams.has("before")).toBe(false);
   await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page.getByLabel("Actor account ID")).toBeHidden();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
   await expect(page.getByLabel("Actor account ID")).toHaveValue("");
   await expect.poll(() => requests.at(-1)?.searchParams.has("account_id")).toBe(false);
 });

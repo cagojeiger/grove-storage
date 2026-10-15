@@ -86,7 +86,7 @@ tool annotation은 클라이언트 힌트이며 서버의 권한·참조 제약�
 | 입구 인증 실패 | `surface=mcp` 보안 이벤트; 신원이 확인된 거부는 `mcp.connect` 실패 기록 |
 | Origin·protocol 거부 | HTTP 진단 범위; 자원 변경·감사 생성 없음 |
 | SDK 로그 | payload가 포함될 수 있는 `rmcp` target 전체를 항상 제외; RUST_LOG보다 우선 |
-| 운영 관찰 | 기존 request.end와 공통 command_invocations·audit_events·security_events |
+| 운영 관찰 | [운영 로그](12-logging.md)의 http.response와 공통 command_invocations·audit_events·security_events |
 | 순수 테스트 | 24개 schema·이름·annotation·출력 참조, SDK 로그 차단 |
 | PG HTTP 테스트 | CLI API 결과 대조·권한·owner·폐기·경계·감사 rollback·unknown |
 | 실제 프로세스 | `scripts/e2e-mcp.py`: 24개 도구·CLI 결과·토큰별 audit·폐기·비밀 없는 서버 로그 |

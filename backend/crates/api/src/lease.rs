@@ -93,7 +93,7 @@ async fn run_with_write_heartbeat<T>(
                 }
                 Err(error) => {
                     tracing::warn!(
-                    event = "s3.write_heartbeat_failed",
+                    event = "s3.write_heartbeat_failed", stage = "renew_lease", outcome = "error", error_code = "db_heartbeat_failed",
                     operation = ownership.operation(),
                     file = %file_id,
                     %error,
@@ -196,7 +196,7 @@ pub async fn audit_read(
     )
     .await
     {
-        tracing::warn!(event = "file.read_audit_failed", file = %file_id, %error);
+        tracing::error!(event = "history.write_failed", stream = "lease_history", file_id = %file_id, error_code = "db_write_failed", outcome = "error", %error);
     }
 }
 

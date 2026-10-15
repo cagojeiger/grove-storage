@@ -21,7 +21,7 @@ export type Audit = {
 export type Invocation = {
   context: EventContext;
   operation: string;
-  outcome: string;
+  outcome: "succeeded" | "denied" | "failed" | "unknown";
   error_code: string | null;
   duration_ms: number;
 };
@@ -59,8 +59,10 @@ export function validator(stream: Stream): (v: unknown) => v is Event {
       return (
         typeof v.operation === "string" &&
         typeof v.outcome === "string" &&
+        Object.hasOwn(invocationOutcomes, v.outcome) &&
         nullable(v.error_code) &&
-        Number.isFinite(v.duration_ms)
+        typeof v.duration_ms === "number" &&
+        Number.isSafeInteger(v.duration_ms) && v.duration_ms >= 0
       );
     return (
       typeof v.event_type === "string" && typeof v.reason_code === "string"
@@ -80,4 +82,21 @@ export const eventResult = (event: Event) =>
       ? event.outcome
       : event.reason_code;
 export const actor = (context: EventContext) =>
-  context.actor_kind === "system" ? "System" : (context.actor_id ?? "Unknown");
+  context.actor_kind === "system" ? "System"
+    : context.actor_kind === "anonymous" ? "Anonymous"
+      : (context.actor_id ?? "Unknown");
+
+const invocationOutcomes = {
+  succeeded: { label: "Succeeded", color: "success" },
+  denied: { label: "Denied", color: "warning" },
+  failed: { label: "Failed", color: "error" },
+  unknown: { label: "Unknown", color: "warning" },
+} as const;
+
+export const invocationStatus = (outcome: Invocation["outcome"]) => invocationOutcomes[outcome];
+
+const sourceNames: Record<string, string> = {
+  console: "Console", cli: "CLI", mcp: "MCP", resource_api: "API", local: "Local",
+};
+export const sourceName = (surface: string) =>
+  Object.hasOwn(sourceNames, surface) ? sourceNames[surface] : surface;

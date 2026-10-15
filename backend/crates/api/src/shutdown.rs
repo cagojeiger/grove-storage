@@ -14,7 +14,7 @@ pub async fn drain<F: Future<Output = ()>>(
         let (server_result, ()) = tokio::join!(server, async {
             while let Some(result) = workers.join_next().await {
                 if let Err(error) = result {
-                    tracing::warn!(event = "background.join_failed", %error);
+                    tracing::warn!(event = "background.join_failed", error_code = "worker_join_failed", %error);
                 }
             }
         });

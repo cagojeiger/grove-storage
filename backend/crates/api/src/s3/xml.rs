@@ -84,7 +84,9 @@ pub(super) use grove_s3_protocol::multipart::parse_complete_multipart;
 
 /// 내부 실패 — 상세는 로그로, 응답은 일반 XML (네이티브 error.rs와 같은 원칙).
 pub(super) fn xml_internal(context: &'static str, error: impl std::fmt::Display) -> Response {
-    tracing::error!(event = "s3.internal", context, %error);
+    let stage = context.replace(' ', "_");
+    tracing::error!(event = "object.operation_finished", operation="s3", outcome="error",
+        stage, error_code="internal_error", %error);
     xml_error(
         StatusCode::INTERNAL_SERVER_ERROR,
         "InternalError",
@@ -96,7 +98,9 @@ pub(super) fn xml_internal(context: &'static str, error: impl std::fmt::Display)
 /// 502로 답하는 것과 같은 계층 구분이며, S3 SDK가 재시도하는 503
 /// ServiceUnavailable 코드로 낸다 (SDK가 아는 재시도 신호).
 pub(super) fn xml_storage_error(context: &'static str, error: impl std::fmt::Display) -> Response {
-    tracing::error!(event = "s3.storage_error", context, %error);
+    let operation = context.replace(' ', "_");
+    tracing::error!(event = "provider.failed", operation, stage="provider", outcome="error",
+        error_code="provider_unavailable", %error);
     xml_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "ServiceUnavailable",
