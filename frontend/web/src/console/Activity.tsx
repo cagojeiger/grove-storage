@@ -22,6 +22,8 @@ import { cspNonce } from "../app/csp";
 import { activityFilters, uuidPattern } from "../features/activity/filters";
 import {
   actor,
+  activityName,
+  eventLabel,
   eventName,
   eventResult,
   invocationStatus,
@@ -72,6 +74,8 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
   });
   const suffix = params.size ? `?${params}` : "";
   const rows = query.data?.items ?? [];
+  const relatedParams = new URLSearchParams(params);
+  if (selected) relatedParams.set("operation_id", selected.context.request_id);
   const columns = useMemo<GridColDef<Event>[]>(() => [
     {
       field: "time",
@@ -86,15 +90,15 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       minWidth: mobile ? 140 : 190,
       renderCell: ({ row, tabIndex }) => (
         <Stack spacing={0.25} sx={{ minWidth: 0, height: "100%", justifyContent: "center" }}>
-          <Tooltip title={eventName(row)}>
+          <Tooltip title={eventName(row)} describeChild>
             <Link component="button" variant="body2" tabIndex={tabIndex} noWrap underline="hover" sx={{ maxWidth: "100%" }}
               onClick={(event) => { event.stopPropagation(); setSelected(row); }}>
-              {eventName(row)}
+              {eventLabel(row)}
             </Link>
           </Tooltip>
           {"outcome" in row && <Typography variant="caption" color="text.secondary" noWrap>{stageName(row.stage)}</Typography>}
-          {"event_type" in row && <Tooltip title={row.operation ?? "Operation not recorded"}>
-            <Typography variant="caption" color="text.secondary" noWrap>{row.operation ?? "Operation not recorded"}</Typography>
+          {"event_type" in row && <Tooltip title={row.operation ?? "Operation not recorded"} describeChild>
+            <Typography variant="caption" color="text.secondary" noWrap>{row.operation ? activityName(row.operation) : "Operation not recorded"}</Typography>
           </Tooltip>}
           {mobile && <Typography variant="caption" color="text.secondary" noWrap>{time(row.context.created_at)}</Typography>}
         </Stack>
@@ -115,7 +119,10 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       renderCell: stream === "invocations" ? ({ row }) => {
         if (!("outcome" in row)) return null;
         const outcome = invocationStatus(row.outcome);
-        return <Chip label={outcome.label} color={outcome.color} variant="outlined" size="small" />;
+        return <Stack spacing={0.5} sx={{ height: "100%", justifyContent: "center", alignItems: "flex-start" }}>
+          <Chip label={outcome.label} color={outcome.color} variant="outlined" size="small" />
+          {mobile && <Typography variant="caption" color="text.secondary">{duration(row.duration_ms)}</Typography>}
+        </Stack>;
       } : stream === "security" && mobile ? ({ row }) => {
         if (!("event_type" in row)) return null;
         const recording = recordingStatus(row.is_sampled);
@@ -221,19 +228,27 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           <Collapse in={filters} unmountOnExit>
             <Stack
               component="form"
-              direction={{ xs: "column", sm: "row" }}
+              direction={{ xs: "column", md: "row" }}
               spacing={2}
               onSubmit={(event) => {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
                 const next = new URLSearchParams();
-                for (const key of ["account_id", "credential_id"]) {
+                for (const key of ["operation_id", "account_id", "credential_id"]) {
                   const value = field(data, key).trim();
                   if (value) next.set(key, value);
                 }
                 location.hash = `${path}${next.size ? `?${next}` : ""}`;
               }}
             >
+              <TextField
+                fullWidth
+                size="small"
+                label="Operation ID"
+                name="operation_id"
+                defaultValue={params.get("operation_id") ?? ""}
+                slotProps={{ htmlInput: { pattern: uuidPattern } }}
+              />
               <TextField
                 fullWidth
                 size="small"
@@ -258,7 +273,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       {denied ? (
         <Alert severity="error">Admin access required.</Alert>
       ) : !valid ? (
-        <Alert severity="error">Enter a valid account or token ID.</Alert>
+        <Alert severity="error">Enter a valid operation, account or token ID.</Alert>
       ) : (
         <>
           <QueryState
@@ -333,7 +348,12 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         </>
       )}
       {!denied && !query.isError && selected && (
-        <ActivityDetails key={selected.context.id} event={selected} onClose={() => setSelected(null)} />
+        <ActivityDetails
+          key={selected.context.id}
+          event={selected}
+          relatedHref={params.get("operation_id") === selected.context.request_id ? undefined : `#${path}?${relatedParams}`}
+          onClose={() => setSelected(null)}
+        />
       )}
     </Page>
   );

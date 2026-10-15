@@ -272,7 +272,7 @@ test("activity is read-only and event details use a drawer", async ({
   await maintenanceMock(page);
   await page.goto(`${root}#activity`);
   await page
-    .getByRole("button", { name: "storage.create", exact: true })
+    .getByRole("button", { name: "Create storage", exact: true })
     .click();
   await expect(
     page.getByRole("dialog", { name: "Event details" }),
@@ -283,7 +283,7 @@ test("activity is read-only and event details use a drawer", async ({
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("tab", { name: "Security events" }).click();
   await expect(
-    page.getByRole("button", { name: "permission_denied" }),
+    page.getByRole("button", { name: "Permission denied" }),
   ).toBeVisible();
 });
 

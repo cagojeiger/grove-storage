@@ -8,6 +8,7 @@ pub struct HistoryQuery {
     pub page: Page<i64>,
     pub account_id: Option<Uuid>,
     pub credential_id: Option<Uuid>,
+    pub operation_id: Option<Uuid>,
 }
 impl From<Page<i64>> for HistoryQuery {
     fn from(page: Page<i64>) -> Self {
@@ -87,13 +88,15 @@ impl IdentityTransaction<'_> {
             "SELECT * FROM management.audit_events WHERE ($1::uuid IS NULL OR actor_id=$1)
             AND ($2::bigint IS NULL OR id<$2)
             AND ($4::uuid IS NULL OR actor_id=$4)
-            AND ($5::uuid IS NULL OR credential_id=$5) ORDER BY id DESC LIMIT $3",
+            AND ($5::uuid IS NULL OR credential_id=$5)
+            AND ($6::uuid IS NULL OR request_id=$6) ORDER BY id DESC LIMIT $3",
         )
         .bind(scope.user())
         .bind(query.page.before)
         .bind(query.page.limit)
         .bind(query.account_id)
         .bind(query.credential_id)
+        .bind(query.operation_id)
         .fetch_all(&mut *self.inner)
         .await?)
     }
@@ -106,13 +109,15 @@ impl IdentityTransaction<'_> {
             "SELECT * FROM management.command_invocations WHERE ($1::uuid IS NULL OR actor_id=$1)
             AND ($2::bigint IS NULL OR id<$2)
             AND ($4::uuid IS NULL OR actor_id=$4)
-            AND ($5::uuid IS NULL OR credential_id=$5) ORDER BY id DESC LIMIT $3",
+            AND ($5::uuid IS NULL OR credential_id=$5)
+            AND ($6::uuid IS NULL OR request_id=$6) ORDER BY id DESC LIMIT $3",
         )
         .bind(scope.user())
         .bind(query.page.before)
         .bind(query.page.limit)
         .bind(query.account_id)
         .bind(query.credential_id)
+        .bind(query.operation_id)
         .fetch_all(&mut *self.inner)
         .await?)
     }
@@ -123,12 +128,14 @@ impl IdentityTransaction<'_> {
         Ok(sqlx::query_as(
             "SELECT * FROM management.security_events WHERE ($1::bigint IS NULL OR id<$1)
             AND ($3::uuid IS NULL OR actor_id=$3)
-            AND ($4::uuid IS NULL OR credential_id=$4) ORDER BY id DESC LIMIT $2",
+            AND ($4::uuid IS NULL OR credential_id=$4)
+            AND ($5::uuid IS NULL OR request_id=$5) ORDER BY id DESC LIMIT $2",
         )
         .bind(query.page.before)
         .bind(query.page.limit)
         .bind(query.account_id)
         .bind(query.credential_id)
+        .bind(query.operation_id)
         .fetch_all(&mut *self.inner)
         .await?)
     }

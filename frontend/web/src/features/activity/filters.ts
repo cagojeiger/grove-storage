@@ -3,7 +3,7 @@ export const uuidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-f
 export function activityFilters(route: string) {
   const supplied = new URLSearchParams(route.split("?")[1] ?? "");
   const params = new URLSearchParams();
-  for (const key of ["account_id", "credential_id"]) {
+  for (const key of ["operation_id", "account_id", "credential_id"]) {
     const value = supplied.get(key);
     if (value) params.set(key, value);
   }

@@ -23,6 +23,12 @@ test("preview records actions without logging secrets and shows them in Activity
   const audit = await (await request.get(`${identity}/history/audit?account_id=${session.user_id}`)).json() as Page<Audit>;
   expect(audit.items.some((row: { action: string; resource_id: string }) => row.action === "client.create" && row.resource_id === id)).toBeTruthy();
   expect(audit.items.some((row: { action: string }) => row.action === "client.show" || row.action === "storage.test")).toBeFalsy();
+  const operationId = audit.items.find(row => row.action === "client.create" && row.resource_id === id)!.context.request_id;
+  for (const stream of ["audit", "invocations"]) {
+    const related = await (await request.get(`${identity}/history/${stream}?operation_id=${operationId}`)).json() as Page<Audit | Invocation>;
+    expect(related.items).toHaveLength(1);
+    expect(related.items[0].context.request_id).toBe(operationId);
+  }
   const first = await (await request.get(`${identity}/history/invocations?limit=1`)).json() as Page<Invocation>;
   expect(first.items[0]).toMatchObject({ operation: "storage.test", outcome: "failed", error_code: "unavailable" });
   expect(first.next_before).not.toBeNull();

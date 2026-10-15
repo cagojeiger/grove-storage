@@ -14,6 +14,7 @@ fn query(account: Option<Uuid>, credential: Option<Uuid>, before: Option<i64>) -
         account_id: account,
         credential_id: credential,
         page: Page::new(before, 1).unwrap(),
+        ..HistoryQuery::default()
     }
 }
 

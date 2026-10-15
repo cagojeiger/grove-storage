@@ -172,6 +172,7 @@ async fn history_rejects_invalid_filters_and_preserves_security_authorization(po
         for query in [
             "account_id=invalid",
             "credential_id=invalid",
+            "operation_id=invalid",
             "before=0",
             "before=-1",
             "before=9223372036854775808",
@@ -218,5 +219,117 @@ async fn history_rejects_invalid_filters_and_preserves_security_authorization(po
             .status(),
             StatusCode::FORBIDDEN
         );
+    }
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn operation_history_filter_preserves_scope_actor_filters_and_cursors(pool: PgPool) {
+    let (_, admin_cookie) = actor(&pool, Role::Admin).await;
+    let (reader, reader_cookie) = actor(&pool, Role::Reader).await;
+    let (writer, _) = actor(&pool, Role::Writer).await;
+    let own_operation = Uuid::new_v4();
+    let foreign_operation = Uuid::new_v4();
+    for (id, operation) in [
+        (reader, own_operation),
+        (writer, foreign_operation),
+        (reader, own_operation),
+    ] {
+        let ctx = db::AuditContext {
+            actor: db::AuditActor::Account {
+                id,
+                session_id: None,
+                credential_id: None,
+            },
+            request_id: operation,
+            surface: Surface::Console,
+        };
+        db::create_account(
+            &pool,
+            &ctx,
+            db::NewAccount {
+                display_name: "history target",
+                role: Role::Reader,
+            },
+        )
+        .await
+        .unwrap();
+        let details =
+            db::telemetry::Details::new("identity.account.create", db::telemetry::Stage::Execution);
+        db::telemetry::invocation(
+            &pool,
+            &ctx,
+            &details,
+            db::telemetry::Outcome::Succeeded,
+            None,
+            1,
+        )
+        .await
+        .unwrap();
+        db::telemetry::security(
+            &pool,
+            Some(&ctx),
+            operation,
+            Surface::Console,
+            db::telemetry::SecurityReason::Authenticated,
+            &details,
+        )
+        .await
+        .unwrap();
+    }
+    for stream in ["audit", "invocations", "security"] {
+        let path = format!("/history/{stream}?operation_id={own_operation}&limit=1");
+        let first = get(&pool, &admin_cookie, &path).await;
+        assert_eq!(first["items"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            first["items"][0]["context"]["request_id"],
+            own_operation.to_string()
+        );
+        let before = first["next_before"].as_str().unwrap();
+        let second = get(&pool, &admin_cookie, &format!("{path}&before={before}")).await;
+        assert_eq!(second["items"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            second["items"][0]["context"]["request_id"],
+            own_operation.to_string()
+        );
+        assert_ne!(
+            first["items"][0]["context"]["id"],
+            second["items"][0]["context"]["id"]
+        );
+        let before = second["next_before"].as_str().unwrap();
+        assert!(
+            get(&pool, &admin_cookie, &format!("{path}&before={before}")).await["items"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        for other_filter in [
+            format!("account_id={writer}"),
+            format!("credential_id={}", Uuid::new_v4()),
+        ] {
+            assert!(
+                get(&pool, &admin_cookie, &format!("{path}&{other_filter}")).await["items"]
+                    .as_array()
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        if stream == "security" {
+            assert_eq!(
+                send(&pool, &reader_cookie, "GET", &path, serde_json::Value::Null)
+                    .await
+                    .status(),
+                StatusCode::FORBIDDEN
+            );
+        } else {
+            let own = get(&pool, &reader_cookie, &path).await;
+            assert_eq!(own["items"][0]["context"]["actor_id"], reader.to_string());
+            let foreign = get(
+                &pool,
+                &reader_cookie,
+                &format!("/history/{stream}?operation_id={foreign_operation}"),
+            )
+            .await;
+            assert!(foreign["items"].as_array().unwrap().is_empty());
+        }
     }
 }

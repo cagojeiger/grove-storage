@@ -87,23 +87,27 @@ try {
   await admin.getByRole("link", { name: "Activity", exact: true }).click();
   await admin.getByRole("tab", { name: "Command history", exact: true }).click();
   await admin.getByRole("grid", { name: "Activity", exact: true }).getByRole("row")
-    .filter({ hasText: "identity.account.create" }).filter({ hasText: "Succeeded" })
-    .getByRole("button", { name: "identity.account.create", exact: true }).click();
+    .filter({ hasText: "Create account" }).filter({ hasText: "Succeeded" })
+    .getByRole("button", { name: "Create account", exact: true }).click();
   const details = admin.getByRole("dialog", { name: "Event details" });
   await expect(details).toContainText(created.target_id);
   await expect(details).toContainText("Execution");
   await expect(details).toContainText("Password");
   await expect(details.getByLabel("Operation ID", { exact: true })).toHaveValue(created.context.request_id);
   await admin.screenshot({ path: new URL("activity-command-context.png", output).pathname, animations: "disabled" });
-  await admin.keyboard.press("Escape");
+  await details.getByRole("link", { name: "View related history", exact: true }).click();
+  await expect(admin.getByLabel("Operation ID", { exact: true })).toHaveValue(created.context.request_id);
   await admin.getByRole("tab", { name: "Security events", exact: true }).click();
   await admin.getByRole("grid", { name: "Activity", exact: true }).getByRole("row")
-    .filter({ hasText: "identity.account.create" }).filter({ hasText: "Reauthentication" })
-    .getByRole("button", { name: "authentication_succeeded", exact: true }).click();
+    .filter({ hasText: "Create account" }).filter({ hasText: "Reauthentication" })
+    .getByRole("button", { name: "Authentication succeeded", exact: true }).click();
   await expect(details).toContainText("Reauthentication");
   await expect(details).toContainText("Individual");
   await expect(details).toContainText("Password");
   await expect(details.getByRole("alert")).toHaveCount(0);
+  const relatedSecurity = await admin.evaluate(async operation =>
+    (await fetch(`/api/admin/identity/v1/history/security?operation_id=${operation}`)).json(), created.context.request_id);
+  assert(relatedSecurity.items.length > 0 && relatedSecurity.items.every(row => row.context.request_id === created.context.request_id));
   await admin.screenshot({ path: new URL("activity-security-context.png", output).pathname, animations: "disabled" });
   await admin.keyboard.press("Escape");
   console.log("PASS real HTTPS: collected command target, stage, auth method and security recording mode reach Activity details");

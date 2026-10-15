@@ -19,8 +19,12 @@ async function history(page: Page) {
 
 async function columnMenu(page: Page, field: string) {
   const header = page.locator(`[role="columnheader"][data-field="${field}"]`);
-  await header.hover();
-  await header.getByRole("button").click();
+  // Responsive column layout can move the header away from the pointer.
+  await expect(async () => {
+    await header.hover();
+    await header.getByRole("button").click({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await expect(page.getByRole("menu")).toBeVisible();
 }
 
 test("native column controls hide and restore columns across detail and refresh", async ({ page }) => {

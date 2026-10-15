@@ -12,10 +12,11 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   );
   await page.goto(`${origin}/api/admin/console/#activity`);
   await page
-    .getByRole("button", { name: /storage.create/ })
+    .getByRole("button", { name: /Create storage/ })
     .first()
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Token ID");
+  await page.getByRole("button", { name: "Technical details", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText("Token ID", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(
     /^[0-9a-f-]{36}$/,
   );
@@ -25,7 +26,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
     .getByRole("tab", { name: "Command history", exact: true })
     .click();
   await page
-    .getByRole("button", { name: /storage.test/ })
+    .getByRole("button", { name: /Test storage/ })
     .first()
     .click();
   await expect(page.getByRole("dialog")).toContainText("Duration");

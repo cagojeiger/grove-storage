@@ -1,6 +1,10 @@
 import { useId, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
+  Button,
   Chip,
   DialogContent,
   DialogTitle,
@@ -12,11 +16,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Copy, X } from "lucide-react";
+import { ChevronDown, Copy, Filter, X } from "lucide-react";
 import TextField from "../template/shared-theme/Field";
 import {
   actor,
+  activityName,
   authMethodName,
+  eventLabel,
   eventName,
   invocationStatus,
   recordingStatus,
@@ -27,8 +33,9 @@ import {
 import { duration, time } from "../design/format";
 import { Properties } from "./ui";
 
-export function ActivityDetails({ event, onClose }: {
+export function ActivityDetails({ event, relatedHref, onClose }: {
   event: Event;
+  relatedHref?: string;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -62,7 +69,7 @@ export function ActivityDetails({ event, onClose }: {
       <DialogContent dividers>
         <Stack spacing={3}>
           <Typography variant="subtitle1" sx={{ overflowWrap: "anywhere" }}>
-            {eventName(event)}
+            {eventLabel(event)}
           </Typography>
           <Properties values={{
             ...(outcome ? { Outcome: (
@@ -82,7 +89,7 @@ export function ActivityDetails({ event, onClose }: {
               "Target ID": event.target_id ?? "Not recorded",
             } : {}),
             ...("event_type" in event ? {
-              Operation: event.operation ?? "Not recorded",
+              Operation: event.operation ? activityName(event.operation) : "Not recorded",
               Reason: event.reason_code,
               Recording: recording && <Tooltip title={recording.description}>
                 <Chip label={recording.label} color={recording.color} variant="outlined" size="small" />
@@ -133,12 +140,24 @@ export function ActivityDetails({ event, onClose }: {
           {notice && (
             <Typography role="status" variant="body2">{notice}</Typography>
           )}
-          <Properties values={{
-            Actor: actor(event.context),
-            "Token ID": event.context.credential_id,
-            "Session ID": event.context.session_id,
-            "Event ID": event.context.id,
-          }} />
+          {relatedHref && <Button href={relatedHref} startIcon={<Filter size={18} />} sx={{ alignSelf: "flex-start" }}>
+            View related history
+          </Button>}
+          <Properties values={{ Actor: actor(event.context) }} />
+          <Accordion disableGutters elevation={0}>
+            <AccordionSummary expandIcon={<ChevronDown size={20} />}>
+              <Typography>Technical details</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Properties values={{
+                "Event code": eventName(event),
+                ...("event_type" in event ? { "Operation code": event.operation ?? "Not recorded" } : {}),
+                "Token ID": event.context.credential_id,
+                "Session ID": event.context.session_id,
+                "Event ID": event.context.id,
+              }} />
+            </AccordionDetails>
+          </Accordion>
           {"metadata" in event && Object.keys(event.metadata).length > 0 && (
             <Stack spacing={1}>
               <Typography variant="subtitle2">Metadata</Typography>

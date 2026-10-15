@@ -20,8 +20,8 @@ export async function openInvocation(page, operationId) {
     const index = items.findIndex(row => row.context.request_id === operationId);
     if (index >= 0) {
       await grid.locator(`[role="row"][data-id="${items[index].context.id}"]`)
-        .getByRole("button", { name: items[index].operation, exact: true }).click();
-      await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(operationId);
+        .getByRole("button").click();
+      await expect(page.getByRole("dialog").getByLabel("Operation ID", { exact: true })).toHaveValue(operationId);
       return;
     }
     assert(next_before && !seen.has(next_before), "Invocation not found in cursor history");

@@ -84,7 +84,7 @@ test("activity retains full attribution in event details", async ({
   await page.goto("/api/admin/console/#activity");
   await expect(page.getByRole("grid", { name: "Activity" }).getByRole("gridcell", { name: id, exact: true })).toHaveCount(1);
   await page
-    .getByRole("button", { name: "storage.create", exact: true })
+    .getByRole("button", { name: "Create storage", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toContainText(id);
 });
