@@ -153,7 +153,10 @@ async fn rejects_repeat_import_and_detects_changed_mapping(pool: PgPool) -> Resu
         .await
         .err()
         .context("expected nonempty target rejection")?;
-    ensure!(error.to_string().contains("not empty"));
+    ensure!(
+        error.to_string().contains("not empty"),
+        "unexpected repeat-import rejection: {error:#}"
+    );
     sqlx::query("UPDATE locations SET object_key='wrong/object'")
         .execute(&pool)
         .await?;
