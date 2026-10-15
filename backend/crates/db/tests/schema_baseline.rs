@@ -135,7 +135,7 @@ async fn fresh_install_creates_only_the_current_schema_and_reapplies_cleanly(poo
             .fetch_all(&pool)
             .await
             .unwrap();
-    assert_eq!(versions, [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     let tables: Vec<String> = sqlx::query_scalar(
         "SELECT schemaname || '.' || tablename FROM pg_tables
          WHERE schemaname IN ('public','management') AND tablename <> '_sqlx_migrations'

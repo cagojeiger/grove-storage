@@ -27,7 +27,7 @@ async fn account_lookup_is_independent_of_pages_and_preserves_deleted_state(pool
     let id: Uuid = target.parse().unwrap();
     let invocations: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE operation='identity.account.get'")
         .fetch_one(&pool).await.unwrap();
-    assert_eq!(invocations, 1);
+    assert_eq!(invocations, 0);
     db::change_account(&pool, &context(), id, db::AccountChange::Delete)
         .await
         .unwrap();

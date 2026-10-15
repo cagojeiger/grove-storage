@@ -50,6 +50,7 @@ async fn cookies_legacy_master_and_ambiguous_authorization_cannot_enter_resource
 #[sqlx::test(migrations = "../db/migrations")]
 async fn envelope_validation_and_server_owned_surface_are_enforced(pool: PgPool) {
     let token = owner(&pool).await;
+    seed(&pool).await;
     for (body, code) in [
         (
             json!({"protocol":2,"command":"invalid","input":{}}),
@@ -93,7 +94,7 @@ async fn envelope_validation_and_server_owned_surface_are_enforced(pool: PgPool)
             ("user-agent", "cli-mcp-console"),
             ("x-request-id", "client-spoof"),
         ],
-        json!({"protocol":1,"command":"client.list","input":{}}),
+        json!({"protocol":1,"command":"credential.list","input":{"client_id":"app"}}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);

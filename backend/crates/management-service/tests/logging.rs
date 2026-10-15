@@ -10,8 +10,15 @@ use grove_management_policy::{Role, Surface};
 use grove_management_service::{self as service, Command, Error, Output, Page, Proof};
 use support::*;
 
+fn details() -> db::telemetry::Details {
+    db::telemetry::Details::new(
+        "identity.session.login",
+        db::telemetry::Stage::Authentication,
+    )
+}
+
 #[sqlx::test(migrations = "../db/migrations")]
-async fn mutations_audit_once_and_reads_only_record_invocations(pool: PgPool) {
+async fn mutations_audit_once_and_successful_reads_do_not_grow_history(pool: PgPool) {
     let admin = owner(&pool).await;
     let before = audit_count(&pool).await;
     let created = service::execute(
@@ -36,17 +43,36 @@ async fn mutations_audit_once_and_reads_only_record_invocations(pool: PgPool) {
     assert_eq!(actors, (admin.account, admin.credential, admin.session_id));
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND outcome='succeeded'").bind(created.request_id).fetch_one(&pool).await.unwrap();
     assert_eq!(count, 1);
-    assert!(
-        service::execute(
+    for command in [
+        Command::Accounts(Page::default().into()),
+        Command::Account(admin.account),
+        Command::CurrentSession,
+        Command::OwnSessions(Page::default()),
+        Command::Audit(Page::default().into()),
+        Command::Invocations(Page::default().into()),
+        Command::Security(Page::default().into()),
+    ] {
+        let execution = service::execute(
             &pool,
             Proof::Session(&admin.session),
             Surface::Console,
-            Command::Accounts(Page::default().into())
+            command,
         )
+        .await;
+        assert!(execution.result.is_ok());
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM management.command_invocations WHERE request_id=$1",
+        )
+        .bind(execution.request_id)
+        .fetch_one(&pool)
         .await
-        .result
-        .is_ok()
-    );
+        .unwrap();
+        assert_eq!(count, 0);
+    }
+    let row: (String, String, String) = sqlx::query_as("SELECT i.target_type,i.target_id,a.resource_id FROM management.command_invocations i JOIN management.audit_events a USING(request_id) WHERE i.request_id=$1")
+        .bind(created.request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(row.0, "account");
+    assert_eq!(row.1, row.2);
     assert_eq!(audit_count(&pool).await, before + 1);
 }
 
@@ -70,6 +96,11 @@ async fn invalid_proof_logs_anonymous_security_without_payload(pool: PgPool) {
     .unwrap();
     assert!(event.contains("anonymous"));
     assert!(!event.contains(secret));
+    let fields: serde_json::Value = serde_json::from_str(&event).unwrap();
+    assert_eq!(fields.get("operation").unwrap(), "identity.account.list");
+    assert_eq!(fields.get("stage").unwrap(), "authentication");
+    assert_eq!(fields.get("auth_method").unwrap(), "api_token");
+    assert_eq!(fields.get("is_sampled").unwrap(), true);
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations")
         .fetch_one(&pool)
         .await
@@ -91,6 +122,7 @@ async fn anonymous_security_log_growth_is_bounded_across_concurrent_callers(pool
                 uuid::Uuid::new_v4(),
                 Surface::Mcp,
                 SecurityReason::Unauthenticated,
+                &details(),
             )
             .await
             .unwrap();
@@ -108,9 +140,16 @@ async fn anonymous_security_log_growth_is_bounded_across_concurrent_callers(pool
         (Surface::Cli, SecurityReason::Unauthenticated),
         (Surface::Mcp, SecurityReason::Forbidden),
     ] {
-        telemetry::security(&pool, None, uuid::Uuid::new_v4(), surface, reason)
-            .await
-            .unwrap();
+        telemetry::security(
+            &pool,
+            None,
+            uuid::Uuid::new_v4(),
+            surface,
+            reason,
+            &details(),
+        )
+        .await
+        .unwrap();
     }
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.security_events")
         .fetch_one(&pool)
@@ -128,6 +167,7 @@ async fn anonymous_security_log_growth_is_bounded_across_concurrent_callers(pool
         uuid::Uuid::new_v4(),
         Surface::Mcp,
         SecurityReason::Unauthenticated,
+        &details(),
     )
     .await
     .unwrap();
@@ -143,6 +183,7 @@ async fn anonymous_security_log_growth_is_bounded_across_concurrent_callers(pool
         uuid::Uuid::new_v4(),
         Surface::Mcp,
         SecurityReason::Unauthenticated,
+        &details(),
     )
     .await
     .unwrap();
@@ -173,6 +214,7 @@ async fn authenticated_security_events_are_not_sampled(pool: PgPool) {
             context.request_id,
             Surface::Console,
             SecurityReason::Forbidden,
+            &details(),
         )
         .await
         .unwrap();
@@ -184,6 +226,13 @@ async fn authenticated_security_events_are_not_sampled(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(count, 5);
+    let sampled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.security_events WHERE is_sampled IS DISTINCT FROM false",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(sampled, 0);
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
@@ -201,6 +250,7 @@ async fn anonymous_logger_does_not_wait_on_another_logger(pool: PgPool) {
             uuid::Uuid::new_v4(),
             Surface::Mcp,
             db::telemetry::SecurityReason::Unauthenticated,
+            &details(),
         ),
     )
     .await
@@ -234,6 +284,9 @@ async fn token_denial_retains_user_and_credential_without_creating_audit(pool: P
     assert_eq!(row.0, "account");
     assert_eq!(row.1, admin.account);
     assert_ne!(row.2, admin.credential);
+    let stages: (String, String) = sqlx::query_as("SELECT i.stage,s.stage FROM management.command_invocations i JOIN management.security_events s USING(request_id) WHERE i.request_id=$1")
+        .bind(denied.request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(stages, ("authorization".into(), "authorization".into()));
     assert_eq!(audit_count(&pool).await, before);
 }
 
@@ -324,6 +377,149 @@ async fn commit_failure_is_conservative_unknown_without_retry(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(rows, vec![("unknown".into(), "outcome_unknown".into())]);
+    let stage: String =
+        sqlx::query_scalar("SELECT stage FROM management.command_invocations WHERE request_id=$1")
+            .bind(result.request_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stage, "commit");
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn failed_reads_keep_the_target_and_sensitive_reads_keep_success(pool: PgPool) {
+    let admin = owner(&pool).await;
+    let missing = uuid::Uuid::new_v4();
+    let failed = service::execute(
+        &pool,
+        Proof::Session(&admin.session),
+        Surface::Console,
+        Command::Account(missing),
+    )
+    .await;
+    assert!(matches!(failed.result, Err(Error::NotFound)));
+    let row: (String, String, String, String) = sqlx::query_as("SELECT target_type,target_id,stage,outcome FROM management.command_invocations WHERE request_id=$1")
+        .bind(failed.request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        row,
+        (
+            "account".into(),
+            missing.to_string(),
+            "execution".into(),
+            "failed".into()
+        )
+    );
+    let listed = service::execute(
+        &pool,
+        Proof::Session(&admin.session),
+        Surface::Console,
+        Command::Credentials {
+            account: admin.account,
+            page: Page::default(),
+        },
+    )
+    .await;
+    assert!(listed.result.is_ok());
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='identity.credential.list' AND outcome='succeeded'")
+        .bind(listed.request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn browser_admission_is_distinct_from_account_authorization(pool: PgPool) {
+    let id = service::sessions::reject_browser(&pool, Error::Forbidden).await;
+    let row: (String, String, String, bool) = sqlx::query_as("SELECT operation,stage,auth_method,is_sampled FROM management.security_events WHERE request_id=$1")
+        .bind(id).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        row,
+        (
+            "console.request".into(),
+            "browser_admission".into(),
+            "session".into(),
+            true
+        )
+    );
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn password_login_and_reauthentication_keep_context_not_secrets(pool: PgPool) {
+    let password = "a private phrase for collection contract tests";
+    service::local_accounts::initialize(
+        &pool,
+        uuid::Uuid::new_v4(),
+        "owner",
+        "Private owner name",
+        password.into(),
+    )
+    .await
+    .unwrap();
+    let failed = service::sessions::login_password(
+        &pool,
+        "private-unknown-user",
+        "private-invalid-password".into(),
+        &hash(900),
+    )
+    .await;
+    assert!(matches!(failed.result, Err(Error::Unauthenticated)));
+    let session_hash = hash(901);
+    let login =
+        service::sessions::login_password(&pool, "owner", password.into(), &session_hash).await;
+    assert!(login.result.is_ok());
+    let row: (String, String, bool) = sqlx::query_as(
+        "SELECT stage,auth_method,is_sampled FROM management.security_events WHERE request_id=$1",
+    )
+    .bind(login.request_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row, ("authentication".into(), "password".into(), false));
+    for correct in [false, true] {
+        let id = uuid::Uuid::new_v4();
+        let result = service::password_setups::create(
+            &pool,
+            id,
+            &session_hash,
+            NewAccount {
+                display_name: "Private reader name",
+                role: Role::Reader,
+            },
+            "reader",
+            if correct {
+                password
+            } else {
+                "private-wrong-password"
+            }
+            .into(),
+            &hash(902),
+        )
+        .await;
+        assert_eq!(result.is_ok(), correct);
+        let row: (String, String, String, bool) = sqlx::query_as("SELECT operation,stage,auth_method,is_sampled FROM management.security_events WHERE request_id=$1")
+            .bind(id).fetch_one(&pool).await.unwrap();
+        assert_eq!(
+            row,
+            (
+                "identity.account.create".into(),
+                "reauthentication".into(),
+                "password".into(),
+                false
+            )
+        );
+    }
+    let histories: String = sqlx::query_scalar("SELECT jsonb_build_object('audit',(SELECT jsonb_agg(to_jsonb(a)) FROM management.audit_events a),'commands',(SELECT jsonb_agg(to_jsonb(i)) FROM management.command_invocations i),'security',(SELECT jsonb_agg(to_jsonb(s)) FROM management.security_events s))::text")
+        .fetch_one(&pool).await.unwrap();
+    for secret in [
+        password,
+        "private-unknown-user",
+        "private-invalid-password",
+        "private-wrong-password",
+        "Private owner name",
+        "Private reader name",
+        "argon2",
+        &session_hash,
+    ] {
+        assert!(!histories.contains(secret));
+    }
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

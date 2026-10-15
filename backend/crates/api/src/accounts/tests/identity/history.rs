@@ -39,7 +39,7 @@ async fn scoped_history_preserves_bigint_cursors_and_account_token_filters(pool:
     db::telemetry::invocation(
         &pool,
         &ctx,
-        "storage.list",
+        &db::telemetry::Details::new("storage.list", db::telemetry::Stage::Execution),
         db::telemetry::Outcome::Succeeded,
         None,
         1,
@@ -128,6 +128,41 @@ async fn scoped_history_preserves_bigint_cursors_and_account_token_filters(pool:
             .iter()
             .any(|r| r["context"]["request_id"] == denied_id && r["reason_code"] == "forbidden")
     );
+    let denial = security["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["context"]["request_id"] == denied_id)
+        .unwrap();
+    assert_eq!(denial["operation"], "history.security.list");
+    assert_eq!(denial["stage"], "authorization");
+    assert_eq!(denial["auth_method"], "session");
+    assert_eq!(denial["is_sampled"], false);
+    let missing = Uuid::new_v4();
+    let failed = send(
+        &pool,
+        &admin_cookie,
+        "GET",
+        &format!("/accounts/{missing}"),
+        serde_json::Value::Null,
+    )
+    .await;
+    let failed_id = failed.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(failed.status(), StatusCode::NOT_FOUND);
+    let calls = get(&pool, &admin_cookie, "/history/invocations?limit=100").await;
+    let failed = calls["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["context"]["request_id"] == failed_id)
+        .unwrap();
+    assert_eq!(failed["target_type"], "account");
+    assert_eq!(failed["target_id"], missing.to_string());
+    assert_eq!(failed["stage"], "execution");
+    assert_eq!(failed["auth_method"], "session");
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

@@ -51,6 +51,8 @@ where
     let request_id = Uuid::new_v4();
     let started = tokio::time::Instant::now();
     let name = command.name();
+    let mut details = logging::details(name.as_str(), proof);
+    details.target = target(&command);
     let (context, result) = run(
         pool,
         crypto,
@@ -59,6 +61,7 @@ where
         surface,
         command,
         request_id,
+        &mut details,
     )
     .await;
     logging::record(
@@ -66,7 +69,7 @@ where
         context.as_ref(),
         request_id,
         surface,
-        name.as_str(),
+        &details,
         started.elapsed(),
         &result,
     )
@@ -77,6 +80,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run<V, F>(
     pool: &PgPool,
     crypto: &Crypto,
@@ -85,6 +89,7 @@ async fn run<V, F>(
     surface: Surface,
     command: Command,
     request_id: Uuid,
+    details: &mut logging::Details,
 ) -> (Option<AuditContext>, Result<Output, Error>)
 where
     V: FnOnce(StorageOperation) -> F,
@@ -95,8 +100,19 @@ where
     let mutation = command.name().effect() == Effect::Mutation;
     let result = async {
         let mut tx = IdentityTransaction::begin(pool).await?;
-        let mut ctx = current(&mut tx, proof, surface, name, request_id, &mut context).await?;
+        let mut ctx = current(
+            &mut tx,
+            proof,
+            surface,
+            name,
+            request_id,
+            &mut context,
+            details,
+        )
+        .await?;
+        details.stage = logging::Stage::Validation;
         command.validate().map_err(|_| Error::InvalidInput)?;
+        details.stage = logging::Stage::Execution;
         let output = match command {
             Command::StorageCreate(input) | Command::StorageReplace(input) => {
                 if name == grove_management_command::CommandName::StorageReplace {
@@ -106,7 +122,17 @@ where
                 tx.finish().await.map_err(|_| Error::Unavailable)?;
                 let row = verify_storage(StorageOperation::Register(input)).await?;
                 tx = IdentityTransaction::begin(pool).await?;
-                ctx = current(&mut tx, proof, surface, name, request_id, &mut context).await?;
+                ctx = current(
+                    &mut tx,
+                    proof,
+                    surface,
+                    name,
+                    request_id,
+                    &mut context,
+                    details,
+                )
+                .await?;
+                details.stage = logging::Stage::Execution;
                 storage::write(&mut tx, &ctx, name, row).await?
             }
             Command::StorageTest(input) => {
@@ -121,7 +147,17 @@ where
                 )
                 .await;
                 tx = IdentityTransaction::begin(pool).await?;
-                current(&mut tx, proof, surface, name, request_id, &mut context).await?;
+                current(
+                    &mut tx,
+                    proof,
+                    surface,
+                    name,
+                    request_id,
+                    &mut context,
+                    details,
+                )
+                .await?;
+                details.stage = logging::Stage::Execution;
                 if tx.storage(&input.id).await? != row {
                     return Err(Error::Conflict);
                 }
@@ -134,6 +170,7 @@ where
             command if mutation => writes::run(&mut tx, crypto, &ctx, command).await?,
             command => reads::run(&mut tx, command).await?,
         };
+        details.stage = logging::Stage::Commit;
         tx.finish().await.map(|()| output).map_err(|_| {
             if mutation {
                 Error::OutcomeUnknown
@@ -153,15 +190,45 @@ async fn current(
     name: grove_management_command::CommandName,
     request_id: Uuid,
     context: &mut Option<AuditContext>,
+    details: &mut logging::Details,
 ) -> Result<AuditContext, Error> {
+    details.stage = logging::Stage::Authentication;
     *context = None;
     let identity = tx.resolve(proof).await?.ok_or(Error::Unauthenticated)?;
     let ctx = audit_context(&identity, request_id, surface)?;
     *context = Some(ctx);
+    details.stage = logging::Stage::Authorization;
     if authorize(identity.caller(), surface, name.required_action()) != Ok(Scope::Installation) {
         return Err(Error::Forbidden);
     }
     Ok(ctx)
+}
+
+fn target(command: &Command) -> Option<logging::Target> {
+    use logging::Target;
+    match command {
+        Command::StorageCreate(i) | Command::StorageReplace(i) => {
+            Target::resource("storage", &i.id)
+        }
+        Command::StorageShow(i) | Command::StorageTest(i) | Command::StorageDelete(i) => {
+            Target::resource("storage", &i.id)
+        }
+        Command::StorageMetadataShow(i) => Target::resource("storage", &i.id),
+        Command::StorageMetadataReplace(i) => Target::resource("storage", &i.id),
+        Command::ClientCreate(i) => Target::resource("client", &i.id),
+        Command::ClientShow(i) | Command::ClientDelete(i) | Command::ClientMetadataShow(i) => {
+            Target::resource("client", &i.id)
+        }
+        Command::ClientMetadataReplace(i) => Target::resource("client", &i.id),
+        Command::CredentialList(i) | Command::CredentialCreate(i) | Command::ClientKeyList(i) => {
+            Target::resource("client", &i.client_id)
+        }
+        Command::CredentialDelete(i) => Target::resource("client", &i.client_id),
+        Command::ClientKeyRegister(i) | Command::ClientKeyDelete(i) => {
+            Target::resource("client", &i.client_id)
+        }
+        _ => None,
+    }
 }
 
 fn wire_error(error: Error) -> CommandError {

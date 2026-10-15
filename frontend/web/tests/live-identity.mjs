@@ -80,6 +80,34 @@ try {
   await reader.screenshot({ path: new URL("reader-sessions.png", output).pathname, animations: "disabled" });
   console.log("PASS real HTTPS: account creation/retry, recipient setup, independent cookies, Reader denial, CSRF, two browser sessions");
 
+  const commands = await admin.evaluate(async () =>
+    (await fetch("/api/admin/identity/v1/history/invocations?limit=100")).json());
+  const created = commands.items.find(row => row.operation === "identity.account.create" && row.outcome === "succeeded");
+  assert(created?.target_type === "account" && created.stage === "execution" && created.auth_method === "password");
+  await admin.getByRole("link", { name: "Activity", exact: true }).click();
+  await admin.getByRole("tab", { name: "Command history", exact: true }).click();
+  await admin.getByRole("grid", { name: "Activity", exact: true }).getByRole("row")
+    .filter({ hasText: "identity.account.create" }).filter({ hasText: "Succeeded" })
+    .getByRole("button", { name: "identity.account.create", exact: true }).click();
+  const details = admin.getByRole("dialog", { name: "Event details" });
+  await expect(details).toContainText(created.target_id);
+  await expect(details).toContainText("Execution");
+  await expect(details).toContainText("Password");
+  await expect(details.getByLabel("Operation ID", { exact: true })).toHaveValue(created.context.request_id);
+  await admin.screenshot({ path: new URL("activity-command-context.png", output).pathname, animations: "disabled" });
+  await admin.keyboard.press("Escape");
+  await admin.getByRole("tab", { name: "Security events", exact: true }).click();
+  await admin.getByRole("grid", { name: "Activity", exact: true }).getByRole("row")
+    .filter({ hasText: "identity.account.create" }).filter({ hasText: "Reauthentication" })
+    .getByRole("button", { name: "authentication_succeeded", exact: true }).click();
+  await expect(details).toContainText("Reauthentication");
+  await expect(details).toContainText("Individual");
+  await expect(details).toContainText("Password");
+  await expect(details.getByRole("alert")).toHaveCount(0);
+  await admin.screenshot({ path: new URL("activity-security-context.png", output).pathname, animations: "disabled" });
+  await admin.keyboard.press("Escape");
+  console.log("PASS real HTTPS: collected command target, stage, auth method and security recording mode reach Activity details");
+
   await reader.getByRole("tab", { name: "Security", exact: true }).click();
   const replacement = "a replacement reader browser passphrase";
   await reader.getByLabel("Current password").fill(password);

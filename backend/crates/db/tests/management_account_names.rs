@@ -60,10 +60,7 @@ async fn rename_preserves_identity_credentials_and_sessions(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        metadata,
-        serde_json::json!({"before_name":"Owner","after_name":"New owner"})
-    );
+    assert_eq!(metadata, serde_json::json!({"name_changed":true}));
 }
 
 #[sqlx::test(migrations = "./migrations")]

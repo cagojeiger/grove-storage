@@ -105,19 +105,27 @@ pub async fn execute(
     let request_id = Uuid::new_v4();
     let started = tokio::time::Instant::now();
     let operation = command.name();
+    let mut details = logging::details(operation, proof);
+    details.target = command.target();
     let mutation = command.is_mutation();
-    let (context, result) = run(pool, proof, surface, command, request_id).await;
+    let (context, result) = run(pool, proof, surface, command, request_id, &mut details).await;
     let result = if !mutation && matches!(result, Err(Error::OutcomeUnknown)) {
         Err(Error::Unavailable)
     } else {
         result
     };
+    match &result {
+        Ok(Output::Account(id)) => details.target = Some(logging::Target::account(*id)),
+        Ok(Output::Credential(row)) => details.target = Some(logging::Target::credential(row.id)),
+        Err(Error::OutcomeUnknown) => details.stage = logging::Stage::Commit,
+        _ => {}
+    }
     logging::record(
         pool,
         context.as_ref(),
         request_id,
         surface,
-        operation,
+        &details,
         started.elapsed(),
         &result,
     )
@@ -131,6 +139,7 @@ async fn run(
     surface: Surface,
     command: Command<'_>,
     request_id: Uuid,
+    details: &mut logging::Details,
 ) -> (Option<AuditContext>, Result<Output, Error>) {
     let mut tx = match IdentityTransaction::begin(pool).await {
         Ok(tx) => tx,
@@ -145,6 +154,11 @@ async fn run(
         Ok(context) => context,
         Err(error) => return (None, Err(error)),
     };
+    details.stage = logging::Stage::Authorization;
+    if matches!(command, Command::Logout) {
+        let db::ResolvedIdentity::User(user) = &identity;
+        details.target = user.session_id.map(logging::Target::session);
+    }
     let scope = match authorize(identity.caller(), surface, command.action()) {
         Ok(scope) => scope,
         Err(_) => return (Some(context), Err(Error::Forbidden)),
@@ -160,11 +174,18 @@ async fn run(
         if let Err(error) = tx.finish().await {
             return (Some(context), Err(error.into()));
         }
-        if let Err(error) =
-            password_setups::reauthenticate(pool, session_hash, current_password.clone()).await
+        if let Err(error) = password_setups::reauthenticate(
+            pool,
+            session_hash,
+            current_password.clone(),
+            request_id,
+            details,
+        )
+        .await
         {
             return (Some(context), Err(error));
         }
+        details.stage = logging::Stage::Authentication;
         tx = match IdentityTransaction::begin(pool).await {
             Ok(tx) => tx,
             Err(error) => return (Some(context), Err(error.into())),
@@ -174,10 +195,12 @@ async fn run(
             Ok(None) => return (Some(context), Err(Error::Unauthenticated)),
             Err(error) => return (Some(context), Err(error.into())),
         };
+        details.stage = logging::Stage::Authorization;
         if authorize(identity.caller(), surface, command.action()) != Ok(scope) {
             return (Some(context), Err(Error::Forbidden));
         }
     }
+    details.stage = logging::Stage::Execution;
     let result = dispatch::run(tx, &context, identity, scope, command)
         .await
         .map_err(Error::from);

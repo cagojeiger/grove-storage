@@ -44,6 +44,18 @@ async fn reader_tests_saved_storage_across_surfaces_without_registry_or_audit_mu
         let count: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='storage.test' AND outcome='succeeded'")
             .bind(execution.request_id).fetch_one(&pool).await.unwrap();
         assert_eq!(count, 1);
+        let target: (String, String, String) = sqlx::query_as("SELECT target_type,target_id,auth_method FROM management.command_invocations WHERE request_id=$1")
+            .bind(execution.request_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(target.0, "storage");
+        assert_eq!(target.1, "local");
+        assert_eq!(
+            target.2,
+            if surface == Surface::Console {
+                "session"
+            } else {
+                "api_token"
+            }
+        );
     }
     assert_eq!(audit_count(&pool).await, audits);
     assert_eq!(
@@ -149,6 +161,14 @@ async fn failed_and_timed_out_probes_preserve_registry(pool: PgPool) {
         let error = result.result.unwrap_err();
         assert_eq!(error.code, ErrorCode::Unavailable);
         assert_eq!(error.outcome, Outcome::NotApplied);
+        let stage: String = sqlx::query_scalar(
+            "SELECT stage FROM management.command_invocations WHERE request_id=$1",
+        )
+        .bind(result.request_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stage, "execution");
     }
     assert_eq!(
         registry::get_storage(&pool, "local")

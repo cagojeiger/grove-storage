@@ -30,7 +30,7 @@ async fn seed(pool: &PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn resources_read_status_is_server_observation_and_logs_once(pool: PgPool) {
+async fn resources_read_status_is_server_observation_without_history_growth(pool: PgPool) {
     let admin = owner(&pool).await;
     seed(&pool).await;
     let before = audit_count(&pool).await;
@@ -50,17 +50,6 @@ async fn resources_read_status_is_server_observation_and_logs_once(pool: PgPool)
             && matches!(status.storage_access, grove_management_command::model::StorageAccess::NotChecked)
     ));
     assert_eq!(audit_count(&pool).await, before);
-    let (operation, surface, outcome): (String, String, String) = sqlx::query_as(
-        "SELECT operation,surface,outcome FROM management.command_invocations WHERE request_id=$1",
-    )
-    .bind(execution.request_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        (operation.as_str(), surface.as_str(), outcome.as_str()),
-        ("status", "cli", "succeeded")
-    );
     let count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM management.command_invocations WHERE request_id=$1",
     )
@@ -68,5 +57,36 @@ async fn resources_read_status_is_server_observation_and_logs_once(pool: PgPool)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(count, 1);
+    assert_eq!(count, 0);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn failed_resource_reads_keep_safe_targets_not_arbitrary_lookup_input(pool: PgPool) {
+    let admin = owner(&pool).await;
+    for id in ["missing", "private/lookup?token=sentinel"] {
+        let execution = resources::execute(
+            &pool,
+            &crypto(),
+            unexpected_storage_probe,
+            Proof::Token(&admin.token),
+            Surface::Cli,
+            Command::StorageShow(input::ResourceInput { id: id.into() }),
+        )
+        .await;
+        assert_eq!(execution.result.unwrap_err().code, ErrorCode::NotFound);
+        let row: (Option<String>, Option<String>, String) = sqlx::query_as("SELECT target_type,target_id,stage FROM management.command_invocations WHERE request_id=$1")
+            .bind(execution.request_id).fetch_one(&pool).await.unwrap();
+        if id == "missing" {
+            assert_eq!(
+                row,
+                (
+                    Some("storage".into()),
+                    Some("missing".into()),
+                    "execution".into()
+                )
+            );
+        } else {
+            assert_eq!(row, (None, None, "execution".into()));
+        }
+    }
 }

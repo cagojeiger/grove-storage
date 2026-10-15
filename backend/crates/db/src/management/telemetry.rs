@@ -4,6 +4,104 @@ use grove_management_policy::Surface;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Authentication,
+    Authorization,
+    Reauthentication,
+    Validation,
+    Execution,
+    Commit,
+    BrowserAdmission,
+}
+impl Stage {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Authentication => "authentication",
+            Self::Authorization => "authorization",
+            Self::Reauthentication => "reauthentication",
+            Self::Validation => "validation",
+            Self::Execution => "execution",
+            Self::Commit => "commit",
+            Self::BrowserAdmission => "browser_admission",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum AuthMethod {
+    Password,
+    Session,
+    ApiToken,
+}
+impl AuthMethod {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Password => "password",
+            Self::Session => "session",
+            Self::ApiToken => "api_token",
+        }
+    }
+}
+
+pub struct Target {
+    kind: &'static str,
+    id: String,
+}
+impl Target {
+    pub fn account(id: Uuid) -> Self {
+        Self {
+            kind: "account",
+            id: id.to_string(),
+        }
+    }
+    pub fn credential(id: Uuid) -> Self {
+        Self {
+            kind: "credential",
+            id: id.to_string(),
+        }
+    }
+    pub fn session(id: Uuid) -> Self {
+        Self {
+            kind: "session",
+            id: id.to_string(),
+        }
+    }
+
+    pub fn resource(kind: &'static str, id: &str) -> Option<Self> {
+        // Lookup inputs are less restrictive than registered IDs. Do not copy
+        // arbitrary lookup paths, key hashes, or credentials into history.
+        let valid = matches!(kind, "storage" | "client")
+            && (1..=64).contains(&id.len())
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            && id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+            && id.as_bytes().last().is_some_and(u8::is_ascii_alphanumeric);
+        valid.then(|| Self {
+            kind,
+            id: id.to_owned(),
+        })
+    }
+}
+
+pub struct Details {
+    pub operation: &'static str,
+    pub target: Option<Target>,
+    pub stage: Stage,
+    pub auth_method: Option<AuthMethod>,
+}
+impl Details {
+    pub fn new(operation: &'static str, stage: Stage) -> Self {
+        Self {
+            operation,
+            target: None,
+            stage,
+            auth_method: None,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum Outcome {
     Succeeded,
@@ -45,18 +143,22 @@ impl SecurityReason {
 pub async fn invocation(
     pool: &PgPool,
     context: &AuditContext,
-    operation: &'static str,
+    details: &Details,
     outcome: Outcome,
     error_code: Option<&'static str>,
     duration_ms: u64,
 ) -> Result<(), Error> {
     let f = audit::columns(Some(context.actor));
     sqlx::query("INSERT INTO management.command_invocations
-        (actor_kind,actor_id,credential_id,session_id,request_id,surface,operation,outcome,error_code,duration_ms)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
+        (actor_kind,actor_id,credential_id,session_id,request_id,surface,operation,outcome,error_code,duration_ms,
+         target_type,target_id,stage,auth_method)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)")
         .bind(f.kind).bind(f.actor).bind(f.credential).bind(f.session)
-        .bind(context.request_id).bind(audit::surface_name(context.surface)).bind(operation).bind(outcome.name()).bind(error_code)
-        .bind(i64::try_from(duration_ms).unwrap_or(i64::MAX)).execute(pool).await?;
+        .bind(context.request_id).bind(audit::surface_name(context.surface)).bind(details.operation).bind(outcome.name()).bind(error_code)
+        .bind(i64::try_from(duration_ms).unwrap_or(i64::MAX))
+        .bind(details.target.as_ref().map(|t| t.kind)).bind(details.target.as_ref().map(|t| &t.id))
+        .bind(details.stage.name()).bind(details.auth_method.map(AuthMethod::name))
+        .execute(pool).await?;
     Ok(())
 }
 
@@ -66,13 +168,15 @@ pub async fn security(
     request_id: Uuid,
     surface: Surface,
     reason: SecurityReason,
+    details: &Details,
 ) -> Result<(), Error> {
     let f = audit::columns(context.map(|c| c.actor));
     let (event, code) = reason.fields();
     let write = sqlx::query(
         "INSERT INTO management.security_events
-        (actor_kind,actor_id,credential_id,session_id,request_id,surface,event_type,reason_code)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+        (actor_kind,actor_id,credential_id,session_id,request_id,surface,event_type,reason_code,
+         operation,stage,auth_method,is_sampled)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
     )
     .bind(f.kind)
     .bind(f.actor)
@@ -81,7 +185,11 @@ pub async fn security(
     .bind(request_id)
     .bind(audit::surface_name(surface))
     .bind(event)
-    .bind(code);
+    .bind(code)
+    .bind(details.operation)
+    .bind(details.stage.name())
+    .bind(details.auth_method.map(AuthMethod::name))
+    .bind(context.is_none());
     if context.is_some() {
         write.execute(pool).await?;
         return Ok(());

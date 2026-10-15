@@ -86,8 +86,8 @@ pub(super) async fn change_in(
             sqlx::query("UPDATE management.accounts SET display_name=$2,updated_at=grove_time.wall_now() WHERE id=$1")
                 .bind(id).bind(name).execute(&mut *tx).await?;
             let event = audit::record(&mut tx, context, "account.name", "account", id).await?;
-            sqlx::query("UPDATE management.audit_events SET metadata=jsonb_build_object('before_name',$2::text,'after_name',$3::text) WHERE id=$1")
-                .bind(event).bind(old_name).bind(name).execute(&mut *tx).await?;
+            sqlx::query("UPDATE management.audit_events SET metadata=jsonb_build_object('name_changed',true) WHERE id=$1")
+                .bind(event).execute(&mut *tx).await?;
             tx.commit().await.map_err(|_| Error::CommitUnknown)?;
             return Ok(true);
         }

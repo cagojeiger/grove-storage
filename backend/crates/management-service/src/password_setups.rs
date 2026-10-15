@@ -14,26 +14,27 @@ pub async fn issue(
     current_password: SecretString,
     token_hash: &str,
 ) -> Result<db::password_setup::Setup, Error> {
-    logging::session_operation(
-        pool,
-        request_id,
-        session_hash,
+    let mut details = logging::Details::new(
         "identity.account.password_setup.issue",
-        async {
-            let username = passwords::username(username).map_err(password_error)?;
-            reauthenticate_admin(pool, session_hash, current_password).await?;
-            db::password_setup::issue(
-                pool,
-                request_id,
-                session_hash,
-                account,
-                &username,
-                token_hash,
-            )
-            .await
-            .map_err(Error::from)
-        },
-    )
+        logging::Stage::Authentication,
+    );
+    details.target = Some(logging::Target::account(account));
+    logging::session_operation(pool, request_id, session_hash, details, async |details| {
+        details.stage = logging::Stage::Validation;
+        let username = passwords::username(username).map_err(password_error)?;
+        reauthenticate_admin(pool, session_hash, current_password, request_id, details).await?;
+        details.stage = logging::Stage::Execution;
+        db::password_setup::issue(
+            pool,
+            request_id,
+            session_hash,
+            account,
+            &username,
+            token_hash,
+        )
+        .await
+        .map_err(Error::from)
+    })
     .await
 }
 
@@ -50,11 +51,13 @@ pub async fn create(
         pool,
         request_id,
         session_hash,
-        "identity.account.create",
-        async {
+        logging::Details::new("identity.account.create", logging::Stage::Authentication),
+        async |details| {
+            details.stage = logging::Stage::Validation;
             let username = passwords::username(username).map_err(password_error)?;
-            reauthenticate_admin(pool, session_hash, current_password).await?;
-            db::password_setup::create(
+            reauthenticate_admin(pool, session_hash, current_password, request_id, details).await?;
+            details.stage = logging::Stage::Execution;
+            let setup = db::password_setup::create(
                 pool,
                 request_id,
                 session_hash,
@@ -63,7 +66,9 @@ pub async fn create(
                 token_hash,
             )
             .await
-            .map_err(Error::from)
+            .map_err(Error::from)?;
+            details.target = Some(logging::Target::account(setup.account_id));
+            Ok(setup)
         },
     )
     .await
@@ -73,8 +78,11 @@ async fn reauthenticate_admin(
     pool: &PgPool,
     session_hash: &str,
     current_password: SecretString,
+    request_id: Uuid,
+    details: &mut logging::Details,
 ) -> Result<(), Error> {
-    let actor = reauthenticate(pool, session_hash, current_password).await?;
+    let actor = reauthenticate(pool, session_hash, current_password, request_id, details).await?;
+    details.stage = logging::Stage::Authorization;
     if !matches!(
         actor.caller.actor,
         Actor::User {
@@ -91,11 +99,16 @@ pub(crate) async fn reauthenticate(
     pool: &PgPool,
     session_hash: &str,
     current_password: SecretString,
+    request_id: Uuid,
+    details: &mut logging::Details,
 ) -> Result<db::Identity, Error> {
+    details.stage = logging::Stage::Authentication;
     let actor = db::session_actor(pool, session_hash)
         .await
         .map_err(Error::from)?
         .ok_or(Error::Unauthenticated)?;
+    details.stage = logging::Stage::Reauthentication;
+    details.auth_method = Some(logging::AuthMethod::Password);
     if !db::admission::account_allowed(
         pool,
         actor.account_id,
@@ -119,6 +132,7 @@ pub(crate) async fn reauthenticate(
     {
         return Err(Error::Unauthenticated);
     }
+    logging::reauthenticated(pool, request_id, &actor, details).await;
     Ok(actor)
 }
 

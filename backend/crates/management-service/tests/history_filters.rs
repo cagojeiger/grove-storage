@@ -55,7 +55,7 @@ async fn actor_and_token_filters_intersect_scope_before_pagination(pool: PgPool)
         telemetry::invocation(
             &pool,
             &ctx,
-            "storage.list",
+            &telemetry::Details::new("storage.list", telemetry::Stage::Execution),
             telemetry::Outcome::Succeeded,
             None,
             1,
@@ -68,6 +68,7 @@ async fn actor_and_token_filters_intersect_scope_before_pagination(pool: PgPool)
             ctx.request_id,
             Surface::Mcp,
             telemetry::SecurityReason::Forbidden,
+            &telemetry::Details::new("storage.list", telemetry::Stage::Authorization),
         )
         .await
         .unwrap();

@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, Proof};
 use grove_db::{
     PgPool,
     management::{
@@ -7,17 +7,28 @@ use grove_db::{
     },
 };
 use grove_management_policy::Surface;
-use std::{future::Future, time::Duration};
+use std::time::Duration;
 use uuid::Uuid;
 
+pub(crate) use telemetry::{AuthMethod, Details, Stage, Target};
+
 const LOG_TIMEOUT: Duration = Duration::from_millis(250);
+
+pub(crate) fn details(operation: &'static str, proof: Proof<'_>) -> Details {
+    let mut details = Details::new(operation, Stage::Authentication);
+    details.auth_method = Some(match proof {
+        Proof::Session(_) | Proof::PasswordSession(_) => AuthMethod::Session,
+        Proof::Token(_) => AuthMethod::ApiToken,
+    });
+    details
+}
 
 pub(crate) async fn session_operation<T>(
     pool: &PgPool,
     request_id: Uuid,
     session_hash: &str,
-    operation: &'static str,
-    work: impl Future<Output = Result<T, Error>>,
+    mut details: Details,
+    work: impl AsyncFnOnce(&mut Details) -> Result<T, Error>,
 ) -> Result<T, Error> {
     let started = tokio::time::Instant::now();
     let context = db::session_actor(pool, session_hash)
@@ -33,13 +44,26 @@ pub(crate) async fn session_operation<T>(
             request_id,
             surface: Surface::Console,
         });
-    let result = work.await;
+    details.auth_method = Some(AuthMethod::Session);
+    if let Some(context) = &context {
+        details.stage = Stage::Execution;
+        if details.target.is_none()
+            && details.operation != "identity.account.create"
+            && let AuditActor::Account { id, .. } = context.actor
+        {
+            details.target = Some(Target::account(id));
+        }
+    }
+    let result = work(&mut details).await;
+    if matches!(result, Err(Error::OutcomeUnknown)) {
+        details.stage = Stage::Commit;
+    }
     record(
         pool,
         context.as_ref(),
         request_id,
         Surface::Console,
-        operation,
+        &details,
         started.elapsed(),
         &result,
     )
@@ -52,12 +76,13 @@ pub(super) async fn record<T>(
     context: Option<&AuditContext>,
     request_id: Uuid,
     surface: Surface,
-    operation: &'static str,
+    details: &Details,
     elapsed: Duration,
     result: &Result<T, Error>,
 ) {
-    observe(request_id, surface, operation, elapsed, result);
-    if let Some(context) = context {
+    observe(request_id, surface, details.operation, elapsed, result);
+    if let Some(context) = context.filter(|_| result.is_err() || records_success(details.operation))
+    {
         let (outcome, code) = match result {
             Ok(_) => (Outcome::Succeeded, None),
             Err(Error::Forbidden) => (Outcome::Denied, Some(Error::Forbidden.code())),
@@ -67,7 +92,7 @@ pub(super) async fn record<T>(
         let write = telemetry::invocation(
             pool,
             context,
-            operation,
+            details,
             outcome,
             code,
             u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
@@ -81,11 +106,18 @@ pub(super) async fn record<T>(
         Err(Error::Unauthenticated) => Some(SecurityReason::Unauthenticated),
         Err(Error::Forbidden) => Some(SecurityReason::Forbidden),
         Err(Error::RateLimited) => Some(SecurityReason::RateLimited),
-        Err(_) if context.is_none() => Some(SecurityReason::Unavailable),
+        Err(Error::Unavailable)
+            if matches!(
+                details.stage,
+                Stage::Authentication | Stage::Reauthentication
+            ) =>
+        {
+            Some(SecurityReason::Unavailable)
+        }
         _ => None,
     };
     if let Some(reason) = reason {
-        security(pool, context, request_id, surface, reason).await;
+        security(pool, context, request_id, surface, reason, details).await;
     }
 }
 
@@ -95,12 +127,66 @@ pub(super) async fn security(
     request_id: Uuid,
     surface: Surface,
     reason: SecurityReason,
+    details: &Details,
 ) {
-    let write = telemetry::security(pool, context, request_id, surface, reason);
+    let write = telemetry::security(pool, context, request_id, surface, reason, details);
     if !matches!(tokio::time::timeout(LOG_TIMEOUT, write).await, Ok(Ok(()))) {
         tracing::error!(event="history.write_failed", operation_id=%request_id,
             stream="security_events", error_code="write_failed_or_timed_out", outcome="error");
     }
+}
+
+pub(crate) async fn reauthenticated(
+    pool: &PgPool,
+    request_id: Uuid,
+    actor: &db::Identity,
+    details: &Details,
+) {
+    let context = AuditContext {
+        actor: AuditActor::Account {
+            id: actor.account_id,
+            credential_id: actor.credential_id,
+            session_id: actor.session_id,
+        },
+        request_id,
+        surface: Surface::Console,
+    };
+    security(
+        pool,
+        Some(&context),
+        request_id,
+        Surface::Console,
+        SecurityReason::Authenticated,
+        details,
+    )
+    .await;
+}
+
+fn records_success(operation: &str) -> bool {
+    use grove_management_command::{CommandName, Effect};
+    if let Some(name) = CommandName::parse(operation) {
+        return name.effect() == Effect::Mutation
+            || matches!(
+                name,
+                CommandName::StorageTest | CommandName::CredentialList | CommandName::ClientKeyList
+            );
+    }
+    matches!(
+        operation,
+        "identity.account.create"
+            | "identity.account.name"
+            | "identity.account.role"
+            | "identity.account.active"
+            | "identity.account.delete"
+            | "identity.account.password_setup.issue"
+            | "identity.credential.issue"
+            | "identity.credential.revoke"
+            | "identity.credential.list"
+            | "identity.session.login"
+            | "identity.session.logout"
+            | "identity.session.revoke"
+            | "account.password_change"
+    )
 }
 
 fn observe<T>(
@@ -164,7 +250,7 @@ fn is_read(operation: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_read;
+    use super::{is_read, records_success};
     use grove_management_command::{CommandName, Effect};
 
     #[test]
@@ -174,6 +260,36 @@ mod tests {
         }
         assert!(is_read("identity.session.current"));
         assert!(!is_read("identity.account.create"));
+    }
+
+    #[test]
+    fn successful_history_uses_an_explicit_read_allowlist() {
+        for name in CommandName::ALL {
+            assert_eq!(
+                records_success(name.as_str()),
+                name.effect() == Effect::Mutation
+                    || matches!(
+                        name,
+                        CommandName::StorageTest
+                            | CommandName::CredentialList
+                            | CommandName::ClientKeyList
+                    )
+            );
+        }
+        for name in [
+            "identity.account.list",
+            "identity.account.get",
+            "identity.session.current",
+            "identity.session.list",
+            "history.audit.list",
+            "history.invocation.list",
+            "history.security.list",
+            "unknown.command",
+        ] {
+            assert!(!records_success(name));
+        }
+        assert!(records_success("identity.credential.list"));
+        assert!(records_success("identity.account.create"));
     }
 
     #[sqlx::test(migrations = "../db/migrations")]
@@ -198,6 +314,7 @@ mod tests {
             surface: Surface::Console,
         };
         let result: Result<(), Error> = Ok(());
+        let details = Details::new("account.password_change", Stage::Execution);
         tokio::time::pause();
         let started = tokio::time::Instant::now();
         let mut write = Box::pin(record(
@@ -205,7 +322,7 @@ mod tests {
             Some(&context),
             context.request_id,
             Surface::Console,
-            "account.password_change",
+            &details,
             Duration::ZERO,
             &result,
         ));
