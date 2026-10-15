@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use crate::metrics::{Operation, S3Metrics};
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::presigning::PresigningConfig;
 use grove_core::time::{Clock, SystemClock};
@@ -37,6 +38,7 @@ pub struct S3Storage {
     pub client: aws_sdk_s3::Client,
     pub bucket: String,
     clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
 }
 
 fn presigning(storage: &S3Storage, expires_in: Duration) -> anyhow::Result<PresigningConfig> {
@@ -76,6 +78,7 @@ impl PartialEq for S3StorageSpec {
 pub struct S3ClientCache {
     inner: RwLock<HashMap<(String, Address), (S3StorageSpec, S3Storage)>>,
     clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
 }
 
 impl Default for S3ClientCache {
@@ -86,9 +89,14 @@ impl Default for S3ClientCache {
 
 impl S3ClientCache {
     pub fn new(clock: Arc<dyn Clock>) -> Self {
+        Self::with_metrics(clock, S3Metrics::default())
+    }
+
+    pub fn with_metrics(clock: Arc<dyn Clock>, metrics: S3Metrics) -> Self {
         Self {
             inner: RwLock::default(),
             clock,
+            metrics,
         }
     }
     /// id는 등록부 storage id — 갱신 시 옛 항목이 제자리 교체되게 하는 키.
@@ -99,7 +107,7 @@ impl S3ClientCache {
         {
             return storage.clone();
         }
-        let storage = client(spec, address, self.clock.clone());
+        let storage = client(spec, address, self.clock.clone(), self.metrics.clone());
         if let Ok(mut cache) = self.inner.write() {
             cache.insert((id.to_owned(), address), (spec.clone(), storage.clone()));
         }
@@ -108,7 +116,12 @@ impl S3ClientCache {
 }
 
 /// 접근 확인 없이 클라이언트만 구성한다.
-fn client(spec: &S3StorageSpec, address: Address, clock: Arc<dyn Clock>) -> S3Storage {
+fn client(
+    spec: &S3StorageSpec,
+    address: Address,
+    clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
+) -> S3Storage {
     let credentials = Credentials::new(
         spec.access_key.clone(),
         spec.secret_key.expose_secret().to_owned(),
@@ -142,6 +155,7 @@ fn client(spec: &S3StorageSpec, address: Address, clock: Arc<dyn Clock>) -> S3St
         client: aws_sdk_s3::Client::from_conf(s3_config),
         bucket: spec.bucket.clone(),
         clock,
+        metrics,
     }
 }
 
@@ -159,12 +173,21 @@ pub async fn connect_with_clock(
     spec: &S3StorageSpec,
     clock: Arc<dyn Clock>,
 ) -> anyhow::Result<S3Storage> {
-    let storage = client(spec, Address::Internal, clock);
+    connect_with_metrics(spec, clock, S3Metrics::default()).await
+}
+
+pub async fn connect_with_metrics(
+    spec: &S3StorageSpec,
+    clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
+) -> anyhow::Result<S3Storage> {
+    let storage = client(spec, Address::Internal, clock, metrics);
     storage
-        .client
-        .head_bucket()
-        .bucket(&storage.bucket)
-        .send()
+        .metrics
+        .observe(
+            Operation::HeadBucket,
+            storage.client.head_bucket().bucket(&storage.bucket).send(),
+        )
         .await
         .map_err(|err| {
             anyhow::anyhow!(
@@ -174,11 +197,16 @@ pub async fn connect_with_clock(
             )
         })?;
     storage
-        .client
-        .list_multipart_uploads()
-        .bucket(&storage.bucket)
-        .max_uploads(1)
-        .send()
+        .metrics
+        .observe(
+            Operation::ListMultipartUploads,
+            storage
+                .client
+                .list_multipart_uploads()
+                .bucket(&storage.bucket)
+                .max_uploads(1)
+                .send(),
+        )
         .await
         .map_err(|err| {
             anyhow::anyhow!(
@@ -281,7 +309,10 @@ pub async fn put_object_from_path(
     if let Some(content_type) = content_type {
         request = request.content_type(content_type);
     }
-    request.send().await?;
+    storage
+        .metrics
+        .observe(Operation::PutObject, request.send())
+        .await?;
     Ok(())
 }
 
@@ -291,11 +322,16 @@ pub async fn open_read(
     object_key: &str,
 ) -> anyhow::Result<Option<(impl tokio::io::AsyncRead + Send + Unpin + use<>, i64)>> {
     let result = storage
-        .client
-        .get_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .send()
+        .metrics
+        .observe(
+            Operation::GetObject,
+            storage
+                .client
+                .get_object()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .send(),
+        )
         .await;
     match result {
         Ok(output) => {
@@ -334,12 +370,17 @@ pub async fn open_read_range(
     end: i64,
 ) -> anyhow::Result<Option<(impl tokio::io::AsyncRead + Send + Unpin + use<>, i64)>> {
     let result = storage
-        .client
-        .get_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .range(format!("bytes={start}-{end}"))
-        .send()
+        .metrics
+        .observe(
+            Operation::GetObject,
+            storage
+                .client
+                .get_object()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .range(format!("bytes={start}-{end}"))
+                .send(),
+        )
         .await;
     match result {
         Ok(output) => {
@@ -369,11 +410,16 @@ pub async fn open_read_range(
 /// 성공한다 — purge는 멱등하다 (spec 00, 실측).
 pub async fn delete_object(storage: &S3Storage, object_key: &str) -> anyhow::Result<()> {
     storage
-        .client
-        .delete_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .send()
+        .metrics
+        .observe(
+            Operation::DeleteObject,
+            storage
+                .client
+                .delete_object()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .send(),
+        )
         .await?;
     Ok(())
 }
@@ -385,11 +431,16 @@ pub async fn head_object(
     object_key: &str,
 ) -> anyhow::Result<Option<(i64, String)>> {
     let result = storage
-        .client
-        .head_object()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .send()
+        .metrics
+        .observe(
+            Operation::HeadObject,
+            storage
+                .client
+                .head_object()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .send(),
+        )
         .await;
     match result {
         Ok(head) => {
@@ -430,7 +481,10 @@ pub async fn create_multipart(
     if let Some(content_type) = content_type {
         request = request.content_type(content_type);
     }
-    let output = request.send().await?;
+    let output = storage
+        .metrics
+        .observe(Operation::CreateMultipartUpload, request.send())
+        .await?;
     output
         .upload_id()
         .map(str::to_owned)
@@ -469,14 +523,19 @@ pub async fn upload_part_from_path(
 ) -> anyhow::Result<String> {
     let body = aws_sdk_s3::primitives::ByteStream::from_path(path).await?;
     let output = storage
-        .client
-        .upload_part()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .upload_id(upload_id)
-        .part_number(part_number)
-        .body(body)
-        .send()
+        .metrics
+        .observe(
+            Operation::UploadPart,
+            storage
+                .client
+                .upload_part()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .upload_id(upload_id)
+                .part_number(part_number)
+                .body(body)
+                .send(),
+        )
         .await?;
     strip_etag(output.e_tag(), "upload_part")
 }
@@ -500,7 +559,10 @@ pub async fn list_parts(
         if let Some(marker) = &marker {
             request = request.part_number_marker(marker);
         }
-        let output = request.send().await?;
+        let output = storage
+            .metrics
+            .observe(Operation::ListParts, request.send())
+            .await?;
         for part in output.parts() {
             let number = part
                 .part_number()
@@ -554,13 +616,18 @@ pub async fn complete_multipart(
         ))
         .build();
     let output = storage
-        .client
-        .complete_multipart_upload()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .upload_id(upload_id)
-        .multipart_upload(completed)
-        .send()
+        .metrics
+        .observe(
+            Operation::CompleteMultipartUpload,
+            storage
+                .client
+                .complete_multipart_upload()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .upload_id(upload_id)
+                .multipart_upload(completed)
+                .send(),
+        )
         .await?;
     strip_etag(output.e_tag(), "complete_multipart")
 }
@@ -573,12 +640,17 @@ pub async fn abort_multipart(
     upload_id: &str,
 ) -> anyhow::Result<()> {
     let result = storage
-        .client
-        .abort_multipart_upload()
-        .bucket(&storage.bucket)
-        .key(object_key)
-        .upload_id(upload_id)
-        .send()
+        .metrics
+        .observe(
+            Operation::AbortMultipartUpload,
+            storage
+                .client
+                .abort_multipart_upload()
+                .bucket(&storage.bucket)
+                .key(object_key)
+                .upload_id(upload_id)
+                .send(),
+        )
         .await;
     match result {
         Ok(_) => Ok(()),
@@ -612,13 +684,18 @@ pub async fn abort_multipart_by_key(storage: &S3Storage, object_key: &str) -> an
             "list_multipart_uploads repeated a pagination marker"
         );
         let output = storage
-            .client
-            .list_multipart_uploads()
-            .bucket(&storage.bucket)
-            .prefix(object_key)
-            .set_key_marker(key_marker)
-            .set_upload_id_marker(upload_id_marker)
-            .send()
+            .metrics
+            .observe(
+                Operation::ListMultipartUploads,
+                storage
+                    .client
+                    .list_multipart_uploads()
+                    .bucket(&storage.bucket)
+                    .prefix(object_key)
+                    .set_key_marker(key_marker)
+                    .set_upload_id_marker(upload_id_marker)
+                    .send(),
+            )
             .await?;
         let upload_ids: Vec<String> = output
             .uploads()

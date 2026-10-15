@@ -175,4 +175,66 @@ mod tests {
         assert!(is_read("identity.session.current"));
         assert!(!is_read("identity.account.create"));
     }
+
+    #[sqlx::test(migrations = "../db/migrations")]
+    #[allow(clippy::unwrap_used)]
+    async fn invocation_pool_wait_is_bounded_without_changing_the_operation_result(
+        options: sqlx::postgres::PgPoolOptions,
+        connect: sqlx::postgres::PgConnectOptions,
+    ) {
+        use super::*;
+        let pool = options
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(60))
+            .idle_timeout(None)
+            .max_lifetime(None)
+            .connect_with(connect)
+            .await
+            .unwrap();
+        let mut held = pool.acquire().await.unwrap();
+        let context = AuditContext {
+            actor: AuditActor::System,
+            request_id: Uuid::new_v4(),
+            surface: Surface::Console,
+        };
+        let result: Result<(), Error> = Ok(());
+        tokio::time::pause();
+        let started = tokio::time::Instant::now();
+        let mut write = Box::pin(record(
+            &pool,
+            Some(&context),
+            context.request_id,
+            Surface::Console,
+            "account.password_change",
+            Duration::ZERO,
+            &result,
+        ));
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(write.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        tokio::time::advance(LOG_TIMEOUT - Duration::from_millis(1)).await;
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(write.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        tokio::time::advance(Duration::from_millis(1)).await;
+        write.await;
+        assert!(started.elapsed() >= LOG_TIMEOUT);
+        assert!(started.elapsed() <= LOG_TIMEOUT + Duration::from_millis(1));
+        tokio::time::resume();
+        assert!(result.is_ok());
+        let rows: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM management.command_invocations WHERE request_id=$1",
+        )
+        .bind(context.request_id)
+        .fetch_one(&mut *held)
+        .await
+        .unwrap();
+        assert_eq!(rows, 0);
+        drop(held);
+        pool.close().await;
+    }
 }

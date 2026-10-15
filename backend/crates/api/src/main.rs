@@ -114,7 +114,8 @@ async fn serve() -> anyhow::Result<()> {
     );
 
     // 등록된 storage 접근 재검증 — 실패하면 부팅 중단 (ADR 001).
-    storage_registration::verify_registered(&pool, &crypto).await?;
+    storage_registration::verify_registered(&pool, &crypto, clock.clone(), metrics.provider())
+        .await?;
 
     let maintenance_pool = grove_db::connect(
         config.database.url.expose_secret(),
@@ -131,7 +132,10 @@ async fn serve() -> anyhow::Result<()> {
 
     let shutdown = CancellationToken::new();
     // 요청 경로와 reconciler가 같은 캐시를 공유한다 — 같은 storage의 웜 풀.
-    let s3_clients = Arc::new(grove_infra::S3ClientCache::new(clock.clone()));
+    let s3_clients = Arc::new(grove_infra::S3ClientCache::with_metrics(
+        clock.clone(),
+        metrics.provider(),
+    ));
     let mut workers = tokio::task::JoinSet::new();
     let tick = std::time::Duration::from_secs(config.server.reconciler_interval_secs);
     workers.spawn(reconciler::run(

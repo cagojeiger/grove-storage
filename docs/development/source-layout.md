@@ -66,7 +66,8 @@ backend/crates/
 │   ├── s3_io.rs               전송·물리 정리 조율, DB 상태 변경 없음
 │   └── temp_spool.rs          전송용 임시 파일·정리
 ├── storage-provider/
-│   └── src/s3.rs              S3 SDK·presign·제어 호출·바이트 I/O
+│   ├── src/s3.rs              S3 SDK·presign·제어 호출·바이트 I/O
+│   └── src/metrics.rs         SDK send 관찰·외부 S3 호출 지표
 ├── core/                       환경 설정·암호·해시·기존 경로 재노출
 └── cli/                        gscli HTTP·출력·비밀 전달·자체 업데이트
 frontend/web/src/
@@ -189,6 +190,7 @@ DB 서버·CPU·메모리는 공유한다. Provider 전체 작업의 시간 제�
 | 브라우저 인증·표면 분리 | `api/src/accounts/tests`, `api/src/mcp/tests`, `api/src/routes/tests.rs` |
 | 관리 DB와 파일 요청 독립성 | `api/src/routes/tests/independence.rs`: 격리 DB의 관리 스키마 제거 후 Native·S3 요청·소유 범위·서비스 키 폐기 검증 |
 | Provider signing·multipart 조회 | `storage-provider/tests/time.rs`, `storage-provider/tests/multipart_cleanup.rs` |
+| Provider 지연·재시도·취소·응답/본문 경계 | `storage-provider/src/metrics/tests.rs` |
 | 임시 파일·계측 | `infra/src/temp_spool.rs`, `api/src/spool/tests.rs` |
 | 로그 스키마·비밀 제외·서명 헤더·전송/작업 종료 | `api/src/logging/tests.rs` |
 | 직접 계측·시간·중단·SQL 없는 scrape·실제 S3 전송 | `api/src/metrics/tests.rs`, `scripts/e2e-metrics.py` |

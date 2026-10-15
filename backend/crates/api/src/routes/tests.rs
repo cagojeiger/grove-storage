@@ -38,9 +38,15 @@ pub(crate) fn test_state() -> AppState {
     let pool = PgPoolOptions::new()
         .connect_lazy(LAZY_DATABASE_URL)
         .unwrap();
+    let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
+    let metrics = crate::metrics::Metrics::new(clock.clone(), None);
+    let s3_clients = Arc::new(grove_infra::S3ClientCache::with_metrics(
+        clock.clone(),
+        metrics.provider(),
+    ));
     AppState {
-        clock: Arc::new(grove_core::time::SystemClock),
-        metrics: crate::metrics::Metrics::default(),
+        clock,
+        metrics,
         pool,
         crypto,
         public_url: Some("http://grove.test".to_owned()),
@@ -48,7 +54,7 @@ pub(crate) fn test_state() -> AppState {
         console_web: None,
         multipart_threshold: 8 * 1024 * 1024,
         part_size: 5 * 1024 * 1024,
-        s3_clients: Arc::new(grove_infra::S3ClientCache::default()),
+        s3_clients,
         single_upload_claims: Arc::new(tokio::sync::Semaphore::new(1)),
         spool_budget: Arc::new(crate::spool::SpoolBudget::new(6 * 1024 * 1024 * 1024)),
     }

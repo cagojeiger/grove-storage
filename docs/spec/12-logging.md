@@ -133,5 +133,8 @@ stdout/Loki 보존은 수집 인프라의 정책이며 관리 DB 보존과 독�
 `api/src/logging/tests.rs`는 JSON/Pretty 개인정보 제외, ERROR-only 상관관계,
 서명 헤더 유지, HTTP 수준, 송수신 EOF·오류·중단·시간 초과, 가상 시간,
 worker 단일 종료, 유계 writer 포화·정상 drain을 검증한다.
+`management-service/src/logging.rs`의 테스트는 DB 연결을 점유한 상태에서 가상 시간
+250ms 제한과 작업 결과 보존을 검증한다. 비밀번호 변경 테스트는 best-effort 호출
+이력의 도착을 보장으로 삼지 않고, 같은 request_id의 트랜잭션 감사와 세션 폐기를 확인한다.
 전체 API/DB 테스트는 기존 인증·파일 상태·S3 계약의 회귀 범위를 유지한다.
 실제 수집기·Loki 조회와 MinIO SDK parity는 별도의 E2E/배포 검증이다.

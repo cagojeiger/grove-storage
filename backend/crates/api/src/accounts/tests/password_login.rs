@@ -299,9 +299,10 @@ async fn password_change_revokes_browser_sessions_but_keeps_management_tokens(po
         .unwrap()
         .parse()
         .unwrap();
-    let invocations: i64 = sqlx::query_scalar("SELECT count(*) FROM management.command_invocations WHERE request_id=$1 AND operation='account.password_change' AND outcome='succeeded'")
+    // Password changes guarantee transactional audit, not best-effort invocation delivery.
+    let audits: i64 = sqlx::query_scalar("SELECT count(*) FROM management.audit_events WHERE request_id=$1 AND action='account.password_change'")
         .bind(request_id).fetch_one(&pool).await.unwrap();
-    assert_eq!(invocations, 1);
+    assert_eq!(audits, 1);
     assert!(
         response.headers()[header::SET_COOKIE]
             .to_str()

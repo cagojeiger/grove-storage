@@ -5,7 +5,7 @@ use grove_core::time::Clock;
 use grove_core::{Crypto, SecretString};
 use grove_db::PgPool;
 use grove_db::registry::{self, StorageRow};
-use grove_infra::{S3StorageSpec, s3_connect, s3_connect_with_clock};
+use grove_infra::{S3Metrics, S3StorageSpec, s3_connect_with_metrics};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -42,6 +42,7 @@ fn default_kind() -> String {
 pub(crate) async fn verify_command(
     crypto: &Crypto,
     clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
     relay_base_ready: bool,
     operation: grove_management_service::resources::StorageOperation,
 ) -> Result<StorageRow, grove_management_service::Error> {
@@ -55,7 +56,7 @@ pub(crate) async fn verify_command(
             let StorageBackend { spec, .. } =
                 backend_from_row(crypto, &row).map_err(|_| Error::Unavailable)?;
             // Neither provider diagnostics nor credentials cross this boundary.
-            s3_connect_with_clock(&spec, clock)
+            s3_connect_with_metrics(&spec, clock, metrics)
                 .await
                 .map_err(|_| Error::Unavailable)?;
             return Ok(row);
@@ -79,7 +80,7 @@ pub(crate) async fn verify_command(
         secret_key: spec.secret_key.map(SecretString::from),
         capacity_bytes: spec.capacity_bytes,
     };
-    verified_row(crypto, clock, relay_base_ready, &input.id, body)
+    verified_row(crypto, clock, metrics, relay_base_ready, &input.id, body)
         .await
         .map_err(|error| match error {
             ApiError::Status(StatusCode::BAD_REQUEST, _) => {
@@ -92,6 +93,7 @@ pub(crate) async fn verify_command(
 pub(crate) async fn verified_row(
     crypto: &Crypto,
     clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
     relay_base_ready: bool,
     id: &str,
     body: Submission,
@@ -100,7 +102,7 @@ pub(crate) async fn verified_row(
         return Err(bad_request("capacity_bytes must be >= 0"));
     }
     match body.kind.as_str() {
-        "s3" => verified_s3_row(crypto, clock, relay_base_ready, id, body).await,
+        "s3" => verified_s3_row(crypto, clock, metrics, relay_base_ready, id, body).await,
         _ => Err(bad_request("only S3-compatible storage is supported")),
     }
 }
@@ -108,12 +110,13 @@ pub(crate) async fn verified_row(
 async fn verified_s3_row(
     crypto: &Crypto,
     clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
     relay_base_ready: bool,
     id: &str,
     body: Submission,
 ) -> Result<StorageRow, ApiError> {
     let submission = validated_s3_submission(relay_base_ready, body)?;
-    if let Err(error) = s3_connect_with_clock(&submission.spec, clock).await {
+    if let Err(error) = s3_connect_with_metrics(&submission.spec, clock, metrics).await {
         // Provider errors may contain submitted addresses or credentials.
         tracing::error!(event = "storage.verify_failed", storage = %id, kind = "s3");
         return Err(bad_request(&format!(
@@ -217,12 +220,22 @@ impl StorageCheck {
 
 /// 등록된 모든 storage의 접근을 재검증하되, 첫 실패에 멈추지 않고 결과를
 /// 전부 모은다 (부팅용 strict 래퍼는 verify_registered).
-pub async fn check_registered(pool: &PgPool, crypto: &Crypto) -> anyhow::Result<Vec<StorageCheck>> {
+pub async fn check_registered(
+    pool: &PgPool,
+    crypto: &Crypto,
+    clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
+) -> anyhow::Result<Vec<StorageCheck>> {
     let mut checks = Vec::new();
     for row in registry::list_storages(pool).await? {
         let detail = match backend_from_row(crypto, &row) {
             Err(error) => Some(error.to_string()),
-            Ok(StorageBackend { spec, .. }) => s3_connect(&spec).await.err().map(|e| e.to_string()),
+            Ok(StorageBackend { spec, .. }) => {
+                s3_connect_with_metrics(&spec, clock.clone(), metrics.clone())
+                    .await
+                    .err()
+                    .map(|e| e.to_string())
+            }
         };
         checks.push(StorageCheck {
             id: row.id,
@@ -235,8 +248,13 @@ pub async fn check_registered(pool: &PgPool, crypto: &Crypto) -> anyhow::Result<
 
 /// 부팅 재검증 — 등록된 모든 storage의 접근을 확인한다 (ADR 001).
 /// 실패하면 부팅 중단. 잘못된 마스터 키 설정도 여기서 잡힌다 (spec 01).
-pub async fn verify_registered(pool: &PgPool, crypto: &Crypto) -> anyhow::Result<()> {
-    for check in check_registered(pool, crypto).await? {
+pub async fn verify_registered(
+    pool: &PgPool,
+    crypto: &Crypto,
+    clock: Arc<dyn Clock>,
+    metrics: S3Metrics,
+) -> anyhow::Result<()> {
+    for check in check_registered(pool, crypto, clock, metrics).await? {
         match check.detail {
             Some(detail) => {
                 anyhow::bail!("storage '{}' re-verification: {detail}", check.id)
