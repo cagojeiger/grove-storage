@@ -12,6 +12,7 @@ mod local_accounts;
 mod log_retention;
 mod logging;
 mod mcp;
+mod metrics;
 mod native;
 mod openapi;
 mod reconciler;
@@ -84,7 +85,8 @@ async fn serve() -> anyhow::Result<()> {
         _ => None,
     };
     let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
-    let _log_writer = logging::init(config.server.log_format, clock.clone());
+    let (_log_writer, log_errors) = logging::init(config.server.log_format, clock.clone());
+    let metrics = metrics::Metrics::new(clock.clone(), Some(log_errors));
     grove_infra::temp_spool::prepare_root(&spool::spool_root()).await?;
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.
@@ -121,6 +123,10 @@ async fn serve() -> anyhow::Result<()> {
     .await?;
 
     let listener = tokio::net::TcpListener::bind(config.server.bind_addr).await?;
+    let metrics_listener = match config.server.metrics_bind_addr {
+        Some(addr) => Some(tokio::net::TcpListener::bind(addr).await?),
+        None => None,
+    };
     info!(event = "server.listening", addr = %config.server.bind_addr);
 
     let shutdown = CancellationToken::new();
@@ -135,16 +141,41 @@ async fn serve() -> anyhow::Result<()> {
         tick,
         shutdown.clone(),
         clock.clone(),
+        metrics.clone(),
     ));
     workers.spawn(log_retention::run(
         maintenance_pool.clone(),
         config.server.management_log_retention,
         tick,
         shutdown.clone(),
+        metrics.clone(),
     ));
 
+    let observations_pool = config
+        .server
+        .metrics_bind_addr
+        .map(|_| grove_db::observations::pool(config.database.url.expose_secret()))
+        .transpose()?;
+    if let Some(pool) = &observations_pool {
+        workers.spawn(metrics::database::run(
+            pool.clone(),
+            config.server.management_log_retention,
+            metrics.clone(),
+            shutdown.clone(),
+        ));
+    }
+
+    let spool_budget = Arc::new(spool::SpoolBudget::new(config.server.spool_budget_bytes));
+    let metrics_app = metrics::endpoint::router(
+        metrics.clone(),
+        pool.clone(),
+        maintenance_pool.clone(),
+        observations_pool.clone(),
+        spool_budget.clone(),
+    );
     let state = routes::AppState {
         clock,
+        metrics,
         pool: pool.clone(),
         crypto,
         public_url: config.server.public_url.clone(),
@@ -156,15 +187,39 @@ async fn serve() -> anyhow::Result<()> {
         single_upload_claims: std::sync::Arc::new(tokio::sync::Semaphore::new(
             lease_relay::SINGLE_UPLOAD_CLAIM_LIMIT,
         )),
-        spool_budget: Arc::new(spool::SpoolBudget::new(config.server.spool_budget_bytes)),
+        spool_budget,
     };
 
     let http_shutdown = shutdown.clone().cancelled_owned();
+    let metrics_shutdown = shutdown.clone().cancelled_owned();
+    let server_stopped = shutdown.clone();
+    let metrics_stopped = shutdown.clone();
     let app = routes::app(state, &config.server.s3_cors_allowed_origins);
     let server = async move {
-        axum::serve(listener, app)
-            .with_graceful_shutdown(http_shutdown)
-            .await
+        let http = async move {
+            let result = axum::serve(listener, app)
+                .with_graceful_shutdown(http_shutdown)
+                .await;
+            server_stopped.cancel();
+            result
+        };
+        let monitoring = async move {
+            let result = match metrics_listener {
+                Some(listener) => {
+                    axum::serve(listener, metrics_app)
+                        .with_graceful_shutdown(metrics_shutdown)
+                        .await
+                }
+                None => {
+                    metrics_shutdown.await;
+                    Ok(())
+                }
+            };
+            metrics_stopped.cancel();
+            result
+        };
+        let (http, monitoring) = tokio::join!(http, monitoring);
+        http.and(monitoring)
     };
     tokio::pin!(server);
 
@@ -186,7 +241,11 @@ async fn serve() -> anyhow::Result<()> {
         },
         workers,
         || async {
-            tokio::join!(pool.close(), maintenance_pool.close());
+            tokio::join!(pool.close(), maintenance_pool.close(), async {
+                if let Some(pool) = observations_pool {
+                    pool.close().await;
+                }
+            });
         },
         shutdown::GRACE_PERIOD,
     )

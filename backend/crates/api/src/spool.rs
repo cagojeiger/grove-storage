@@ -21,6 +21,7 @@ pub const SPOOL_CONCURRENCY_LIMIT: usize = 16;
 pub struct SpoolBudget {
     slots: Arc<Semaphore>,
     bytes: Arc<Semaphore>,
+    capacity_units: usize,
 }
 
 pub struct SpoolPermit {
@@ -33,6 +34,7 @@ impl SpoolBudget {
         Self {
             slots: Arc::new(Semaphore::new(SPOOL_CONCURRENCY_LIMIT)),
             bytes: Arc::new(Semaphore::new((max_bytes / BUDGET_UNIT) as usize)),
+            capacity_units: (max_bytes / BUDGET_UNIT) as usize,
         }
     }
 
@@ -45,6 +47,14 @@ impl SpoolBudget {
             _slot: slot,
             _bytes: bytes,
         })
+    }
+
+    pub(crate) fn reservations(&self) -> (u64, u64, usize) {
+        (
+            (self.capacity_units - self.bytes.available_permits()) as u64 * BUDGET_UNIT,
+            self.capacity_units as u64 * BUDGET_UNIT,
+            SPOOL_CONCURRENCY_LIMIT - self.slots.available_permits(),
+        )
     }
 }
 /// 스트림 버퍼 크기 — 다운로드 재청크와 업로드 스풀 쓰기가 공유한다.
@@ -85,6 +95,7 @@ pub async fn spool_to_temp(
     temp_path: &Path,
     declared_size: i64,
     want_s3_checksums: bool,
+    metrics: crate::metrics::Metrics,
 ) -> Result<Measured, SpoolError> {
     spool_to_temp_with_limits(
         body,
@@ -97,6 +108,7 @@ pub async fn spool_to_temp(
             window: PROGRESS_WINDOW,
             min_bytes_per_second: MIN_BYTES_PER_SECOND,
         },
+        metrics,
     )
     .await
 }
@@ -114,8 +126,9 @@ async fn spool_to_temp_with_limits(
     declared_size: i64,
     want_s3_checksums: bool,
     limits: StreamLimits,
+    metrics: crate::metrics::Metrics,
 ) -> Result<Measured, SpoolError> {
-    let mut transfer = crate::logging::transfer::Transfer::new("receive", declared_size);
+    let mut transfer = crate::logging::transfer::Transfer::new("receive", declared_size, metrics);
     let mut md5 = Md5::new();
     let mut sha256 = want_s3_checksums.then(Sha256::new);
     let mut crc32 = want_s3_checksums.then(crc32fast::Hasher::new);

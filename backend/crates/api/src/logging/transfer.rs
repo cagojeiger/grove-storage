@@ -1,3 +1,4 @@
+use crate::metrics::Metrics;
 use axum::body::{Body, Bytes};
 use http_body::{Body as HttpBody, Frame, SizeHint};
 use std::{
@@ -14,10 +15,13 @@ pub(crate) struct Transfer {
     started: Instant,
     span: Span,
     finished: bool,
+    metrics: Metrics,
+    bytes_counter: prometheus_client::metrics::counter::Counter,
 }
 
 impl Transfer {
-    pub fn new(direction: &'static str, expected: i64) -> Self {
+    pub fn new(direction: &'static str, expected: i64, metrics: Metrics) -> Self {
+        let bytes_counter = metrics.transfer_started(direction);
         Self {
             direction,
             expected: expected.max(0) as u64,
@@ -25,16 +29,24 @@ impl Transfer {
             started: Instant::now(),
             span: Span::current(),
             finished: false,
+            metrics,
+            bytes_counter,
         }
     }
     pub fn bytes(&mut self, count: usize) {
         self.observed += count as u64;
+        self.bytes_counter.inc_by(count as u64);
     }
     pub fn finish(&mut self, outcome: &'static str, error_code: &'static str) {
         if self.finished {
             return;
         }
         self.finished = true;
+        self.metrics.transfer_finished(
+            self.direction,
+            outcome,
+            self.started.elapsed().as_secs_f64(),
+        );
         let expected_bytes = self.expected;
         let observed_bytes = self.observed;
         let direction = self.direction;
@@ -68,8 +80,8 @@ struct Download {
     transfer: Transfer,
 }
 
-pub(crate) fn download(body: Body, expected: i64, file_id: uuid::Uuid) -> Body {
-    let mut transfer = Transfer::new("send", expected);
+pub(crate) fn download(body: Body, expected: i64, file_id: uuid::Uuid, metrics: Metrics) -> Body {
+    let mut transfer = Transfer::new("send", expected, metrics);
     transfer.span = tracing::error_span!("transfer", %file_id);
     if expected == 0 {
         transfer.finish("success", "");

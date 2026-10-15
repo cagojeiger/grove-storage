@@ -113,6 +113,38 @@ fn pretty_output_uses_the_same_privacy_policy() {
 }
 
 #[test]
+fn snapshot_failure_context_survives_redaction_without_error_payloads() {
+    record(LogFormat::Json, "trace", |capture| {
+        runtime().block_on(async {
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .connect_lazy("postgres://private-user:private-password@127.0.0.1:1/private-db")
+                .unwrap();
+            pool.close().await;
+            let policy = grove_core::ManagementLogRetention {
+                audit_days: std::num::NonZeroU16::new(365).unwrap(),
+                security_days: std::num::NonZeroU16::new(90).unwrap(),
+                invocation_days: std::num::NonZeroU16::new(90).unwrap(),
+            };
+            crate::metrics::database::refresh(&pool, policy, &crate::metrics::Metrics::default())
+                .await;
+        });
+        let rows = capture.records();
+        let failure = rows
+            .iter()
+            .find(|row| row["event"] == "database.snapshot_failed")
+            .unwrap();
+        assert_eq!(failure["stage"], "begin");
+        assert_eq!(failure["stream"], "none");
+        assert_eq!(failure["reason"], "pool_closed");
+        assert_eq!(failure["error_code"], "db_snapshot_failed");
+        assert_eq!(failure["worker"], "database");
+        assert_eq!(failure["task"], "snapshot");
+        assert!(uuid::Uuid::parse_str(failure["run_id"].as_str().unwrap()).is_ok());
+        assert!(!format!("{rows:?}").contains("private"));
+    });
+}
+
+#[test]
 fn context_updates_are_safe_and_survive_an_error_only_filter() {
     record(LogFormat::Json, "error", |capture| {
         let id = uuid::Uuid::new_v4();
@@ -142,7 +174,10 @@ fn http_keeps_signed_headers_and_omits_raw_paths_and_queries() {
                         ([("x-request-id", business_id.to_string())], "ok")
                     }),
                 )
-                .layer(axum::middleware::from_fn(http::observe));
+                .layer(axum::middleware::from_fn_with_state(
+                    crate::metrics::Metrics::default(),
+                    http::observe,
+                ));
             let response = app
                 .oneshot(
                     Request::builder()
@@ -178,22 +213,35 @@ fn complete_empty_partial_error_and_dropped_streams_finish_once() {
                     (Body::from("done"), 4),
                     (Body::from("short"), 9),
                 ] {
-                    let _ = to_bytes(transfer::download(body, size, file_id), 32)
-                        .await
-                        .unwrap();
+                    let _ = to_bytes(
+                        transfer::download(body, size, file_id, crate::metrics::Metrics::default()),
+                        32,
+                    )
+                    .await
+                    .unwrap();
                 }
                 let broken = futures_util::stream::iter([Err::<Bytes, _>(std::io::Error::other(
                     "sentinel-error",
                 ))]);
                 assert!(
                     to_bytes(
-                        transfer::download(Body::from_stream(broken), 10, file_id),
+                        transfer::download(
+                            Body::from_stream(broken),
+                            10,
+                            file_id,
+                            crate::metrics::Metrics::default()
+                        ),
                         32
                     )
                     .await
                     .is_err()
                 );
-                drop(transfer::download(Body::empty(), 10, file_id));
+                drop(transfer::download(
+                    Body::empty(),
+                    10,
+                    file_id,
+                    crate::metrics::Metrics::default(),
+                ));
             }
             .instrument(span)
             .await;
@@ -227,11 +275,19 @@ fn response_creation_and_body_completion_have_distinct_timing_and_shared_identit
                         tokio::time::advance(std::time::Duration::from_millis(100)).await;
                         (
                             [("x-request-id", operation_id.to_string())],
-                            transfer::download(Body::from("done"), 4, file_id),
+                            transfer::download(
+                                Body::from("done"),
+                                4,
+                                file_id,
+                                crate::metrics::Metrics::default(),
+                            ),
                         )
                     }),
                 )
-                .layer(axum::middleware::from_fn(http::observe));
+                .layer(axum::middleware::from_fn_with_state(
+                    crate::metrics::Metrics::default(),
+                    http::observe,
+                ));
             let response = app
                 .oneshot(
                     Request::builder()
@@ -279,7 +335,12 @@ fn download_identity_survives_request_context_and_an_error_only_filter() {
                 let broken = futures_util::stream::iter([Err::<Bytes, _>(std::io::Error::other(
                     "private-provider-error",
                 ))]);
-                transfer::download(Body::from_stream(broken), 10, file_id)
+                transfer::download(
+                    Body::from_stream(broken),
+                    10,
+                    file_id,
+                    crate::metrics::Metrics::default(),
+                )
             };
             assert!(to_bytes(body, 32).await.is_err());
             let rows = capture.records();
@@ -301,7 +362,12 @@ fn content_length_completion_does_not_require_a_final_poll() {
             let stream =
                 futures_util::stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(b"done"))])
                     .chain(futures_util::stream::pending());
-            let mut body = transfer::download(Body::from_stream(stream), 4, uuid::Uuid::new_v4());
+            let mut body = transfer::download(
+                Body::from_stream(stream),
+                4,
+                uuid::Uuid::new_v4(),
+                crate::metrics::Metrics::default(),
+            );
             let frame =
                 std::future::poll_fn(|cx| std::pin::Pin::new(&mut body).poll_frame(cx)).await;
             assert!(frame.is_some());
@@ -317,8 +383,9 @@ fn elapsed_time_and_worker_results_are_virtualizable() {
     record(LogFormat::Json, "trace", |capture| {
         runtime().block_on(async {
             tokio::time::pause();
-            let mut run = worker::Run::new("object", "purge");
-            let mut transfer = transfer::Transfer::new("receive", 4);
+            let mut run = worker::Run::new("object", "purge", crate::metrics::Metrics::default());
+            let mut transfer =
+                transfer::Transfer::new("receive", 4, crate::metrics::Metrics::default());
             tokio::time::advance(std::time::Duration::from_secs(3)).await;
             transfer.bytes(4);
             transfer.finish("success", "");
@@ -327,7 +394,8 @@ fn elapsed_time_and_worker_results_are_virtualizable() {
                 ..worker::Report::default()
             });
             drop(run);
-            let abandoned = worker::Run::new("object", "cleanup");
+            let abandoned =
+                worker::Run::new("object", "cleanup", crate::metrics::Metrics::default());
             drop(abandoned);
             let rows = capture.records();
             assert_eq!(rows.len(), 3);
@@ -358,7 +426,10 @@ fn http_levels_distinguish_expected_s3_rejections_and_service_errors() {
                         }
                     }),
                 )
-                .layer(axum::middleware::from_fn(http::observe));
+                .layer(axum::middleware::from_fn_with_state(
+                    crate::metrics::Metrics::default(),
+                    http::observe,
+                ));
             for (method, key) in [
                 ("GET", "ok"),
                 ("GET", "missing"),
@@ -399,7 +470,10 @@ fn interrupted_requests_and_timed_out_workers_are_not_successes() {
             tokio::time::pause();
             let app = Router::new()
                 .route("/waiting", get(std::future::pending::<()>))
-                .layer(axum::middleware::from_fn(http::observe));
+                .layer(axum::middleware::from_fn_with_state(
+                    crate::metrics::Metrics::default(),
+                    http::observe,
+                ));
             assert!(
                 tokio::time::timeout(
                     std::time::Duration::from_secs(2),
@@ -413,7 +487,11 @@ fn interrupted_requests_and_timed_out_workers_are_not_successes() {
                 .await
                 .is_err()
             );
-            let mut run = worker::Run::new("management", "retention");
+            let mut run = worker::Run::new(
+                "management",
+                "retention",
+                crate::metrics::Metrics::default(),
+            );
             run.timed_out();
             run.finish(&worker::Report::default());
             drop(run);
@@ -436,9 +514,16 @@ fn receive_logs_measure_bytes_and_classify_partial_aborted_and_idle_streams() {
             let path = std::path::Path::new("unused-logging-spool");
             for (body, size) in [(Body::from("done"), 4), (Body::from("short"), 9)] {
                 assert!(
-                    crate::spool::spool_to_temp(body, &mut tokio::io::sink(), path, size, false)
-                        .await
-                        .is_ok()
+                    crate::spool::spool_to_temp(
+                        body,
+                        &mut tokio::io::sink(),
+                        path,
+                        size,
+                        false,
+                        crate::metrics::Metrics::default()
+                    )
+                    .await
+                    .is_ok()
                 );
             }
             let broken = futures_util::stream::iter([Err::<Bytes, _>(std::io::Error::other(
@@ -450,7 +535,8 @@ fn receive_logs_measure_bytes_and_classify_partial_aborted_and_idle_streams() {
                     &mut tokio::io::sink(),
                     path,
                     4,
-                    false
+                    false,
+                    crate::metrics::Metrics::default()
                 )
                 .await
                 .is_err()
@@ -462,7 +548,8 @@ fn receive_logs_measure_bytes_and_classify_partial_aborted_and_idle_streams() {
                     &mut tokio::io::sink(),
                     path,
                     1,
-                    false
+                    false,
+                    crate::metrics::Metrics::default()
                 )
                 .await
                 .is_err()
@@ -525,6 +612,16 @@ fn bounded_writer_drops_without_backpressure_and_guard_drains_accepted_lines() {
     writer.write_all(b"second\n").unwrap();
     writer.write_all(b"dropped\n").unwrap();
     assert_eq!(counter.dropped_lines(), 1);
+    let metrics = crate::metrics::Metrics::new(
+        Arc::new(grove_core::time::SystemClock),
+        Some(counter.clone()),
+    );
+    assert!(
+        metrics
+            .render()
+            .unwrap()
+            .contains("grove_log_dropped_lines_total 1")
+    );
     release.send(()).unwrap();
     drop(guard);
     assert_eq!(&*capture.0.lock().unwrap(), b"first\nsecond\n");

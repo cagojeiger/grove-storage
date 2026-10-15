@@ -43,6 +43,7 @@ impl SecurityConfig {
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub bind_addr: SocketAddr,
+    pub metrics_bind_addr: Option<SocketAddr>,
     pub log_format: LogFormat,
     /// 중계 바이트 엔드포인트의 공개 베이스 URL (예: https://objects.grove.example.com).
     /// force_relay storage 등록에 필요하다.
@@ -101,6 +102,10 @@ impl Config {
                 .unwrap_or_else(|| "127.0.0.1:8080".to_owned())
                 .parse()
                 .map_err(|e| Error::config(format!("GROVE_BIND: {e}")))?,
+            metrics_bind_addr: env("GROVE_METRICS_BIND")
+                .map(|value| value.parse())
+                .transpose()
+                .map_err(|e| Error::config(format!("GROVE_METRICS_BIND: {e}")))?,
             log_format: match env("GROVE_LOG_FORMAT").as_deref() {
                 None | Some("pretty") => LogFormat::Pretty,
                 Some("json") => LogFormat::Json,
@@ -242,6 +247,7 @@ mod tests {
     fn defaults_apply_with_required_env() {
         let config = Config::load_from(&base_env).unwrap();
         assert_eq!(config.server.bind_addr.port(), 8080);
+        assert_eq!(config.server.metrics_bind_addr, None);
         assert_eq!(config.server.log_format, LogFormat::Pretty);
         assert_eq!(config.database.max_connections, 20);
         assert_eq!(config.security.enc_key_id, "v1");
@@ -252,6 +258,32 @@ mod tests {
         assert_eq!(retention.audit_days.get(), 365);
         assert_eq!(retention.security_days.get(), 90);
         assert_eq!(retention.invocation_days.get(), 90);
+    }
+
+    #[test]
+    fn metrics_listener_is_explicit_and_validated() {
+        for addr in ["127.0.0.1:9090", "0.0.0.0:9090", "[::1]:9090"] {
+            let config = Config::load_from(&|key| match key {
+                "GROVE_METRICS_BIND" => Some(addr.to_owned()),
+                other => base_env(other),
+            })
+            .unwrap();
+            assert_eq!(config.server.metrics_bind_addr, Some(addr.parse().unwrap()));
+        }
+        for invalid in [
+            "",
+            "localhost:9090",
+            "http://127.0.0.1:9090",
+            "127.0.0.1:70000",
+        ] {
+            assert!(
+                Config::load_from(&|key| match key {
+                    "GROVE_METRICS_BIND" => Some(invalid.to_owned()),
+                    other => base_env(other),
+                })
+                .is_err()
+            );
+        }
     }
 
     #[test]

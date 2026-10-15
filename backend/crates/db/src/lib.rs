@@ -2,6 +2,7 @@
 
 pub mod files;
 pub mod management;
+pub mod observations;
 pub mod registry;
 pub mod retention;
 pub mod s3_registry;

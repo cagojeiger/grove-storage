@@ -177,6 +177,7 @@ jobs:
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-cli.py
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-mcp.py
           /tmp/grove-s3-sdk/bin/python -B scripts/e2e-shutdown.py
+          /tmp/grove-s3-sdk/bin/python -B scripts/e2e-metrics.py
 
       - name: S3 SDK contract
         run: |

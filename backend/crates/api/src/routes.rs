@@ -28,6 +28,7 @@ pub(crate) const RESERVED_TOP_LEVEL: &[&str] = grove_db::registry::RESERVED_CLIE
 #[derive(Clone)]
 pub struct AppState {
     pub clock: Arc<dyn grove_core::time::Clock>,
+    pub metrics: crate::metrics::Metrics,
     pub pool: PgPool,
     pub crypto: Arc<grove_core::Crypto>,
     /// 중계 바이트 URL의 공개 베이스 (GROVE_PUBLIC_URL). 중계 storage
@@ -77,6 +78,7 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     // 업로드를 자른다)은 피한다. api·blobs·probes 이름의 버킷은 예약된다
     // (admin::clients가 client id로 거부한다).
     let boundary = state.console_origin.clone();
+    let metrics = state.metrics.clone();
     let app = Router::new()
         .merge(control)
         .merge(objects::streaming(s3_cors_allowed_origins))
@@ -89,13 +91,16 @@ pub fn app(state: AppState, s3_cors_allowed_origins: &[String]) -> Router {
     } else {
         app
     };
-    with_telemetry(app)
+    with_telemetry(app, metrics)
 }
 
 /// Keep signed request headers intact; observe handler IDs before propagation.
-fn with_telemetry(router: Router) -> Router {
+fn with_telemetry(router: Router, metrics: crate::metrics::Metrics) -> Router {
     router
-        .layer(axum::middleware::from_fn(crate::logging::http::observe))
+        .layer(axum::middleware::from_fn_with_state(
+            metrics,
+            crate::logging::http::observe,
+        ))
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }

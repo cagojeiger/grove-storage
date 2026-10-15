@@ -105,11 +105,19 @@ pub(super) async fn put_object(
         .map_err(|e| xml_internal("spool", e))?;
     let _cleanup = temp_spool::Cleanup(temp_path.clone());
     let mut writer = tokio::io::BufWriter::with_capacity(STREAM_BUF_SIZE, file);
-    let measured =
-        match spool::spool_to_temp(body, &mut writer, &temp_path, content_length, true).await {
-            Ok(measured) => measured,
-            Err(error) => return Err(spool_error_to_xml(error)),
-        };
+    let measured = match spool::spool_to_temp(
+        body,
+        &mut writer,
+        &temp_path,
+        content_length,
+        true,
+        state.metrics.clone(),
+    )
+    .await
+    {
+        Ok(measured) => measured,
+        Err(error) => return Err(spool_error_to_xml(error)),
+    };
     let written = measured.written;
     if written != content_length {
         temp_spool::abort_write(&temp_path).await;
@@ -344,6 +352,7 @@ pub(super) async fn get_object(
         Body::from_stream(ReaderStream::with_capacity(reader, STREAM_BUF_SIZE)),
         len,
         file_id,
+        state.metrics.clone(),
     )
     .into_response();
     if let Some((start, end)) = span {
