@@ -47,12 +47,12 @@ request_id다. UUID를 Loki stream label로 승격하지 않고 JSON에서 조�
 
 | 이벤트 | 기록 경계 | 결과·필드 |
 |---|---|---|
-| `http.response` | 핸들러 응답 생성 | status·surface·method·route·duration_ms |
+| `http.response` | 핸들러 응답 생성 | status·surface·method·route·duration_ms·outcome·operation_id |
 | `http.interrupted` | 응답 생성 전 future 종료 | interrupted·duration_ms |
 | `transfer.finished` | 관찰한 receive/send 스트림 종료 | direction·expected_bytes·observed_bytes·duration_ms·outcome·error_code; send는 file_id 포함 |
 | `object.operation_finished` | 예약·파트 기록·완료 확정·논리 삭제 등 명시된 단계 | operation·stage·file_id·outcome |
-| `management.operation_finished` | 관리 실행 결과 | operation·operation_id·surface·outcome·error_code |
-| `worker.run_finished` | object/retention 작업 호출 종료 | worker·task·run_id·outcome·processed·failed·skipped |
+| `management.operation_finished` | 관리 실행 결과 | operation·operation_id·surface·outcome·error_code·duration_ms |
+| `worker.run_finished` | object/retention 작업 호출 종료 | worker·task·run_id·outcome·processed·failed·skipped·duration_ms |
 | `history.write_failed` | 호출/보안/파일 접근 이력 저장 실패 또는 시간 초과 | stream·operation_id 또는 file_id·error_code |
 
 복구·보존의 상세 이벤트는 파일 UUID·stream과 고정 error_code를 제공한다.
@@ -94,6 +94,9 @@ worker processed는 확정된 처리·삭제 수, failed는 관찰된 실패 수
 | INFO | 명시된 변경 단계·실제 정리·중단 관찰·느린 정상 요청 |
 | WARN | 요청 거부·미달·timeout·재시도 가능한 상세 실패; 미지원 S3 501 |
 | ERROR | HTTP 서버 오류·내부 I/O 오류·작업 실패 집계·이력 기록 실패·관리 unknown |
+
+기본 INFO 출력은 정상 DEBUG 이벤트를 제외한다. 전체 요청 수·오류율·지연 분포는
+처리 지점의 메트릭으로 측정하며 운영 로그 건수로 대체하지 않는다.
 
 필드 이름과 형식의 allowlist가 DEBUG/TRACE에도 적용된다. payload·raw key·파일명·
 presigned URL·auth/header·토큰·계정 이름·IP·자유로운 message/error는 출력하지 않는다.

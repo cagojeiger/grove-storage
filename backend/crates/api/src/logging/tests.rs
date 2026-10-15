@@ -214,6 +214,60 @@ fn complete_empty_partial_error_and_dropped_streams_finish_once() {
 }
 
 #[test]
+fn response_creation_and_body_completion_have_distinct_timing_and_shared_identity() {
+    record(LogFormat::Json, "trace", |capture| {
+        runtime().block_on(async {
+            tokio::time::pause();
+            let file_id = uuid::Uuid::new_v4();
+            let operation_id = uuid::Uuid::new_v4();
+            let app = Router::new()
+                .route(
+                    "/{bucket}/{*key}",
+                    get(move || async move {
+                        tokio::time::advance(std::time::Duration::from_millis(100)).await;
+                        (
+                            [("x-request-id", operation_id.to_string())],
+                            transfer::download(Body::from("done"), 4, file_id),
+                        )
+                    }),
+                )
+                .layer(axum::middleware::from_fn(http::observe));
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/private-bucket/private-key")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let rows = capture.records();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0]["event"], "http.response");
+            assert_eq!(rows[0]["outcome"], "success");
+            assert_eq!(rows[0]["duration_ms"], 100);
+            assert_eq!(rows[0]["operation_id"], operation_id.to_string());
+
+            tokio::time::advance(std::time::Duration::from_secs(2)).await;
+            assert_eq!(to_bytes(response.into_body(), 4).await.unwrap(), "done");
+            let completed = capture.records();
+            assert_eq!(completed.len(), 2);
+            assert_eq!(completed[1]["event"], "transfer.finished");
+            assert_eq!(completed[1]["outcome"], "success");
+            assert_eq!(completed[1]["duration_ms"], 2000);
+            assert_eq!(completed[1]["observed_bytes"], 4);
+            assert_eq!(completed[1]["request_id"], rows[0]["request_id"]);
+            assert_eq!(completed[1]["file_id"], file_id.to_string());
+            assert!(
+                !completed
+                    .iter()
+                    .any(|row| row.to_string().contains("private"))
+            );
+        })
+    });
+}
+
+#[test]
 fn download_identity_survives_request_context_and_an_error_only_filter() {
     record(LogFormat::Json, "error", |capture| {
         runtime().block_on(async {

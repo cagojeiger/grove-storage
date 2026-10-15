@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { duration } from "../src/design/format";
 import { actor, invocationStatus, sourceName, validator, type Invocation } from "../src/features/activity/model";
 import { audit, context, invocation, maintenanceMock } from "./maintenance-fixture";
+import { openInvocation } from "./activity-history.mjs";
 
 const commands = ([
   { ...invocation, operation: "storage.test", outcome: "succeeded", duration_ms: 12 },
@@ -93,6 +94,7 @@ test("inspection preserves resized columns and keyboard focus", async ({ page })
   const grid = page.getByRole("grid", { name: "Activity", exact: true });
   const header = grid.locator('[role="columnheader"][data-field="event"]');
   const separator = header.locator(".MuiDataGrid-columnSeparator");
+  const originalWidth = (await header.boundingBox())!.width;
   const bounds = await separator.boundingBox();
   expect(bounds).not.toBeNull();
   await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
@@ -100,13 +102,41 @@ test("inspection preserves resized columns and keyboard focus", async ({ page })
   await page.mouse.move(bounds!.x + bounds!.width / 2 + 60, bounds!.y + bounds!.height / 2, { steps: 5 });
   await page.mouse.up();
   const width = (await header.boundingBox())!.width;
+  expect(width).toBeGreaterThan(originalWidth);
   const operation = grid.getByRole("button", { name: "storage.test", exact: true });
+  // MUI briefly suppresses clicks after resizing; inspect the tooltip before activating.
+  await operation.hover();
+  await expect(page.getByRole("tooltip", { name: "storage.test", exact: true })).toBeVisible();
   await operation.focus();
   await operation.press("Enter");
   await expect(page.getByRole("dialog", { name: "Event details" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(operation).toBeFocused();
   await expect.poll(async () => (await header.boundingBox())!.width).toBe(width);
+});
+
+test("audit correlation follows cursor pages and reveals a virtualized invocation", async ({ page }) => {
+  await maintenanceMock(page);
+  const cursors: (string | null)[] = [];
+  await page.route("**/identity/v1/history/invocations?*", route => {
+    const cursor = new URL(route.request().url()).searchParams.get("before");
+    cursors.push(cursor);
+    return route.fulfill({ json: {
+      items: Array.from({ length: 50 }, (_, index) => ({
+        ...invocation,
+        context: { ...context,
+          id: String((cursor ? 50 : 100) - index),
+          request_id: cursor && index === 48 ? context.request_id : "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        },
+      })),
+      next_before: cursor ? null : "51",
+    } });
+  });
+  await page.goto("/api/admin/console/#activity");
+  await openInvocation(page, context.request_id);
+  await expect(page.getByRole("dialog", { name: "Event details" })).toContainText("Succeeded");
+  expect(cursors[0]).toBeNull();
+  expect(cursors.filter(cursor => cursor !== null)).toEqual(["51"]);
 });
 
 for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {

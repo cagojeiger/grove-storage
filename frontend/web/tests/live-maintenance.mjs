@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
 import { loginWithPassword } from "./live-auth.mjs";
+import { openInvocation } from "./activity-history.mjs";
 
 export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await page
@@ -23,15 +24,16 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   await page
     .getByRole("tab", { name: "Command history", exact: true })
     .click();
-  await page.getByRole("button", { name: "storage.create", exact: true }).first().click();
-  await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(operationId);
-  await expect(page.getByRole("dialog")).toContainText("Succeeded");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("button", { name: /storage.test/ })
     .first()
     .click();
   await expect(page.getByRole("dialog")).toContainText("Duration");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.goto(`${origin}/api/admin/console/#activity`);
+  await expect(page.getByRole("tab", { name: "Audit log", exact: true })).toHaveAttribute("aria-selected", "true");
+  await openInvocation(page, operationId);
+  await expect(page.getByRole("dialog")).toContainText("Succeeded");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("tab", { name: "Security events", exact: true })
