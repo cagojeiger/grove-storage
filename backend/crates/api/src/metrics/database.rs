@@ -13,6 +13,7 @@ use prometheus_client::{
     collector::Collector,
     encoding::{DescriptorEncoder, EncodeMetric},
     metrics::gauge::ConstGauge,
+    registry::Unit,
 };
 use tokio::time::{MissedTickBehavior, interval, timeout};
 use tokio_util::sync::CancellationToken;
@@ -44,9 +45,9 @@ impl Collector for Cache {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let timestamp = ConstGauge::new(snapshot.as_ref().map_or(0, |s| s.observed_at.timestamp()));
         timestamp.encode(encoder.encode_descriptor(
-            "database_snapshot_timestamp_seconds",
+            "database_snapshot_timestamp",
             "Database time of the last complete snapshot; zero means none",
-            None,
+            Some(&Unit::Seconds),
             timestamp.metric_type(),
         )?)?;
         let Some(snapshot) = snapshot.as_ref() else {
@@ -92,12 +93,14 @@ impl Collector for Cache {
         )?;
         gauge(
             &mut encoder,
-            "retention_days",
-            "Configured retention days for each stream",
-            snapshot
-                .retention
-                .iter()
-                .map(|r| (vec![("stream", r.stream)], i64::from(r.retention_days))),
+            "retention_seconds",
+            "Configured retention duration for each stream",
+            snapshot.retention.iter().map(|r| {
+                (
+                    vec![("stream", r.stream)],
+                    i64::from(r.retention_days) * 86_400,
+                )
+            }),
         )?;
         gauge(
             &mut encoder,
@@ -156,8 +159,15 @@ fn gauge<'a>(
     help: &str,
     samples: impl Iterator<Item = (Vec<(&'static str, &'a str)>, i64)>,
 ) -> Result<(), std::fmt::Error> {
+    let (name, unit) = if let Some(name) = name.strip_suffix("_bytes") {
+        (name, Some(Unit::Bytes))
+    } else if let Some(name) = name.strip_suffix("_seconds") {
+        (name, Some(Unit::Seconds))
+    } else {
+        (name, None)
+    };
     let mut family =
-        encoder.encode_descriptor(name, help, None, ConstGauge::new(0).metric_type())?;
+        encoder.encode_descriptor(name, help, unit.as_ref(), ConstGauge::new(0).metric_type())?;
     for (labels, value) in samples {
         ConstGauge::new(value).encode(family.encode_family(&labels)?)?;
     }

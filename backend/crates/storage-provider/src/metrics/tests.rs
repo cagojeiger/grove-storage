@@ -37,6 +37,7 @@ async fn outcomes_preserve_results_and_never_capture_error_payloads() {
         .await;
     assert!(matches!(error, Err(SdkError::ConstructionFailure(_))));
     let text = render(&metrics);
+    assert!(text.contains("# UNIT grove_provider_call_duration_seconds seconds"));
     for (class, outcome) in [("2xx", "success"), ("none", "timeout"), ("none", "error")] {
         assert!(text.contains(&format!("grove_provider_calls_total{{operation=\"put_object\",status_class=\"{class}\",outcome=\"{outcome}\"}} 1")));
     }

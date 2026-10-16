@@ -61,7 +61,9 @@ async fn snapshot_is_absent_until_collected_and_failure_preserves_previous_value
     assert!(
         text.contains("grove_object_backlog_oldest_waiting_timestamp_seconds{queue=\"purge\"} 500")
     );
-    assert!(text.contains("grove_retention_days{stream=\"audit_events\"} 365"));
+    assert!(text.contains("grove_retention_seconds{stream=\"audit_events\"} 31536000"));
+    assert!(text.contains("# UNIT grove_retention_seconds seconds"));
+    assert!(text.contains("# UNIT grove_db_table_data_bytes bytes"));
     assert!(text.contains(
         "grove_db_table_estimated_rows{schema=\"public\",table=\"files\",state=\"dead\"} 2"
     ));

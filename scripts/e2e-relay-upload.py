@@ -141,24 +141,28 @@ def check(endpoint, directory, database, account, backend):
 def verify_logs(output):
     text = output.decode()
     records = [json.loads(line) for line in text.splitlines() if line.startswith("{")]
-    assert records and all(row["schema_version"] == 1 for row in records)
-    operations = [row for row in records if row["event"] == "object.operation_finished"]
+    assert records and all(row["resource"]["service.name"] == "grove-storage"
+                           and isinstance(row["severity_number"], int)
+                           and isinstance(row["attributes"], dict) for row in records)
+    operations = [row["attributes"] for row in records
+                  if row["event_name"] == "grove.object.operation_finished"]
     for operation, stage in [("put", "record_upload"), ("upload_part", "record_part")]:
-        found = [row for row in operations if row.get("operation") == operation
-                 and row.get("stage") == stage]
+        found = [row for row in operations if row.get("grove.operation") == operation
+                 and row.get("grove.stage") == stage]
         assert found, (operation, stage)
         for row in found:
-            uuid.UUID(row["file_id"])
-            assert row["outcome"] == "success"
-    downloads = [row for row in records if row["event"] == "transfer.finished"
-                 and row["direction"] == "send"]
+            uuid.UUID(row["grove.file_id"])
+            assert row["grove.outcome"] == "success"
+    downloads = [row["attributes"] for row in records
+                 if row["event_name"] == "grove.transfer.finished"
+                 and row["attributes"]["grove.direction"] == "send"]
     assert downloads
     for row in downloads:
-        uuid.UUID(row["file_id"])
-        uuid.UUID(row["request_id"])
-        assert row["outcome"] == "success"
-        assert row["observed_bytes"] == row["expected_bytes"]
-    assert not any(row["event"].startswith("blobs.") for row in records)
+        uuid.UUID(row["grove.file_id"])
+        uuid.UUID(row["grove.request_id"])
+        assert row["grove.outcome"] == "success"
+        assert row["grove.observed_bytes"] == row["grove.expected_bytes"]
+    assert not any(row["event_name"].startswith("grove.blobs.") for row in records)
     for private in ["relay-regression-key", "injected relay measurement commit failure"]:
         assert private not in text
     print("PASS relay log contract: lifecycle stages, download identities and private-field exclusion")

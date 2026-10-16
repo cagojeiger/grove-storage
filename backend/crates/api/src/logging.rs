@@ -33,11 +33,7 @@ pub(crate) fn init(
         .with(
             tracing_subscriber::fmt::layer()
                 .fmt_fields(format::SafeFields)
-                .event_format(format::SafeEvent {
-                    mode,
-                    clock,
-                    errors: Some(errors.clone()),
-                })
+                .event_format(format::SafeEvent { mode, clock })
                 .with_writer(writer),
         )
         .init();
