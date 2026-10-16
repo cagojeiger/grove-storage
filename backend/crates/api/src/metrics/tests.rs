@@ -21,7 +21,7 @@ use tower::ServiceExt;
 fn labels() -> HttpLabels {
     HttpLabels {
         surface: "s3",
-        method: "GET",
+        method: "GET".into(),
         route: "/{bucket}/{*key}".into(),
     }
 }
@@ -207,7 +207,7 @@ async fn unmatched_paths_and_methods_cannot_create_unbounded_labels() {
     }
     let key = HttpLabels {
         surface: "s3",
-        method: "OTHER",
+        method: "_OTHER".into(),
         route: String::new(),
     };
     assert_eq!(

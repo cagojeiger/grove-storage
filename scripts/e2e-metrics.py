@@ -57,6 +57,17 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
             assert observed_bytes[direction] >= len(payload), direction
             assert f'grove_transfers_total{{direction="{direction}",outcome="success"}} 1' in text
         assert 'surface="s3",method="PUT",route="/{bucket}/{*key}",status_class="2xx",outcome="success"' in text
+        assert "# UNIT http_server_request_duration_seconds seconds" in text
+        assert "# UNIT grove_provider_call_duration_seconds seconds" in text
+        assert "# UNIT grove_transfer_observed_bytes bytes" in text
+        assert "grove_http_request_duration_seconds" not in text
+        assert "grove_http_response_creation_duration_seconds" in text
+        for method in ["PUT", "GET"]:
+            prefix = ('http_server_request_duration_seconds_count{'
+                      f'http_request_method="{method}",url_scheme="http",'
+                      'http_route="/{bucket}/{*key}",http_response_status_code="200"} ')
+            count = next(line for line in text.splitlines() if line.startswith(prefix))
+            assert int(count.removeprefix(prefix)) >= 1, method
         for forbidden in ["private-object-name", "private-payload", "metrics-client", "X-Amz-", credential["secret_key"], "file_id=", "request_id="]:
             assert forbidden not in text, "sensitive or high-cardinality metric label"
         assert "grove_db_pool_connections" in text
@@ -91,7 +102,7 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
             time.sleep(.1)
         assert 'grove_object_backlog_items{queue="purge"}' in text
         assert 'grove_retention_overdue_rows{stream="security_events"}' in text
-        assert 'grove_retention_days{stream="audit_events"} 365' in text
+        assert 'grove_retention_seconds{stream="audit_events"} 31536000' in text
         assert 'grove_db_pool_max_connections{pool="observations"} 1' in text
         worker_prefix = 'grove_worker_runs_total{worker="database",task="snapshot",outcome="success"} '
         assert int(next(line for line in text.splitlines() if line.startswith(worker_prefix)).removeprefix(worker_prefix)) >= 1
@@ -116,9 +127,9 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
 
 
 def verify_shutdown(log):
-    events = [json.loads(line).get("event") for line in log.splitlines()]
-    assert events.count("shutdown.complete") == 1
-    assert "shutdown.timed_out" not in events
+    events = [json.loads(line).get("event_name") for line in log.splitlines()]
+    assert events.count("grove.shutdown.complete") == 1
+    assert "grove.shutdown.timed_out" not in events
 
 
 if __name__ == "__main__":

@@ -11,19 +11,20 @@ use prometheus_client::{
         histogram::Histogram,
         info::Info,
     },
-    registry::Registry,
+    registry::{Registry, Unit},
 };
 use tracing_appender::non_blocking::ErrorCounter;
 
 pub(crate) mod database;
 pub(crate) mod endpoint;
+pub(crate) mod http;
 #[cfg(test)]
 mod tests;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct HttpLabels {
     pub surface: &'static str,
-    pub method: &'static str,
+    pub method: String,
     pub route: String,
 }
 
@@ -62,8 +63,10 @@ struct Inner {
     provider: grove_infra::S3Metrics,
     database: database::Cache,
     clock: Arc<dyn Clock>,
+    http_methods: http::KnownMethods,
     http_requests: Family<HttpResult, Counter>,
     http_duration: Family<HttpLabels, Histogram>,
+    http_server_duration: Family<Vec<(&'static str, String)>, Histogram>,
     http_active: Family<HttpLabels, Gauge>,
     transfers: Family<TransferLabels, Counter>,
     transfer_bytes: Family<Vec<(&'static str, &'static str)>, Counter>,
@@ -99,13 +102,29 @@ impl Default for Metrics {
 
 impl Metrics {
     pub fn new(clock: Arc<dyn Clock>, log_errors: Option<ErrorCounter>) -> Self {
+        Self::with_http_methods(clock, log_errors, http::KnownMethods::default())
+    }
+
+    pub fn with_http_methods(
+        clock: Arc<dyn Clock>,
+        log_errors: Option<ErrorCounter>,
+        http_methods: http::KnownMethods,
+    ) -> Self {
         let mut inner = Inner {
-            registry: Registry::with_prefix("grove"),
+            registry: Registry::default(),
             provider: grove_infra::S3Metrics::default(),
             database: database::Cache::default(),
             clock,
+            http_methods,
             http_requests: Family::default(),
             http_duration: Family::new_with_constructor(duration_histogram),
+            http_server_duration: Family::new_with_constructor(|| {
+                // Recommended HTTP buckets plus the storage-transfer latency tail.
+                Histogram::new([
+                    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5,
+                    10.0, 30.0, 60.0, 300.0, 1800.0, 7200.0,
+                ])
+            }),
             http_active: Family::default(),
             transfers: Family::default(),
             transfer_bytes: Family::default(),
@@ -126,15 +145,23 @@ impl Metrics {
             spool_active: Gauge::default(),
         };
         let r = &mut inner.registry;
+        r.register_with_unit(
+            "http_server_request_duration",
+            "HTTP server request duration through local response body completion or interruption",
+            Unit::Seconds,
+            inner.http_server_duration.clone(),
+        );
+        let r = r.sub_registry_with_prefix("grove");
         inner.provider.register(r);
         r.register(
             "http_requests",
             "Requests ending in response creation or interruption",
             inner.http_requests.clone(),
         );
-        r.register(
-            "http_request_duration_seconds",
+        r.register_with_unit(
+            "http_response_creation_duration",
             "Time until response creation or interruption, not body delivery",
+            Unit::Seconds,
             inner.http_duration.clone(),
         );
         r.register(
@@ -147,14 +174,16 @@ impl Metrics {
             "Observed relay streams by terminal outcome",
             inner.transfers.clone(),
         );
-        r.register(
-            "transfer_observed_bytes",
+        r.register_with_unit(
+            "transfer_observed",
             "Bytes read from receive bodies or provided to the HTTP send runtime",
+            Unit::Bytes,
             inner.transfer_bytes.clone(),
         );
-        r.register(
-            "transfer_duration_seconds",
+        r.register_with_unit(
+            "transfer_duration",
             "Time until relay stream terminal observation",
+            Unit::Seconds,
             inner.transfer_duration.clone(),
         );
         r.register(
@@ -167,9 +196,10 @@ impl Metrics {
             "Worker invocations by terminal outcome",
             inner.worker_runs.clone(),
         );
-        r.register(
-            "worker_duration_seconds",
+        r.register_with_unit(
+            "worker_duration",
             "Time until worker terminal observation",
+            Unit::Seconds,
             inner.worker_duration.clone(),
         );
         r.register(
@@ -177,9 +207,10 @@ impl Metrics {
             "Worker invocations not yet terminated",
             inner.worker_active.clone(),
         );
-        r.register(
-            "worker_last_success_timestamp_seconds",
+        r.register_with_unit(
+            "worker_last_success_timestamp",
             "Last completed pass without observed failure; zero means never",
+            Unit::Seconds,
             inner.worker_last_success.clone(),
         );
         r.register(
@@ -212,14 +243,16 @@ impl Metrics {
             "Configured process pool connection limit",
             inner.pool_limit.clone(),
         );
-        r.register(
-            "spool_reserved_bytes",
+        r.register_with_unit(
+            "spool_reserved",
             "Live rounded transfer reservations, not physical filesystem usage",
+            Unit::Bytes,
             inner.spool_reserved.clone(),
         );
-        r.register(
-            "spool_capacity_bytes",
+        r.register_with_unit(
+            "spool_capacity",
             "Effective rounded transfer reservation budget",
+            Unit::Bytes,
             inner.spool_capacity.clone(),
         );
         r.register(
@@ -265,6 +298,10 @@ impl Metrics {
         self.0.provider.clone()
     }
 
+    pub fn http_method(&self, method: &axum::http::Method) -> String {
+        self.0.http_methods.normalize(method)
+    }
+
     pub fn http_started(&self, labels: &HttpLabels) {
         self.0.http_active.get_or_create(labels).inc();
     }
@@ -294,6 +331,35 @@ impl Metrics {
             .inc();
         self.0.http_duration.get_or_create(labels).observe(seconds);
         self.0.http_active.get_or_create(labels).dec();
+    }
+
+    pub fn http_server_finished(
+        &self,
+        request: &HttpLabels,
+        scheme: &'static str,
+        status: Option<u16>,
+        error: Option<&'static str>,
+        seconds: f64,
+    ) {
+        let mut labels = vec![
+            ("http_request_method", request.method.to_owned()),
+            ("url_scheme", scheme.to_owned()),
+        ];
+        if !request.route.is_empty() {
+            labels.push(("http_route", request.route.clone()));
+        }
+        if let Some(status) = status {
+            labels.push(("http_response_status_code", status.to_string()));
+        }
+        if let Some(error) = error {
+            labels.push(("error_type", error.to_owned()));
+        } else if let Some(status @ 500..=599) = status {
+            labels.push(("error_type", status.to_string()));
+        }
+        self.0
+            .http_server_duration
+            .get_or_create(&labels)
+            .observe(seconds);
     }
 
     pub fn transfer_started(&self, direction: &'static str) -> Counter {

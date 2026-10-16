@@ -85,8 +85,10 @@ async fn serve() -> anyhow::Result<()> {
         _ => None,
     };
     let clock: Arc<dyn grove_core::time::Clock> = Arc::new(grove_core::time::SystemClock);
+    let http_methods = metrics::http::KnownMethods::from_env()?;
     let (_log_writer, log_errors) = logging::init(config.server.log_format, clock.clone());
-    let metrics = metrics::Metrics::new(clock.clone(), Some(log_errors));
+    let metrics =
+        metrics::Metrics::with_http_methods(clock.clone(), Some(log_errors), http_methods);
     grove_infra::temp_spool::prepare_root(&spool::spool_root()).await?;
 
     // 암호기 조립이 부팅 첫머리다 — 루트 길이·중복 key_id 오설정을 여기서 잡는다.

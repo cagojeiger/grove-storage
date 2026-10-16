@@ -14,7 +14,7 @@ HTTP request -> request_id
   +-- Receive/send stream -> transfer.finished
 Background task -> run_id -> processed/failed/skipped
   |
-  +-- safe flat JSON -> bounded stdout queue -> collector -> Loki
+  +-- safe structured JSON -> bounded stdout queue -> collector -> Loki
 ```
 
 운영 로그와 후속 Prometheus 지표는 같은 처리 경계와 결과 의미를 사용한다.
@@ -24,10 +24,42 @@ Grafana 대시보드는 별도 배포 단계다.
 
 ## 형식과 ID
 
-JSON 한 줄은 `schema_version=1`, `timestamp`, `level`, `target`, `event`, 고정
-`message`와 해당 이벤트의 허용 필드를 포함한다. 시각은 주입된 Clock의 UTC이며
-소요 시간은 Tokio monotonic Instant로 측정한다. Pretty 출력도 같은 필드 정책을
-사용하고 앞에 level을 붙인다. 이전 중첩 `fields`와 `request.end`는 사용하지 않는다.
+JSON 한 줄은 OpenTelemetry LogRecord 데이터 모델에 매핑되는 stdout 표현이다.
+OTLP JSON 전송 형식은 아니며 OTel SDK·exporter는 아직 연결하지 않는다.
+실제 OTLP 전송은 공식 SDK의 직렬화·전송을 사용한다.
+
+| 출력 필드 | OTel 대응 | 값 |
+|---|---|---|
+| timestamp | Timestamp | 주입된 Clock의 UTC RFC3339, 밀리초 정밀도 |
+| severity_text·severity_number | SeverityText·SeverityNumber | TRACE=1·DEBUG=5·INFO=9·WARN=13·ERROR=17 |
+| body | Body | 원문 message 대신 고정 설명 |
+| event_name | EventName | `grove.` 접두어와 아래 이벤트 코드 |
+| resource | Resource | `service.name=grove-storage`·빌드의 `service.version` |
+| instrumentation_scope | InstrumentationScope | `name=grove-storage.logs`·빌드 버전 |
+| attributes | Attributes | 표준 HTTP 속성과 허용된 `grove.*` 작업 속성 |
+
+발생 시각과 수집 시각은 구분한다. 수집기 관측 시각인 ObservedTimestamp와 실제
+추적 문맥인 TraceId·SpanId·TraceFlags는 현재 출력하지 않는다. 작업 UUID를
+TraceId로 바꾸거나 없는 추적 문맥을 생성하지 않는다. 자체 schema_version은
+출력하지 않으며 이 문서의 stdout 표현과 OTLP 인코딩을 혼용하지 않는다.
+Pretty는 같은 JSON 앞에 수준을 붙인다. 소요 시간은 Tokio monotonic Instant다.
+
+[OTel 로그 데이터 모델](https://opentelemetry.io/docs/specs/otel/logs/data-model/),
+[HTTP 의미 규약](https://opentelemetry.io/docs/specs/semconv/http/http-spans/)
+
+| 기존 필드 | attributes의 키 |
+|---|---|
+| method·status·route | http.request.method·http.response.status_code·http.route |
+| request_id·operation_id·run_id·file_id | grove.request_id·grove.operation_id·grove.run_id·grove.file_id |
+| operation·stage·outcome·duration_ms | grove.operation·grove.stage·grove.outcome·grove.duration_ms |
+| error_code | grove.error_code; 의미가 다른 error.type으로 일괄 치환하지 않음 |
+| url_scheme·error_type | url.scheme·error.type; 관찰한 HTTP scheme과 5xx 상태 코드 |
+| 그 외 허용된 필드 | grove 접두어와 기존 이름 |
+| Rust target | grove.code_target; 계측 범위와 별개 |
+
+아래 표의 필드는 계측 지점에서 사용하는 이름이다. 출력은 위 매핑을 적용하고
+숫자·boolean 자료형을 유지한다. 예를 들어 `http.response`의 출력 이름은
+`grove.http.response`다. HTTP route는 실제 path가 아닌 라우트 템플릿이다.
 
 | 필드 | 의미 |
 |---|---|
@@ -42,7 +74,7 @@ JSON 한 줄은 `schema_version=1`, `timestamp`, `level`, `target`, `event`, 고
 내부 request_id는 외부 `x-request-id`를 덮어쓰지 않는다. 기존 요청 ID의 전파와
 응답 헤더 계약은 유지한다. SigV4에 포함된 헤더·URL·본문은 로그 목적으로 변경되지
 않는다. operation_id는 핸들러가 UUID를 제공한 응답에만 있으며 요청 전체의 공통 ID는
-request_id다. UUID를 Loki stream label로 승격하지 않고 JSON에서 조회한다.
+request_id다. UUID를 Loki stream label로 승격하지 않고 attributes에서 조회한다.
 
 ## 이벤트
 
@@ -68,7 +100,8 @@ send 로그는 요청 핸들러 종료 뒤에도 request_id와 file_id를 유지
 
 Activity는 PostgreSQL의 감사·명령 호출·보안 이력을 읽는다. 명령 호출은 결과와
 소요 시간을 목록에 표시하며 unknown을 성공이나 실패로 바꾸지 않는다. 상세의
-Operation ID는 관리 이력의 request_id이며 운영 로그의 operation_id와 연결된다.
+Operation ID는 관리 이력의 request_id이며 운영 로그의 attributes 안에 있는
+grove.operation_id와 연결된다. DB 필드와 Activity 응답은 변경하지 않는다.
 전송·worker 로그는 Activity에 복제하지 않고 Loki에서 조회한다.
 명령 목록은 대상과 마지막 처리 단계를, 보안 목록은 검사 단계와 기록 방식을 표시한다.
 상세는 인증 방식과 작업 ID를 함께 제공한다. 과거 행의 빈 맥락은 Not recorded,
@@ -157,8 +190,9 @@ ID는 UUID, 등록 저장소 ID와 의미 코드는 길이·문자 집합을 제
 ## 출력과 조회
 
 stdout writer는 tracing-appender의 전용 thread와 1,024줄 lossy 큐를 사용한다.
-큐 포화는 요청을 기다리게 하지 않는다. `log_dropped_lines_total`은 큐 유실의
-프로세스 누적값이며 stdout I/O 오류나 collector/Loki 유실까지 세지 않는다.
+큐 포화는 요청을 기다리게 하지 않는다. `grove_log_dropped_lines_total` 메트릭은
+큐 유실의 프로세스 누적값이며 각 로그에 반복하지 않는다. stdout I/O 오류나
+collector/Loki 유실까지 세지 않는다.
 guard는 정상 종료 시 큐 drain을 시도한다. SIGKILL·출력 정지·비정상 종료에서는
 마지막 기록을 보장하지 않는다. [tracing-appender](https://docs.rs/tracing-appender/latest/tracing_appender/non_blocking/index.html)
 
@@ -166,19 +200,24 @@ Loki의 기존 workload selector 뒤에서 JSON 필드를 조회한다. 실제 l
 수집기의 설정을 따른다. [LogQL JSON parser](https://grafana.com/docs/loki/latest/query/log_queries/#json)
 
 ```logql
-{namespace="grove-storage"} | json | event="transfer.finished" | outcome!="success"
-{namespace="grove-storage"} | json | event="worker.run_finished" | outcome=~"error|timeout|interrupted"
-{namespace="grove-storage"} | json | request_id="<internal-uuid>"
-{namespace="grove-storage"} | json | operation_id="<audit-request-uuid>"
+{namespace="grove-storage"} | json event="event_name", outcome="attributes[\"grove.outcome\"]" | event="grove.transfer.finished" | outcome!="success"
+{namespace="grove-storage"} | json event="event_name", outcome="attributes[\"grove.outcome\"]" | event="grove.worker.run_finished" | outcome=~"error|timeout|interrupted"
+{namespace="grove-storage"} | json request="attributes[\"grove.request_id\"]" | request="<internal-uuid>"
+{namespace="grove-storage"} | json operation="attributes[\"grove.operation_id\"]" | operation="<audit-request-uuid>"
 ```
 
 管理 이력 보존은 [운영 설정](../stack/README.md#관리-로그-보존)을 따른다.
 stdout/Loki 보존은 수집 인프라의 정책이며 관리 DB 보존과 독립이다.
-수집기는 JSON의 level을 읽는다. error_code나 message에서 수준을 추측하지 않는다.
+수집기는 severity_text·severity_number를 읽고 기존 level 기반 parser를 교체한다.
+error_code나 body에서 수준을 추측하지 않는다. 이전 flat JSON과의 하위 호환은
+유지하지 않으므로 수집기·Loki 쿼리·로그 기반 알림을 새 형식에 맞춘 뒤 배포한다.
+관리 DB 스키마와 Activity 응답은 유지한다. 메트릭 이름·단위 변경과 조회 전환은
+[메트릭 계약](13-metrics.md#조회와-검증)을 따른다.
 
 ## 검증
 
-`api/src/logging/tests.rs`는 JSON/Pretty 개인정보 제외, ERROR-only 상관관계,
+`api/src/logging/tests.rs`는 표준 필드·severity 번호·HTTP 속성 자료형·도메인 접두어,
+추적 문맥 미생성, JSON/Pretty 개인정보 제외, ERROR-only 상관관계,
 서명 헤더 유지, HTTP 수준, 송수신 EOF·오류·중단·시간 초과, 가상 시간,
 worker 단일 종료, 유계 writer 포화·정상 drain을 검증한다.
 `management-service/src/logging.rs`의 테스트는 DB 연결을 점유한 상태에서 가상 시간

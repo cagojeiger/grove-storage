@@ -175,7 +175,8 @@ def check_s3(endpoint, directory, backend, account):
 def verify_log(data):
     text = data.decode(errors="replace")
     assert all(secret not in text for secret in SECRETS), "Secret appeared in server logs"
-    assert "http.response" in text, "Application telemetry was unexpectedly suppressed"
+    events = [json.loads(line).get("event_name") for line in text.splitlines()]
+    assert "grove.http.response" in events, "Application telemetry was unexpectedly suppressed"
     print("PASS server logs exclude management, service, and provider secrets with rmcp=trace")
 
 

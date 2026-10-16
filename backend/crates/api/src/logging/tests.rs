@@ -55,7 +55,6 @@ fn record(mode: LogFormat, level: &str, test: impl FnOnce(Capture)) {
                 .event_format(format::SafeEvent {
                     mode,
                     clock: Arc::new(clock),
-                    errors: None,
                 })
                 .with_writer(move || writer.clone()),
         );
@@ -69,7 +68,7 @@ fn runtime() -> tokio::runtime::Runtime {
 }
 
 #[test]
-fn json_is_flat_bounded_and_excludes_payloads_in_events_and_spans() {
+fn json_maps_to_otel_fields_and_excludes_payloads_in_events_and_spans() {
     record(LogFormat::Json, "trace", |capture| {
         let id = uuid::Uuid::new_v4();
         let span =
@@ -88,12 +87,119 @@ fn json_is_flat_bounded_and_excludes_payloads_in_events_and_spans() {
         tracing::warn!(target:"aws_smithy_http", response="secret-provider");
         let rows = capture.records();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["request_id"], id.to_string());
+        assert_eq!(rows[0]["attributes"]["grove.request_id"], id.to_string());
         assert_eq!(rows[0]["timestamp"], "2026-01-01T00:00:00.000Z");
-        assert_eq!(rows[0]["schema_version"], 1);
-        assert_eq!(rows[0]["status"], 503);
+        assert_eq!(rows[0]["severity_text"], "ERROR");
+        assert_eq!(rows[0]["severity_number"], 17);
+        assert_eq!(rows[0]["body"], "HTTP response created");
+        assert_eq!(rows[0]["resource"]["service.name"], "grove-storage");
+        assert_eq!(
+            rows[0]["resource"]["service.version"],
+            env!("CARGO_PKG_VERSION")
+        );
+        assert_eq!(
+            rows[0]["instrumentation_scope"]["name"],
+            "grove-storage.logs"
+        );
+        for absent in [
+            "schema_version",
+            "level",
+            "event",
+            "message",
+            "target",
+            "log_dropped_lines_total",
+            "trace_id",
+            "span_id",
+            "observed_timestamp",
+        ] {
+            assert!(rows[0].get(absent).is_none(), "{absent}");
+        }
+        assert_eq!(rows[0]["attributes"]["http.response.status_code"], 503);
         assert!(!rows[0].to_string().contains("secret"));
         assert!(rows[0].get("fields").is_none());
+    });
+}
+
+#[test]
+fn all_severities_have_standard_numbers_and_no_invented_trace_context() {
+    record(LogFormat::Json, "trace", |capture| {
+        tracing::trace!(event = "runtime.test");
+        tracing::debug!(event = "runtime.test");
+        tracing::info!(event = "runtime.test");
+        tracing::warn!(event = "runtime.test");
+        tracing::error!(event = "runtime.test");
+        let rows = capture.records();
+        assert_eq!(rows.len(), 5);
+        for (row, (text, number)) in rows.iter().zip([
+            ("TRACE", 1),
+            ("DEBUG", 5),
+            ("INFO", 9),
+            ("WARN", 13),
+            ("ERROR", 17),
+        ]) {
+            assert_eq!(row["severity_text"], text);
+            assert_eq!(row["severity_number"], number);
+            assert_eq!(row["event_name"], "grove.runtime.test");
+            assert!(row.get("trace_id").is_none());
+            assert!(row.get("span_id").is_none());
+        }
+    });
+}
+
+#[test]
+fn standard_http_and_domain_attributes_keep_their_types_and_privacy_policy() {
+    record(LogFormat::Json, "trace", |capture| {
+        let id = uuid::Uuid::new_v4();
+        let span = tracing::info_span!("request", request_id = %id, method = "GET",
+            route = "/{bucket}/{*key}", status = 200_u64, duration_ms = 1_u64);
+        let _entered = span.enter();
+        tracing::warn!(
+            event = "http.response",
+            status = 503_u64,
+            duration_ms = 528_u64,
+            outcome = "error",
+            error_code = "unavailable",
+            multipart = true,
+            trace_id = "sentinel-trace",
+            span_id = "sentinel-span",
+            service.name = "sentinel-service",
+            http.route = "/sentinel-key",
+            body = "sentinel-body"
+        );
+        tracing::info!(
+            event = "invalid-event-name?sentinel",
+            request_id = "sentinel-id"
+        );
+        let rows = capture.records();
+        assert_eq!(rows.len(), 2);
+        let attrs = &rows[0]["attributes"];
+        assert_eq!(attrs["http.request.method"], "GET");
+        assert_eq!(attrs["http.route"], "/{bucket}/{*key}");
+        assert_eq!(attrs["http.response.status_code"], 503);
+        assert_eq!(attrs["grove.duration_ms"], 528);
+        assert_eq!(attrs["grove.multipart"], true);
+        assert_eq!(attrs["grove.error_code"], "unavailable");
+        assert!(attrs.get("error.type").is_none());
+        assert!(attrs.get("grove.event").is_none());
+        assert_eq!(rows[1]["event_name"], "grove.runtime.message");
+        assert_eq!(rows[1]["attributes"]["grove.request_id"], id.to_string());
+        assert!(!format!("{rows:?}").contains("sentinel"));
+    });
+}
+
+#[test]
+fn http_methods_preserve_valid_extension_tokens_without_accepting_control_characters() {
+    record(LogFormat::Json, "trace", |capture| {
+        for method in ["BASELINE-CONTROL", "_OTHER", "invalid\r\nmethod"] {
+            tracing::info!(event = "http.response", method);
+        }
+        let rows = capture.records();
+        assert_eq!(
+            rows[0]["attributes"]["http.request.method"],
+            "BASELINE-CONTROL"
+        );
+        assert_eq!(rows[1]["attributes"]["http.request.method"], "_OTHER");
+        assert!(rows[2]["attributes"].get("http.request.method").is_none());
     });
 }
 
@@ -131,15 +237,20 @@ fn snapshot_failure_context_survives_redaction_without_error_payloads() {
         let rows = capture.records();
         let failure = rows
             .iter()
-            .find(|row| row["event"] == "database.snapshot_failed")
+            .find(|row| row["event_name"] == "grove.database.snapshot_failed")
             .unwrap();
-        assert_eq!(failure["stage"], "begin");
-        assert_eq!(failure["stream"], "none");
-        assert_eq!(failure["reason"], "pool_closed");
-        assert_eq!(failure["error_code"], "db_snapshot_failed");
-        assert_eq!(failure["worker"], "database");
-        assert_eq!(failure["task"], "snapshot");
-        assert!(uuid::Uuid::parse_str(failure["run_id"].as_str().unwrap()).is_ok());
+        assert_eq!(failure["attributes"]["grove.stage"], "begin");
+        assert_eq!(failure["attributes"]["grove.stream"], "none");
+        assert_eq!(failure["attributes"]["grove.reason"], "pool_closed");
+        assert_eq!(
+            failure["attributes"]["grove.error_code"],
+            "db_snapshot_failed"
+        );
+        assert_eq!(failure["attributes"]["grove.worker"], "database");
+        assert_eq!(failure["attributes"]["grove.task"], "snapshot");
+        assert!(
+            uuid::Uuid::parse_str(failure["attributes"]["grove.run_id"].as_str().unwrap()).is_ok()
+        );
         assert!(!format!("{rows:?}").contains("private"));
     });
 }
@@ -156,7 +267,10 @@ fn context_updates_are_safe_and_survive_an_error_only_filter() {
         span.record("request_id", tracing::field::display(id));
         let _entered = span.enter();
         tracing::error!(event = "history.write_failed", stream = "security_events");
-        assert_eq!(capture.records()[0]["request_id"], id.to_string());
+        assert_eq!(
+            capture.records()[0]["attributes"]["grove.request_id"],
+            id.to_string()
+        );
         assert!(!capture.records()[0].to_string().contains("sentinel"));
     });
 }
@@ -190,11 +304,23 @@ fn http_keeps_signed_headers_and_omits_raw_paths_and_queries() {
                 .unwrap();
             assert_eq!(response.status(), 200);
             let rows = capture.records();
-            let end = rows.iter().find(|r| r["event"] == "http.response").unwrap();
-            assert_eq!(end["operation_id"], business_id.to_string());
-            assert!(uuid::Uuid::parse_str(end["request_id"].as_str().unwrap()).is_ok());
-            assert_ne!(end["request_id"], end["operation_id"]);
-            assert_eq!(end["route"], "/{bucket}/{*key}");
+            let end = rows
+                .iter()
+                .find(|r| r["event_name"] == "grove.http.response")
+                .unwrap();
+            assert_eq!(
+                end["attributes"]["grove.operation_id"],
+                business_id.to_string()
+            );
+            assert!(
+                uuid::Uuid::parse_str(end["attributes"]["grove.request_id"].as_str().unwrap())
+                    .is_ok()
+            );
+            assert_ne!(
+                end["attributes"]["grove.request_id"],
+                end["attributes"]["grove.operation_id"]
+            );
+            assert_eq!(end["attributes"]["http.route"], "/{bucket}/{*key}");
             assert!(!end.to_string().contains("sentinel"));
         })
     });
@@ -251,10 +377,10 @@ fn complete_empty_partial_error_and_dropped_streams_finish_once() {
                 rows.iter()
                     .zip(["success", "success", "incomplete", "error", "interrupted"])
             {
-                assert_eq!(row["event"], "transfer.finished");
-                assert_eq!(row["outcome"], expected);
-                assert_eq!(row["request_id"], id.to_string());
-                assert_eq!(row["file_id"], file_id.to_string());
+                assert_eq!(row["event_name"], "grove.transfer.finished");
+                assert_eq!(row["attributes"]["grove.outcome"], expected);
+                assert_eq!(row["attributes"]["grove.request_id"], id.to_string());
+                assert_eq!(row["attributes"]["grove.file_id"], file_id.to_string());
             }
             assert!(!rows.iter().any(|r| r.to_string().contains("sentinel")));
         })
@@ -299,21 +425,30 @@ fn response_creation_and_body_completion_have_distinct_timing_and_shared_identit
                 .unwrap();
             let rows = capture.records();
             assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0]["event"], "http.response");
-            assert_eq!(rows[0]["outcome"], "success");
-            assert_eq!(rows[0]["duration_ms"], 100);
-            assert_eq!(rows[0]["operation_id"], operation_id.to_string());
+            assert_eq!(rows[0]["event_name"], "grove.http.response");
+            assert_eq!(rows[0]["attributes"]["grove.outcome"], "success");
+            assert_eq!(rows[0]["attributes"]["grove.duration_ms"], 100);
+            assert_eq!(
+                rows[0]["attributes"]["grove.operation_id"],
+                operation_id.to_string()
+            );
 
             tokio::time::advance(std::time::Duration::from_secs(2)).await;
             assert_eq!(to_bytes(response.into_body(), 4).await.unwrap(), "done");
             let completed = capture.records();
             assert_eq!(completed.len(), 2);
-            assert_eq!(completed[1]["event"], "transfer.finished");
-            assert_eq!(completed[1]["outcome"], "success");
-            assert_eq!(completed[1]["duration_ms"], 2000);
-            assert_eq!(completed[1]["observed_bytes"], 4);
-            assert_eq!(completed[1]["request_id"], rows[0]["request_id"]);
-            assert_eq!(completed[1]["file_id"], file_id.to_string());
+            assert_eq!(completed[1]["event_name"], "grove.transfer.finished");
+            assert_eq!(completed[1]["attributes"]["grove.outcome"], "success");
+            assert_eq!(completed[1]["attributes"]["grove.duration_ms"], 2000);
+            assert_eq!(completed[1]["attributes"]["grove.observed_bytes"], 4);
+            assert_eq!(
+                completed[1]["attributes"]["grove.request_id"],
+                rows[0]["attributes"]["grove.request_id"]
+            );
+            assert_eq!(
+                completed[1]["attributes"]["grove.file_id"],
+                file_id.to_string()
+            );
             assert!(
                 !completed
                     .iter()
@@ -345,10 +480,13 @@ fn download_identity_survives_request_context_and_an_error_only_filter() {
             assert!(to_bytes(body, 32).await.is_err());
             let rows = capture.records();
             assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0]["event"], "transfer.finished");
-            assert_eq!(rows[0]["request_id"], request_id.to_string());
-            assert_eq!(rows[0]["file_id"], file_id.to_string());
-            assert_eq!(rows[0]["outcome"], "error");
+            assert_eq!(rows[0]["event_name"], "grove.transfer.finished");
+            assert_eq!(
+                rows[0]["attributes"]["grove.request_id"],
+                request_id.to_string()
+            );
+            assert_eq!(rows[0]["attributes"]["grove.file_id"], file_id.to_string());
+            assert_eq!(rows[0]["attributes"]["grove.outcome"], "error");
             assert!(!rows[0].to_string().contains("private"));
         })
     });
@@ -373,7 +511,10 @@ fn content_length_completion_does_not_require_a_final_poll() {
             assert!(frame.is_some());
             drop(body);
             assert_eq!(capture.records().len(), 1);
-            assert_eq!(capture.records()[0]["outcome"], "success");
+            assert_eq!(
+                capture.records()[0]["attributes"]["grove.outcome"],
+                "success"
+            );
         })
     });
 }
@@ -399,12 +540,12 @@ fn elapsed_time_and_worker_results_are_virtualizable() {
             drop(abandoned);
             let rows = capture.records();
             assert_eq!(rows.len(), 3);
-            assert_eq!(rows[0]["duration_ms"], 3000);
-            assert_eq!(rows[1]["duration_ms"], 3000);
-            assert_eq!(rows[1]["outcome"], "error");
-            assert_eq!(rows[1]["failed"], 1);
-            assert_eq!(rows[2]["outcome"], "interrupted");
-            assert!(rows[1].get("run_id").is_some());
+            assert_eq!(rows[0]["attributes"]["grove.duration_ms"], 3000);
+            assert_eq!(rows[1]["attributes"]["grove.duration_ms"], 3000);
+            assert_eq!(rows[1]["attributes"]["grove.outcome"], "error");
+            assert_eq!(rows[1]["attributes"]["grove.failed"], 1);
+            assert_eq!(rows[2]["attributes"]["grove.outcome"], "interrupted");
+            assert!(rows[1]["attributes"].get("grove.run_id").is_some());
         })
     });
 }
@@ -453,12 +594,19 @@ fn http_levels_distinguish_expected_s3_rejections_and_service_errors() {
             assert_eq!(rows.len(), 6);
             for (row, level) in rows
                 .iter()
-                .zip(["debug", "debug", "debug", "warn", "error", "debug"])
+                .zip(["DEBUG", "DEBUG", "DEBUG", "WARN", "ERROR", "DEBUG"])
             {
-                assert_eq!(row["level"], level);
+                assert_eq!(row["severity_text"], level);
             }
-            assert_eq!(rows[3]["outcome"], "rejected");
-            assert_eq!(rows[4]["outcome"], "error");
+            assert_eq!(rows[3]["attributes"]["grove.outcome"], "rejected");
+            assert_eq!(rows[4]["attributes"]["grove.outcome"], "error");
+            assert_eq!(rows[3]["attributes"]["error.type"], "501");
+            assert_eq!(rows[4]["attributes"]["error.type"], "503");
+            for row in &rows {
+                assert_eq!(row["attributes"]["url.scheme"], "http");
+            }
+            assert!(rows[0]["attributes"].get("error.type").is_none());
+            assert!(rows[1]["attributes"].get("error.type").is_none());
         })
     });
 }
@@ -497,11 +645,14 @@ fn interrupted_requests_and_timed_out_workers_are_not_successes() {
             drop(run);
             let rows = capture.records();
             assert_eq!(rows.len(), 2);
-            assert_eq!(rows[0]["event"], "http.interrupted");
+            assert_eq!(rows[0]["event_name"], "grove.http.interrupted");
             // Tokio timers have millisecond resolution, including paused auto-advance.
-            assert!((2000..=2001).contains(&rows[0]["duration_ms"].as_u64().unwrap()));
-            assert_eq!(rows[1]["outcome"], "timeout");
-            assert_eq!(rows[1]["error_code"], "pass_timeout");
+            assert!(
+                (2000..=2001)
+                    .contains(&rows[0]["attributes"]["grove.duration_ms"].as_u64().unwrap())
+            );
+            assert_eq!(rows[1]["attributes"]["grove.outcome"], "timeout");
+            assert_eq!(rows[1]["attributes"]["grove.error_code"], "pass_timeout");
         })
     });
 }
@@ -560,13 +711,16 @@ fn receive_logs_measure_bytes_and_classify_partial_aborted_and_idle_streams() {
                 .iter()
                 .zip(["success", "incomplete", "error", "timeout"])
             {
-                assert_eq!(row["direction"], "receive");
-                assert_eq!(row["outcome"], outcome);
+                assert_eq!(row["attributes"]["grove.direction"], "receive");
+                assert_eq!(row["attributes"]["grove.outcome"], outcome);
             }
-            assert_eq!(rows[1]["observed_bytes"], 5);
-            assert_eq!(rows[2]["error_code"], "receive_aborted");
-            assert_eq!(rows[3]["error_code"], "receive_idle");
-            assert!((30000..=30001).contains(&rows[3]["duration_ms"].as_u64().unwrap()));
+            assert_eq!(rows[1]["attributes"]["grove.observed_bytes"], 5);
+            assert_eq!(rows[2]["attributes"]["grove.error_code"], "receive_aborted");
+            assert_eq!(rows[3]["attributes"]["grove.error_code"], "receive_idle");
+            assert!(
+                (30000..=30001)
+                    .contains(&rows[3]["attributes"]["grove.duration_ms"].as_u64().unwrap())
+            );
             assert!(!rows.iter().any(|r| r.to_string().contains("private")));
         })
     });

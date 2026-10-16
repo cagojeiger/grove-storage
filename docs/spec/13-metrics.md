@@ -12,15 +12,55 @@
 수집 리스너는 인증이 없으므로 내부 수집망에서만 접근한다. scrape는 DB 질의나
 외부 S3 I/O를 실행하지 않는다.
 
+## 표준 대응
+
+로그는 [OTel 데이터 모델 매핑](12-logging.md#형식과-id), HTTP 메트릭은
+[안정된 HTTP 규약](https://opentelemetry.io/docs/specs/semconv/http/http-metrics/),
+출력은 OpenMetrics 1.0을 사용한다. OTel SDK·OTLP 전송은 사용하지 않는다.
+Prometheus 표기의 속성 이름은 점 대신 밑줄을 사용한다.
+
+| 영역 | 표준 적용 | Grove 고유 경계 |
+|---|---|---|
+| HTTP | http.server.request.duration, 초 단위 histogram, 공식 속성 | 응답 생성 시점의 별도 지연·요청 수·처리 중 수 |
+| 서비스 로그 | Timestamp·Severity·Body·EventName·Resource·Attributes 매핑 | grove 작업·파일·회차 ID와 처리 단계 |
+| 외부 S3 | 초 단위 지연, counter·gauge·histogram 의미 | SDK 내부 재시도를 포함한 논리 호출; 개별 HTTP 호출로 치환하지 않음 |
+| 릴레이 | 바이트·초, 누적 전송량과 진행 중 수 구분 | receive/send의 관측 바이트와 스트림 종료 결과 |
+| worker | 초 단위 지연, UTC epoch 마지막 성공 시각 | 작업별 처리·실패·보류 수와 복구 적체 |
+| DB·보존·spool | 할당 바이트·UTC epoch 초·보존 초, OpenMetrics UNIT | 풀·정리 가능 잔량·예약 예산; 불안정한 외부 규약에 강제 대응하지 않음 |
+
+표준 HTTP 지연은 middleware 진입부터 로컬 응답 body 종료 관측까지다. 빈 body·HEAD·
+body 없는 상태는 응답 생성 때 종료한다. 그 외는 EOF·오류·drop 때 한 번 기록한다.
+정확한 길이의 데이터를 제공한 뒤에도 poll이 계속되면 trailers·오류까지 관찰한다.
+런타임이 추가 poll 없이 body를 버리면 관찰한 길이로 완료를 판단한다. 관찰하지 못한
+trailers나 오류는 보장하지 않는다. body 전달은 HTTP 런타임에 제공했다는 뜻이며
+클라이언트 수신을 보장하지 않는다. 응답 생성 진단과 이 지연을 합산하지 않는다.
+요청 취소는 interrupted, body 오류는 body_error, 길이 불일치는 body_length_mismatch다.
+오류가 없는 요청은 error_type을 생략하고, HTTP 5xx는 상태 코드 문자열을 쓴다.
+표준 HTTP 501은 error_type=501이지만 Grove의 미지원 S3 분류는 rejected를 유지한다.
+
+메서드는 RFC9110·PATCH·QUERY의 기본 목록에 없는 값을 _OTHER로 정규화한다.
+`OTEL_INSTRUMENTATION_HTTP_KNOWN_METHODS`는 쉼표 구분 전체 목록 override다.
+대소문자를 구분하고 잘못된 HTTP token은 부팅을 거부한다. 원래 요청은 수정하지 않는다.
+url_scheme은 URI의 http/https, 없으면 HTTP 리스너의 http다. 임의 Forwarded·
+X-Forwarded-Proto를 신뢰해 수집 값을 바꾸지 않는다. http_route는 템플릿이 없으면
+생략하며 raw path로 대체하지 않는다. 상태 코드도 응답이 없으면 생략한다.
+
+HTTP histogram은 OTel 권장 구간에 저장소 전송의 긴 지연을 위한
+30·60·300·1800·7200초 구간을 추가한다. 히스토그램 표본 수로 해당 종료 경계의
+요청량을 계산할 수 있다. 정상 로그의 생략·유실은 이 측정에 영향을 주지 않는다.
+
 ## 지표
 
-모든 이름은 `grove_`로 시작한다. Counter에는 `_total`이 붙고 histogram에는
+표준 HTTP 이름은 `http_`, Grove 고유 이름은 `grove_`로 시작한다. 아래 표에서
+Grove 접두어는 생략한다. Counter에는 `_total`이 붙고 histogram에는
 `_bucket`, `_sum`, `_count`가 붙는다. 소요 시간은 Tokio monotonic 시계의 초다.
+시간·바이트 지표는 OpenMetrics UNIT도 명시한다.
 
 | 이름 | 종류 | 라벨·의미 |
 |---|---|---|
 | `http_requests` | counter | surface·method·route·status_class·outcome; 응답 생성 또는 중단 |
-| `http_request_duration_seconds` | histogram | surface·method·route; 응답 생성/중단까지의 시간 |
+| `http_server_request_duration_seconds` (접두어 추가 없음) | histogram | http_request_method·url_scheme·http_route·http_response_status_code·error_type; 로컬 body 종료/중단까지 |
+| `http_response_creation_duration_seconds` | histogram | surface·method·route; 응답 생성/중단까지의 시간 |
 | `http_requests_in_flight` | gauge | surface·method·route; 응답 생성 전 요청 |
 | `transfers` | counter | direction·outcome; relay 스트림의 단일 종료 결과 |
 | `transfer_observed_bytes` | counter | direction; 청크 관찰마다 갱신하는 바이트 |
@@ -46,7 +86,7 @@
 | `object_backlog_oldest_waiting_timestamp_seconds` | gauge | queue; 가장 오래된 대기 기준 시각, 빈 큐·미기록 시각은 시계열 없음 |
 | `retention_overdue_rows` | gauge | stream; 기존 보존 삭제 조건을 만족하는 행 수 |
 | `retention_oldest_overdue_timestamp_seconds` | gauge | stream; 삭제 대상의 가장 오래된 보존 기준 시각, 대상 없으면 0 |
-| `retention_days` | gauge | stream; 적용 중인 보존 기간 |
+| `retention_seconds` | gauge | stream; 설정된 보존 일수를 초로 변환한 기간 |
 | `db_table_data_bytes` / `db_table_index_bytes` | gauge | schema·table; 데이터(TOAST 포함)·인덱스의 할당 바이트 |
 | `db_table_estimated_rows` | gauge | schema·table·state=live/dead; PostgreSQL 행 수 추정치 |
 
@@ -73,7 +113,8 @@ SDK 자체 timeout과 호출자 취소는 각각 timeout·interrupted이며 stat
 네트워크 응답 없는 오류도 none이다. 버킷·키·주소·자격증명·오류 원문은 라벨이 아니다.
 
 HTTP outcome은 success/rejected/error/interrupted다. S3 미지원 501은 rejected이며
-status_class=5xx를 유지한다. 서비스 오류 집계는 outcome=error를 사용한다.
+status_class=5xx를 유지한다. 이 값은 Grove 응답 생성 경계의 업무 분류다.
+서비스 오류 집계는 outcome=error를 사용하며 표준 HTTP error_type과 구분한다.
 transfer outcome은 success/incomplete/error/interrupted/timeout/too_slow/rejected다.
 실패·중단도 관찰한 지연과 바이트에 포함된다.
 
@@ -86,7 +127,8 @@ worker skip은 마지막 성공 시각을 갱신하지 않는다. object/pass는
 
 route는 MatchedPath 템플릿이다. raw path·query·객체 키·파일명·계정·요청/파일
 UUID·credential을 라벨에 넣지 않는다. method·surface·outcome과 task는 내부의
-유계 어휘를 사용한다. 알려진 전송 결과와 worker baseline은 0으로 초기화한다.
+유계 어휘를 사용한다. 메서드 override도 부팅 설정의 유한 목록만 라벨이 된다.
+알려진 전송 결과와 worker baseline은 0으로 초기화한다.
 미사용 route가 없다는 것과 scrape 대상이 사라졌다는 것은 다른 상태다.
 
 ### DB 주기 수집
@@ -134,6 +176,12 @@ DB snapshot은 Pod당 최대 128개 시계열과 수집 worker 계열을 추가�
 Grafana 대시보드·알림은 실제 수집된
 시계열을 확인한 뒤 추가한다.
 
+이 변경은 `grove_http_request_duration_seconds`를
+`grove_http_response_creation_duration_seconds`로, `grove_retention_days`를
+`grove_retention_seconds`로 교체한다. 365일은 31,536,000초다. 기존 데이터의
+단위를 소급 변경하지 않으며 PromQL·알림·대시보드를 함께 갱신한 뒤 배포한다.
+표준 HTTP 지표의 추가가 기존 측정 기간의 연속성을 뜻하지는 않는다.
+
 `metrics/tests.rs`는 가상 시간, 응답/전송 경계, 취소·EOF·오류, worker 결과,
 SQL 없는 scrape, 개인정보·S3 경로 격리를 검증한다. `scripts/e2e-metrics.py`는
 격리된 PostgreSQL/MinIO에서 실제 바이너리의 presigned PUT/GET과 지표 증가,
@@ -148,3 +196,6 @@ timeout·SQL 실패 후 기존 값·성공 시각 유지, inflight 해제,
 provider 테스트는 가상 시간의 소요 시간·취소, SDK·연결 timeout 분류와 실제 SDK의 404·5xx·내부 재시도,
 GET 본문 대기 중 호출 완료, 로컬 presign 제외와 라벨 격리를 검증한다.
 메트릭 E2E는 실제 MinIO의 연결 probe·PUT·GET이 같은 레지스트리에 기록됨도 확인한다.
+`metrics/http/tests.rs`는 표준 HTTP 전체 지연과 응답 생성 지연의 구분, body 오류·drop·
+길이 불일치·마지막 poll 생략·HEAD·body 없는 상태·trailers와 메서드 override를
+검증한다. 계측은 본문·헤더·서명 입력을 변경하거나 전송을 선행 소비하지 않는다.

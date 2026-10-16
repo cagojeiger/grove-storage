@@ -153,7 +153,7 @@ def fairness(endpoint, _directory, database, account, backend):
 
 
 def verify_failures(log):
-    failures = sum(json.loads(line).get("event") == "reconciler.observe_failed"
+    failures = sum(json.loads(line).get("event_name") == "grove.reconciler.observe_failed"
         for line in log.splitlines() if line.startswith(b"{"))
     assert failures >= 40, f"expected two real failed batches, saw {failures}"
     print(f"PASS real worker observed {failures} provider failures while healthy storage progressed")

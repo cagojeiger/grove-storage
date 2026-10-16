@@ -4,7 +4,7 @@ use aws_sdk_s3::error::SdkError;
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{counter::Counter, family::Family, gauge::Gauge, histogram::Histogram},
-    registry::Registry,
+    registry::{Registry, Unit},
 };
 use tokio::time::Instant;
 
@@ -82,9 +82,10 @@ impl S3Metrics {
             "Logical S3 SDK sends including internal retries; GET ends at response headers",
             self.calls.clone(),
         );
-        registry.register(
-            "provider_call_duration_seconds",
+        registry.register_with_unit(
+            "provider_call_duration",
             "Time until logical SDK send returns or is dropped; not GET body delivery",
+            Unit::Seconds,
             self.duration.clone(),
         );
         registry.register(
