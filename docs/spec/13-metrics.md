@@ -34,6 +34,8 @@ body 없는 상태는 응답 생성 때 종료한다. 그 외는 EOF·오류·dr
 런타임이 추가 poll 없이 body를 버리면 관찰한 길이로 완료를 판단한다. 관찰하지 못한
 trailers나 오류는 보장하지 않는다. body 전달은 HTTP 런타임에 제공했다는 뜻이며
 클라이언트 수신을 보장하지 않는다. 응답 생성 진단과 이 지연을 합산하지 않는다.
+길이가 0인 응답은 처음부터 데이터 길이를 충족한 상태다. poll 없이 종료돼도 중단으로
+분류하지 않으며, 실제로 poll한 뒤의 오류·trailers는 계속 관찰한다.
 요청 취소는 interrupted, body 오류는 body_error, 길이 불일치는 body_length_mismatch다.
 오류가 없는 요청은 error_type을 생략하고, HTTP 5xx는 상태 코드 문자열을 쓴다.
 표준 HTTP 501은 error_type=501이지만 Grove의 미지원 S3 분류는 rejected를 유지한다.
@@ -197,5 +199,5 @@ provider 테스트는 가상 시간의 소요 시간·취소, SDK·연결 timeou
 GET 본문 대기 중 호출 완료, 로컬 presign 제외와 라벨 격리를 검증한다.
 메트릭 E2E는 실제 MinIO의 연결 probe·PUT·GET이 같은 레지스트리에 기록됨도 확인한다.
 `metrics/http/tests.rs`는 표준 HTTP 전체 지연과 응답 생성 지연의 구분, body 오류·drop·
-길이 불일치·마지막 poll 생략·HEAD·body 없는 상태·trailers와 메서드 override를
+길이 불일치·마지막 poll 생략·0바이트·실제 Hyper TCP·HEAD·body 없는 상태·trailers와 메서드 override를
 검증한다. 계측은 본문·헤더·서명 입력을 변경하거나 전송을 선행 소비하지 않는다.

@@ -29,6 +29,15 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
             assert text.endswith("# EOF\n")
             return text
 
+    def http_count(text, method, error=None):
+        labels = (f'http_request_method="{method}",url_scheme="http",'
+                  'http_route="/{bucket}/{*key}",http_response_status_code="200"')
+        if error:
+            labels += f',error_type="{error}"'
+        prefix = 'http_server_request_duration_seconds_count{' + labels + '} '
+        return int(next((line.removeprefix(prefix) for line in text.splitlines()
+                         if line.startswith(prefix)), "0"))
+
     with minio_backend() as backend:
         management = Management(endpoint, account)
         management.command("storage.create", {"id": "metrics-backend", "spec": backend.spec})
@@ -63,11 +72,7 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
         assert "grove_http_request_duration_seconds" not in text
         assert "grove_http_response_creation_duration_seconds" in text
         for method in ["PUT", "GET"]:
-            prefix = ('http_server_request_duration_seconds_count{'
-                      f'http_request_method="{method}",url_scheme="http",'
-                      'http_route="/{bucket}/{*key}",http_response_status_code="200"} ')
-            count = next(line for line in text.splitlines() if line.startswith(prefix))
-            assert int(count.removeprefix(prefix)) >= 1, method
+            assert http_count(text, method) >= 1, method
         for forbidden in ["private-object-name", "private-payload", "metrics-client", "X-Amz-", credential["secret_key"], "file_id=", "request_id="]:
             assert forbidden not in text, "sensitive or high-cardinality metric label"
         assert "grove_db_pool_connections" in text
@@ -78,6 +83,19 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
             prefix = f'grove_provider_calls_total{{operation="{operation}",status_class="2xx",outcome="success"}} '
             assert int(next(line for line in text.splitlines() if line.startswith(prefix)).removeprefix(prefix)) > 0
             assert f'grove_provider_calls_in_flight{{operation="{operation}"}} 0' in text
+
+        before = http_count(text, "GET")
+        empty_params = {**params, "Key": params["Key"] + "-empty"}
+        put = client.generate_presigned_url("put_object", Params=empty_params)
+        with opener.open(urllib.request.Request(put, method="PUT", data=b""), timeout=10) as response:
+            assert response.status == 200
+        get = client.generate_presigned_url("get_object", Params=empty_params)
+        with opener.open(get, timeout=10) as response:
+            assert response.read() == b""
+        client.delete_object(**empty_params)
+        text = scrape()
+        assert http_count(text, "GET") == before + 1, "empty GET was not recorded as complete"
+        assert http_count(text, "GET", "interrupted") == 0, "empty GET was classified as interrupted"
 
         deadline = time.monotonic() + 10
         while True:
@@ -121,6 +139,7 @@ def check(endpoint, _directory, _database, account, metrics_endpoint):
         print("METRICS", json.dumps({"observed_bytes": observed_bytes,
             "spool_reserved_bytes": 0, "log_dropped_lines_total": 0,
             "maintenance_completed": True, "database_snapshot_completed": True,
+            "empty_get_completed": True,
             "provider_operations": provider_operations,
             "observed_tables": 22, "account_table_data_bytes": table_bytes}, sort_keys=True))
     print("PASS real presigned PUT/GET, live counters, worker timestamp and metrics privacy/isolation")
