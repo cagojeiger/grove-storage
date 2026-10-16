@@ -181,6 +181,69 @@ async fn exact_length_finishes_without_an_extra_poll_and_mismatch_is_not_success
 }
 
 #[tokio::test]
+async fn zero_length_body_finishes_when_the_runtime_does_not_poll() {
+    let metrics = Metrics::default();
+    let body = Body::from_stream(futures_util::stream::pending::<Result<Bytes, std::io::Error>>());
+    let response = Response::builder()
+        .header(header::CONTENT_LENGTH, 0)
+        .body(body)
+        .unwrap();
+    let response = ServerRequest::new(metrics.clone(), labels(), "http", false).response(response);
+    drop(response);
+    assert_eq!(histogram(&metrics, Some(200), None).count(), 1);
+    assert_eq!(
+        histogram(&metrics, Some(200), Some("interrupted")).count(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn hyper_zero_length_response_is_not_an_interruption() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let metrics = Metrics::default();
+    let app = Router::new()
+        .route(
+            "/{bucket}/{*key}",
+            get(|| async {
+                Response::builder()
+                    .header(header::CONTENT_LENGTH, 0)
+                    .body(Body::from_stream(futures_util::stream::pending::<
+                        Result<Bytes, std::io::Error>,
+                    >()))
+                    .unwrap()
+            }),
+        )
+        .layer(middleware::from_fn_with_state(
+            metrics.clone(),
+            crate::logging::http::observe,
+        ));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let result = tokio::time::timeout(Duration::from_secs(2), async {
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        client
+            .write_all(b"GET /bucket/key HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        let mut bytes = Vec::new();
+        client.read_to_end(&mut bytes).await.unwrap();
+        bytes
+    })
+    .await;
+    server.abort();
+    let _ = server.await;
+    let bytes = result.unwrap();
+    assert!(bytes.starts_with(b"HTTP/1.1 200"));
+    assert!(bytes.ends_with(b"\r\n\r\n"));
+    assert_eq!(histogram(&metrics, Some(200), None).count(), 1);
+    assert_eq!(
+        histogram(&metrics, Some(200), Some("interrupted")).count(),
+        0
+    );
+}
+
+#[tokio::test]
 async fn head_and_bodyless_statuses_complete_without_polling_or_changing_headers() {
     let metrics = Metrics::default();
     for (method, status) in [("HEAD", 200), ("GET", 204), ("GET", 304)] {
@@ -353,46 +416,48 @@ async fn exact_length_does_not_hide_later_trailers_or_body_errors() {
             self.0.is_empty()
         }
     }
-    for fails in [false, true] {
-        let metrics = Metrics::default();
-        let mut trailers = axum::http::HeaderMap::new();
-        trailers.insert("x-test-trailer", "kept".parse().unwrap());
-        let body = Body::new(Frames(
-            [
-                Ok(Frame::data(Bytes::from_static(b"data"))),
-                if fails {
-                    Err(std::io::Error::other("private-error"))
-                } else {
-                    Ok(Frame::trailers(trailers))
-                },
-            ]
-            .into(),
-        ));
-        let response = Response::builder()
-            .header(header::CONTENT_LENGTH, 4)
-            .body(body)
-            .unwrap();
-        let mut body = ServerRequest::new(metrics.clone(), labels(), "http", false)
-            .response(response)
-            .into_body();
-        let data = std::future::poll_fn(|cx| Pin::new(&mut body).poll_frame(cx))
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(data.into_data().unwrap(), "data");
-        assert_eq!(histogram(&metrics, Some(200), None).count(), 0);
-        tokio::time::advance(Duration::from_secs(3)).await;
-        let end = to_bytes(body, 4).await;
-        assert_eq!(end.is_err(), fails);
-        let completed = histogram(&metrics, Some(200), fails.then_some("body_error"));
-        assert_eq!(completed.count(), 1);
-        assert_eq!(completed.sum(), 3.0);
-        assert_eq!(
-            histogram(&metrics, Some(200), Some("interrupted")).count(),
-            0
-        );
-        if fails {
+    for (payload, length) in [(b"data".as_slice(), 4), (b"".as_slice(), 0)] {
+        for fails in [false, true] {
+            let metrics = Metrics::default();
+            let mut trailers = axum::http::HeaderMap::new();
+            trailers.insert("x-test-trailer", "kept".parse().unwrap());
+            let body = Body::new(Frames(
+                [
+                    Ok(Frame::data(Bytes::from_static(payload))),
+                    if fails {
+                        Err(std::io::Error::other("private-error"))
+                    } else {
+                        Ok(Frame::trailers(trailers))
+                    },
+                ]
+                .into(),
+            ));
+            let response = Response::builder()
+                .header(header::CONTENT_LENGTH, length)
+                .body(body)
+                .unwrap();
+            let mut body = ServerRequest::new(metrics.clone(), labels(), "http", false)
+                .response(response)
+                .into_body();
+            let data = std::future::poll_fn(|cx| Pin::new(&mut body).poll_frame(cx))
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(data.into_data().unwrap(), payload);
             assert_eq!(histogram(&metrics, Some(200), None).count(), 0);
+            tokio::time::advance(Duration::from_secs(3)).await;
+            let end = to_bytes(body, 4).await;
+            assert_eq!(end.is_err(), fails);
+            let completed = histogram(&metrics, Some(200), fails.then_some("body_error"));
+            assert_eq!(completed.count(), 1);
+            assert_eq!(completed.sum(), 3.0);
+            assert_eq!(
+                histogram(&metrics, Some(200), Some("interrupted")).count(),
+                0
+            );
+            if fails {
+                assert_eq!(histogram(&metrics, Some(200), None).count(), 0);
+            }
         }
     }
 }

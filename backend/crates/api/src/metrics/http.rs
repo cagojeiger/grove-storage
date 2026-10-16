@@ -106,7 +106,7 @@ impl ServerRequest {
                 body,
                 request: self,
                 remaining,
-                data_complete: false,
+                data_complete: remaining == Some(0),
             }),
         )
     }
