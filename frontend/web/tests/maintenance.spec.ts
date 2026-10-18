@@ -40,7 +40,7 @@ test("activity tabs, bigint cursor and details preserve actor and token attribut
   ).toBeVisible();
   expect(cursors.filter((cursor) => cursor !== null)).toEqual([context.id]);
   expect(cursors[0]).toBeNull();
-  await page.getByRole("tab", { name: "Command history", exact: true }).click();
+  await page.getByRole("tab", { name: "Operation history", exact: true }).click();
   await page.getByRole("button", { name: /Test storage/ }).click();
   await expect(page.getByRole("dialog")).toContainText("12 ms");
   await page.getByRole("button", { name: "Close", exact: true }).click();

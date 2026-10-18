@@ -21,7 +21,7 @@
 | 설정 | 공급·관리 |
 |---|---|
 | bind·로그·DB URL·pool 크기·multipart·스풀 예산·CORS | env, 로컬 예시는 [.env.example](../../.env.example) |
-| 관리 로그 보존 기간 | env, Audit 365일·Security 90일·Command history 90일; 변경 후 재시작 |
+| 관리 로그 보존 기간 | env, Audit 365일·Security 90일·Operation history 90일; 변경 후 재시작 |
 | 마스터 키·key id·이전 키 쌍 | env, [키 회전](../spec/01-registry.md#키와-비밀) |
 | 관리자 인증 | 로컬 비밀번호·DB 관리 토큰·콘솔 세션; [spec 11](../spec/11-local-management-auth.md). 이전 REST는 [spec 05](../spec/05-admin-auth.md) |
 | storage·client·키·S3 자격증명 | PostgreSQL, 운영자 API |

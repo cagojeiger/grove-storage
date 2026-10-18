@@ -66,6 +66,29 @@ async fn history_upgrade_preserves_rows_without_inventing_context(pool: PgPool) 
     let fields: (Option<String>, Option<String>, Option<String>, Option<bool>) = sqlx::query_as("SELECT operation,stage,auth_method,is_sampled FROM management.security_events WHERE request_id=$1")
         .bind(id).fetch_one(&pool).await.unwrap();
     assert_eq!(fields, (None, None, None, None));
+    let security_before: serde_json::Value = sqlx::query_scalar(
+        "SELECT to_jsonb(e) FROM management.security_events e WHERE request_id=$1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!("../migrations/0010_security_session_end.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let security_after: serde_json::Value = sqlx::query_scalar(
+        "SELECT to_jsonb(e) FROM management.security_events e WHERE request_id=$1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(security_before, security_after);
+    sqlx::query("INSERT INTO management.security_events(actor_kind,request_id,surface,event_type,reason_code) VALUES('system',$1,'console','session_ended','user_requested')")
+        .bind(id).execute(&pool).await.unwrap();
+    assert!(sqlx::query("INSERT INTO management.security_events(actor_kind,request_id,surface,event_type,reason_code) VALUES('system',$1,'console','unknown','user_requested')")
+        .bind(id).execute(&pool).await.is_err());
     for (kind, target) in [
         (Some("storage"), None),
         (None, Some("private")),

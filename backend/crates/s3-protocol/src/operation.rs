@@ -19,6 +19,21 @@ pub enum Operation<'a> {
     },
 }
 
+impl Operation<'_> {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Put => "put_object",
+            Self::Get => "get_object",
+            Self::Head => "head_object",
+            Self::Delete => "delete_object",
+            Self::CreateMultipart => "create_multipart_upload",
+            Self::UploadPart { .. } => "upload_part",
+            Self::CompleteMultipart { .. } => "complete_multipart_upload",
+            Self::AbortMultipart { .. } => "abort_multipart_upload",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum RouteError {
     InvalidArgument,

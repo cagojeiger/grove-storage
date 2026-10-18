@@ -98,16 +98,16 @@ export function previewIdentity(json, history) {
             login.username === body.username && login.password === body.password &&
             accounts.get(id)?.is_active && !accounts.get(id)?.deleted_at);
           if (!match) {
-            history.record("security", null, { event_type: "login.failed", reason_code: "unauthenticated" });
+            history.record("security", null, { event_type: "authentication_failed", reason_code: "unauthenticated", operation: "identity.session.login", stage: "authentication", auth_method: "password", is_sampled: false });
             fail(401, "unauthenticated");
             return true;
           }
           current = { account_id: match[0], session_id: randomUUID() };
           signedInAt = new Date().toISOString();
-          history.record("security", session(), { event_type: "login.succeeded", reason_code: "password" });
+          history.record("security", session(), { event_type: "authentication_succeeded", reason_code: "authenticated", operation: "identity.session.login", stage: "authentication", auth_method: "password", is_sampled: false });
         }
         if (method === "DELETE") {
-          if (session()) history.record("security", session(), { event_type: "logout", reason_code: "user_requested" });
+          if (session()) history.record("security", session(), { event_type: "session_ended", reason_code: "user_requested", operation: "identity.session.logout", stage: "execution", auth_method: "session", is_sampled: false });
           current = null;
           json(res, 204, null);
           return true;
@@ -206,6 +206,11 @@ export function previewIdentity(json, history) {
         return true;
       }
       if (path.startsWith("/history/") && method === "GET") {
+        const category = url.searchParams.get("category");
+        if (category !== null && (path !== "/history/invocations" || !["all", "management", "authentication"].includes(category))) {
+          fail(400, "invalid_input");
+          return true;
+        }
         if (path === "/history/security" && session().role !== "admin") fail(403, "forbidden");
         else {
           const result = history.page(path.slice("/history/".length), session(), url.searchParams);

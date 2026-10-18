@@ -22,7 +22,9 @@ export function previewHistory() {
     },
     page(stream, session, params) {
       if (!Object.hasOwn(streams, stream)) return null;
-      const rows = streams[stream].filter(({ context: c }) =>
+      const rows = streams[stream].filter(({ context: c, operation }) =>
+        (stream !== "invocations" || !params.get("category") || params.get("category") === "all" ||
+          operation?.startsWith("identity.session.") === (params.get("category") === "authentication")) &&
         (session.role === "admin" || c.actor_id === session.user_id) &&
         (!params.get("account_id") || c.actor_id === params.get("account_id")) &&
         (!params.get("credential_id") || c.credential_id === params.get("credential_id")) &&

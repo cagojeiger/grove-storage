@@ -86,7 +86,7 @@ It initializes the first Admin through a server-local command against an empty d
 | Storage list/detail, S3 create/replace/delete, conflict guards | Standalone draft connection test |
 | Clients create/detail/delete, S3 credential issue/revoke with one-time secrets | Runtime Client Logs; Native keys remain API/CLI/MCP-only |
 | API readiness, client/storage counts, per-storage/client usage and daily snapshot chart/table | Server-paged large usage histories |
-| Activity: audit, command history, security events; actor/token filters, scoped cursor paging and event details | Resource/date filters |
+| Activity: audit, operation history, security events; actor/token/operation filters, operation categories, scoped cursor paging and event details | Resource/date filters |
 | My account: display-name edit, password change, own sessions and own management API tokens | Historical token-session cleanup |
 | Registration/replacement checks and saved S3 **Test connection**, shared with CLI/MCP | Standalone draft test; sample preview performs no probes and returns unavailable |
 | System/light/dark, mobile/tablet/desktop | Production static hosting and TLS ingress |
@@ -286,6 +286,10 @@ Issued management tokens stay in component state only. Closing requires an expli
 saved-token acknowledgement; the token is then discarded. Account search and
 role/status filters run on the server; previous/next cursors survive reload and
 detail navigation. Activity uses the Data Grid's previous/next controls with
-50-row server cursor pages and an unknown total until the last page. Token and
+50-row server cursor pages and an unknown total until the last page. Operation
+history defaults to management operations; Authentication & sessions and All
+operations remain selectable. Related-operation navigation includes every category.
+Category filters run before cursor paging; existing records and actor scopes remain
+unchanged. Confirmed logout also appears in Security as Signed out. Token and
 session lists fetch the next server page through **Load more**. User identity actions
 use console-only APIs, separate from resource commands available to CLI/MCP.

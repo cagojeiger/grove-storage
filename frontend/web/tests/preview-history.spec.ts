@@ -37,7 +37,7 @@ test("preview records actions without logging secrets and shows them in Activity
   const filtered = await (await request.get(`${identity}/history/audit?credential_id=00000000-0000-0000-0000-000000000000`)).json() as Page<Audit>;
   expect(filtered.items).toEqual([]);
   const security = await (await request.get(`${identity}/history/security`)).json() as Page<Security>;
-  expect(security.items.some((row: { event_type: string }) => row.event_type === "login.succeeded")).toBeTruthy();
+  expect(security.items.some((row: { event_type: string }) => row.event_type === "authentication_succeeded")).toBeTruthy();
   for (const stream of [audit, first, next, security]) {
     expect(JSON.stringify(stream)).not.toContain(password);
     expect(JSON.stringify(stream)).not.toContain(secret);
@@ -79,4 +79,17 @@ test("preview audits identify each S3 key and omit repeated deletions", async ({
   } finally {
     await command("client.delete", { id });
   }
+});
+
+test("preview session end and category validation match the Activity contract", async ({ request }) => {
+  await request.post(`${identity}/session`, { data: { username: "owner", password: "a private phrase for preview" } });
+  for (const path of ["invocations?category=invalid", "audit?category=all", "security?category=management"]) {
+    expect((await request.get(`${identity}/history/${path}`)).status()).toBe(400);
+  }
+  expect((await request.delete(`${identity}/session`)).status()).toBe(204);
+  await request.post(`${identity}/session`, { data: { username: "owner", password: "a private phrase for preview" } });
+  const history = await (await request.get(`${identity}/history/security`)).json() as Page<Security>;
+  expect(history.items).toEqual(expect.arrayContaining([expect.objectContaining({
+    event_type: "session_ended", reason_code: "user_requested", operation: "identity.session.logout", is_sampled: false,
+  })]));
 });

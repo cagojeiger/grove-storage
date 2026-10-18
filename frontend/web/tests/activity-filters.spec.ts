@@ -66,7 +66,7 @@ test("filters survive pagination, tabs, reload and reset without stale rows", as
   await page.getByRole("button", { name: "Go to next page", exact: true }).click();
   await expect(page.getByRole("button", { name: /Create client/ })).toBeVisible();
   expect(requests.at(-1)?.searchParams.get("before")).toBe(context.id);
-  await page.getByRole("tab", { name: "Command history", exact: true }).click();
+  await page.getByRole("tab", { name: "Operation history", exact: true }).click();
   await expect(page.getByRole("button", { name: /Test storage/ })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Used token ID")).toHaveValue(tokenId);
@@ -125,7 +125,7 @@ test("related history narrows every tab by operation without discarding actor fi
   await page.getByRole("dialog").getByRole("link", { name: "View related history", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByLabel("Operation ID", { exact: true })).toHaveValue(context.request_id);
-  for (const [tab, label] of [["Audit log", "Create storage"], ["Command history", "Test storage"], ["Security events", "Permission denied"]]) {
+  for (const [tab, label] of [["Audit log", "Create storage"], ["Operation history", "Test storage"], ["Security events", "Permission denied"]]) {
     await page.getByRole("tab", { name: tab, exact: true }).click();
     const button = page.getByRole("grid", { name: "Activity", exact: true }).getByRole("button", { name: label, exact: true });
     await expect(button).toHaveCount(1);

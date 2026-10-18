@@ -73,11 +73,12 @@ Session의 `account_id`는 필수이며 Root/Master 인증 구조는 생성하�
 | 종류 | 질문 | 쓰기 계약 |
 |---|---|---|
 | Audit | 누가 어떤 관리 설정을 바꿨나? | 변경과 같은 transaction; 기록 실패 시 변경 롤백 |
-| Command history | 어떤 관리 호출이 성공·실패했나? | best-effort, 각 쓰기 250 ms timeout |
+| Operation history | 어떤 관리 호출이 성공·실패했나? | best-effort, 각 쓰기 250 ms timeout |
 | Security | 로그인·인증·권한 검사가 어떻게 끝났나? | best-effort, 각 쓰기 250 ms timeout |
 
-Client 파일 전송 로그와 관리 감사는 별개다. 조회도 command invocation을 기록하며,
-관리 로그는 Audit 365일·Security 90일·Command history 90일을 기본으로 보존한다.
+Client 파일 전송 로그와 관리 감사는 별개다. 정상 목록·상세 조회는 저장하지 않으며,
+명시적 Storage 검사·자격증명 목록 조회와 인증된 실패는 실행 이력에 남는다.
+관리 로그는 Audit 365일·Security 90일·Operation history 90일을 기본으로 보존한다.
 서버 환경 설정과 워커의 테이블별 유계 배치 정리를 사용한다. 행 증가량과 운영 조회
 비용은 측정 전이며 기간별 정책은 [운영 설명](../stack/README.md#관리-로그-보존)을 따른다.
 

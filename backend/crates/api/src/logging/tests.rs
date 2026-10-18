@@ -15,6 +15,9 @@ use std::{
 use tower::ServiceExt;
 use tracing::Instrument;
 
+mod http_events;
+mod s3_events;
+
 #[derive(Clone, Default)]
 struct Capture(Arc<Mutex<Vec<u8>>>);
 impl Write for Capture {
@@ -38,15 +41,17 @@ impl Capture {
             .collect()
     }
 }
-fn record(mode: LogFormat, level: &str, test: impl FnOnce(Capture)) {
-    let capture = Capture::default();
-    let writer = capture.clone();
+fn subscriber(
+    mode: LogFormat,
+    level: &str,
+    writer: Capture,
+) -> impl tracing::Subscriber + Send + Sync {
     let clock = grove_core::time::FixedClock(
         chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
             .unwrap()
             .into(),
     );
-    let subscriber = tracing_subscriber::registry()
+    tracing_subscriber::registry()
         .with(EnvFilter::new(level))
         .with(filter_fn(payload_safe))
         .with(
@@ -57,8 +62,11 @@ fn record(mode: LogFormat, level: &str, test: impl FnOnce(Capture)) {
                     clock: Arc::new(clock),
                 })
                 .with_writer(move || writer.clone()),
-        );
-    tracing::subscriber::with_default(subscriber, || test(capture));
+        )
+}
+fn record(mode: LogFormat, level: &str, test: impl FnOnce(Capture)) {
+    let capture = Capture::default();
+    tracing::subscriber::with_default(subscriber(mode, level, capture.clone()), || test(capture));
 }
 fn runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
@@ -436,11 +444,22 @@ fn response_creation_and_body_completion_have_distinct_timing_and_shared_identit
             tokio::time::advance(std::time::Duration::from_secs(2)).await;
             assert_eq!(to_bytes(response.into_body(), 4).await.unwrap(), "done");
             let completed = capture.records();
-            assert_eq!(completed.len(), 2);
+            assert_eq!(completed.len(), 3);
             assert_eq!(completed[1]["event_name"], "grove.transfer.finished");
             assert_eq!(completed[1]["attributes"]["grove.outcome"], "success");
             assert_eq!(completed[1]["attributes"]["grove.duration_ms"], 2000);
             assert_eq!(completed[1]["attributes"]["grove.observed_bytes"], 4);
+            assert_eq!(completed[2]["event_name"], "grove.http.request_finished");
+            assert_eq!(completed[2]["attributes"]["grove.duration_ms"], 2100);
+            assert_eq!(completed[2]["attributes"]["grove.outcome"], "success");
+            assert_eq!(
+                completed[2]["attributes"]["grove.request_id"],
+                rows[0]["attributes"]["grove.request_id"]
+            );
+            assert_eq!(
+                completed[2]["attributes"]["grove.operation_id"],
+                operation_id.to_string()
+            );
             assert_eq!(
                 completed[1]["attributes"]["grove.request_id"],
                 rows[0]["attributes"]["grove.request_id"]
@@ -590,7 +609,12 @@ fn http_levels_distinguish_expected_s3_rejections_and_service_errors() {
                     .await
                     .unwrap();
             }
-            let rows = capture.records();
+            let records = capture.records();
+            assert_eq!(records.len(), 12);
+            let rows: Vec<_> = records
+                .iter()
+                .filter(|row| row["event_name"] == "grove.http.response")
+                .collect();
             assert_eq!(rows.len(), 6);
             for (row, level) in rows
                 .iter()
@@ -644,15 +668,22 @@ fn interrupted_requests_and_timed_out_workers_are_not_successes() {
             run.finish(&worker::Report::default());
             drop(run);
             let rows = capture.records();
-            assert_eq!(rows.len(), 2);
+            assert_eq!(rows.len(), 3);
             assert_eq!(rows[0]["event_name"], "grove.http.interrupted");
             // Tokio timers have millisecond resolution, including paused auto-advance.
             assert!(
                 (2000..=2001)
                     .contains(&rows[0]["attributes"]["grove.duration_ms"].as_u64().unwrap())
             );
-            assert_eq!(rows[1]["attributes"]["grove.outcome"], "timeout");
-            assert_eq!(rows[1]["attributes"]["grove.error_code"], "pass_timeout");
+            assert_eq!(rows[1]["event_name"], "grove.http.request_finished");
+            assert_eq!(rows[1]["attributes"]["grove.outcome"], "interrupted");
+            assert!(
+                rows[1]["attributes"]
+                    .get("http.response.status_code")
+                    .is_none()
+            );
+            assert_eq!(rows[2]["attributes"]["grove.outcome"], "timeout");
+            assert_eq!(rows[2]["attributes"]["grove.error_code"], "pass_timeout");
         })
     });
 }

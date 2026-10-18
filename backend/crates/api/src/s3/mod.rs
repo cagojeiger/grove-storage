@@ -57,6 +57,8 @@ async fn dispatch(
     Path((bucket, key)): Path<(String, String)>,
     req: Request,
 ) -> Response {
+    let span = tracing::Span::current();
+    span.record("stage", "authentication");
     let (parts, body) = req.into_parts();
     let authenticated =
         match auth::authenticate(&state, &parts.method, &parts.uri, &parts.headers).await {
@@ -64,6 +66,7 @@ async fn dispatch(
             Err(response) => return response,
         };
     let client_id = authenticated.client_id;
+    span.record("stage", "authorization");
     // client == bucket: 인증된 클라이언트의 버킷은 자기 id뿐이다. GET/HEAD/
     // DELETE/PUT 모두 이 검사를 지나야 한다 (다른 버킷은 존재하지 않는다).
     if bucket != client_id {
@@ -77,6 +80,7 @@ async fn dispatch(
     // ?uploads·?uploadId·?partNumber 분기는 단일 객체 메서드 라우팅에 없는
     // 새 표면이다. 인증·bucket 검사는 이미 공용으로 지났다.
     let query = parts.uri.query().unwrap_or("");
+    span.record("stage", "routing");
     let operation = match classify(
         parts.method.as_str(),
         query,
@@ -104,6 +108,8 @@ async fn dispatch(
             return xml::xml_error(status, code, message);
         }
     };
+    span.record("operation", operation.name());
+    span.record("stage", "validation");
     if !supported_conditions(&parts.headers, &operation) {
         return xml::xml_error(
             StatusCode::NOT_IMPLEMENTED,
@@ -111,6 +117,7 @@ async fn dispatch(
             "the conditional request is not supported",
         );
     }
+    span.record("stage", "execution");
     let result = match operation {
         Operation::CreateMultipart => {
             multipart::create_multipart(&state, &client_id, &bucket, &key, &parts.headers).await

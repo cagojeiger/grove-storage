@@ -47,6 +47,7 @@ fn string_field(name: &str) -> bool {
             | "outcome"
             | "stage"
             | "error_code"
+            | "s3_error_code"
             | "surface"
             | "direction"
             | "worker"
@@ -232,6 +233,7 @@ where
             .unwrap_or("runtime.message");
         let body = match event_name {
             "http.response" => "HTTP response created",
+            "http.request_finished" => "HTTP request finished",
             "transfer.finished" => "Byte stream finished",
             "worker.run_finished" => "Maintenance run finished",
             "management.operation_finished" => "Management operation finished",

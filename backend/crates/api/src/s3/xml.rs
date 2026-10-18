@@ -4,12 +4,16 @@
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
-pub(super) fn xml_error(status: StatusCode, code: &str, message: &str) -> Response {
+pub(super) fn xml_error(status: StatusCode, code: &'static str, message: &str) -> Response {
     let body = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <Error><Code>{code}</Code><Message>{message}</Message></Error>"
     );
-    (status, [(header::CONTENT_TYPE, "application/xml")], body).into_response()
+    let mut response = (status, [(header::CONTENT_TYPE, "application/xml")], body).into_response();
+    response
+        .extensions_mut()
+        .insert(crate::logging::http::S3ErrorCode(code));
+    response
 }
 
 pub(super) fn access_denied(message: &str) -> Response {

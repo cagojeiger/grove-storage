@@ -23,7 +23,7 @@ export async function maintenanceChecks(browser, page, origin, ownerPassword) {
   const operationId = await page.getByLabel("Operation ID", { exact: true }).inputValue();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
-    .getByRole("tab", { name: "Command history", exact: true })
+    .getByRole("tab", { name: "Operation history", exact: true })
     .click();
   await page
     .getByRole("button", { name: /Test storage/ })
