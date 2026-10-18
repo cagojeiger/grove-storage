@@ -81,6 +81,7 @@ request_id다. UUID를 Loki stream label로 승격하지 않고 attributes에서
 | 이벤트 | 기록 경계 | 결과·필드 |
 |---|---|---|
 | `http.response` | 핸들러 응답 생성 | status·surface·method·route·duration_ms·outcome·operation_id |
+| `http.request_finished` | 로컬 응답 body 종료 또는 요청 중단 | request_id·status(응답이 있으면)·duration_ms·outcome·error_code; S3는 operation·stage·s3_error_code |
 | `http.interrupted` | 응답 생성 전 future 종료 | interrupted·duration_ms |
 | `transfer.finished` | 관찰한 receive/send 스트림 종료 | direction·expected_bytes·observed_bytes·duration_ms·outcome·error_code; send는 file_id 포함 |
 | `object.operation_finished` | 예약·파트 기록·완료 확정·논리 삭제 등 명시된 단계 | operation·stage·file_id·outcome |
@@ -95,6 +96,25 @@ request_id다. UUID를 Loki stream label로 승격하지 않고 attributes에서
 send 로그는 요청 핸들러 종료 뒤에도 request_id와 file_id를 유지한다.
 `provider.failed`는 요청 경로의 provider 실패를 나타낸다. provider SDK 응답 본문은
 출력하지 않는다. 별도 이벤트가 없는 시작·종료 진단도 같은 안전한 필드 정책을 따른다.
+
+`http.request_finished`는 기존 HTTP 메트릭의 본문 종료 관측을 재사용한다.
+HEAD·본문 없는 상태·빈 응답은 해당 종료 경계에서 기록한다. 그 외는 완료·길이 불일치·
+body 오류·drop 중 먼저 관찰한 종료를 한 번 기록한다. 정상은 INFO, 요청 거부는 WARN,
+서버·body 오류는 ERROR, 중단은 INFO다. probe·루트 서비스 정보·콘솔 정적 파일은 제외한다.
+기본 INFO에서도 정상 서비스 요청을 기록하지만 수집 무손실을 보장하지 않는다.
+
+S3 작업명은 인증·버킷 검사 뒤 확정된 Put/Get/Head/Delete와 multipart 4종의 고정 코드다.
+그 이전 거부나 분류 실패는 unknown이다. stage는 마지막으로 관찰한 dispatch 경계인
+authentication·authorization·routing·validation·execution이며 내부 DB 실패 단계를
+추정하지 않는다. s3_error_code는 응답 내부 메타데이터의 고정 XML 코드다. 본문을 다시
+읽거나 오류 message를 기록하지 않으며 wire 응답과 SigV4 입력은 변경하지 않는다.
+body 오류가 나면 error_code는 해당 종료 사유이고 s3_error_code는 원래 응답 코드를 유지한다.
+
+수집 후 요청 종료 행의 중복 여부는 event_name과 내부 request_id로 구분한다.
+클라이언트 재시도는 새 request_id의 별도 요청이다. 요청량은 이 이벤트만 집계하고
+http.response·transfer.finished·object.operation_finished를 같은 단위로 합산하지 않는다.
+HTTP 오류·중단은 파일 상태 변경의 실패 확정이나 클라이언트 수신 확인이 아니다.
+Activity 테이블·응답·보존 정책과 배치 집계 저장은 이번 수집 계약과 별개다.
 
 ## 콘솔 조회
 
@@ -174,12 +194,13 @@ worker processed는 확정된 처리·삭제 수, failed는 관찰된 실패 수
 | 수준 | 용도 |
 |---|---|
 | DEBUG | 정상 HTTP 응답·읽기·URL 발급·완료 스트림·probe·빈 작업; S3 404/412 |
-| INFO | 명시된 변경 단계·실제 정리·중단 관찰·느린 정상 요청 |
+| INFO | 정상 서비스 요청 종료·명시된 변경 단계·실제 정리·중단 관찰·느린 정상 요청 |
 | WARN | 요청 거부·미달·timeout·재시도 가능한 상세 실패; 미지원 S3 501 |
 | ERROR | HTTP 서버 오류·내부 I/O 오류·작업 실패 집계·이력 기록 실패·관리 unknown |
 
-기본 INFO 출력은 정상 DEBUG 이벤트를 제외한다. 전체 요청 수·오류율·지연 분포는
-처리 지점의 메트릭으로 측정하며 운영 로그 건수로 대체하지 않는다.
+기본 INFO 출력은 정상 DEBUG 진단을 제외하되 서비스 요청 종료는 포함한다.
+로그 기반 분석은 http.request_finished의 수집된 요청을 대상으로 한다. 전체 트래픽의
+운영 지표는 처리 지점의 메트릭을 유지하며 임의 로그 건수로 대체하지 않는다.
 
 필드 이름과 형식의 allowlist가 DEBUG/TRACE에도 적용된다. payload·raw key·파일명·
 presigned URL·auth/header·토큰·계정 이름·IP·자유로운 message/error는 출력하지 않는다.

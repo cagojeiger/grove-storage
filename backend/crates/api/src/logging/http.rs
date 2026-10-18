@@ -7,6 +7,45 @@ use axum::{
 use tokio::time::Instant;
 use tracing::{Instrument, Span};
 
+#[derive(Clone, Copy)]
+pub(crate) struct S3ErrorCode(pub &'static str);
+
+fn response_outcome(surface: &str, status: u16) -> &'static str {
+    if status >= 500 && !(surface == "s3" && status == 501) {
+        "error"
+    } else if status >= 400 {
+        "rejected"
+    } else {
+        "success"
+    }
+}
+
+pub(crate) fn request_finished(
+    span: &Span,
+    surface: &str,
+    status: Option<u16>,
+    body_error: Option<&'static str>,
+    s3_error_code: Option<&'static str>,
+    elapsed: std::time::Duration,
+) {
+    let outcome = match body_error {
+        Some("interrupted") => "interrupted",
+        Some(_) => "error",
+        None => status.map_or("interrupted", |status| response_outcome(surface, status)),
+    };
+    let error_code = body_error.or(s3_error_code).unwrap_or("");
+    let duration_ms = elapsed.as_millis() as u64;
+    let status = status.map(u64::from);
+    match outcome {
+        "error" => tracing::error!(parent: span, event = "http.request_finished",
+            status, outcome, error_code, duration_ms),
+        "rejected" => tracing::warn!(parent: span, event = "http.request_finished",
+            status, outcome, error_code, duration_ms),
+        _ => tracing::info!(parent: span, event = "http.request_finished",
+            status, outcome, error_code, duration_ms),
+    }
+}
+
 struct Observation {
     started: Instant,
     span: Span,
@@ -69,14 +108,23 @@ pub(crate) async fn observe(
         "http"
     };
     let span = tracing::error_span!("request", %request_id, method, surface, route,
-        url_scheme = scheme, error_type = tracing::field::Empty);
+        url_scheme = scheme, error_type = tracing::field::Empty,
+        operation = tracing::field::Empty, stage = tracing::field::Empty,
+        operation_id = tracing::field::Empty, s3_error_code = tracing::field::Empty);
+    if surface == "s3" {
+        span.record("operation", "unknown");
+    }
     let labels = HttpLabels {
         surface,
         method: method.clone(),
         route: route.to_owned(),
     };
-    let server_request =
+    let mut server_request =
         crate::metrics::http::ServerRequest::new(metrics.clone(), labels.clone(), scheme, is_head);
+    let console_asset = path == "/api/admin/console" || path.starts_with("/api/admin/console/");
+    if surface != "system" && !console_asset {
+        server_request.log_to(span.clone());
+    }
     metrics.http_started(&labels);
     let mut observation = Observation {
         started: Instant::now(),
@@ -98,15 +146,15 @@ pub(crate) async fn observe(
         .and_then(|h| h.to_str().ok())
         .and_then(|h| uuid::Uuid::parse_str(h).ok());
     let operation_id = operation_id.map(|id| id.to_string()).unwrap_or_default();
+    if !operation_id.is_empty() {
+        span.record("operation_id", operation_id.as_str());
+    }
+    if let Some(S3ErrorCode(code)) = response.extensions().get::<S3ErrorCode>() {
+        span.record("s3_error_code", *code);
+    }
     let unsupported = surface == "s3" && status == 501;
     let expected_rejection = surface == "s3" && matches!(status, 404 | 412);
-    let outcome = if status >= 500 && !unsupported {
-        "error"
-    } else if status >= 400 {
-        "rejected"
-    } else {
-        "success"
-    };
+    let outcome = response_outcome(surface, status);
     observation.metrics.http_finished(
         &observation.labels,
         Some(status),

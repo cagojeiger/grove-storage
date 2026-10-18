@@ -76,3 +76,35 @@ fn signing_and_response_parameters_preserve_object_routing() {
         Ok(Operation::Get)
     );
 }
+
+#[test]
+fn operation_names_do_not_include_request_values() {
+    for (operation, expected) in [
+        (Operation::Put, "put_object"),
+        (Operation::Get, "get_object"),
+        (Operation::Head, "head_object"),
+        (Operation::Delete, "delete_object"),
+        (Operation::CreateMultipart, "create_multipart_upload"),
+        (
+            Operation::UploadPart {
+                upload_id: "private-upload",
+                part_number: 5,
+            },
+            "upload_part",
+        ),
+        (
+            Operation::CompleteMultipart {
+                upload_id: "private-upload",
+            },
+            "complete_multipart_upload",
+        ),
+        (
+            Operation::AbortMultipart {
+                upload_id: "private-upload",
+            },
+            "abort_multipart_upload",
+        ),
+    ] {
+        assert_eq!(operation.name(), expected);
+    }
+}

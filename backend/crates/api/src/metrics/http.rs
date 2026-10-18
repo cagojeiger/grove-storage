@@ -68,6 +68,8 @@ pub(crate) struct ServerRequest {
     started: Instant,
     status: Option<u16>,
     finished: bool,
+    log_span: Option<tracing::Span>,
+    s3_error_code: Option<&'static str>,
 }
 
 impl ServerRequest {
@@ -80,11 +82,21 @@ impl ServerRequest {
             started: Instant::now(),
             status: None,
             finished: false,
+            log_span: None,
+            s3_error_code: None,
         }
+    }
+
+    pub fn log_to(&mut self, span: tracing::Span) {
+        self.log_span = Some(span);
     }
 
     pub fn response(mut self, response: Response) -> Response {
         self.status = Some(response.status().as_u16());
+        self.s3_error_code = response
+            .extensions()
+            .get::<crate::logging::http::S3ErrorCode>()
+            .map(|code| code.0);
         let (parts, body) = response.into_parts();
         if self.is_head || matches!(parts.status.as_u16(), 100..=199 | 204 | 304) {
             self.finish(None);
@@ -116,13 +128,24 @@ impl ServerRequest {
             return;
         }
         self.finished = true;
+        let elapsed = self.started.elapsed();
         self.metrics.http_server_finished(
             &self.labels,
             self.scheme,
             self.status,
             error,
-            self.started.elapsed().as_secs_f64(),
+            elapsed.as_secs_f64(),
         );
+        if let Some(span) = &self.log_span {
+            crate::logging::http::request_finished(
+                span,
+                self.labels.surface,
+                self.status,
+                error,
+                self.s3_error_code,
+                elapsed,
+            );
+        }
     }
 }
 
