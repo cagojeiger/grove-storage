@@ -93,6 +93,7 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npx playwright install --with-deps chromium
       - run: npm run lint
+      - run: node --test scripts/*.test.mjs
       - run: npm run build
       - run: npm test
       - name: Preserve Activity UI evidence
@@ -104,6 +105,8 @@ jobs:
             frontend/web/test-results/activity-view-*.png
             frontend/web/test-results/activity-detail-*.png
             frontend/web/test-results/security-context-*.png
+            frontend/web/test-results/operation-categories-*.png
+            frontend/web/test-results/security-session-end-*.png
           retention-days: 14
           if-no-files-found: warn
 
