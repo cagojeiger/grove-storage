@@ -9,6 +9,15 @@ pub struct HistoryQuery {
     pub account_id: Option<Uuid>,
     pub credential_id: Option<Uuid>,
     pub operation_id: Option<Uuid>,
+    pub invocation_category: InvocationCategory,
+}
+
+#[derive(Default)]
+pub enum InvocationCategory {
+    #[default]
+    All,
+    Management,
+    Authentication,
 }
 impl From<Page<i64>> for HistoryQuery {
     fn from(page: Page<i64>) -> Self {
@@ -110,7 +119,9 @@ impl IdentityTransaction<'_> {
             AND ($2::bigint IS NULL OR id<$2)
             AND ($4::uuid IS NULL OR actor_id=$4)
             AND ($5::uuid IS NULL OR credential_id=$5)
-            AND ($6::uuid IS NULL OR request_id=$6) ORDER BY id DESC LIMIT $3",
+            AND ($6::uuid IS NULL OR request_id=$6)
+            AND ($7::boolean IS NULL OR (operation LIKE 'identity.session.%')=$7)
+            ORDER BY id DESC LIMIT $3",
         )
         .bind(scope.user())
         .bind(query.page.before)
@@ -118,6 +129,11 @@ impl IdentityTransaction<'_> {
         .bind(query.account_id)
         .bind(query.credential_id)
         .bind(query.operation_id)
+        .bind(match query.invocation_category {
+            InvocationCategory::All => None,
+            InvocationCategory::Management => Some(false),
+            InvocationCategory::Authentication => Some(true),
+        })
         .fetch_all(&mut *self.inner)
         .await?)
     }

@@ -130,6 +130,17 @@ pub async fn execute(
         &result,
     )
     .await;
+    if operation == "identity.session.logout" && matches!(result, Ok(Output::Changed(true))) {
+        logging::security(
+            pool,
+            context.as_ref(),
+            request_id,
+            surface,
+            db::telemetry::SecurityReason::SignedOut,
+            &details,
+        )
+        .await;
+    }
     Execution { request_id, result }
 }
 

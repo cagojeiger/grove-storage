@@ -18,6 +18,112 @@ fn details() -> db::telemetry::Details {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
+async fn logout_links_committed_audit_execution_and_security_without_repeating_success(
+    pool: PgPool,
+) {
+    let admin = owner(&pool).await;
+    let execution = service::execute(
+        &pool,
+        Proof::Session(&admin.session),
+        Surface::Console,
+        Command::Logout,
+    )
+    .await;
+    assert!(matches!(execution.result, Ok(Output::Changed(true))));
+    let row: (String, String, String, String, bool, uuid::Uuid) = sqlx::query_as(
+        "SELECT a.action,i.operation,s.event_type,s.reason_code,s.is_sampled,s.session_id
+         FROM management.audit_events a
+         JOIN management.command_invocations i USING(request_id)
+         JOIN management.security_events s USING(request_id)
+         WHERE a.request_id=$1",
+    )
+    .bind(execution.request_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        row,
+        (
+            "session.revoke".into(),
+            "identity.session.logout".into(),
+            "session_ended".into(),
+            "user_requested".into(),
+            false,
+            admin.session_id,
+        )
+    );
+    let repeated = service::execute(
+        &pool,
+        Proof::Session(&admin.session),
+        Surface::Console,
+        Command::Logout,
+    )
+    .await;
+    assert!(matches!(repeated.result, Err(Error::Unauthenticated)));
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.security_events WHERE event_type='session_ended'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn logout_security_write_failure_does_not_undo_session_revocation(pool: PgPool) {
+    let admin = owner(&pool).await;
+    sqlx::query("DROP TABLE management.security_events")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let execution = service::execute(
+        &pool,
+        Proof::Session(&admin.session),
+        Surface::Console,
+        Command::Logout,
+    )
+    .await;
+    assert!(matches!(execution.result, Ok(Output::Changed(true))));
+    assert!(
+        db::session_actor(&pool, &admin.session)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.audit_events WHERE request_id=$1 AND action='session.revoke'"
+    ).bind(execution.request_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn failed_logout_does_not_report_session_end(pool: PgPool) {
+    let admin = owner(&pool).await;
+    reject_audit(&pool).await;
+    let execution = service::execute(
+        &pool,
+        Proof::Session(&admin.session),
+        Surface::Console,
+        Command::Logout,
+    )
+    .await;
+    assert!(matches!(execution.result, Err(Error::Unavailable)));
+    assert!(
+        db::session_actor(&pool, &admin.session)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM management.security_events WHERE event_type='session_ended'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
 async fn mutations_audit_once_and_successful_reads_do_not_grow_history(pool: PgPool) {
     let admin = owner(&pool).await;
     let before = audit_count(&pool).await;

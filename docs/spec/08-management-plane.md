@@ -85,8 +85,8 @@ DB 잠금으로 직렬화한다. 이 조건은 [인증 계약](11-local-manageme
 | 저장소 | 기록 대상 | 보장 |
 |---|---|---|
 | `management.audit_events` | 확정된 계정·설정·자격증명 변경 | 변경과 같은 transaction; 기록 실패는 rollback |
-| `management.command_invocations` | 인증 후 관리 작업의 조회·성공·실패 | best-effort; 기록 실패는 작업 결과를 바꾸지 않음 |
-| `management.security_events` | 인증·권한 검사 결과 | 인증 전에는 actor가 불명일 수 있음; 저장 실패는 운영 로그에 기록 |
+| `management.command_invocations` | 인증 후 관리 작업의 실행 결과·소요 시간 | best-effort; 기록 실패는 작업 결과를 바꾸지 않음 |
+| `management.security_events` | 인증·권한 검사 결과와 확정된 사용자 로그아웃 | 인증 전에는 actor가 불명일 수 있음; 저장 실패는 운영 로그에 기록 |
 
 ```text
 request_id=R: MCP token -> storage.replace
@@ -97,6 +97,18 @@ request_id=R: MCP token -> storage.replace
 서버는 request_id와 surface를 지정한다. 인증 후 권한 거부는 호출·보안 이력에
 기록되고 변경 감사는 생성되지 않는다. 요청 형식 오류와 서버 도달 전 실패는
 관리 명령 실행 이력의 범위 밖이다.
+
+정상 목록·상세·이력 조회는 실행 이력을 생성하지 않는다. 변경 작업, 명시적
+Storage 검사와 자격증명 목록 조회는 성공 시에도 기록한다. 인증된 작업의 실패는
+실행 이력에 남는다. 로그인·로그아웃·세션 폐기는 인증·세션 분류로 조회하며
+비밀번호·계정·토큰 변경은 관리 작업으로 분류한다. 분류는 기존 operation에서
+결정하고 별도 컬럼이나 테이블을 만들지 않는다.
+
+로그아웃은 세션 폐기 확정 후 `session_ended` / `user_requested`를 보안 이력에
+기록한다. 실패·무변경·commit 결과 불명은 성공한 세션 종료로 기록하지 않는다.
+Audit의 `session.revoke`와 실행 결과는 같은 request_id로 유지한다. 보안 이력 쓰기
+실패는 확정된 세션 폐기를 되돌리지 않는다. 자연 만료나 다른 세션 폐기는 이
+로그아웃 이벤트로 추정하지 않는다.
 
 미인증 보안 이벤트는 같은 surface·reason별로 1분에 한 건을 기록한다. 다른 로거가
 같은 기록 잠금을 점유하면 기다리지 않고 생략한다. 이 제한은 DB에서 여러 API

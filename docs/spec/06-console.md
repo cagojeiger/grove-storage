@@ -40,7 +40,7 @@ Grove Storage
 │   ├── Accounts      Admin only: list / detail / Create account
 │   │   └── Password setup / Management API tokens / Danger zone
 │   └── Activity
-│       └── Audit log / Command history / Security events
+│       └── Audit log / Operation history / Security events
 ├── Developer
 │   └── API docs      Swagger UI: S3 / Management / Native compatibility
 └── Sidebar identity
@@ -61,13 +61,29 @@ Entry: Sign in / one-time Set password / operator recovery help
 | Storage editor | Dedicated create/edit route; full-spec replacement re-enters the secret; saved data refreshes without redirecting a user who left the editor |
 | Clients | ID, assigned Storage, stored files/data, metadata and one-time S3 credentials |
 | Accounts | Server-side search, role/status filters and cursor paging; create, rename, change role, enable/disable/delete |
-| Activity | Committed changes, command outcomes and security events; actor/token filters and event details |
+| Activity | Audit log for committed changes, Operation history for execution results, Security events for authentication/access; actor/token/operation filters and event details |
 | My account | Display-name edit, own tokens and sessions; revoking the current session signs out |
 | API docs | Read-only Swagger UI and OpenAPI 3.1 JSON; public integration contracts, not browser-internal identity routes |
 
 Reader/Writer see their own management history; Admin sees installation history.
 Security events and account administration require Admin. Client file-request logs
 are a future contract, separate from management Activity.
+
+Operation history defaults to management operations. Its Category selector also
+offers Authentication & sessions and All operations. The browser sends
+`category=management|authentication|all` to `/history/invocations`; the server
+applies the category before cursor paging and within the authorized actor scope.
+Authentication & sessions covers the `identity.session.*` operation namespace.
+Password/account/token changes and storage diagnostics remain management operations.
+The API without a category retains all records. Other history streams do not accept
+this parameter. Related-operation navigation selects all categories unless the user
+explicitly narrows them. Switching streams preserves actor/operation filters, not
+the operation-only category.
+
+Successful logout appears as `session_ended` / `user_requested` in Security, while
+Audit retains the committed `session.revoke` and Operation history retains the
+execution result. Their shared operation ID links different evidence, not three
+independent actions. Past rows are preserved; no session-end events are backfilled.
 
 ## Presentation
 

@@ -170,6 +170,7 @@ async fn history_rejects_invalid_filters_and_preserves_security_authorization(po
     let (_, cookie) = actor(&pool, Role::Admin).await;
     for stream in ["audit", "invocations", "security"] {
         for query in [
+            "category=invalid",
             "account_id=invalid",
             "credential_id=invalid",
             "operation_id=invalid",
@@ -218,6 +219,124 @@ async fn history_rejects_invalid_filters_and_preserves_security_authorization(po
             .await
             .status(),
             StatusCode::FORBIDDEN
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn invocation_categories_filter_before_cursor_paging_and_preserve_scope(pool: PgPool) {
+    let (_, admin_cookie) = actor(&pool, Role::Admin).await;
+    let (reader, reader_cookie) = actor(&pool, Role::Reader).await;
+    let (other, _) = actor(&pool, Role::Writer).await;
+    let operation_id = Uuid::new_v4();
+    for account in [reader, other] {
+        let ctx = db::AuditContext {
+            actor: db::AuditActor::Account {
+                id: account,
+                session_id: None,
+                credential_id: None,
+            },
+            request_id: operation_id,
+            surface: Surface::Console,
+        };
+        for operation in [
+            "storage.test",
+            "identity.session.login",
+            "identity.account.name",
+            "identity.session.logout",
+            "storage.delete",
+            "identity.session.revoke",
+            "identity.session.current",
+            "identity.session.list",
+        ] {
+            db::telemetry::invocation(
+                &pool,
+                &ctx,
+                &db::telemetry::Details::new(operation, db::telemetry::Stage::Execution),
+                db::telemetry::Outcome::Succeeded,
+                None,
+                1,
+            )
+            .await
+            .unwrap();
+        }
+    }
+    for (category, expected) in [
+        (
+            "management",
+            vec!["storage.delete", "identity.account.name", "storage.test"],
+        ),
+        (
+            "authentication",
+            vec![
+                "identity.session.list",
+                "identity.session.current",
+                "identity.session.revoke",
+                "identity.session.logout",
+                "identity.session.login",
+            ],
+        ),
+    ] {
+        let mut before = String::new();
+        for operation in expected {
+            let page = get(&pool, &reader_cookie, &format!(
+                "/history/invocations?category={category}&operation_id={operation_id}&limit=1{before}"
+            )).await;
+            assert_eq!(page["items"].as_array().unwrap().len(), 1);
+            assert_eq!(page["items"][0]["operation"], operation);
+            assert_eq!(page["items"][0]["context"]["actor_id"], reader.to_string());
+            before = format!("&before={}", page["next_before"].as_str().unwrap());
+        }
+        let empty = get(&pool, &reader_cookie, &format!(
+            "/history/invocations?category={category}&operation_id={operation_id}&limit=1{before}"
+        )).await;
+        assert!(empty["items"].as_array().unwrap().is_empty());
+        let narrowed = get(
+            &pool,
+            &reader_cookie,
+            &format!("/history/invocations?category={category}&account_id={other}"),
+        )
+        .await;
+        assert!(narrowed["items"].as_array().unwrap().is_empty());
+        let installation = get(&pool, &admin_cookie, &format!(
+            "/history/invocations?category={category}&account_id={other}&operation_id={operation_id}"
+        )).await;
+        assert_eq!(
+            installation["items"].as_array().unwrap().len(),
+            if category == "management" { 3 } else { 5 }
+        );
+        let token_filtered = get(
+            &pool,
+            &admin_cookie,
+            &format!(
+                "/history/invocations?category={category}&credential_id={}",
+                Uuid::new_v4()
+            ),
+        )
+        .await;
+        assert!(token_filtered["items"].as_array().unwrap().is_empty());
+    }
+    for category in ["", "&category=all"] {
+        let page = get(
+            &pool,
+            &reader_cookie,
+            &format!("/history/invocations?operation_id={operation_id}{category}"),
+        )
+        .await;
+        assert_eq!(page["items"].as_array().unwrap().len(), 8);
+    }
+    for stream in ["audit", "security"] {
+        assert_eq!(
+            send(
+                &pool,
+                &admin_cookie,
+                "GET",
+                &format!("/history/{stream}?category=management"),
+                serde_json::Value::Null
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
         );
     }
 }

@@ -127,6 +127,7 @@ pub enum SecurityReason {
     Forbidden,
     Unavailable,
     RateLimited,
+    SignedOut,
 }
 impl SecurityReason {
     fn fields(self) -> (&'static str, &'static str) {
@@ -136,6 +137,7 @@ impl SecurityReason {
             Self::Forbidden => ("permission_denied", "forbidden"),
             Self::Unavailable => ("authentication_unavailable", "unavailable"),
             Self::RateLimited => ("authentication_rate_limited", "rate_limited"),
+            Self::SignedOut => ("session_ended", "user_requested"),
         }
     }
 }

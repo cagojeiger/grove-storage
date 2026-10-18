@@ -7,6 +7,7 @@ import {
   Chip,
   Collapse,
   Link,
+  MenuItem,
   Stack,
   Tab,
   Tabs,
@@ -49,8 +50,11 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       ? "invocations"
       : "audit";
   const { params, valid } = activityFilters(route);
+  const category = params.get("category") ?? (params.has("operation_id") ? "all" : "management");
+  const requestParams = new URLSearchParams(params);
+  if (stream === "invocations") requestParams.set("category", category);
   const denied = stream === "security" && !admin;
-  const [filters, setFilters] = useState(params.size > 0 || !valid);
+  const [filters, setFilters] = useState([...params.keys()].some(key => key !== "category") || !valid);
   const [selected, setSelected] = useState<Event | null>(null);
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
@@ -60,7 +64,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
   });
   const layout = mobile ? "mobile" : "desktop";
   const query = useQuery({
-    queryKey: ["activity", stream, admin, params.toString(), cursors[page]],
+    queryKey: ["activity", stream, admin, requestParams.toString(), cursors[page]],
     enabled: valid && !denied,
     queryFn: ({ signal }) =>
       identityPage(
@@ -68,13 +72,16 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
         validator(stream),
         cursors[page],
         signal,
-        params,
+        requestParams,
       ),
     gcTime: 0,
   });
-  const suffix = params.size ? `?${params}` : "";
+  const tabParams = new URLSearchParams(params);
+  tabParams.delete("category");
+  const suffix = tabParams.size ? `?${tabParams}` : "";
   const rows = query.data?.items ?? [];
   const relatedParams = new URLSearchParams(params);
+  relatedParams.delete("category");
   if (selected) relatedParams.set("operation_id", selected.context.request_id);
   const columns = useMemo<GridColDef<Event>[]>(() => [
     {
@@ -197,7 +204,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
           href={`#activity${suffix}`}
         />
         <Tab
-          label="Command history"
+          label="Operation history"
           value="invocations"
           component="a"
           href={`#activity/invocations${suffix}`}
@@ -213,13 +220,30 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       </Tabs>
       {!denied && (
         <>
+          {stream === "invocations" && <TextField
+            select
+            size="small"
+            label="Category"
+            slotProps={{ select: { inputProps: { "aria-label": "Category" } } }}
+            value={["management", "authentication", "all"].includes(category) ? category : ""}
+            sx={{ minWidth: 220, alignSelf: "flex-start" }}
+            onChange={event => {
+              const next = new URLSearchParams(params);
+              next.set("category", event.target.value);
+              location.hash = `${path}?${next}`;
+            }}
+          >
+            <MenuItem value="management">Management operations</MenuItem>
+            <MenuItem value="authentication">Authentication &amp; sessions</MenuItem>
+            <MenuItem value="all">All operations</MenuItem>
+          </TextField>}
           <Stack direction="row" spacing={2}>
             <Button
               startIcon={<Filter size={18} />}
               aria-expanded={filters}
               onClick={() => setFilters(!filters)}
             >
-              Filters{params.size ? ` (${params.size})` : ""}
+              Filters{tabParams.size ? ` (${tabParams.size})` : ""}
             </Button>
             {params.size > 0 && (
               <Button href={`#${path}`}>Clear filters</Button>
@@ -234,6 +258,7 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
                 const next = new URLSearchParams();
+                if (stream === "invocations" && params.has("category")) next.set("category", category);
                 for (const key of ["operation_id", "account_id", "credential_id"]) {
                   const value = field(data, key).trim();
                   if (value) next.set(key, value);
@@ -273,7 +298,9 @@ export function Activity({ route, admin }: { route: string; admin: boolean }) {
       {denied ? (
         <Alert severity="error">Admin access required.</Alert>
       ) : !valid ? (
-        <Alert severity="error">Enter a valid operation, account or token ID.</Alert>
+        <Alert severity="error">{params.has("category") && !["management", "authentication", "all"].includes(category)
+          ? "Select a valid activity category."
+          : "Enter a valid operation, account or token ID."}</Alert>
       ) : (
         <>
           <QueryState

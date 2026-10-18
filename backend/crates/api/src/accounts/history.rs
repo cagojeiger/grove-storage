@@ -8,7 +8,7 @@ use axum::{
     http::HeaderMap,
     response::Response,
 };
-use grove_db::management::history::HistoryQuery;
+use grove_db::management::history::{HistoryQuery, InvocationCategory};
 use grove_management_service::Command;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -22,6 +22,7 @@ pub(super) struct HistoryParams {
     account_id: Option<Uuid>,
     credential_id: Option<Uuid>,
     operation_id: Option<Uuid>,
+    category: Option<String>,
 }
 fn history_limit() -> u16 {
     50
@@ -58,6 +59,7 @@ pub(super) async fn revoke_session(
     )
 }
 
+#[derive(Clone, Copy)]
 enum Stream {
     Audit,
     Invocations,
@@ -100,11 +102,18 @@ async fn list(
     .history_page() else {
         return inputs::invalid();
     };
+    let invocation_category = match (stream, query.category.as_deref()) {
+        (_, None) | (Stream::Invocations, Some("all")) => InvocationCategory::All,
+        (Stream::Invocations, Some("management")) => InvocationCategory::Management,
+        (Stream::Invocations, Some("authentication")) => InvocationCategory::Authentication,
+        _ => return inputs::invalid(),
+    };
     let history = HistoryQuery {
         page,
         account_id: query.account_id,
         credential_id: query.credential_id,
         operation_id: query.operation_id,
+        invocation_category,
     };
     let command = match stream {
         Stream::Audit => Command::Audit(history),

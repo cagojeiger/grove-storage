@@ -7,7 +7,14 @@ export function activityFilters(route: string) {
     const value = supplied.get(key);
     if (value) params.set(key, value);
   }
-  const valid = [...params.values()].every(value => new RegExp(`^${uuidPattern}$`).test(value));
+  let valid = [...params.values()].every(value => new RegExp(`^${uuidPattern}$`).test(value));
+  if (route.split("?")[0].endsWith("/invocations")) {
+    const category = supplied.get("category");
+    if (category) {
+      params.set("category", category);
+      valid = valid && ["management", "authentication", "all"].includes(category);
+    }
+  }
   return { params, valid };
 }
 

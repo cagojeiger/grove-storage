@@ -6,7 +6,7 @@ export async function openInvocation(page, operationId) {
   const grid = page.getByRole("grid", { name: "Activity", exact: true });
   const seen = new Set();
   let cursor = null;
-  let navigate = () => page.getByRole("tab", { name: "Command history", exact: true }).click();
+  let navigate = () => page.getByRole("tab", { name: "Operation history", exact: true }).click();
   for (;;) {
     const [response] = await Promise.all([
       page.waitForResponse(response => {

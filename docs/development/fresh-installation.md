@@ -17,6 +17,7 @@ migration history; there are no old-name views or table aliases.
 | `0007_upload_recovery.sql` | Durable retry eligibility and ordered completion/cleanup candidates |
 | `0008_file_recovery.sql` | Retry eligibility for generic observation, reclaim cleanup and purge |
 | `0009_management_history_context.sql` | Command targets, execution stages, authentication methods and security sampling markers |
+| `0010_security_session_end.sql` | Allow confirmed logout events in the existing security history |
 
 The current schema creates 22 application tables.
 S3-only storage and Account session ownership are defined directly, without
@@ -29,6 +30,8 @@ atomically, without silently dropping rows. Existing observation times remain
 unknown. Retention and file recovery have separate execution locks.
 Migration 0009 leaves new fields NULL on existing history. It preserves recorded
 timestamps, object state and retention periods.
+Migration 0010 extends security event/reason constraints without changing existing
+rows, table count or retention. Past logouts are not reconstructed as new events.
 Migration 0006 preserves pending upload keys, conditional flags, completion values
 and timestamps in `uploads`. Native/S3 owners of the same file reject the migration
 atomically. Leases, part measurements and vendor upload IDs stay unchanged.

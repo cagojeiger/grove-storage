@@ -85,7 +85,7 @@ try {
   const created = commands.items.find(row => row.operation === "identity.account.create" && row.outcome === "succeeded");
   assert(created?.target_type === "account" && created.stage === "execution" && created.auth_method === "password");
   await admin.getByRole("link", { name: "Activity", exact: true }).click();
-  await admin.getByRole("tab", { name: "Command history", exact: true }).click();
+  await admin.getByRole("tab", { name: "Operation history", exact: true }).click();
   await admin.getByRole("grid", { name: "Activity", exact: true }).getByRole("row")
     .filter({ hasText: "Create account" }).filter({ hasText: "Succeeded" })
     .getByRole("button", { name: "Create account", exact: true }).click();
